@@ -140,7 +140,7 @@ POST   /api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot
 DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}
 ```
 
-`page_ref` can be a page index like `0`, or the stable `page_id` returned by `/pages`. Scripts should prefer `page_id` when multiple pages may open or close.
+`page_ref` can be a page index like `0`, or the stable `page_id` returned by `/pages`. Scripts should prefer `page_id` when multiple pages may open or close. For a fresh profile, create a new page first instead of automating Firefox's built-in `about:home` page.
 
 Example:
 
@@ -149,15 +149,20 @@ PROFILE_ID=<running-profile-id>
 
 curl "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages"
 
-curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/0/goto" \
+PAGE_ID=$(
+  curl -s -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages" \
+    | python -c 'import json,sys; print(json.load(sys.stdin)["page_id"])'
+)
+
+curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/$PAGE_ID/goto" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com","wait_until":"domcontentloaded","timeout_ms":30000}'
 
-curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/0/evaluate" \
+curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/$PAGE_ID/evaluate" \
   -H "Content-Type: application/json" \
   -d '{"expression":"document.title"}'
 
-curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/0/screenshot" \
+curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/$PAGE_ID/screenshot" \
   -H "Content-Type: application/json" \
   -d '{"full_page":true}' \
   --output screenshot.png
