@@ -617,20 +617,13 @@ async def set_clipboard(profile_id: str, body: ClipboardRequest):
 
 @app.get("/api/profiles/{profile_id}/clipboard")
 async def get_clipboard(profile_id: str):
-    """Read the VNC session's clipboard.
-
-    Chrome doesn't write to X11 clipboard under KasmVNC, so xclip can't read it.
-    Instead, read via Playwright's CDP connection to Chrome (navigator.clipboard.readText).
-    Falls back to xclip for non-Chrome clipboard owners.
-    """
+    """Read clipboard text captured from the VNC browser session."""
     running = browser_mgr.running.get(profile_id)
     if not running:
         raise HTTPException(status_code=404, detail="Profile not running")
 
-    # Read Chrome's current text selection via Playwright.
-    # Chrome's native copy (via VNC Ctrl+C) doesn't write to X11 clipboard
-    # and doesn't fire DOM events, so we read the visible selection instead.
-    # The init script also captures copy events when they do fire.
+    # The init script captures copy events when they fire. Some browser copy
+    # paths under KasmVNC never reach X11 clipboard, so check all pages first.
     # Check all pages — user may have copied in any tab
     try:
         for page in running.context.pages:
@@ -644,7 +637,7 @@ async def get_clipboard(profile_id: str):
     except Exception as exc:
         logger.debug("Playwright clipboard read failed: %s", exc)
 
-    # Fallback: xclip for non-Chrome clipboard owners
+    # Fallback: xclip for non-browser clipboard owners.
     import os
 
     env = {**os.environ, "DISPLAY": f":{running.display}"}

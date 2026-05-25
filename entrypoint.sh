@@ -10,10 +10,12 @@ pkill -f 'cloakbrowser.*chrome' 2>/dev/null || true
 pkill -f 'chromium.*fingerprint' 2>/dev/null || true
 pkill -f xclip 2>/dev/null || true
 
-# Clean Chrome lock files left on the persistent volume
+# Clean browser lock files left on the persistent volume
 find /data/profiles -maxdepth 2 -name 'SingletonLock' -delete 2>/dev/null || true
 find /data/profiles -maxdepth 2 -name 'SingletonCookie' -delete 2>/dev/null || true
 find /data/profiles -maxdepth 2 -name 'SingletonSocket' -delete 2>/dev/null || true
+find /data/profiles -maxdepth 2 -name '.parentlock' -delete 2>/dev/null || true
+find /data/profiles -maxdepth 2 -name 'lock' -delete 2>/dev/null || true
 
 # Remove X11 lock files from previous displays
 rm -f /tmp/.X1*-lock 2>/dev/null || true

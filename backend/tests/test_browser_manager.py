@@ -220,6 +220,9 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
 
     user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+    for lock_file in ("SingletonLock", "SingletonCookie", "SingletonSocket", ".parentlock", "lock"):
+        (user_data_dir / lock_file).write_text("stale")
     monkeypatch.setenv("DISPLAY", ":77")
 
     running = await mgr.launch({
@@ -254,6 +257,9 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     assert not any(arg.startswith("--remote-debugging-port=") for arg in launch.kwargs["extra_args"])
     assert not (user_data_dir / "Default" / "Bookmarks").exists()
     assert not (user_data_dir / "Default" / "Preferences").exists()
+    assert not (user_data_dir / "SingletonLock").exists()
+    assert not (user_data_dir / ".parentlock").exists()
+    assert not (user_data_dir / "lock").exists()
 
     mgr.vnc.start_vnc.assert_awaited_once_with(100, 6100, width=1366, height=768)
     launch.context.add_init_script.assert_awaited_once()

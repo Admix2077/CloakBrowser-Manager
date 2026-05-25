@@ -9,7 +9,7 @@ RUN npm run build
 # Stage 2: Production image
 FROM python:3.12-slim
 
-# Chromium system deps
+# Firefox/X11/KasmVNC runtime deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdbus-1-3 libdrm2 libxkbcommon0 libatspi2.0-0 libxcomposite1 \
@@ -19,40 +19,32 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libgtk-3-0 libpangocairo-1.0-0 libcairo-gobject2 \
     libgdk-pixbuf-2.0-0 libxss1 libxtst6 fonts-liberation \
     libgl1-mesa-dri libegl-mesa0 \
-    procps wget ca-certificates xclip \
+    procps wget ca-certificates xclip git \
     && rm -rf /var/lib/apt/lists/*
 
-# Playwright system deps (matches test-infra)
-RUN pip install --no-cache-dir playwright && playwright install-deps chromium 2>/dev/null || true && pip uninstall -y playwright
-
-# Windows core fonts (Arial, Times New Roman, Verdana, etc.)
-RUN echo "deb http://deb.debian.org/debian trixie contrib" >> /etc/apt/sources.list.d/contrib.list \
-    && echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections \
-    && apt-get update && apt-get install -y --no-install-recommends ttf-mscorefonts-installer \
-    && fc-cache -f \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install KasmVNC (auto-selects amd64 or arm64 based on build platform)
-ARG TARGETARCH
+# Install KasmVNC. invisible_playwright currently ships Linux x86_64 Firefox.
+ARG TARGETARCH=amd64
+RUN test "$TARGETARCH" = "amd64"
 RUN wget -q https://github.com/kasmtech/KasmVNC/releases/download/v1.3.3/kasmvncserver_bookworm_1.3.3_${TARGETARCH}.deb \
     && apt-get update && apt-get install -y -f ./kasmvncserver_bookworm_1.3.3_${TARGETARCH}.deb \
     && rm kasmvncserver_bookworm_1.3.3_${TARGETARCH}.deb \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+ENV MOZ_ENABLE_WAYLAND=0 GDK_BACKEND=x11
 
 # Python deps
 COPY backend/requirements.txt /app/backend/
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt \
+    && python -m playwright install-deps firefox \
+    && python -m invisible_playwright fetch \
+    && rm -rf /var/lib/apt/lists/*
 
 # Backend code
 COPY backend/ /app/backend/
 
 # Frontend build from stage 1
 COPY --from=frontend-builder /build/dist /app/frontend/dist
-
-# Pre-download CloakBrowser binary
-RUN python -c "from cloakbrowser.download import ensure_binary; ensure_binary()"
 
 EXPOSE 8080
 

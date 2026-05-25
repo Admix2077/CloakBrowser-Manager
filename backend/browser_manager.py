@@ -150,9 +150,15 @@ class BrowserManager:
 
         display, ws_port = await self.vnc.allocate()
 
-        # Clean stale Chromium-era lock files from existing profile directories.
+        # Clean stale browser lock files from existing profile directories.
         user_data_dir = Path(profile["user_data_dir"])
-        for lock_file in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+        for lock_file in (
+            "SingletonLock",
+            "SingletonCookie",
+            "SingletonSocket",
+            ".parentlock",
+            "lock",
+        ):
             lock_path = user_data_dir / lock_file
             lock_path.unlink(missing_ok=True)
 
