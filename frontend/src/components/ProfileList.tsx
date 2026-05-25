@@ -1,5 +1,5 @@
 import { Plus, Monitor } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import {
   defaultProfileFilters,
@@ -16,6 +16,11 @@ import {
 import { HealthBadge } from "./HealthBadge";
 import { ProfileFilters } from "./ProfileFilters";
 import { StatusIndicator } from "./StatusIndicator";
+
+const PROFILE_LIST_VIRTUAL_THRESHOLD = 80;
+const PROFILE_LIST_ITEM_HEIGHT = 112;
+const PROFILE_LIST_OVERSCAN = 6;
+const PROFILE_LIST_FALLBACK_VIEWPORT_HEIGHT = 560;
 
 interface ProfileListProps {
   profiles: Profile[];
@@ -51,6 +56,42 @@ export function ProfileList({
     [filters, healthByProfileId, profiles],
   );
   const runningCount = profiles.filter((p) => p.status === "running").length;
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(PROFILE_LIST_FALLBACK_VIEWPORT_HEIGHT);
+  const shouldVirtualize = filtered.length > PROFILE_LIST_VIRTUAL_THRESHOLD;
+  const virtualWindow = useMemo(
+    () => getVirtualWindow(filtered.length, scrollTop, viewportHeight),
+    [filtered.length, scrollTop, viewportHeight],
+  );
+  const visibleProfiles = shouldVirtualize
+    ? filtered.slice(virtualWindow.start, virtualWindow.end)
+    : filtered;
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const updateViewportHeight = () => {
+      setViewportHeight(list.clientHeight || PROFILE_LIST_FALLBACK_VIEWPORT_HEIGHT);
+    };
+
+    updateViewportHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateViewportHeight);
+      return () => window.removeEventListener("resize", updateViewportHeight);
+    }
+
+    const observer = new ResizeObserver(updateViewportHeight);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setScrollTop(0);
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [filters]);
 
   return (
     <div className="flex flex-col h-full">
@@ -73,21 +114,53 @@ export function ProfileList({
       </div>
 
       {/* Profile list */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <div
+        ref={listRef}
+        role="region"
+        aria-label="Profiles list"
+        className="flex-1 overflow-y-auto p-2"
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+      >
         {filtered.length === 0 && (
           <div className="text-center text-gray-500 text-xs py-8">
             {profiles.length === 0 ? "No profiles yet" : "No matches"}
           </div>
         )}
-        {filtered.map((profile) => (
-          <ProfileListItem
-            key={profile.id}
-            profile={profile}
-            selected={selectedId === profile.id}
-            health={healthByProfileId[profile.id]}
-            onSelect={onSelect}
-          />
-        ))}
+        {shouldVirtualize ? (
+          <div
+            className="relative"
+            style={{ height: filtered.length * PROFILE_LIST_ITEM_HEIGHT }}
+          >
+            {visibleProfiles.map((profile, index) => (
+              <div
+                key={profile.id}
+                className="absolute left-0 right-0"
+                style={{
+                  height: PROFILE_LIST_ITEM_HEIGHT,
+                  transform: `translateY(${(virtualWindow.start + index) * PROFILE_LIST_ITEM_HEIGHT}px)`,
+                }}
+              >
+                <ProfileListItem
+                  profile={profile}
+                  selected={selectedId === profile.id}
+                  health={healthByProfileId[profile.id]}
+                  onSelect={onSelect}
+                  virtualized
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          visibleProfiles.map((profile) => (
+            <ProfileListItem
+              key={profile.id}
+              profile={profile}
+              selected={selectedId === profile.id}
+              health={healthByProfileId[profile.id]}
+              onSelect={onSelect}
+            />
+          ))
+        )}
       </div>
 
       {/* New profile button */}
@@ -101,14 +174,39 @@ export function ProfileList({
   );
 }
 
+function getVirtualWindow(
+  total: number,
+  scrollTop: number,
+  viewportHeight: number,
+): { start: number; end: number } {
+  if (total === 0) return { start: 0, end: 0 };
+
+  const visibleCount = Math.ceil(
+    Math.max(viewportHeight, PROFILE_LIST_FALLBACK_VIEWPORT_HEIGHT) / PROFILE_LIST_ITEM_HEIGHT,
+  );
+  const windowSize = visibleCount + PROFILE_LIST_OVERSCAN * 2;
+  const maxStart = Math.max(0, total - windowSize);
+  const rawStart = Math.floor(scrollTop / PROFILE_LIST_ITEM_HEIGHT) - PROFILE_LIST_OVERSCAN;
+  const start = Math.min(Math.max(0, rawStart), maxStart);
+  const end = Math.min(total, start + windowSize);
+  return { start, end };
+}
+
 interface ProfileListItemProps {
   profile: Profile;
   selected: boolean;
   health?: ProfileHealthResponse;
   onSelect: (id: string) => void;
+  virtualized?: boolean;
 }
 
-function ProfileListItem({ profile, selected, health, onSelect }: ProfileListItemProps) {
+function ProfileListItem({
+  profile,
+  selected,
+  health,
+  onSelect,
+  virtualized = false,
+}: ProfileListItemProps) {
   const warningSummary = getHealthWarningSummary(health);
   const geoipParts = getHealthGeoipParts(health);
   const healthTone = getHealthTone(health?.status);
@@ -118,6 +216,8 @@ function ProfileListItem({ profile, selected, health, onSelect }: ProfileListIte
     <button
       onClick={() => onSelect(profile.id)}
       className={`w-full text-left px-3 py-2.5 rounded-md mb-1 transition-colors ${
+        virtualized ? "h-[108px] overflow-hidden" : ""
+      } ${
         selected
           ? "bg-surface-3 border border-border-hover"
           : "hover:bg-surface-2 border border-transparent"

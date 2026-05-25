@@ -57,6 +57,7 @@
   - health。
   - country。
   - last_geoip_resolved_at。
+- [x] 左侧 `ProfileList` 大列表虚拟滚动。
 - [x] 新增多选状态。
 - [ ] 新增 `BulkActionBar`。
 - [ ] 接入批量 launch。
@@ -263,3 +264,54 @@ cd frontend && npm run build
 - 不接入批量 launch / stop / health check / set tags / delete。
 - 不新增后端 API 或 mutation。
 - 后续应基于 `selectedProfileIds` 接 `BulkActionBar`，先做安全动作和清晰确认，再做危险动作。
+
+## 2026-05-26 左侧 ProfileList 虚拟滚动小闭环
+
+背景：
+
+- Jeff 反馈：几百个 profile 时，左侧列表全量渲染会卡顿。
+- 本小闭环只优化左侧 `ProfileList` 渲染数量，不改 API，不做服务端分页，不改筛选/排序语义。
+
+已完成：
+
+- [x] `ProfileList` 在过滤结果超过 80 条时启用无依赖固定高度虚拟窗口。
+- [x] 列表项高度收敛为 112px，左侧列表继续定位为导航/扫视区；长 warning、GeoIP、tag 仍截断，完整信息继续在主表格或详情里查看。
+- [x] 虚拟窗口包含 overscan，减少滚动时的空白感。
+- [x] 筛选条件变化后重置左侧列表滚动位置，避免筛选后停留在旧滚动区导致空白窗口。
+- [x] 虚拟窗口起点做边界 clamp，列表数量从多变少时不会越界。
+- [x] `New Profile` 按钮仍固定在左侧底部，不受虚拟滚动影响。
+- [x] 选择 profile 仍按 `profile.id` 调用 `onSelect`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileList.test.tsx
+# 1 passed, 8 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 53 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data` 写入 180 个 `Perf Profile`，总计 184 个 profiles。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 左侧 `Profiles list` 区域约渲染 18 个 profile button，而不是 184 个。
+  - 左侧列表 `scrollHeight` 正常增大，滚动条可用。
+  - 滚动到 `112 * 120` 后，`Perf Profile 120` 出现在左侧窗口内，`Perf Profile 000` 不在左侧 DOM 内。
+  - `New Profile` 按钮仍固定在底部。
+- 移动 `390x844`：
+  - 打开 sidebar 后，左侧列表仍只渲染窗口内约 18 个 profile button。
+  - 选择区、滚动条和底部 `New Profile` 可用。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+
+范围说明：
+
+- 主区 `ProfileTable` 当前仍会全量渲染过滤结果；几百行时短期可接受，但上千 profile 时应继续做主表格虚拟滚动。
+- 本小闭环不引入 `react-window` 或 `@tanstack/react-virtual`；如果后续要求左侧 item 保持完全可变高度、多行 warning/tag 完整展示，再考虑引入支持测量动态高度的虚拟滚动库。
+- 本小闭环不做服务端分页。服务端分页需要重新定义筛选、排序、select filtered 和批量操作契约，建议等 API/批量动作语义稳定后再进入。

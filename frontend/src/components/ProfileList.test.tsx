@@ -102,6 +102,18 @@ const runningWarningHealth: ProfileHealthResponse = {
   },
 };
 
+function bulkProfile(index: number): Profile {
+  const id = `bulk-${index.toString().padStart(3, "0")}`;
+  return {
+    ...profile,
+    id,
+    name: `Bulk Profile ${index.toString().padStart(3, "0")}`,
+    proxy: null,
+    tags: [],
+    status: "stopped",
+  };
+}
+
 describe("ProfileList invisible_playwright identity display", () => {
   it("does not display stored platform as an active fingerprint label", () => {
     render(
@@ -287,5 +299,30 @@ describe("ProfileList operations filters", () => {
 
     expect(screen.getByText("Running US Profile")).toBeTruthy();
     expect(screen.queryByText("Stopped JP Profile")).toBeNull();
+  });
+
+  it("virtualizes large profile lists while keeping selection usable", () => {
+    const onSelect = vi.fn();
+    const profiles = Array.from({ length: 300 }, (_, index) => bulkProfile(index));
+
+    render(
+      <ProfileList
+        profiles={profiles}
+        selectedId={null}
+        onSelect={onSelect}
+        onNew={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Bulk Profile 000")).toBeTruthy();
+    expect(screen.queryByText("Bulk Profile 120")).toBeNull();
+
+    const list = screen.getByRole("region", { name: "Profiles list" });
+    fireEvent.scroll(list, { target: { scrollTop: 112 * 120 } });
+
+    expect(screen.queryByText("Bulk Profile 000")).toBeNull();
+    fireEvent.click(screen.getByText("Bulk Profile 120"));
+    expect(onSelect).toHaveBeenCalledWith("bulk-120");
+    expect(screen.getByText("New Profile")).toBeTruthy();
   });
 });
