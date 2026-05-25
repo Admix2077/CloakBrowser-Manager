@@ -31,7 +31,7 @@
   - left filter rail。
   - main profile table。
   - right summary panel。
-- [ ] 新增 `ProfileTable`：
+- [x] 新增 `ProfileTable`：
   - select。
   - name。
   - status。
@@ -57,7 +57,7 @@
   - health。
   - country。
   - last_geoip_resolved_at。
-- [ ] 新增多选状态。
+- [x] 新增多选状态。
 - [ ] 新增 `BulkActionBar`。
 - [ ] 接入批量 launch。
 - [ ] 接入批量 stop。
@@ -211,4 +211,55 @@ cd frontend && npm run build
 范围说明：
 
 - 本小闭环仍不实现多选 checkbox、批量 action bar、批量 launch/stop/delete/health check、右侧 summary panel 或 card list。
-- 顶层 `新增 ProfileTable` 任务仍保持未完成，因为正式运营台 table 还需要和后续多选/批量操作闭环合并。
+- 顶层 `新增 ProfileTable` 在后续多选状态小闭环完成后再统一勾选。
+
+## 2026-05-26 ProfileTable 多选状态小闭环
+
+已完成：
+
+- [x] `ProfileTable` 新增 `Select` 列。
+- [x] 每行新增 profile checkbox，点击只切换多选状态，不触发 `Open`。
+- [x] 表头新增 `Select all visible profiles` checkbox，只作用当前筛选后的可见 rows。
+- [x] 表头 checkbox 支持半选态。
+- [x] `AppContent` 新增独立 `selectedProfileIds`，和现有 `selectedId` / `view` 详情流分离。
+- [x] 筛选后隐藏的已选 profile 会自动清理，避免后续批量动作误作用到不可见 rows。
+- [x] 选择后显示轻量选择条：`N selected` + `Clear`。
+- [x] 空表格 `colSpan` 已随 Select 列更新。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 10 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 52 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- Vite dev server：`http://127.0.0.1:5173/`。
+- QA 数据目录：`/tmp/cloakbrowser-manager-qa-data`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 点击 `Select QA Invalid Proxy` 后出现 `1 selected` 和 `Clear`。
+  - 表头 checkbox 呈半选态。
+  - `Open` 按钮仍可见，未被选择条遮挡。
+- 筛选：
+  - 选择 invalid proxy 后切换 `Health status = 可继续`，隐藏选择被清理，不再显示 `1 selected`。
+  - `Health status = 不可用` 后点击表头 checkbox，只选中当前可见的 invalid proxy。
+- 移动 `390x844`：
+  - 默认 sidebar 收起。
+  - Select 列、选择条和横向滚动可用。
+  - 选择条不遮挡 profile rows。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+
+范围说明：
+
+- 本小闭环不新增 `BulkActionBar` 文件。
+- 不接入批量 launch / stop / health check / set tags / delete。
+- 不新增后端 API 或 mutation。
+- 后续应基于 `selectedProfileIds` 接 `BulkActionBar`，先做安全动作和清晰确认，再做危险动作。

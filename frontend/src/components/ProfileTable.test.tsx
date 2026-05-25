@@ -103,6 +103,7 @@ describe("ProfileTable", () => {
       />,
     );
 
+    expect(screen.getByRole("columnheader", { name: "Select" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Profile" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Health" })).toBeTruthy();
     expect(screen.getByRole("columnheader", { name: "Proxy" })).toBeTruthy();
@@ -123,6 +124,31 @@ describe("ProfileTable", () => {
     expect(screen.getByText("US")).toBeTruthy();
     expect(screen.getByText("America/Los_Angeles")).toBeTruthy();
     expect(screen.getByText("en-US")).toBeTruthy();
+  });
+
+  it("renders controlled row selection and select-all controls", () => {
+    const onToggleProfileSelection = vi.fn();
+    const onToggleVisibleSelection = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        onToggleProfileSelection={onToggleProfileSelection}
+        onToggleVisibleSelection={onToggleVisibleSelection}
+      />,
+    );
+
+    expect((screen.getByLabelText("Select Good US") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Select Broken Proxy") as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.click(screen.getByLabelText("Select Broken Proxy"));
+    expect(onToggleProfileSelection).toHaveBeenCalledWith("error");
+
+    fireEvent.click(screen.getByLabelText("Select all visible profiles"));
+    expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
   });
 
   it("opens the existing profile detail flow when a row action is clicked", () => {
@@ -181,6 +207,9 @@ describe("ProfileTable", () => {
         profiles={[]}
         healthByProfileId={{}}
         onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+        onToggleVisibleSelection={vi.fn()}
       />,
     );
 

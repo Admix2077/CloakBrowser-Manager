@@ -476,6 +476,63 @@ cd frontend && npm run build
 - 本小闭环不包含多选 checkbox、`BulkActionBar`、批量 launch/stop/health check/set tags/delete、右侧 summary panel 或移动 card list。
 - `frontend/tsconfig.tsbuildinfo` 是当前仓库已跟踪的 TypeScript build metadata，历史前端提交也会更新；本轮作为显式已跟踪编译元数据处理，不做单独清理。
 
+### 10.7 03 Profile 运营台：ProfileTable 多选状态
+
+完成内容：
+
+- `ProfileTable` 新增 `Select` 列。
+- 每行新增 profile checkbox，点击只切换多选状态，不触发 `Open`。
+- 表头新增 `Select all visible profiles` checkbox，只作用当前筛选后的可见 rows。
+- 表头 checkbox 支持半选态。
+- `AppContent` 新增独立 `selectedProfileIds`，和现有 `selectedId` / `view` 详情流分离。
+- 筛选后隐藏的已选 profile 会自动清理，避免后续批量动作误作用到不可见 rows。
+- 选择后显示轻量选择条：`N selected` + `Clear`。
+- 空表格 `colSpan` 已随 Select 列更新。
+- `tasks/03-profile-operations-console.md` 已勾选：
+  - `新增 ProfileTable`。
+  - `新增多选状态`。
+
+已跑验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 10 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 52 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- Vite dev server：`http://127.0.0.1:5173/`。
+- QA 数据目录：`/tmp/cloakbrowser-manager-qa-data`。
+- `agent-browser` 在当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 截图保存到：
+  - `/tmp/cloak-profile-multiselect-desktop.png`
+  - `/tmp/cloak-profile-multiselect-mobile.png`
+- 桌面 `1440x900`：
+  - 点击 `Select QA Invalid Proxy` 后出现 `1 selected` 和 `Clear`。
+  - 表头 checkbox 呈半选态。
+  - `Open` 按钮仍可见，未被选择条遮挡。
+- 筛选：
+  - 选择 invalid proxy 后切换 `Health status = 可继续`，隐藏选择被清理，不再显示 `1 selected`。
+  - `Health status = 不可用` 后点击表头 checkbox，只选中当前可见的 invalid proxy。
+- 移动 `390x844`：
+  - 默认 sidebar 收起。
+  - Select 列、选择条和横向滚动可用。
+  - 选择条不遮挡 profile rows。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+
+范围说明：
+
+- 本小闭环不新增 `BulkActionBar` 文件。
+- 不接入批量 launch / stop / health check / set tags / delete。
+- 不新增后端 API 或 mutation。
+- 后续应基于 `selectedProfileIds` 接 `BulkActionBar`，先做安全动作和清晰确认，再做危险动作。
+
 ## 11. 推荐下一步执行计划
 
 下一次 session 可以从这个顺序开始：
@@ -492,7 +549,6 @@ cd frontend && npm run build
    - `cd frontend && npm test -- --run`
    - `cd frontend && npm run build`
 4. 从 03 Profile 运营台开始推进第一个可验证小闭环：
-   - 多选状态。
    - `BulkActionBar` 只显示选中数量、清空选择和安全占位动作。
    - 第一批真实批量动作建议从 `health check` 开始，`delete` 必须单独确认闭环。
 5. 每个前端小闭环必须跑前端测试、build 和浏览器 UI/UE 走查。

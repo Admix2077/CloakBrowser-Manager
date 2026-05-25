@@ -109,7 +109,7 @@ function tableProfileNames(): string[] {
   return within(screen.getByRole("table"))
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[0]?.textContent ?? "");
+    .map((row) => within(row).getAllByRole("cell")[1]?.textContent ?? "");
 }
 
 describe("App operations console", () => {
@@ -138,5 +138,30 @@ describe("App operations console", () => {
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
     expect(screen.queryByPlaceholderText("Search profiles...")).toBeNull();
     expect(screen.getByTitle("Show sidebar")).toBeTruthy();
+  });
+
+  it("tracks selected visible profiles and clears selections hidden by filters", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText("Select Beta Broken"));
+
+    expect(screen.getByText("1 selected")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Health status"), { target: { value: "good" } });
+
+    expect(screen.queryByText("1 selected")).toBeNull();
+    expect((screen.getByLabelText("Select Alpha Good") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("selects all currently visible profiles from the table header", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Health status"), { target: { value: "good" } });
+    fireEvent.click(screen.getByLabelText("Select all visible profiles"));
+
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    expect((screen.getByLabelText("Select Alpha Good") as HTMLInputElement).checked).toBe(true);
   });
 });

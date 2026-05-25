@@ -1,21 +1,67 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
+
+const EMPTY_SELECTION = new Set<string>();
 
 interface ProfileTableProps {
   profiles: Profile[];
   healthByProfileId: Record<string, ProfileHealthResponse | undefined>;
   onSelect: (id: string) => void;
+  selectedProfileIds?: Set<string>;
+  onToggleProfileSelection?: (id: string) => void;
+  onToggleVisibleSelection?: (ids: string[], shouldSelect: boolean) => void;
+  onClearSelection?: () => void;
 }
 
-export function ProfileTable({ profiles, healthByProfileId, onSelect }: ProfileTableProps) {
+export function ProfileTable({
+  profiles,
+  healthByProfileId,
+  onSelect,
+  selectedProfileIds = EMPTY_SELECTION,
+  onToggleProfileSelection,
+  onToggleVisibleSelection,
+  onClearSelection,
+}: ProfileTableProps) {
+  const visibleIds = profiles.map((profile) => profile.id);
+  const selectedVisibleCount = visibleIds.filter((id) => selectedProfileIds.has(id)).length;
+  const allVisibleSelected = profiles.length > 0 && selectedVisibleCount === profiles.length;
+  const hasPartialVisibleSelection = selectedVisibleCount > 0 && !allVisibleSelected;
+  const selectedCount = selectedProfileIds.size;
+
   return (
     <div className="h-full overflow-auto">
-      <div className="min-w-[980px]">
+      <div className="min-w-[1040px]">
+        {selectedCount > 0 && (
+          <div className="sticky top-0 z-20 flex h-10 items-center gap-3 border-b border-border bg-surface-1 px-3 text-xs">
+            <span className="font-medium text-gray-200">{selectedCount} selected</span>
+            {onClearSelection && (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-gray-300 transition-colors hover:border-border-hover hover:bg-surface-3"
+                onClick={onClearSelection}
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+              </button>
+            )}
+          </div>
+        )}
         <table className="w-full border-separate border-spacing-0 text-left text-xs">
-          <thead className="sticky top-0 z-10 bg-surface-0/95 backdrop-blur">
+          <thead className={`sticky z-10 bg-surface-0/95 backdrop-blur ${selectedCount > 0 ? "top-10" : "top-0"}`}>
             <tr className="text-gray-500">
+              <th aria-label="Select" className="w-10 border-b border-border px-3 py-2 font-medium">
+                <SelectionCheckbox
+                  label="Select all visible profiles"
+                  checked={allVisibleSelected}
+                  indeterminate={hasPartialVisibleSelection}
+                  disabled={profiles.length === 0 || !onToggleVisibleSelection}
+                  onChange={() => onToggleVisibleSelection?.(visibleIds, !allVisibleSelected)}
+                />
+                <span className="sr-only">Select</span>
+              </th>
               <HeaderCell>Profile</HeaderCell>
               <HeaderCell>Runtime</HeaderCell>
               <HeaderCell>Health</HeaderCell>
@@ -32,7 +78,7 @@ export function ProfileTable({ profiles, healthByProfileId, onSelect }: ProfileT
           <tbody>
             {profiles.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-4 py-10 text-center text-gray-500">
+                <td colSpan={12} className="px-4 py-10 text-center text-gray-500">
                   No profiles in this view
                 </td>
               </tr>
@@ -43,6 +89,8 @@ export function ProfileTable({ profiles, healthByProfileId, onSelect }: ProfileT
                   profile={profile}
                   health={healthByProfileId[profile.id]}
                   onSelect={onSelect}
+                  selected={selectedProfileIds.has(profile.id)}
+                  onToggleSelection={onToggleProfileSelection}
                 />
               ))
             )}
@@ -61,13 +109,55 @@ function HeaderCell({ children }: { children: string }) {
   );
 }
 
+interface SelectionCheckboxProps {
+  label: string;
+  checked: boolean;
+  indeterminate?: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}
+
+function SelectionCheckbox({
+  label,
+  checked,
+  indeterminate = false,
+  disabled = false,
+  onChange,
+}: SelectionCheckboxProps) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      disabled={disabled}
+      onChange={onChange}
+      className="h-4 w-4 rounded border-border bg-surface-2 text-accent focus:ring-1 focus:ring-accent/60"
+    />
+  );
+}
+
 interface ProfileTableRowProps {
   profile: Profile;
   health?: ProfileHealthResponse;
   onSelect: (id: string) => void;
+  selected: boolean;
+  onToggleSelection?: (id: string) => void;
 }
 
-function ProfileTableRow({ profile, health, onSelect }: ProfileTableRowProps) {
+function ProfileTableRow({
+  profile,
+  health,
+  onSelect,
+  selected,
+  onToggleSelection,
+}: ProfileTableRowProps) {
   const geoip = health?.geoip;
   const ip = geoip?.ip ?? profile.last_geoip_ip;
   const country = geoip?.country_code ?? profile.last_geoip_country_code;
@@ -78,6 +168,14 @@ function ProfileTableRow({ profile, health, onSelect }: ProfileTableRowProps) {
 
   return (
     <tr className="group border-b border-border hover:bg-surface-1">
+      <td className="border-b border-border px-3 py-2">
+        <SelectionCheckbox
+          label={`Select ${profile.name}`}
+          checked={selected}
+          disabled={!onToggleSelection}
+          onChange={() => onToggleSelection?.(profile.id)}
+        />
+      </td>
       <td className="border-b border-border px-3 py-2">
         <div className="max-w-[180px] truncate text-sm font-medium text-gray-100" title={profile.name}>
           {profile.name}

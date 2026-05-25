@@ -115,6 +115,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [view, setView] = useState<View>("empty");
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
+  const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => new Set());
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -125,6 +126,14 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     () => filterAndSortProfiles(profiles, healthByProfileId, filters),
     [filters, healthByProfileId, profiles],
   );
+
+  useEffect(() => {
+    const visibleIds = new Set(filteredProfiles.map((profile) => profile.id));
+    setSelectedProfileIds((prev) => {
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredProfiles]);
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -171,6 +180,32 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
   const handleVncDisconnect = useCallback(() => {
     setView("edit");
+  }, []);
+
+  const handleToggleProfileSelection = useCallback((id: string) => {
+    setSelectedProfileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleVisibleSelection = useCallback((ids: string[], shouldSelect: boolean) => {
+    setSelectedProfileIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => {
+        if (shouldSelect) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      });
+      return next;
+    });
   }, []);
 
   if (loading) {
@@ -252,6 +287,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               profiles={filteredProfiles}
               healthByProfileId={healthByProfileId}
               onSelect={handleSelect}
+              selectedProfileIds={selectedProfileIds}
+              onToggleProfileSelection={handleToggleProfileSelection}
+              onToggleVisibleSelection={handleToggleVisibleSelection}
+              onClearSelection={() => setSelectedProfileIds(new Set())}
             />
           )}
 
