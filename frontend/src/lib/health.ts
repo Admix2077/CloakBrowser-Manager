@@ -1,4 +1,5 @@
 import type { HealthStatus, ProfileHealthResponse } from "./api";
+import { redactUrlCredentials } from "./profileDisplay";
 
 export function getHealthLabel(status: HealthStatus | undefined): string {
   switch (status) {
@@ -65,7 +66,8 @@ export function getHealthTone(status: HealthStatus | undefined): {
 export function getHealthWarningSummary(
   health: ProfileHealthResponse | null | undefined,
 ): string | null {
-  return health?.warnings.find((warning) => warning.message.trim())?.message ?? null;
+  const message = health?.warnings.find((warning) => warning.message.trim())?.message;
+  return message ? redactUrlCredentials(message) : null;
 }
 
 export function getHealthGeoipParts(

@@ -176,4 +176,23 @@ describe("App operations console", () => {
     expect(tableProfileNames()[0]).toContain("Beta Broken");
     expect((screen.getByLabelText("Health status") as HTMLSelectElement).value).toBe("error");
   });
+
+  it("previews a profile summary from the operations table without leaving the table", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    const summary = screen.getByRole("complementary", { name: "Profile summary" });
+    expect(summary).toBeTruthy();
+    expect(within(summary).getByText("Beta Broken")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview Alpha Good" }));
+
+    const updatedSummary = screen.getByRole("complementary", { name: "Profile summary" });
+    expect(screen.getByRole("table")).toBeTruthy();
+    expect(within(updatedSummary).getByText("Alpha Good")).toBeTruthy();
+    expect(screen.queryByText("Edit Profile")).toBeNull();
+
+    fireEvent.click(within(updatedSummary).getByRole("button", { name: "Open Alpha Good" }));
+    expect(await screen.findByText("Edit Profile")).toBeTruthy();
+  });
 });

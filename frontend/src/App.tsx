@@ -7,6 +7,7 @@ import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
 import { ProfileTable } from "./components/ProfileTable";
 import { ProfileFilters } from "./components/ProfileFilters";
+import { ProfileSummaryPanel } from "./components/ProfileSummaryPanel";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
@@ -117,6 +118,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => new Set());
+  const [previewProfileId, setPreviewProfileId] = useState<string | null>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -127,6 +129,11 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     () => filterAndSortProfiles(profiles, healthByProfileId, filters),
     [filters, healthByProfileId, profiles],
   );
+  const previewProfile = useMemo(() => {
+    const firstProfile = filteredProfiles[0];
+    if (!firstProfile) return null;
+    return filteredProfiles.find((profile) => profile.id === previewProfileId) ?? firstProfile;
+  }, [filteredProfiles, previewProfileId]);
   const consoleStats = useMemo(() => {
     const issueCount = profiles.filter((profile) => {
       const status = healthByProfileId[profile.id]?.status;
@@ -149,6 +156,15 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     setSelectedProfileIds((prev) => {
       const next = new Set([...prev].filter((id) => visibleIds.has(id)));
       return next.size === prev.size ? prev : next;
+    });
+  }, [filteredProfiles]);
+
+  useEffect(() => {
+    setPreviewProfileId((prev) => {
+      const firstProfile = filteredProfiles[0];
+      if (!firstProfile) return null;
+      if (prev && filteredProfiles.some((profile) => profile.id === prev)) return prev;
+      return firstProfile.id;
     });
   }, [filteredProfiles]);
 
@@ -340,16 +356,27 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   layout="toolbar"
                 />
               </section>
-              <section className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-panel">
-                <ProfileTable
-                  profiles={filteredProfiles}
-                  healthByProfileId={healthByProfileId}
-                  onSelect={handleSelect}
-                  selectedProfileIds={selectedProfileIds}
-                  onToggleProfileSelection={handleToggleProfileSelection}
-                  onToggleVisibleSelection={handleToggleVisibleSelection}
-                  onClearSelection={() => setSelectedProfileIds(new Set())}
-                />
+              <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-panel lg:min-h-0">
+                  <ProfileTable
+                    profiles={filteredProfiles}
+                    healthByProfileId={healthByProfileId}
+                    onSelect={handleSelect}
+                    selectedProfileIds={selectedProfileIds}
+                    onToggleProfileSelection={handleToggleProfileSelection}
+                    onToggleVisibleSelection={handleToggleVisibleSelection}
+                    onClearSelection={() => setSelectedProfileIds(new Set())}
+                    previewProfileId={previewProfile?.id ?? null}
+                    onPreviewProfile={setPreviewProfileId}
+                  />
+                </div>
+                <div className="min-h-[360px] min-w-0 lg:min-h-0">
+                  <ProfileSummaryPanel
+                    profile={previewProfile}
+                    health={previewProfile ? healthByProfileId[previewProfile.id] : undefined}
+                    onOpenProfile={handleSelect}
+                  />
+                </div>
               </section>
             </div>
           )}

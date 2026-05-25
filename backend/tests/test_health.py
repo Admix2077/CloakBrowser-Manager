@@ -80,6 +80,19 @@ def test_health_invalid_proxy_returns_error():
     assert "ftp" in warnings["proxy_invalid"].message
 
 
+def test_health_invalid_proxy_warning_redacts_proxy_credentials():
+    result = compute_profile_health(
+        _profile(proxy="http://user:hiddenpass@proxy.example"),
+        _runtime(),
+        checked_at="2026-05-25T00:00:00Z",
+    )
+
+    warning = {item.code: item for item in result.warnings}["proxy_invalid"]
+    assert "hiddenpass" not in warning.message
+    assert "user:" not in warning.message
+    assert "http://proxy.example" in warning.message
+
+
 def test_health_warns_on_manual_timezone_and_locale_mismatch():
     result = compute_profile_health(
         _profile(

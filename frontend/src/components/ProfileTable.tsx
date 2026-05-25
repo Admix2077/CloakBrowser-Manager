@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
 import { BulkActionBar } from "./BulkActionBar";
 import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
@@ -19,6 +20,8 @@ interface ProfileTableProps {
   onToggleProfileSelection?: (id: string) => void;
   onToggleVisibleSelection?: (ids: string[], shouldSelect: boolean) => void;
   onClearSelection?: () => void;
+  previewProfileId?: string | null;
+  onPreviewProfile?: (id: string) => void;
 }
 
 export function ProfileTable({
@@ -29,6 +32,8 @@ export function ProfileTable({
   onToggleProfileSelection,
   onToggleVisibleSelection,
   onClearSelection,
+  previewProfileId,
+  onPreviewProfile,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -156,6 +161,8 @@ export function ProfileTable({
                     onSelect={onSelect}
                     selected={selectedProfileIds.has(profile.id)}
                     onToggleSelection={onToggleProfileSelection}
+                    previewed={previewProfileId === profile.id}
+                    onPreview={onPreviewProfile}
                   />
                 ))}
                 {bottomSpacerHeight > 0 && <ProfileTableSpacer height={bottomSpacerHeight} />}
@@ -242,6 +249,8 @@ interface ProfileTableRowProps {
   onSelect: (id: string) => void;
   selected: boolean;
   onToggleSelection?: (id: string) => void;
+  previewed?: boolean;
+  onPreview?: (id: string) => void;
 }
 
 function ProfileTableRow({
@@ -250,6 +259,8 @@ function ProfileTableRow({
   onSelect,
   selected,
   onToggleSelection,
+  previewed = false,
+  onPreview,
 }: ProfileTableRowProps) {
   const geoip = health?.geoip;
   const ip = geoip?.ip ?? profile.last_geoip_ip;
@@ -262,7 +273,11 @@ function ProfileTableRow({
   return (
     <tr
       className={`group border-b border-border transition-colors ${
-        selected ? "bg-blue-50/70 hover:bg-blue-50" : "hover:bg-surface-2"
+        selected
+          ? "bg-blue-50/70 hover:bg-blue-50"
+          : previewed
+            ? "bg-slate-50 hover:bg-slate-100"
+            : "hover:bg-surface-2"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
     >
@@ -275,9 +290,15 @@ function ProfileTableRow({
         />
       </td>
       <td className="border-b border-border px-3 py-2">
-        <div className="max-w-[180px] truncate text-sm font-semibold text-slate-950" title={profile.name}>
+        <button
+          type="button"
+          className="block max-w-[180px] truncate text-left text-sm font-semibold text-slate-950 underline-offset-2 hover:text-blue-700 hover:underline"
+          title={profile.name}
+          aria-label={`Preview ${profile.name}`}
+          onClick={() => onPreview?.(profile.id)}
+        >
           {profile.name}
-        </div>
+        </button>
         <div className="mt-0.5 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</div>
       </td>
       <td className="truncate border-b border-border px-3 py-2">
@@ -329,27 +350,4 @@ function ProfileTableRow({
       </td>
     </tr>
   );
-}
-
-function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatProxyLabel(value: string | null | undefined): string {
-  if (!value) return "-";
-
-  try {
-    const url = new URL(value);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return "Invalid proxy";
-  }
 }

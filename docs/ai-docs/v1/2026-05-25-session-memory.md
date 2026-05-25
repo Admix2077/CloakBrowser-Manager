@@ -964,5 +964,93 @@ git diff --check
 仍未做：
 
 - 批量 launch / stop / health check / tag / delete 仍未接入。
-- `ProfileSummaryPanel` / 右侧详情栏仍未落地。
 - `Open` 仍然切换到原详情页，后续可改为“表格 + 详情抽屉/右栏”的连续运营形态。
+
+## 18. 2026-05-26 ProfileSummaryPanel 右侧摘要小闭环
+
+本轮继续推进 03 Profile 运营台，补齐右侧 summary panel。
+
+核心决策：
+
+- `previewProfileId` 独立于 `selectedId` / `view` / `selectedProfileIds`。
+- 表格 profile name 是预览动作，只更新右侧摘要，不触发编辑页、VNC viewer 或顶部 `LaunchButton` 语义。
+- 表格 `Open` 和右侧 `Open profile` 继续走现有 `handleSelect()`，保留原 edit / VNC 流。
+- 右侧 summary 是主表格的 drill-down，不替代主表格；移动端放到表格下方，不遮挡主操作。
+
+实现范围：
+
+- 新增 `frontend/src/components/ProfileSummaryPanel.tsx`：
+  - health。
+  - runtime。
+  - GeoIP。
+  - manual override。
+  - proxy。
+  - device。
+  - `Open profile` quick action。
+- 新增 `frontend/src/lib/profileDisplay.ts`：
+  - `formatProxyLabel()`。
+  - `formatTimestamp()`。
+  - `redactUrlCredentials()`，用于 health warning 文本/title 的防御性脱敏。
+- 更新 `backend/browser_manager.py`：
+  - `_validate_proxy()` 的 missing hostname / missing port / invalid port 错误不再返回 proxy 用户名密码。
+- 更新 `frontend/src/components/ProfileTable.tsx`：
+  - profile name 变为 `Preview <name>` button。
+  - 增加 `previewProfileId` / `onPreviewProfile` props。
+  - 预览行有轻量背景。
+- 更新 `frontend/src/App.tsx`：
+  - 在 `view === "empty"` 下使用桌面 `main table + 320px summary panel` grid。
+  - 当前预览被筛选隐藏后回到当前可见第一项；无结果时显示空摘要。
+
+测试与验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 19 passed
+
+cd frontend && npm test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx
+# 2 passed, 13 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 62 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data`，共 243 个 profiles。
+- 使用 `agent-browser`，环境变量 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 主表格和右侧 `Profile summary` 同屏可见。
+  - 搜索 `QA Summary` 后主表显示 3 行。
+  - 点击 `Preview QA Summary Good` 后右侧 summary 更新，主表格仍存在，未进入编辑页。
+  - 右侧 `Open profile` 可进入原编辑流，`Edit Profile`、`Launch`、`Delete`、`Cancel`、`Save` 可见。
+  - DOM 未出现 `hiddenpass`。
+- 脱敏补验：
+  - QA 数据库增加 `QA Summary Secret Missing Port`，总计 244 个 profiles。
+  - API health warning 为 `Proxy URL missing port: http://proxy-secret.example`。
+  - 表格、左侧列表和右侧 summary 的 DOM 未出现 `hiddenpass` 或 `user:hiddenpass`。
+- 移动 `390x844`：
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表横向滚动保留。
+  - summary panel 位于表格下方，可通过主内容滚动查看。
+
+截图：
+
+- `/tmp/cloak-summary-panel-desktop.png`
+- `/tmp/cloak-summary-panel-preview.png`
+- `/tmp/cloak-summary-panel-mobile.png`
+- `/tmp/cloak-summary-panel-mobile-summary.png`
+- `/tmp/cloak-summary-panel-secret-redaction.png`
+
+仍未做：
+
+- 批量 launch / stop / health check / tag / delete 仍未接入。
+- 空态细分、窄屏 card list、VNC viewer 连续运营形态仍未进入本闭环。

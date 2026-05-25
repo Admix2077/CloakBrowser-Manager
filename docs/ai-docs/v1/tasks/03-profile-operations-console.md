@@ -26,7 +26,7 @@
 
 ## 任务清单
 
-- [ ] 定义运营台布局：
+- [x] 定义运营台布局：
   - top bar。
   - left filter rail。
   - main profile table。
@@ -66,7 +66,7 @@
 - [ ] 接入批量 health check。
 - [ ] 接入批量 set tags。
 - [ ] 接入批量 delete，必须有确认。
-- [ ] 新增 `ProfileSummaryPanel`：
+- [x] 新增 `ProfileSummaryPanel`：
   - health。
   - runtime。
   - GeoIP。
@@ -547,4 +547,87 @@ git diff --check
 
 - 本小闭环不接入批量 launch / stop / health check / set tags / delete。
 - 本小闭环不新增后端 API，不改变健康计算、筛选排序、虚拟滚动和 proxy 脱敏契约。
-- 下一步继续 03 时，建议优先做 `ProfileSummaryPanel` 或接入最低风险的批量 `health_check`；右侧 summary panel 完成后再考虑把 `Open` 从整页切换改为“表格 + 详情抽屉/右栏”的连续运营形态。
+- 下一步继续 03 时，建议优先接入最低风险的批量 `health_check`；后续再考虑把 `Open` 从整页切换改为“表格 + 详情抽屉/右栏”的连续运营形态。
+
+## 2026-05-26 ProfileSummaryPanel 右侧摘要小闭环
+
+背景：
+
+- 前一轮 UI/UE 质感升级已把信息架构调整为左侧 quick views + 主区运营表格，但右侧 summary panel 仍未接入。
+- 本小闭环补齐 `Data-Dense + Drill-Down` 的右侧摘要，让数百 profile 场景下的主表格继续承担管理核心，右侧只做快速判断和下一步入口。
+
+已完成：
+
+- [x] 新增 `frontend/src/components/ProfileSummaryPanel.tsx`。
+- [x] 新增 `frontend/src/lib/profileDisplay.ts`，复用 proxy 脱敏和 timestamp 格式化。
+- [x] `AppContent` 新增独立 `previewProfileId`，不复用 `selectedId` / `view` / `selectedProfileIds`：
+  - 点击表格 profile name 只更新右侧摘要。
+  - 不触发 `LaunchButton`、编辑页或 VNC viewer。
+  - 当前预览 profile 被筛选隐藏后，自动回到当前可见第一项；无结果时显示空摘要。
+- [x] `ProfileSummaryPanel` 展示：
+  - health。
+  - runtime。
+  - GeoIP。
+  - manual override。
+  - proxy。
+  - device。
+  - `Open profile` quick action。
+- [x] `Open profile` 继续调用现有 `handleSelect()`，保留原有 edit / VNC 详情流。
+- [x] 桌面布局调整为 `main table + 320px right summary panel`。
+- [x] 窄屏下 summary panel 落在表格下方，不撑宽 body；主表仍保留自身横向滚动。
+- [x] proxy 可见文本和 `title` 继续只显示 `protocol//host` 或 `Invalid proxy`，不泄露用户名/密码。
+- [x] health warning 文本和 `title` 增加 proxy 凭据脱敏；后端 proxy 校验错误也不再返回 `user:password@host`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 19 passed
+
+cd frontend && npm test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx
+# 2 passed, 13 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 62 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data` 写入 244 个 profiles。
+- 后端：`http://127.0.0.1:8080`。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 默认显示主表格 + 右侧 `Profile summary`。
+  - 搜索 `QA Summary` 后主表显示 3 个匹配 profile。
+  - 点击 `Preview QA Summary Good` 后右侧 summary 更新为 `QA Summary Good`，主表格仍存在，未进入 `Edit Profile`。
+  - 右侧 `Open profile` 进入原编辑流，`Edit Profile`、`Launch`、`Delete`、`Cancel`、`Save` 可见。
+  - DOM 中未出现 `hiddenpass`，proxy 密码未泄露。
+  - `QA Summary Secret Missing Port` 的后端 health warning 显示为 `Proxy URL missing port: http://proxy-secret.example`，DOM 中未出现 `hiddenpass` 或 `user:hiddenpass`。
+- 移动 `390x844`：
+  - 搜索和主表可用。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身保留横向滚动，`tableScrollWidth=1068`、`tableClientWidth=358`。
+  - summary panel 在表格下方可滚动查看，不遮挡表格操作。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+- 截图保存到：
+  - `/tmp/cloak-summary-panel-desktop.png`
+  - `/tmp/cloak-summary-panel-preview.png`
+  - `/tmp/cloak-summary-panel-mobile.png`
+  - `/tmp/cloak-summary-panel-mobile-summary.png`
+  - `/tmp/cloak-summary-panel-secret-redaction.png`
+
+范围说明：
+
+- 本小闭环不接入批量 launch / stop / health check / set tags / delete。
+- 本小闭环不新增后端 API，不改变健康计算、筛选排序、虚拟滚动、批量选择和 proxy 脱敏契约。
+- 下一步继续 03 时，推荐优先接入最低风险的批量 `health_check`，再做批量 launch/stop；批量 delete 必须单独确认闭环。

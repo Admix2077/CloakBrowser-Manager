@@ -195,6 +195,37 @@ describe("ProfileTable", () => {
     expect(onSelect).toHaveBeenCalledWith("error");
   });
 
+  it("previews rows without reusing selection or open actions", () => {
+    const onPreviewProfile = vi.fn();
+    const onSelect = vi.fn();
+    const onToggleProfileSelection = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={onSelect}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={onToggleProfileSelection}
+        previewProfileId="error"
+        onPreviewProfile={onPreviewProfile}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview Broken Proxy" }));
+    expect(onPreviewProfile).toHaveBeenCalledWith("error");
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onToggleProfileSelection).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText("Select Good US"));
+    expect(onToggleProfileSelection).toHaveBeenCalledWith("good");
+    expect(onPreviewProfile).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Good US" }));
+    expect(onSelect).toHaveBeenCalledWith("good");
+    expect(onPreviewProfile).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps the order provided by shared operations filters", () => {
     render(
       <ProfileTable
@@ -219,12 +250,23 @@ describe("ProfileTable", () => {
             proxy: "http://user:hiddenpass@proxy.example:8080",
           }),
         ]}
-        healthByProfileId={{}}
+        healthByProfileId={{
+          "credential-proxy": health("credential-proxy", {
+            status: "error",
+            warnings: [{
+              code: "proxy_invalid",
+              message: "Proxy URL missing port: http://user:hiddenpass@proxy.example",
+              severity: "error",
+              action: "修正 proxy 格式后重新检测。",
+            }],
+          }),
+        }}
         onSelect={vi.fn()}
       />,
     );
 
     expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
+    expect(screen.getByTitle("Proxy URL missing port: http://proxy.example")).toBeTruthy();
     expect(screen.queryByText(/hiddenpass/)).toBeNull();
     expect(screen.getByTitle("http://proxy.example:8080")).toBeTruthy();
     expect(document.body.innerHTML).not.toContain("user:hiddenpass");

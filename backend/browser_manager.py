@@ -51,9 +51,27 @@ def _validate_proxy(url: str) -> None:
             f"Invalid proxy scheme '{parsed.scheme}'. Must be http, https, or socks5."
         )
     if not parsed.hostname:
-        raise ValueError(f"Proxy URL missing hostname: {url}")
-    if not parsed.port:
-        raise ValueError(f"Proxy URL missing port: {url}")
+        raise ValueError(f"Proxy URL missing hostname: {_redact_proxy_url(url)}")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"Proxy URL invalid port: {_redact_proxy_url(url)}") from exc
+    if not port:
+        raise ValueError(f"Proxy URL missing port: {_redact_proxy_url(url)}")
+
+
+def _redact_proxy_url(url: str) -> str:
+    parsed = urlparse(url)
+    if not parsed.scheme or not parsed.netloc:
+        return url
+
+    host = parsed.hostname or ""
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    port_part = f":{port}" if port else ""
+    return f"{parsed.scheme}://{host}{port_part}"
 
 
 def _proxy_to_invisible(raw: str | None) -> dict[str, str] | None:
