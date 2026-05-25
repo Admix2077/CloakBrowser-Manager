@@ -116,6 +116,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     stopProfiles,
     checkHealth,
     addTagsToProfiles,
+    deleteProfiles,
   } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
@@ -127,6 +128,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [bulkLaunching, setBulkLaunching] = useState(false);
   const [bulkStopping, setBulkStopping] = useState(false);
   const [bulkTagging, setBulkTagging] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -289,6 +291,29 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     }
   }, [addTagsToProfiles]);
 
+  const handleDeleteSelectedProfiles = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const result = await deleteProfiles(ids);
+      const deletedIds = new Set(result.deletedIds);
+      if (deletedIds.size === 0) return;
+
+      setSelectedProfileIds((prev) => {
+        const next = new Set(prev);
+        deletedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      setPreviewProfileId((prev) => (prev && deletedIds.has(prev) ? null : prev));
+      if (selectedId && deletedIds.has(selectedId)) {
+        setSelectedId(null);
+        setView("empty");
+      }
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [deleteProfiles, selectedId]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-surface-0">
@@ -435,6 +460,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     stoppingSelectedProfiles={bulkStopping}
                     onAddTagsToSelectedProfiles={handleAddTagsToSelectedProfiles}
                     taggingSelectedProfiles={bulkTagging}
+                    onDeleteSelectedProfiles={handleDeleteSelectedProfiles}
+                    deletingSelectedProfiles={bulkDeleting}
                   />
                 </div>
                 <div className="min-h-[360px] min-w-0 lg:min-h-0">

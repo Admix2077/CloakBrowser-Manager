@@ -30,6 +30,8 @@ interface ProfileTableProps {
   stoppingSelectedProfiles?: boolean;
   onAddTagsToSelectedProfiles?: (ids: string[], tags: Profile["tags"]) => Promise<void> | void;
   taggingSelectedProfiles?: boolean;
+  onDeleteSelectedProfiles?: (ids: string[]) => Promise<void> | void;
+  deletingSelectedProfiles?: boolean;
 }
 
 export function ProfileTable({
@@ -50,6 +52,8 @@ export function ProfileTable({
   stoppingSelectedProfiles = false,
   onAddTagsToSelectedProfiles,
   taggingSelectedProfiles = false,
+  onDeleteSelectedProfiles,
+  deletingSelectedProfiles = false,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -134,6 +138,10 @@ export function ProfileTable({
               )
               : undefined}
             tagging={taggingSelectedProfiles}
+            onDelete={onDeleteSelectedProfiles
+              ? (ids) => onDeleteSelectedProfiles(ids)
+              : undefined}
+            deleting={deletingSelectedProfiles}
           />
         )}
         <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs text-slate-700">

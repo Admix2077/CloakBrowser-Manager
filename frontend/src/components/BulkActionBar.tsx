@@ -1,4 +1,4 @@
-import { Activity, HeartPulse, Play, Square, Tags, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, HeartPulse, Play, Square, Tags, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
@@ -18,6 +18,8 @@ interface BulkActionBarProps {
   stopping?: boolean;
   onAddTags?: (tags: Profile["tags"]) => Promise<void> | void;
   tagging?: boolean;
+  onDelete?: (ids: string[]) => Promise<void> | void;
+  deleting?: boolean;
 }
 
 export function BulkActionBar({
@@ -33,24 +35,45 @@ export function BulkActionBar({
   stopping = false,
   onAddTags,
   tagging = false,
+  onDelete,
+  deleting = false,
 }: BulkActionBarProps) {
   const [tagEditorOpen, setTagEditorOpen] = useState(false);
   const [tagName, setTagName] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const tagInputRef = useRef<HTMLInputElement>(null);
+  const deleteInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (tagEditorOpen) tagInputRef.current?.focus();
   }, [tagEditorOpen]);
 
-  if (selectedCount === 0) return null;
-
   const runningCount = selectedProfiles.filter((profile) => profile.status === "running").length;
-  const stoppedCount = selectedProfiles.filter((profile) => profile.status === "stopped").length;
+  const stoppedProfiles = selectedProfiles.filter((profile) => profile.status === "stopped");
+  const stoppedCount = stoppedProfiles.length;
   const issueCount = selectedProfiles.filter((profile) => {
     const status = healthByProfileId[profile.id]?.status;
     return status === "error" || status === "warning";
   }).length;
   const normalizedTagName = tagName.trim();
+  const deleteEnabled = Boolean(onDelete) && !deleting && stoppedCount > 0;
+  const deleteTitle = !onDelete
+    ? "Bulk delete is not available"
+    : stoppedCount === 0
+      ? "Stop running profiles before bulk deletion"
+      : "Delete selected stopped profiles";
+  const deleteConfirmReady = deleteConfirmText === "DELETE";
+
+  useEffect(() => {
+    if (!deleteConfirmOpen || stoppedCount > 0) return;
+    setDeleteConfirmOpen(false);
+    setDeleteConfirmText("");
+  }, [deleteConfirmOpen, stoppedCount]);
+
+  useEffect(() => {
+    if (deleteConfirmOpen) deleteInputRef.current?.focus();
+  }, [deleteConfirmOpen]);
 
   const handleTagSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -62,124 +85,216 @@ export function BulkActionBar({
     }).catch(() => undefined);
   };
 
+  const handleDeleteSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!onDelete || !deleteConfirmReady || deleting || stoppedCount === 0) return;
+    const stoppedIds = stoppedProfiles.map((profile) => profile.id);
+    void Promise.resolve(onDelete(stoppedIds)).then(() => {
+      setDeleteConfirmText("");
+      setDeleteConfirmOpen(false);
+    }).catch(() => undefined);
+  };
+
+  if (selectedCount === 0) return null;
+
   return (
     <div
-      role="toolbar"
-      aria-label="Bulk profile actions"
-      aria-busy={checkingHealth || launching || stopping || tagging}
-      className="sticky top-0 z-20 flex h-11 items-center gap-2 overflow-x-auto border-b border-blue-100/80 bg-gradient-to-r from-white via-blue-50/70 to-white px-2.5 text-xs shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur"
+      className="sticky top-0 z-20 h-11 border-b border-blue-100/80 bg-gradient-to-r from-white via-blue-50/70 to-white text-xs shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur"
     >
-      <span
-        role="status"
-        aria-label="Selected profile summary"
-        className="inline-flex h-7 shrink-0 items-center rounded-md border border-blue-200 bg-gradient-to-b from-blue-50 to-blue-100/80 px-2.5 font-semibold tabular-nums text-blue-800 shadow-[0_1px_2px_rgba(37,99,235,0.08),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      <div
+        role="toolbar"
+        aria-label="Bulk profile actions"
+        aria-busy={checkingHealth || launching || stopping || tagging || deleting}
+        className="flex h-11 items-center gap-2 overflow-x-auto px-2.5"
       >
-        {selectedCount} selected
-      </span>
-      <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
-      <SummaryPill label={`${stoppedCount} stopped`} />
-      <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
-      <div className="ml-auto flex items-center gap-1 rounded-lg border border-slate-200/90 bg-white/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-slate-900/[0.02]">
-        <button
-          type="button"
-          disabled={!onCheckHealth || checkingHealth}
-          aria-label={checkingHealth ? "Checking health" : "Check health"}
-          className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.25),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
-          onClick={() => void onCheckHealth?.()}
+        <span
+          role="status"
+          aria-label="Selected profile summary"
+          className="inline-flex h-7 shrink-0 items-center rounded-md border border-blue-200 bg-gradient-to-b from-blue-50 to-blue-100/80 px-2.5 font-semibold tabular-nums text-blue-800 shadow-[0_1px_2px_rgba(37,99,235,0.08),inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          <HeartPulse className="h-3.5 w-3.5" />
-          <span>{checkingHealth ? "Checking..." : "Check health"}</span>
-        </button>
-        <button
-          type="button"
-          disabled={!onLaunch || launching || stoppedCount === 0}
-          aria-label={launching ? "Launching selected" : "Launch selected"}
-          className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
-          onClick={() => void onLaunch?.()}
-        >
-          <Play className="h-3.5 w-3.5" />
-          <span>{launching ? "Launching..." : "Launch"}</span>
-        </button>
-        <button
-          type="button"
-          disabled={!onStop || stopping || runningCount === 0}
-          aria-label={stopping ? "Stopping selected" : "Stop selected"}
-          className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
-          onClick={() => void onStop?.()}
-        >
-          <Square className="h-3.5 w-3.5" />
-          <span>{stopping ? "Stopping..." : "Stop"}</span>
-        </button>
-        {tagEditorOpen ? (
-          <form
-            aria-label="Bulk tag form"
-            className="flex shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-white p-0.5 shadow-[0_1px_2px_rgba(37,99,235,0.08)] ring-2 ring-blue-500/10"
-            onSubmit={handleTagSubmit}
+          {selectedCount} selected
+        </span>
+        <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
+        <SummaryPill label={`${stoppedCount} stopped`} />
+        <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
+        <div className="ml-auto flex items-center gap-1 rounded-lg border border-slate-200/90 bg-white/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-slate-900/[0.02]">
+          <button
+            type="button"
+            disabled={!onCheckHealth || checkingHealth}
+            aria-label={checkingHealth ? "Checking health" : "Check health"}
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.25),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+            onClick={() => void onCheckHealth?.()}
           >
-            <input
-              ref={tagInputRef}
-              aria-label="Bulk tag name"
-              value={tagName}
-              onChange={(event) => setTagName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape" && !tagging) {
+            <HeartPulse className="h-3.5 w-3.5" />
+            <span>{checkingHealth ? "Checking..." : "Check health"}</span>
+          </button>
+          <button
+            type="button"
+            disabled={!onLaunch || launching || stoppedCount === 0}
+            aria-label={launching ? "Launching selected" : "Launch selected"}
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            onClick={() => void onLaunch?.()}
+          >
+            <Play className="h-3.5 w-3.5" />
+            <span>{launching ? "Launching..." : "Launch"}</span>
+          </button>
+          <button
+            type="button"
+            disabled={!onStop || stopping || runningCount === 0}
+            aria-label={stopping ? "Stopping selected" : "Stop selected"}
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-amber-200 hover:bg-amber-50 hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            onClick={() => void onStop?.()}
+          >
+            <Square className="h-3.5 w-3.5" />
+            <span>{stopping ? "Stopping..." : "Stop"}</span>
+          </button>
+          {tagEditorOpen ? (
+            <form
+              aria-label="Bulk tag form"
+              className="flex shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-white p-0.5 shadow-[0_1px_2px_rgba(37,99,235,0.08)] ring-2 ring-blue-500/10"
+              onSubmit={handleTagSubmit}
+            >
+              <input
+                ref={tagInputRef}
+                aria-label="Bulk tag name"
+                value={tagName}
+                onChange={(event) => setTagName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !tagging) {
+                    setTagName("");
+                    setTagEditorOpen(false);
+                  }
+                }}
+                className="h-7 w-36 rounded-md border border-slate-200 bg-slate-50/80 px-2 text-xs font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15"
+                placeholder="Tag name"
+                disabled={tagging}
+              />
+              <button
+                type="submit"
+                disabled={!normalizedTagName || tagging}
+                aria-label={tagging ? "Applying tag" : "Apply tag"}
+                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.22)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+              >
+                <Tags className="h-3.5 w-3.5" />
+                {tagging ? "Applying..." : "Apply tag"}
+              </button>
+              <button
+                type="button"
+                aria-label="Cancel tagging"
+                disabled={tagging}
+                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-transparent bg-white px-2 font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+                onClick={() => {
                   setTagName("");
                   setTagEditorOpen(false);
+                }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              disabled={!onAddTags || tagging}
+              aria-label={tagging ? "Applying tag" : "Tag selected"}
+              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+              onClick={() => setTagEditorOpen(true)}
+            >
+              <Tags className="h-3.5 w-3.5" />
+              <span>{tagging ? "Applying..." : "Tag"}</span>
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={!deleteEnabled}
+            aria-label={deleting ? "Deleting selected" : "Delete selected"}
+            title={deleteTitle}
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-red-200 bg-white px-2.5 font-medium text-red-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:border-red-100 disabled:bg-red-50/35 disabled:text-red-300 disabled:shadow-none"
+            onClick={() => {
+              setTagEditorOpen(false);
+              setDeleteConfirmOpen(true);
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>{deleting ? "Deleting..." : "Delete"}</span>
+          </button>
+          {onClearSelection && (
+            <>
+              <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-slate-200" />
+              <button
+                type="button"
+                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-transparent bg-transparent px-2.5 font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-500/15"
+                onClick={onClearSelection}
+              >
+                <X className="h-3.5 w-3.5" />
+                Clear
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+      {deleteConfirmOpen && (
+        <form
+          role="dialog"
+          aria-label="Confirm bulk profile deletion"
+          className="absolute right-2 top-12 z-30 w-[min(420px,calc(100vw-24px))] rounded-lg border border-red-200 bg-white p-3 text-xs text-slate-700 shadow-[0_18px_44px_rgba(127,29,29,0.16)] ring-1 ring-red-900/[0.03]"
+          onSubmit={handleDeleteSubmit}
+        >
+          <div className="flex items-start gap-2">
+            <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-700">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-950">
+                Delete {stoppedCount} stopped profile{stoppedCount === 1 ? "" : "s"}?
+              </div>
+              <p className="mt-1 text-slate-600">Browser data will be permanently removed.</p>
+              {runningCount > 0 && (
+                <p className="mt-1 text-amber-800">
+                  {runningCount} running profile{runningCount === 1 ? "" : "s"} will be skipped. Stop {runningCount === 1 ? "it" : "them"} first if {runningCount === 1 ? "it also needs" : "they also need"} deletion.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+            <input
+              ref={deleteInputRef}
+              aria-label="Type DELETE to confirm bulk deletion"
+              value={deleteConfirmText}
+              onChange={(event) => setDeleteConfirmText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && !deleting) {
+                  setDeleteConfirmText("");
+                  setDeleteConfirmOpen(false);
                 }
               }}
-              className="h-7 w-36 rounded-md border border-slate-200 bg-slate-50/80 px-2 text-xs font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15"
-              placeholder="Tag name"
-              disabled={tagging}
+              className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2 font-mono text-xs font-semibold tracking-[0.08em] text-slate-800 outline-none transition-colors placeholder:font-sans placeholder:font-medium placeholder:tracking-normal placeholder:text-slate-400 hover:border-slate-300 focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-500/15"
+              placeholder="Type DELETE"
+              disabled={deleting}
             />
             <button
               type="submit"
-              disabled={!normalizedTagName || tagging}
-              aria-label={tagging ? "Applying tag" : "Apply tag"}
-              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.22)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+              aria-label="Confirm bulk delete"
+              disabled={!deleteConfirmReady || deleting}
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md border border-red-600 bg-red-600 px-3 font-medium text-white shadow-[0_1px_2px_rgba(220,38,38,0.25),inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:border-red-700 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
             >
-              <Tags className="h-3.5 w-3.5" />
-              {tagging ? "Applying..." : "Apply tag"}
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? "Deleting..." : "Delete"}
             </button>
             <button
               type="button"
-              aria-label="Cancel tagging"
-              disabled={tagging}
-              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-transparent bg-white px-2 font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+              aria-label="Cancel bulk delete"
+              disabled={deleting}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white px-3 font-medium text-slate-600 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:bg-slate-50 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
               onClick={() => {
-                setTagName("");
-                setTagEditorOpen(false);
+                setDeleteConfirmText("");
+                setDeleteConfirmOpen(false);
               }}
             >
-              <X className="h-3.5 w-3.5" />
+              Cancel
             </button>
-          </form>
-        ) : (
-          <button
-            type="button"
-            disabled={!onAddTags || tagging}
-            aria-label={tagging ? "Applying tag" : "Tag selected"}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
-            onClick={() => setTagEditorOpen(true)}
-          >
-            <Tags className="h-3.5 w-3.5" />
-            <span>{tagging ? "Applying..." : "Tag"}</span>
-          </button>
-        )}
-        <DisabledAction icon={<Trash2 className="h-3.5 w-3.5" />} label="Delete selected" displayLabel="Delete" danger />
-        {onClearSelection && (
-          <>
-            <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-slate-200" />
-            <button
-              type="button"
-              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-transparent bg-transparent px-2.5 font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-slate-500/15"
-              onClick={onClearSelection}
-            >
-              <X className="h-3.5 w-3.5" />
-              Clear
-            </button>
-          </>
-        )}
-      </div>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
@@ -204,33 +319,5 @@ function SummaryPill({
       {icon}
       {label}
     </span>
-  );
-}
-
-function DisabledAction({
-  icon,
-  label,
-  displayLabel = label,
-  danger = false,
-}: {
-  icon: ReactNode;
-  label: string;
-  displayLabel?: string;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled
-      aria-label={label}
-      className={`inline-flex h-7 shrink-0 cursor-not-allowed items-center gap-1 whitespace-nowrap rounded-md border px-2.5 font-medium ${
-        danger
-          ? "border-red-100 bg-red-50/35 text-red-300"
-          : "border-slate-200 bg-white/70 text-slate-400"
-      }`}
-    >
-      {icon}
-      <span>{displayLabel}</span>
-    </button>
   );
 }

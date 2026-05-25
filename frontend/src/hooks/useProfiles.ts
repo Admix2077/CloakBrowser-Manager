@@ -11,6 +11,7 @@ const HEALTH_CHECK_CONCURRENCY = 6;
 const BULK_LAUNCH_CONCURRENCY = 2;
 const BULK_STOP_CONCURRENCY = 2;
 const BULK_TAG_CONCURRENCY = 4;
+const BULK_DELETE_CONCURRENCY = 2;
 
 export interface BulkLaunchResult {
   requestedCount: number;
@@ -33,6 +34,15 @@ export interface BulkTagResult {
   taggedCount: number;
   skippedUnchangedCount: number;
   failedCount: number;
+}
+
+export interface BulkDeleteResult {
+  requestedCount: number;
+  deletableCount: number;
+  deletedCount: number;
+  skippedRunningCount: number;
+  failedCount: number;
+  deletedIds: string[];
 }
 
 type ProfileTag = NonNullable<ProfileCreateData["tags"]>[number];
@@ -443,6 +453,89 @@ export function useProfiles() {
     [profiles, refresh, refreshHealth],
   );
 
+  const deleteProfiles = useCallback(
+    async (profileIds: string[]): Promise<BulkDeleteResult> => {
+      const ids = [...new Set(profileIds.filter(Boolean))];
+      const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+      const deletableIds: string[] = [];
+      const deletedIds: string[] = [];
+      const failureMessages: string[] = [];
+      let skippedRunningCount = 0;
+      let failedCount = 0;
+      let cursor = 0;
+
+      ids.forEach((id) => {
+        const profile = profileById.get(id);
+        if (!profile) {
+          failedCount += 1;
+          failureMessages.push(`Profile ${id} is no longer available`);
+          return;
+        }
+        if (profile.status === "running") {
+          skippedRunningCount += 1;
+          return;
+        }
+        deletableIds.push(id);
+      });
+
+      const result: BulkDeleteResult = {
+        requestedCount: ids.length,
+        deletableCount: deletableIds.length,
+        deletedCount: 0,
+        skippedRunningCount,
+        failedCount: 0,
+        deletedIds: [],
+      };
+
+      if (deletableIds.length > 0) {
+        const workerCount = Math.min(BULK_DELETE_CONCURRENCY, deletableIds.length);
+        await Promise.all(
+          Array.from({ length: workerCount }, async () => {
+            while (cursor < deletableIds.length) {
+              const id = deletableIds[cursor];
+              cursor += 1;
+              if (!id) continue;
+              try {
+                await api.deleteProfile(id);
+                deletedIds.push(id);
+              } catch (err) {
+                failedCount += 1;
+                failureMessages.push(err instanceof Error ? err.message : "Failed to delete profile");
+              }
+            }
+          }),
+        );
+      }
+
+      if (deletedIds.length > 0) {
+        const deletedIdSet = new Set(deletedIds);
+        setProfiles((prev) => prev.filter((profile) => !deletedIdSet.has(profile.id)));
+        setHealthByProfileId((prev) => {
+          const next = { ...prev };
+          deletedIds.forEach((id) => {
+            delete next[id];
+          });
+          return next;
+        });
+      }
+
+      result.deletedCount = deletedIds.length;
+      result.failedCount = failedCount;
+      result.deletedIds = deletedIds;
+
+      if (failedCount > 0) {
+        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
+        setOperationError(`Failed to delete ${failedCount} profile(s)${reasonSummary}`);
+      } else {
+        setOperationError(null);
+      }
+
+      return result;
+    },
+    [profiles],
+  );
+
   return {
     profiles,
     healthByProfileId,
@@ -459,6 +552,7 @@ export function useProfiles() {
     stop,
     stopProfiles,
     addTagsToProfiles,
+    deleteProfiles,
   };
 }
 

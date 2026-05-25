@@ -65,7 +65,7 @@
 - [x] 接入批量 stop。
 - [x] 接入批量 health check。
 - [x] 接入批量 set tags。
-- [ ] 接入批量 delete，必须有确认。
+- [x] 接入批量 delete，必须有确认。
 - [x] 新增 `ProfileSummaryPanel`：
   - health。
   - runtime。
@@ -1115,10 +1115,104 @@ git diff --check
 
 范围说明：
 
-- 本小闭环不接入批量 delete；该动作仍必须单独做确认弹窗和后端/前端测试。
+- 本 UI polish 小闭环当时未接入批量 delete；后续已在“批量 delete 确认小闭环”中接入。
 - 本小闭环不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 本小闭环不改 Profile 创建/编辑/VNC viewer 的现有流，只保持不破坏。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待 03 后续小闭环。
+
+## 2026-05-26 批量 delete 确认小闭环
+
+已完成：
+
+- [x] `frontend/src/hooks/useProfiles.ts`
+  - 新增 `deleteProfiles(profileIds)`，复用真实 `DELETE /api/profiles/{id}`。
+  - 批量层只删除 `status === "stopped"` 的 profile，跳过 running，避免批量误删正在使用的 VNC / Automation 会话。
+  - 删除并发限制为 2，避免大量 profile 数据目录删除同时打满 IO。
+  - 支持去重、部分失败继续执行、失败原因脱敏、成功后清理 `profiles` 和 `healthByProfileId`。
+  - 返回 `deletedIds`，供 App 清理 selection / preview / detail 引用。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - `Delete selected` 从 disabled 占位接入为真实 danger action。
+  - 只有存在 stopped selection 时可用；running-only selection 下保持 disabled，并提示先 stop。
+  - 点击后打开确认面板，明确提示浏览器数据会永久删除。
+  - 必须输入大写 `DELETE` 才能确认；取消和 Escape 不触发删除。
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - 向 bulk toolbar 传递 stopped ids，不破坏现有 table `min-w-[840px]`、横向滚动和虚拟滚动。
+- [x] `frontend/src/App.tsx`
+  - 新增 `bulkDeleting` 状态。
+  - 删除成功后只清理成功删除的 profile selection。
+  - 如果当前 preview / detail 命中已删除 profile，回到可用状态，避免 stale view。
+
+测试更新：
+
+- `useProfiles.test.ts`
+  - 覆盖批量删除去重、成功删除、health cache 清理。
+  - 覆盖 running profile 跳过。
+  - 覆盖部分失败时成功项仍删除、失败原因脱敏。
+  - 覆盖 selection 中 profile 已消失时返回失败。
+- `ProfileTable.test.tsx`
+  - 覆盖必须输入 `DELETE` 才能确认。
+  - 覆盖取消确认不会删除。
+  - 覆盖 running-only selection 下 delete disabled。
+- `App.test.tsx`
+  - 覆盖确认后调用 `deleteProfiles`，删除成功后清理 selection。
+  - 覆盖 mixed selection 只传 stopped，并保留 running selection。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 61 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 96 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8092/`。
+- QA 数据目录：`/tmp/cloakbrowser-bulk-delete-qa-data`，后端启动时 patch `backend.database.DATA_DIR/DB_PATH` 指向临时目录。
+- QA 数据：150 个 `QA Bulk Profile`，用于验证数百 profile 级别 table 虚拟滚动和批量删除。
+- 桌面 `1440x900`：
+  - 首屏可见 operations rail、summary tiles、filter toolbar、dense table、inspector。
+  - 选择 `QA Bulk Profile 000` 和 `QA Bulk Profile 001` 后 bulk bar 显示 `2 selected`，`Delete` 可用。
+  - 点击 `Delete` 后确认面板显示 `Delete 2 stopped profiles?` 和永久删除提示。
+  - 未输入 `DELETE` 时 `Confirm bulk delete` disabled。
+  - 输入 `DELETE` 后真实删除 2 个 profile，列表从 150 变为 148，selection 清理。
+  - 点击 `Check health` 对选中 profile 真实调用健康检测；被检测 profile 从 risk-first 首屏位置移动，说明 health 状态参与排序。
+  - 主表滚动到约第 120 行后早期 profile 离开 DOM，可见 `QA Bulk Profile 122` 至 `130`，虚拟滚动仍生效。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`tableOverflow === "auto"`。
+  - 横向滚动到右侧后 `Actions` / `Open` 仍可访问。
+- console / errors 无相关前端错误。
+
+截图：
+
+- `/tmp/cloak-bulk-delete-desktop.png`
+- `/tmp/cloak-bulk-delete-confirm.png`
+- `/tmp/cloak-bulk-delete-after.png`
+- `/tmp/cloak-bulk-delete-health-check.png`
+- `/tmp/cloak-bulk-delete-virtual-scroll.png`
+- `/tmp/cloak-bulk-delete-mobile.png`
+- `/tmp/cloak-bulk-delete-mobile-actions.png`
+
+范围说明：
+
+- 本小闭环不改后端单删语义；后端仍支持 running profile delete 时先 stop，但前端批量层更保守地跳过 running。
+- 本小闭环不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- 本小闭环不改 Profile 创建/编辑/VNC viewer 的现有流，只保持不破坏。
+- 03 模块仍未完成：创建/编辑能力复核、VNC viewer 能力复核、空态拆分、窄屏 card list 待后续。
 
 ## 2026-05-26 Profile 运营台控件质感 polish 小闭环
 
@@ -1234,7 +1328,7 @@ git diff --check
 
 范围说明：
 
-- 本小闭环不接入批量 delete；该动作仍必须单独做确认弹窗和后端/前端测试。
+- 本 UI polish 小闭环当时未接入批量 delete；后续已在“批量 delete 确认小闭环”中接入。
 - 本小闭环不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 本小闭环不改 Profile 创建/编辑/VNC viewer 的现有流，只保持不破坏。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待 03 后续小闭环。

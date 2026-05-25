@@ -1522,7 +1522,6 @@ git diff --check
 
 仍未做：
 
-- 批量 delete 未接入，仍需确认弹窗和测试。
 - 服务端分页未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待后续。
 
@@ -1625,6 +1624,80 @@ git diff --check
 
 仍未做：
 
-- 批量 delete 未接入，仍需确认弹窗和测试。
 - 服务端分页未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待后续。
+
+## 25. 2026-05-26 批量 delete 确认小闭环（最新状态）
+
+说明：
+
+- 上方 UI polish 小闭环记录的是当时状态；本节是后续最新状态，已覆盖“Delete selected 继续 disabled / 批量 delete 未接入”的历史备注。
+- 03 Profile 运营台的 `接入批量 delete，必须有确认` 已完成并勾选。
+- `tasks/progress.md` 中 03 模块仍不标完成，因为创建/编辑能力复核、VNC viewer 能力复核、空态拆分、窄屏 card list 还未完成。
+
+关键实现：
+
+- `frontend/src/hooks/useProfiles.ts`
+  - 新增 `deleteProfiles(profileIds)`。
+  - 复用真实 `DELETE /api/profiles/{id}`，不新增 mock route。
+  - 前端批量层只删除 stopped profiles，跳过 running profiles。
+  - 删除并发限制为 2。
+  - 成功后本地移除 `profiles` 和 `healthByProfileId`，返回 `deletedIds`。
+  - 部分失败继续执行，失败原因经过 proxy 凭据脱敏。
+- `frontend/src/components/BulkActionBar.tsx`
+  - `Delete selected` 接入真实 danger action。
+  - running-only selection 下 disabled，并提示先 stop running profiles。
+  - 确认面板要求输入大写 `DELETE`；确认文案明确浏览器数据会永久删除。
+- `frontend/src/components/ProfileTable.tsx`
+  - bulk delete 只向 App 传 stopped ids。
+  - 保持 `min-w-[840px]`、表格自身横向滚动和大列表虚拟滚动语义。
+- `frontend/src/App.tsx`
+  - 新增 `bulkDeleting` 状态。
+  - 删除成功后清理成功删除 profile 的 selection。
+  - 当前 preview / detail 命中已删除 profile 时回到可用状态，避免 stale view。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 61 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 96 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8092/`。
+- QA 数据目录：`/tmp/cloakbrowser-bulk-delete-qa-data`。
+- 150 个 `QA Bulk Profile` 用于验证批量删除和数百 profile 虚拟滚动。
+- 桌面 `1440x900`：
+  - 选择 2 个 stopped profiles 后 `Delete` 可用。
+  - 点击 `Delete` 后确认面板出现，未输入 `DELETE` 时确认按钮 disabled。
+  - 输入 `DELETE` 后真实删除 2 个 profile，列表 150 -> 148，selection 清理。
+  - 主表滚动到约第 120 行后可见 `QA Bulk Profile 122` 至 `130`，虚拟滚动仍生效。
+  - `Check health` 对选中 profile 真实调用，未破坏既有批量健康检测。
+- 移动 `390x844`：
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`Actions` / `Open` 可访问。
+- console / errors 无相关前端错误。
+
+截图：
+
+- `/tmp/cloak-bulk-delete-desktop.png`
+- `/tmp/cloak-bulk-delete-confirm.png`
+- `/tmp/cloak-bulk-delete-after.png`
+- `/tmp/cloak-bulk-delete-health-check.png`
+- `/tmp/cloak-bulk-delete-virtual-scroll.png`
+- `/tmp/cloak-bulk-delete-mobile.png`
+- `/tmp/cloak-bulk-delete-mobile-actions.png`

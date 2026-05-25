@@ -158,6 +158,109 @@ describe("useProfiles", () => {
     expect(result.current.profiles).toHaveLength(0);
   });
 
+  it("bulk deletes selected stopped profiles once and removes health snapshots", async () => {
+    const secondProfile = { ...fakeProfile, id: "delete-2", name: "Delete 2" };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, secondProfile]);
+    mockApi.deleteProfile.mockResolvedValue({ ok: true });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => expect(result.current.healthByProfileId["abc-123"]).toEqual(fakeHealth));
+
+    let deleteResult;
+    await act(async () => {
+      deleteResult = await result.current.deleteProfiles(["abc-123", "delete-2", "abc-123"]);
+    });
+
+    expect(mockApi.deleteProfile).toHaveBeenCalledTimes(2);
+    expect(mockApi.deleteProfile).toHaveBeenCalledWith("abc-123");
+    expect(mockApi.deleteProfile).toHaveBeenCalledWith("delete-2");
+    expect(result.current.profiles).toEqual([]);
+    expect(result.current.healthByProfileId["abc-123"]).toBeUndefined();
+    expect(deleteResult).toMatchObject({
+      requestedCount: 2,
+      deletableCount: 2,
+      deletedCount: 2,
+      skippedRunningCount: 0,
+      failedCount: 0,
+    });
+  });
+
+  it("skips running profiles during bulk delete", async () => {
+    const runningProfile = { ...fakeProfile, id: "running-123", name: "Running", status: "running" as const };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, runningProfile]);
+    mockApi.deleteProfile.mockResolvedValue({ ok: true });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let deleteResult;
+    await act(async () => {
+      deleteResult = await result.current.deleteProfiles(["running-123", "abc-123"]);
+    });
+
+    expect(mockApi.deleteProfile).toHaveBeenCalledTimes(1);
+    expect(mockApi.deleteProfile).toHaveBeenCalledWith("abc-123");
+    expect(deleteResult).toMatchObject({
+      requestedCount: 2,
+      deletableCount: 1,
+      deletedCount: 1,
+      skippedRunningCount: 1,
+      failedCount: 0,
+    });
+    expect(result.current.profiles.map((profile) => profile.id)).toEqual(["running-123"]);
+  });
+
+  it("reports partial bulk delete failures while removing successful profiles", async () => {
+    const failingProfile = { ...fakeProfile, id: "fail-123", name: "Failing delete" };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, failingProfile]);
+    mockApi.deleteProfile.mockImplementation((id: string) => {
+      if (id === "abc-123") return Promise.resolve({ ok: true });
+      return Promise.reject(new Error("Delete failed for proxy http://user:secret@proxy.example:8080"));
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let deleteResult;
+    await act(async () => {
+      deleteResult = await result.current.deleteProfiles(["abc-123", "fail-123"]);
+    });
+
+    expect(mockApi.deleteProfile).toHaveBeenCalledTimes(2);
+    expect(result.current.profiles.map((profile) => profile.id)).toEqual(["fail-123"]);
+    expect(deleteResult).toMatchObject({
+      requestedCount: 2,
+      deletableCount: 2,
+      deletedCount: 1,
+      skippedRunningCount: 0,
+      failedCount: 1,
+    });
+    expect(result.current.error).toBe("Failed to delete 1 profile(s): Delete failed for proxy http://proxy.example:8080");
+  });
+
+  it("reports selected profile ids that disappear before bulk delete", async () => {
+    mockApi.listProfiles.mockResolvedValue([fakeProfile]);
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let deleteResult;
+    await act(async () => {
+      deleteResult = await result.current.deleteProfiles(["missing-123"]);
+    });
+
+    expect(mockApi.deleteProfile).not.toHaveBeenCalled();
+    expect(deleteResult).toMatchObject({
+      requestedCount: 1,
+      deletableCount: 0,
+      deletedCount: 0,
+      skippedRunningCount: 0,
+      failedCount: 1,
+    });
+    expect(result.current.error).toBe("Failed to delete 1 profile(s): Profile missing-123 is no longer available");
+  });
+
   it("sets error on fetch failure", async () => {
     mockApi.listProfiles.mockRejectedValue(new Error("Network error"));
 
