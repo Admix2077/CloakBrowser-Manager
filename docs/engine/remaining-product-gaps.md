@@ -7,18 +7,28 @@
 - Profile CRUD、tags、启动/停止/status、删除运行中 profile、auth、auto-launch、剪贴板 API、noVNC WebSocket path 已有后端测试覆盖。
 - Docker 镜像预下载 `invisible_playwright` patched Firefox，并保留 KasmVNC/noVNC 网页操控链路。
 - 运行中 profile 的 `cdp_url` 固定为 `null`，CDP HTTP 返回 `501`，CDP WebSocket 关闭为不可用。
+- 后端已提供 Automation REST API 替代 CDP 控制 running profile，运行中 profile 返回 `automation_url`。
 - 前端不再把第一阶段未生效的 `platform`、`geoip`、`user_agent`、`human_preset` 暴露为可编辑或生效身份标签。
 
 ## 后续必须设计
 
-### 自动化 API 替代 CDP
+### 自动化 API 后续产品化
 
-`invisible_playwright` 使用 Firefox/Juggler，不提供 Chromium CDP。完整产品如果仍要支持“外部脚本控制已运行 profile，同时网页 noVNC 可见”，需要单独设计：
+`invisible_playwright` 使用 Firefox/Juggler，不提供 Chromium CDP。本分支不伪装 CDP，`/api/profiles/{id}/cdp*` 继续返回 `501`。后端基础 REST 能力已经完成：
 
-- Juggler/Playwright 桥接 API 的进程模型和权限边界。
-- 每个 running profile 的可寻址会话标识、并发控制和错误恢复。
-- 与现有 `/api/profiles/{id}/cdp*` 路由的兼容策略：保留 501、替换为新路由，或提供明确迁移文档。
-- Python/Node 客户端示例和端到端测试。
+- `GET /api/profiles/{id}/automation` 返回运行状态和 pages URL。
+- `GET/POST /api/profiles/{id}/automation/pages` 支持列出和新建页面。
+- `POST /api/profiles/{id}/automation/pages/{page_ref}/goto` 支持导航。
+- `POST /api/profiles/{id}/automation/pages/{page_ref}/evaluate` 支持在页面中执行表达式。
+- `POST /api/profiles/{id}/automation/pages/{page_ref}/screenshot` 返回 PNG 截图。
+- `DELETE /api/profiles/{id}/automation/pages/{page_ref}` 支持关闭页面。
+
+后续产品化仍需补齐：
+
+- Python/Node 客户端示例、错误码说明和更完整 API 文档。
+- Docker/真实 patched Firefox smoke：launch 后调用 Automation API 访问页面、evaluate、截图，并确认 noVNC 会话仍可用。
+- 并发请求、长导航、页面关闭竞态和错误恢复边界。
+- `evaluate` 的安全说明、认证 token 暴露风险和可选权限粒度。
 
 ### 未映射 profile 字段
 

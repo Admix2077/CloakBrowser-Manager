@@ -40,7 +40,7 @@ docker compose up --build
 
 Open [http://localhost:8080](http://localhost:8080) in your browser. Create a profile. Click Launch. Done.
 
-> **迁移阶段说明**：当前第一阶段目标是 profile 管理、启动/停止和 noVNC 网页操控可用。Chromium CDP 自动化接口在 invisible_playwright Firefox 后端下暂不可用，后端会返回 `501 Not Implemented`。
+> **迁移阶段说明**：当前分支保留 profile 管理、启动/停止和 noVNC 网页操控。`invisible_playwright` Firefox 不暴露 Chromium CDP，因此 `/api/profiles/<profile-id>/cdp*` 仍返回 `501 Not Implemented`；外部脚本请使用新的 Automation REST API 控制运行中的 profile。
 
 ## Why Not Just Use a VPN?
 
@@ -62,7 +62,7 @@ A VPN only changes your IP. Incognito only clears cookies. Chrome profiles share
 - **One-click launch/stop** — each profile runs as an isolated invisible_playwright Firefox context
 - **Session persistence** — cookies, localStorage, and cache survive browser restarts
 - **In-browser viewing** — interact with launched browsers via noVNC, directly in the web GUI
-- **CDP status** — CDP toolbar entry is retained but disabled in phase one because Firefox does not expose Chromium CDP
+- **Automation REST API** — control running invisible_playwright profiles without Chromium CDP
 - **Optional authentication** — protect the web UI and API with a single token, or run wide open locally
 - **Powered by invisible_playwright** — deterministic stealth profiles on patched Firefox
 
@@ -118,7 +118,7 @@ Your profiles and session data are stored in the `cloakprofiles` volume and pers
 
 ## Automation API
 
-第一阶段不再伪装 Chromium CDP。`invisible_playwright` 使用 patched Firefox，运行中的 profile 仍可通过 noVNC 网页操控，但以下接口会返回 `501 Not Implemented`：
+本分支不伪装 Chromium CDP。`invisible_playwright` 使用 patched Firefox，因此以下 CDP 接口会返回 `501 Not Implemented`：
 
 ```text
 GET /api/profiles/<profile-id>/cdp
@@ -126,7 +126,44 @@ GET /api/profiles/<profile-id>/cdp/json/version
 GET /api/profiles/<profile-id>/cdp/json/list
 ```
 
-前端 toolbar 保留 code 图标，但在 `cdp_url=null` 时禁用并提示 CDP 当前不可用。后续自动化能力需要单独设计 Firefox/Juggler 或自建桥接 API。
+运行中的 profile 会返回 `cdp_url: null` 和 `automation_url: /api/profiles/<profile-id>/automation`。Manager toolbar 的 code 图标会复制这个 Automation API endpoint。该 REST API 操作同一个 Playwright `BrowserContext`，所以 noVNC 画面和外部 REST 控制看到的是同一浏览器会话。
+
+Available endpoints:
+
+```text
+GET    /api/profiles/{profile_id}/automation
+GET    /api/profiles/{profile_id}/automation/pages
+POST   /api/profiles/{profile_id}/automation/pages
+POST   /api/profiles/{profile_id}/automation/pages/{page_ref}/goto
+POST   /api/profiles/{profile_id}/automation/pages/{page_ref}/evaluate
+POST   /api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot
+DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}
+```
+
+`page_ref` can be a page index like `0`, or the stable `page_id` returned by `/pages`. Scripts should prefer `page_id` when multiple pages may open or close.
+
+Example:
+
+```bash
+PROFILE_ID=<running-profile-id>
+
+curl "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages"
+
+curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/0/goto" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","wait_until":"domcontentloaded","timeout_ms":30000}'
+
+curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/0/evaluate" \
+  -H "Content-Type: application/json" \
+  -d '{"expression":"document.title"}'
+
+curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/0/screenshot" \
+  -H "Content-Type: application/json" \
+  -d '{"full_page":true}' \
+  --output screenshot.png
+```
+
+When `AUTH_TOKEN` is enabled, add `-H "Authorization: Bearer <token>"` to API calls. Treat `evaluate` as privileged: it runs JavaScript in the profile page and should only be exposed on trusted networks or behind authentication.
 
 ## Remote Access
 

@@ -48,11 +48,13 @@ Manager 的网页操控依赖 Xvnc，而不是 CDP。第一阶段必须：
 
 ## CDP 不兼容
 
-`invisible_playwright` 使用 Firefox，不提供 Chromium CDP。第一阶段：
+`invisible_playwright` 使用 Firefox，不提供 Chromium CDP。本分支：
 
 - 后端 CDP 路由返回 `501 Not Implemented`。
-- 前端保留 CDP 入口但禁用提示。
-- 第二阶段单独调研 Firefox/Juggler 或自建自动化桥接接口。
+- `ProfileResponse`、`LaunchResponse` 和 status 返回 `cdp_url: null`。
+- 运行中 profile 返回 `automation_url: /api/profiles/{id}/automation`。
+- 前端 toolbar 的 code 图标复制 Automation API endpoint。
+- Automation REST API 操作同一个 Playwright `BrowserContext`，支持 pages list/new、goto、evaluate、screenshot 和 close page。
 
 ## 源码依据
 

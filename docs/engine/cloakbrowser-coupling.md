@@ -50,7 +50,16 @@ Manager 当前为每个 profile 分配 `5100-5199` 之间的 CDP 端口，并追
 - `WS /api/profiles/{profile_id}/cdp`
 - `WS /api/profiles/{profile_id}/cdp/devtools/{path:path}`
 
-`invisible_playwright` 基于 Firefox/Juggler，不提供 Chromium DevTools Protocol。第一阶段保留 UI 入口但禁用提示，后端上述端点返回 `501 Not Implemented`。外部自动化能力作为第二阶段独立设计。
+`invisible_playwright` 基于 Firefox/Juggler，不提供 Chromium DevTools Protocol。本分支不伪装 CDP，后端上述端点返回 `501 Not Implemented`。外部自动化改用 REST 路由：
+
+- `GET /api/profiles/{profile_id}/automation`
+- `GET/POST /api/profiles/{profile_id}/automation/pages`
+- `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/goto`
+- `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/evaluate`
+- `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot`
+- `DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}`
+
+该接口直接操作 running profile 的 Playwright `BrowserContext`，因此外部脚本和 noVNC viewer 共享同一个浏览器会话。
 
 ## noVNC 与 Xvnc 耦合
 
