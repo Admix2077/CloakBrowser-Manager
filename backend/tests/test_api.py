@@ -256,6 +256,7 @@ def test_launch_success_response_invisible_playwright_no_cdp(app_client: TestCli
         "vnc_ws_port": 6101,
         "display": ":101",
         "cdp_url": None,
+        "automation_url": f"/api/profiles/{pid}/automation",
     }
 
 
@@ -440,6 +441,16 @@ def test_profile_response_has_cdp_url_field(app_client: TestClient):
             assert profile["cdp_url"] is None
 
 
+def test_profile_response_has_automation_url_field(app_client: TestClient):
+    """Stopped profiles should have automation_url=null."""
+    app_client.post("/api/profiles", json={"name": "AutomationShape"})
+    resp = app_client.get("/api/profiles")
+    for profile in resp.json():
+        assert "automation_url" in profile
+        if profile["status"] == "stopped":
+            assert profile["automation_url"] is None
+
+
 def test_status_stopped_has_cdp_url_null(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "CdpStatus"})
     pid = create.json()["id"]
@@ -447,6 +458,7 @@ def test_status_stopped_has_cdp_url_null(app_client: TestClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["cdp_url"] is None
+    assert data["automation_url"] is None
 
 
 def test_running_profile_has_no_cdp_url(app_client: TestClient):
@@ -466,8 +478,238 @@ def test_running_profile_has_no_cdp_url(app_client: TestClient):
     assert data["status"] == "running"
     assert data["vnc_ws_port"] == 6100
     assert data["cdp_url"] is None
+    assert data["automation_url"] == f"/api/profiles/{pid}/automation"
 
     # Cleanup
+    main.browser_mgr.running.pop(pid, None)
+
+
+# ── Automation API ──────────────────────────────────────────────────────────
+
+
+def _automation_running_profile(pid: str, pages: list[MagicMock] | None = None) -> MagicMock:
+    context = MagicMock()
+    context.pages = pages if pages is not None else []
+    context.new_page = AsyncMock()
+
+    running = MagicMock(spec=RunningProfile)
+    running.profile_id = pid
+    running.display = 100
+    running.ws_port = 6100
+    running.engine = "invisible_playwright"
+    running.context = context
+    main.browser_mgr.running[pid] = running
+    return running
+
+
+def _automation_page(url: str = "about:blank", title: str = "Blank") -> MagicMock:
+    page = MagicMock()
+    page.url = url
+    page.title = AsyncMock(return_value=title)
+    page.goto = AsyncMock()
+    page.evaluate = AsyncMock()
+    page.screenshot = AsyncMock(return_value=b"png-bytes")
+    page.close = AsyncMock()
+    return page
+
+
+def test_automation_info_running(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationInfo"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid)
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "profile_id": pid,
+        "engine": "invisible_playwright",
+        "status": "running",
+        "pages_url": f"/api/profiles/{pid}/automation/pages",
+    }
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_info_not_running(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationStopped"})
+    pid = create.json()["id"]
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation")
+
+    assert resp.status_code == 404
+
+
+def test_automation_pages_lists_existing_pages(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationPages"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [
+        _automation_page("about:blank", "Blank"),
+        _automation_page("https://example.com/", "Example"),
+    ])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["pages"][0]["index"] == 0
+    assert data["pages"][0]["url"] == "about:blank"
+    assert data["pages"][0]["title"] == "Blank"
+    assert isinstance(data["pages"][0]["page_id"], str)
+    assert data["pages"][1]["index"] == 1
+    assert data["pages"][1]["url"] == "https://example.com/"
+    assert data["pages"][1]["title"] == "Example"
+    assert isinstance(data["pages"][1]["page_id"], str)
+    assert data["pages"][0]["page_id"] != data["pages"][1]["page_id"]
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_pages_create_new_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationNewPage"})
+    pid = create.json()["id"]
+    page = _automation_page("about:blank", "New")
+    running = _automation_running_profile(pid, [])
+    running.context.new_page.return_value = page
+    running.context.pages = [page]
+
+    resp = app_client.post(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 201
+    running.context.new_page.assert_awaited_once()
+    data = resp.json()
+    assert data["index"] == 0
+    assert data["url"] == "about:blank"
+    assert data["title"] == "New"
+    assert isinstance(data["page_id"], str)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_goto_navigates_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationGoto"})
+    pid = create.json()["id"]
+    page = _automation_page("about:blank", "Before")
+    page.url = "https://example.com/"
+    page.title.return_value = "Example"
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/goto",
+        json={"url": "https://example.com/", "wait_until": "domcontentloaded", "timeout_ms": 5000},
+    )
+
+    assert resp.status_code == 200
+    page.goto.assert_awaited_once_with(
+        "https://example.com/",
+        wait_until="domcontentloaded",
+        timeout=5000,
+    )
+    data = resp.json()
+    assert data["index"] == 0
+    assert data["url"] == "https://example.com/"
+    assert data["title"] == "Example"
+    assert isinstance(data["page_id"], str)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_evaluate_returns_json_result(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationEval"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.evaluate.return_value = {"title": "Example", "ok": True}
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/evaluate",
+        json={"expression": "({ title: document.title, ok: true })"},
+    )
+
+    assert resp.status_code == 200
+    page.evaluate.assert_awaited_once_with("({ title: document.title, ok: true })")
+    assert resp.json() == {"result": {"title": "Example", "ok": True}}
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_page_id_remains_stable_when_page_order_changes(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationPageId"})
+    pid = create.json()["id"]
+    first_page = _automation_page("https://first.example/", "First")
+    second_page = _automation_page("https://second.example/", "Second")
+    second_page.evaluate.return_value = "Second"
+    running = _automation_running_profile(pid, [first_page, second_page])
+
+    page_id = app_client.get(
+        f"/api/profiles/{pid}/automation/pages",
+    ).json()["pages"][1]["page_id"]
+    running.context.pages = [second_page, first_page]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/{page_id}/evaluate",
+        json={"expression": "document.title"},
+    )
+
+    assert resp.status_code == 200
+    second_page.evaluate.assert_awaited_once_with("document.title")
+    first_page.evaluate.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_screenshot_returns_png(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationScreenshot"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.screenshot.return_value = b"\x89PNG\r\n"
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/screenshot",
+        json={"full_page": True},
+    )
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content == b"\x89PNG\r\n"
+    page.screenshot.assert_awaited_once_with(type="png", full_page=True)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_close_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationClose"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.delete(f"/api/profiles/{pid}/automation/pages/0")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    page.close.assert_awaited_once()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_page_not_found(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationMissingPage"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/evaluate",
+        json={"expression": "document.title"},
+    )
+
+    assert resp.status_code == 404
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_unknown_page_id_returns_404_before_listing(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationUnknownPageId"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/not-a-page-id/evaluate",
+        json={"expression": "document.title"},
+    )
+
+    assert resp.status_code == 404
     main.browser_mgr.running.pop(pid, None)
 
 

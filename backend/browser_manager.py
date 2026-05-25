@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -202,6 +202,7 @@ class RunningProfile:
     ws_port: int
     engine: str
     runner: Any | None = None
+    automation_page_ids: dict[int, str] = field(default_factory=dict)
 
 
 class BrowserManager:
@@ -369,8 +370,15 @@ class BrowserManager:
                 "vnc_ws_port": running.ws_port,
                 "display": f":{running.display}",
                 "cdp_url": None,
+                "automation_url": f"/api/profiles/{profile_id}/automation",
             }
-        return {"status": "stopped", "vnc_ws_port": None, "display": None, "cdp_url": None}
+        return {
+            "status": "stopped",
+            "vnc_ws_port": None,
+            "display": None,
+            "cdp_url": None,
+            "automation_url": None,
+        }
 
     async def cleanup_all(self):
         """Stop all running profiles. Called on shutdown."""

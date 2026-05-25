@@ -12,12 +12,14 @@ import logging
 import os
 import struct
 import shutil
+import uuid
 from contextlib import asynccontextmanager
 from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import starlette.requests
@@ -26,6 +28,13 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from . import database as db
 from .browser_manager import BrowserManager
 from .models import (
+    AutomationEvaluateRequest,
+    AutomationEvaluateResponse,
+    AutomationGotoRequest,
+    AutomationInfoResponse,
+    AutomationPageResponse,
+    AutomationPagesResponse,
+    AutomationScreenshotRequest,
     ClipboardRequest,
     LaunchResponse,
     LoginRequest,
@@ -443,6 +452,7 @@ async def list_profiles():
         p["status"] = status["status"]
         p["vnc_ws_port"] = status["vnc_ws_port"]
         p["cdp_url"] = status["cdp_url"]
+        p["automation_url"] = status["automation_url"]
         p["tags"] = [TagResponse(**t) for t in p.get("tags", [])]
         result.append(ProfileResponse(**p))
     return result
@@ -461,6 +471,7 @@ async def create_profile(req: ProfileCreate):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["cdp_url"] = status["cdp_url"]
+    profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
 
@@ -474,6 +485,7 @@ async def get_profile(profile_id: str):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["cdp_url"] = status["cdp_url"]
+    profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
 
@@ -492,6 +504,7 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["cdp_url"] = status["cdp_url"]
+    profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
 
@@ -543,6 +556,7 @@ async def launch_profile(profile_id: str):
         vnc_ws_port=running.ws_port,
         display=f":{running.display}",
         cdp_url=None,
+        automation_url=f"/api/profiles/{profile_id}/automation",
     )
 
 
@@ -825,6 +839,170 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
             await websocket.close()
         except Exception as exc:
             logger.debug("VNC proxy: websocket.close() failed: %s", exc)
+
+
+# ── Automation API ───────────────────────────────────────────────────────────
+# Replaces Chromium CDP for invisible_playwright profiles. These routes operate
+# on the Playwright BrowserContext already owned by the running profile, so the
+# noVNC viewer and external API control the same browser session.
+
+
+def _automation_running(profile_id: str):
+    running = browser_mgr.running.get(profile_id)
+    if not running:
+        raise HTTPException(status_code=404, detail="Profile not running")
+    return running
+
+
+def _automation_page_id(running, page) -> str:
+    if not hasattr(running, "automation_page_ids"):
+        running.automation_page_ids = {}
+    key = id(page)
+    page_id = running.automation_page_ids.get(key)
+    if page_id is None:
+        page_id = str(uuid.uuid4())
+        running.automation_page_ids[key] = page_id
+    return page_id
+
+
+async def _automation_page_summary(running, index: int, page) -> AutomationPageResponse:
+    try:
+        title = await page.title()
+    except Exception as exc:
+        logger.debug("Automation page title failed for index %d: %s", index, exc)
+        title = ""
+    return AutomationPageResponse(
+        page_id=_automation_page_id(running, page),
+        index=index,
+        url=page.url,
+        title=title,
+    )
+
+
+def _automation_get_page(profile_id: str, page_ref: str):
+    running = _automation_running(profile_id)
+    if not hasattr(running, "automation_page_ids"):
+        running.automation_page_ids = {}
+    pages = list(getattr(running.context, "pages", []) or [])
+
+    if page_ref.isdecimal():
+        page_index = int(page_ref)
+        if page_index < len(pages):
+            return running, pages[page_index], page_index
+
+    for index, page in enumerate(pages):
+        if running.automation_page_ids.get(id(page)) == page_ref:
+            return running, page, index
+
+    for index, page in enumerate(pages):
+        if _automation_page_id(running, page) == page_ref:
+            return running, page, index
+
+    if page_ref.isdecimal():
+        raise HTTPException(status_code=404, detail="Automation page not found")
+    raise HTTPException(status_code=404, detail="Automation page not found")
+
+
+@app.get("/api/profiles/{profile_id}/automation", response_model=AutomationInfoResponse)
+async def automation_info(profile_id: str):
+    running = _automation_running(profile_id)
+    return AutomationInfoResponse(
+        profile_id=profile_id,
+        engine=running.engine,
+        status="running",
+        pages_url=f"/api/profiles/{profile_id}/automation/pages",
+    )
+
+
+@app.get("/api/profiles/{profile_id}/automation/pages", response_model=AutomationPagesResponse)
+async def automation_pages(profile_id: str):
+    running = _automation_running(profile_id)
+    pages = list(getattr(running.context, "pages", []) or [])
+    return AutomationPagesResponse(
+        pages=[
+            await _automation_page_summary(running, index, page)
+            for index, page in enumerate(pages)
+        ],
+    )
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages",
+    response_model=AutomationPageResponse,
+    status_code=201,
+)
+async def automation_create_page(profile_id: str):
+    running = _automation_running(profile_id)
+    try:
+        page = await running.context.new_page()
+    except Exception as exc:
+        logger.warning("Automation new_page failed for %s: %s", profile_id, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    pages = list(getattr(running.context, "pages", []) or [])
+    try:
+        index = pages.index(page)
+    except ValueError:
+        index = max(0, len(pages) - 1)
+    return await _automation_page_summary(running, index, page)
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/goto",
+    response_model=AutomationPageResponse,
+)
+async def automation_goto(profile_id: str, page_ref: str, body: AutomationGotoRequest):
+    running, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.goto(body.url, wait_until=body.wait_until, timeout=body.timeout_ms)
+    except Exception as exc:
+        logger.warning("Automation goto failed for %s page %d: %s", profile_id, page_index, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await _automation_page_summary(running, page_index, page)
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/evaluate",
+    response_model=AutomationEvaluateResponse,
+)
+async def automation_evaluate(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationEvaluateRequest,
+):
+    _, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        result = await page.evaluate(body.expression)
+    except Exception as exc:
+        logger.warning("Automation evaluate failed for %s page %d: %s", profile_id, page_index, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    return AutomationEvaluateResponse(result=jsonable_encoder(result))
+
+
+@app.post("/api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot")
+async def automation_screenshot(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationScreenshotRequest,
+):
+    _, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        png = await page.screenshot(type="png", full_page=body.full_page)
+    except Exception as exc:
+        logger.warning("Automation screenshot failed for %s page %d: %s", profile_id, page_index, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    return Response(content=png, media_type="image/png")
+
+
+@app.delete("/api/profiles/{profile_id}/automation/pages/{page_ref}")
+async def automation_close_page(profile_id: str, page_ref: str):
+    _, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.close()
+    except Exception as exc:
+        logger.warning("Automation page close failed for %s page %d: %s", profile_id, page_index, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True}
 
 
 # ── CDP WebSocket Proxy ──────────────────────────────────────────────────────

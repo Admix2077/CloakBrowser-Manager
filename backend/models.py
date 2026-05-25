@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -103,6 +103,7 @@ class ProfileResponse(BaseModel):
     status: str = "stopped"  # "running" | "stopped"
     vnc_ws_port: int | None = None
     cdp_url: str | None = None
+    automation_url: str | None = None
 
 
 class LaunchResponse(BaseModel):
@@ -111,6 +112,7 @@ class LaunchResponse(BaseModel):
     vnc_ws_port: int
     display: str
     cdp_url: str | None = None
+    automation_url: str | None = None
 
 
 class StatusResponse(BaseModel):
@@ -124,6 +126,43 @@ class ProfileStatusResponse(BaseModel):
     vnc_ws_port: int | None = None
     display: str | None = None
     cdp_url: str | None = None
+    automation_url: str | None = None
+
+
+class AutomationInfoResponse(BaseModel):
+    profile_id: str
+    engine: str
+    status: str
+    pages_url: str
+
+
+class AutomationPageResponse(BaseModel):
+    page_id: str
+    index: int
+    url: str
+    title: str
+
+
+class AutomationPagesResponse(BaseModel):
+    pages: list[AutomationPageResponse]
+
+
+class AutomationGotoRequest(BaseModel):
+    url: str
+    wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "load"
+    timeout_ms: int = Field(default=30_000, ge=1, le=300_000)
+
+
+class AutomationEvaluateRequest(BaseModel):
+    expression: str = Field(min_length=1, max_length=200_000)
+
+
+class AutomationEvaluateResponse(BaseModel):
+    result: Any
+
+
+class AutomationScreenshotRequest(BaseModel):
+    full_page: bool = False
 
 
 class ClipboardRequest(BaseModel):

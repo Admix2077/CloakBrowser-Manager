@@ -159,6 +159,14 @@ def test_launch_response_cdp_url_default_none():
     assert r.cdp_url is None
 
 
+def test_launch_response_automation_url():
+    r = LaunchResponse(
+        profile_id="abc", vnc_ws_port=6100, display=":100",
+        automation_url="/api/profiles/abc/automation",
+    )
+    assert r.automation_url == "/api/profiles/abc/automation"
+
+
 # ── ProfileStatusResponse ──────────────────────────────────────────────────
 
 
@@ -173,6 +181,14 @@ def test_profile_status_response_cdp_url():
 def test_profile_status_response_cdp_url_stopped():
     r = ProfileStatusResponse(status="stopped")
     assert r.cdp_url is None
+
+
+def test_profile_status_response_automation_url():
+    r = ProfileStatusResponse(
+        status="running", vnc_ws_port=6100, display=":100",
+        automation_url="/api/profiles/abc/automation",
+    )
+    assert r.automation_url == "/api/profiles/abc/automation"
 
 
 # ── ProfileResponse ────────────────────────────────────────────────────────
@@ -195,3 +211,13 @@ def test_profile_response_cdp_url_default_none():
         created_at="2026-01-01T00:00:00", updated_at="2026-01-01T00:00:00",
     )
     assert r.cdp_url is None
+
+
+def test_profile_response_automation_url():
+    r = ProfileResponse(
+        id="abc", name="Test", fingerprint_seed=12345,
+        user_data_dir="/data/profiles/abc",
+        created_at="2026-01-01T00:00:00", updated_at="2026-01-01T00:00:00",
+        status="running", automation_url="/api/profiles/abc/automation",
+    )
+    assert r.automation_url == "/api/profiles/abc/automation"
