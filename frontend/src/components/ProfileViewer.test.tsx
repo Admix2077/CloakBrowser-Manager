@@ -1,17 +1,47 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ProfileViewer } from "./ProfileViewer";
 
+const { MockRFB, rfbInstances } = vi.hoisted(() => {
+  const rfbInstances: Array<{
+    constructorArgs: unknown[];
+    scaleViewport: boolean;
+    resizeSession: boolean;
+    showDotCursor: boolean;
+    listeners: Record<string, (event?: unknown) => void>;
+    addEventListener: ReturnType<typeof vi.fn>;
+    removeEventListener: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    sendKey: ReturnType<typeof vi.fn>;
+  }> = [];
+
+  const MockRFB = vi.fn(function MockRFB(this: unknown, ...args: unknown[]) {
+    const listeners: Record<string, (event?: unknown) => void> = {};
+    const instance = {
+      constructorArgs: args,
+      scaleViewport: false,
+      resizeSession: true,
+      showDotCursor: false,
+      listeners,
+      addEventListener: vi.fn((event: string, handler: (event?: unknown) => void) => {
+        listeners[event] = handler;
+      }),
+      removeEventListener: vi.fn((event: string) => {
+        delete listeners[event];
+      }),
+      disconnect: vi.fn(),
+      sendKey: vi.fn(),
+    };
+
+    rfbInstances.push(instance);
+    return instance;
+  });
+
+  return { MockRFB, rfbInstances };
+});
+
 vi.mock("@novnc/novnc/core/rfb.js", () => ({
-  default: class MockRFB {
-    scaleViewport = false;
-    resizeSession = false;
-    showDotCursor = false;
-    addEventListener = vi.fn();
-    removeEventListener = vi.fn();
-    disconnect = vi.fn();
-    sendKey = vi.fn();
-  },
+  default: MockRFB,
 }));
 
 vi.mock("../lib/api", () => ({
@@ -22,12 +52,57 @@ vi.mock("../lib/api", () => ({
 }));
 
 beforeEach(() => {
+  MockRFB.mockClear();
+  rfbInstances.length = 0;
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: {
       readText: vi.fn(),
       writeText: vi.fn().mockResolvedValue(undefined),
     },
+  });
+});
+
+describe("ProfileViewer VNC connection", () => {
+  it("connects noVNC to the selected profile VNC websocket", async () => {
+    render(
+      <ProfileViewer
+        profileId="profile-1"
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(MockRFB).toHaveBeenCalledTimes(1));
+
+    const [container, wsUrl, options] = MockRFB.mock.calls[0];
+    expect(container).toBeInstanceOf(HTMLElement);
+    expect(wsUrl).toBe(`ws://${window.location.host}/api/profiles/profile-1/vnc`);
+    expect(options).toEqual({ wsProtocols: ["binary"] });
+    expect(rfbInstances[0].scaleViewport).toBe(true);
+    expect(rfbInstances[0].resizeSession).toBe(false);
+    expect(rfbInstances[0].showDotCursor).toBe(true);
+  });
+
+  it("notifies the operations console when noVNC disconnects", async () => {
+    const onDisconnect = vi.fn();
+    render(
+      <ProfileViewer
+        profileId="profile-1"
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    await waitFor(() => expect(rfbInstances[0]?.listeners.disconnect).toBeTruthy());
+
+    act(() => {
+      rfbInstances[0].listeners.disconnect();
+    });
+
+    await waitFor(() => expect(onDisconnect).toHaveBeenCalledTimes(1));
   });
 });
 

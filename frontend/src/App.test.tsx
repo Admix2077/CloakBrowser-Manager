@@ -15,6 +15,27 @@ vi.mock("./hooks/useProfiles", () => ({
   useProfiles: vi.fn(),
 }));
 
+vi.mock("./components/ProfileViewer", () => ({
+  ProfileViewer: ({
+    profileId,
+    automationUrl,
+    clipboardSync,
+    onDisconnect,
+  }: {
+    profileId: string;
+    automationUrl: string | null;
+    clipboardSync: boolean;
+    onDisconnect: () => void;
+  }) => (
+    <section aria-label="VNC viewer">
+      <div>VNC viewer for {profileId}</div>
+      <div>Automation URL: {automationUrl ?? "none"}</div>
+      <div>Clipboard sync: {clipboardSync ? "enabled" : "disabled"}</div>
+      <button type="button" onClick={onDisconnect}>Simulate VNC disconnect</button>
+    </section>
+  ),
+}));
+
 import { api } from "./lib/api";
 import { useProfiles } from "./hooks/useProfiles";
 
@@ -203,6 +224,97 @@ describe("App operations console", () => {
         notes: "Edited from operations console",
       }));
     });
+  });
+
+  it("keeps the VNC viewer reachable when opening a running profile from the operations table", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [
+        profile({
+          id: "running",
+          name: "Running Profile",
+          status: "running",
+          automation_url: "/api/profiles/running/automation",
+          clipboard_sync: true,
+          vnc_ws_port: 6100,
+        }),
+        profile({ id: "stopped", name: "Stopped Profile", status: "stopped" }),
+      ],
+      healthByProfileId: {
+        running: health("running", {
+          status: "good",
+          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
+        }),
+        stopped: health("stopped", { status: "unknown" }),
+      },
+      loading: false,
+      error: null,
+      create: mockCreate,
+      update: mockUpdate,
+      remove: mockRemove,
+      launch: mockLaunch,
+      stop: mockStop,
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(within(screen.getByRole("table")).getByRole("button", { name: "Open Running Profile" }));
+
+    const viewer = await screen.findByRole("region", { name: "VNC viewer" });
+    expect(within(viewer).getByText("VNC viewer for running")).toBeTruthy();
+    expect(within(viewer).getByText("Automation URL: /api/profiles/running/automation")).toBeTruthy();
+    expect(within(viewer).getByText("Clipboard sync: enabled")).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("returns from the VNC viewer to profile editing when the viewer disconnects", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [
+        profile({
+          id: "running",
+          name: "Running Profile",
+          status: "running",
+          automation_url: "/api/profiles/running/automation",
+          clipboard_sync: false,
+          vnc_ws_port: 6100,
+        }),
+      ],
+      healthByProfileId: {
+        running: health("running", {
+          status: "good",
+          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
+        }),
+      },
+      loading: false,
+      error: null,
+      create: mockCreate,
+      update: mockUpdate,
+      remove: mockRemove,
+      launch: mockLaunch,
+      stop: mockStop,
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(within(screen.getByRole("table")).getByRole("button", { name: "Open Running Profile" }));
+    expect(await screen.findByRole("region", { name: "VNC viewer" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Simulate VNC disconnect" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit Profile" })).toBeTruthy();
+    expect(screen.getByDisplayValue("Running Profile")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "VNC viewer" })).toBeNull();
   });
 
   it("shares sidebar filters with the main profile table", async () => {

@@ -1796,3 +1796,69 @@ git diff --check
 - 服务端分页。
 
 03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 27. 2026-05-26 VNC viewer 能力保留小闭环
+
+背景：
+
+- 03 Profile 运营台经过 dense table / summary inspector / bulk actions / UI polish 后，需要复核原有 running profile 的 VNC viewer 入口没有被破坏。
+- 本轮只保留和验证 VNC viewer 入口、前端 noVNC 连接和断开返回路径，不改 VNC proxy、KasmVNC 或 noVNC 生产逻辑。
+
+实现与测试：
+
+- `frontend/src/App.test.tsx`
+  - mock `ProfileViewer`，覆盖 running profile 从 operations table 点击 `Open` 后进入 VNC viewer。
+  - 覆盖 viewer `onDisconnect` 后返回 `Edit Profile`。
+- `frontend/src/components/ProfileViewer.test.tsx`
+  - mock 可构造的 noVNC `RFB`，断言连接 `ws://<host>/api/profiles/<profile_id>/vnc`。
+  - 断言 `wsProtocols: ["binary"]`、`scaleViewport=true`、`resizeSession=false`、`showDotCursor=true`。
+  - 触发 noVNC `disconnect`，断言上层 `onDisconnect` 被调用。
+- `docs/ai-docs/v1/tasks/03-profile-operations-console.md`
+  - `保留 VNC viewer 能力` 已按本轮证据勾选。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileViewer.test.tsx src/App.test.tsx
+# 2 passed, 20 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileViewer.test.tsx src/components/ProfileTable.test.tsx
+# 3 passed, 44 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 105 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器证据：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8093/`。
+- QA 数据目录：`/tmp/cloakbrowser-vnc-retain-qa-data`。
+- host 环境 `command -v Xvnc` 无输出，无法直接启动真实 KasmVNC；本轮用临时 fake RFB WebSocket 服务模拟最小 RFB handshake，以验证前端 noVNC viewer 和后端 VNC proxy 路径。
+- 桌面 `1440x900`：
+  - table 显示 `QA Running VNC Profile` 为 running，inspector 显示 `VNC :6119`。
+  - 点击 table `Open` 后进入 viewer。
+  - viewer 显示 `Connected`，存在 canvas，Automation API copy action 可见。
+  - 点击 `Stop` 后回到 `Edit Profile`，运行数归零，`Launch` 按钮恢复。
+- `agent-browser errors --clear` 无相关应用错误。
+
+截图：
+
+- `/tmp/cloak-vnc-retain-viewer-connected.png`
+- `/tmp/cloak-vnc-retain-stop-edit.png`
+
+仍未做：
+
+- 真实 KasmVNC / `Xvnc` 二进制启动端到端复验，需在 Docker/运行时回归补验。
+- 03 剩余：空态拆分、窄屏 card list。
+
+03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
