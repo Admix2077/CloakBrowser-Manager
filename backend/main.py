@@ -27,6 +27,12 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import database as db
 from .browser_manager import BrowserManager
+from .geoip import resolve_network_geo
+from .health import (
+    ProfileHealthResponse,
+    compute_profile_health,
+    validate_profile_proxy,
+)
 from .models import (
     AutomationEvaluateRequest,
     AutomationEvaluateResponse,
@@ -572,6 +578,54 @@ async def get_profile_status(profile_id: str):
         raise HTTPException(status_code=404, detail="Profile not found")
     status = browser_mgr.get_status(profile_id)
     return ProfileStatusResponse(**status)
+
+
+# ── Health ──────────────────────────────────────────────────────────────────
+
+
+@app.get("/api/profiles/{profile_id}/health", response_model=ProfileHealthResponse)
+async def get_profile_health(profile_id: str):
+    profile = db.get_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    return compute_profile_health(profile, browser_mgr.get_status(profile_id))
+
+
+@app.post("/api/profiles/{profile_id}/health/check", response_model=ProfileHealthResponse)
+async def check_profile_health(profile_id: str):
+    profile = db.get_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    runtime_status = browser_mgr.get_status(profile_id)
+    try:
+        proxy_url = validate_profile_proxy(profile)
+    except ValueError as exc:
+        return compute_profile_health(
+            profile,
+            runtime_status,
+            proxy_error=str(exc),
+        )
+
+    try:
+        geo = await resolve_network_geo(proxy_url)
+    except Exception as exc:
+        logger.warning("Health GeoIP lookup failed for %s: %s", profile_id, exc)
+        return compute_profile_health(
+            profile,
+            runtime_status,
+            geoip_lookup_failed=True,
+        )
+
+    if any((geo.timezone, geo.locale, geo.ip, geo.country_code)):
+        profile = db.update_profile_geoip_result(profile_id, geo.as_dict()) or profile
+        return compute_profile_health(profile, runtime_status)
+
+    return compute_profile_health(
+        profile,
+        runtime_status,
+        geoip_lookup_failed=True,
+    )
 
 
 # ── System Status ─────────────────────────────────────────────────────────────

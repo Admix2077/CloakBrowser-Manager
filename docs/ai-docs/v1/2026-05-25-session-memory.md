@@ -411,3 +411,36 @@ gh auth login -h github.com
 1. 继续 02 指纹健康引擎，优先后端测试驱动。
 2. 05 Session Broker 之前不要解除 Project Mileage 远程占位。
 3. `/api/runtime/*`、viewer token、runtime session 表、service token 和审计落库必须在 05/10 模块按测试实现，不要把 01 草案当作已实现能力。
+
+## 16. 2026-05-25 02 指纹健康引擎后端小闭环
+
+已完成 02 的后端最小闭环，02 整体未完成，前端 HealthBadge 和 profile 列表展示留下一轮。
+
+实现：
+
+- 新增 `backend/health.py`。
+- 新增健康状态：`unknown`、`good`、`warning`、`error`。
+- 新增 `HEALTH_WARNING_CODES`，覆盖 `geoip_missing`、`geoip_stale`、`proxy_invalid`、`geoip_lookup_failed`、`manual_timezone_mismatch`、`manual_locale_mismatch`、`runtime_vnc_missing`、`runtime_automation_missing`、`launch_failed`。
+- 新增 `GET /api/profiles/{id}/health`：不访问网络，只用 DB profile、`last_geoip_*` 和 `browser_mgr.get_status()` 计算。
+- 新增 `POST /api/profiles/{id}/health/check`：校验 proxy、调用 GeoIP、成功时写入 `last_geoip_*`，失败时返回稳定 health response 且保留旧检测结果。
+- 手动 `timezone` / `locale` 继续是手动覆盖字段，health/check 不覆盖它们，只通过 warning 提示与 GeoIP 建议不一致。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 11 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py backend/tests/test_geoip.py backend/tests/test_api.py -q
+# 77 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 216 passed
+```
+
+UI/UE 预审：
+
+- 后续 `HealthBadge` 建议放在 profile 列表第一行右侧，成为运营扫列表时的快速决策信号。
+- 状态短文案建议：`good = 可继续`、`warning = 需关注`、`error = 不可用`、`unknown = 未检测`。
+- 色彩应低饱和，避免和运行态绿点、tag 多色冲突；warning 用 amber，error 沿用 red，unknown 用中性灰，good 用弱绿色或灰底小绿点。
+- `HealthBadge` 必须有可访问名称或 tooltip，不能只靠颜色表达状态。
