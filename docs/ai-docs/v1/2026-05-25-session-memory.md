@@ -647,6 +647,63 @@ git diff --check
   - `/tmp/cloak-profile-table-virtualized-mobile.png`
   - `/tmp/cloak-profile-table-virtualized-mobile-initial.png`
 
+### 10.10 03 Profile 运营台：BulkActionBar 安全壳
+
+背景：
+
+- `ProfileTable` 已有多选状态和轻量 `N selected + Clear` 选择条。
+- 本小闭环只把选择条升级为独立 `BulkActionBar` 组件，为后续真实批量动作提供稳定 UI 容器。
+- 当前不接入任何批量 mutation，不伪造批量 launch / stop / health check / tag / delete 成功态。
+
+完成内容：
+
+- 新增 `frontend/src/components/BulkActionBar.tsx`。
+- `ProfileTable` 用 `BulkActionBar` 替换原 inline 选择条，保留 `sticky top-0` 和 40px 高度，避免破坏 sticky table header 的 `top-10` 偏移。
+- `BulkActionBar` 只消费受控 `selectedProfileIds` 派生出的 `selectedProfiles`，不持有选择状态。
+- 展示 selected count、running count、stopped count、issue count 和 `Clear`。
+- 预留 `Check health`、`Launch selected`、`Stop selected`、`Tag selected`、`Delete selected` 按钮，但全部 disabled，不调用 API。
+- 不展示 proxy、cookie、token 等敏感字段。
+- `tasks/03-profile-operations-console.md` 已勾选 `新增 BulkActionBar` 和浏览器验收 `批量选择后 action bar 不遮挡主要操作`。
+
+已跑验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 11 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 23 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 58 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data` 使用 240 个 profile。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 选择首行后显示 `Bulk profile actions` toolbar。
+  - toolbar 显示 `1 selected`、running/stopped/issue 摘要。
+  - `Check health`、`Launch selected`、`Stop selected`、`Tag selected`、`Delete selected` 均为 disabled。
+  - `Clear` 可点击且不是 disabled。
+  - 主表滚动到中段后 toolbar 仍 sticky 可见，表头仍可见，主表仍只渲染窗口内行。
+- 移动 `390x844`：
+  - 刷新后 sidebar 默认收起。
+  - 选择首行后 toolbar 可见。
+  - 页面本体没有横向撑破，主表自身保留横向滚动。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+- 截图保存到：
+  - `/tmp/cloak-bulk-action-bar-desktop.png`
+  - `/tmp/cloak-bulk-action-bar-mobile.png`
+
 ## 11. 推荐下一步执行计划
 
 下一次 session 可以从这个顺序开始：
@@ -663,8 +720,8 @@ git diff --check
    - `cd frontend && npm test -- --run`
    - `cd frontend && npm run build`
 4. 从 03 Profile 运营台开始推进第一个可验证小闭环：
-   - `BulkActionBar` 只显示选中数量、清空选择和安全占位动作。
    - 第一批真实批量动作建议从 `health check` 开始，`delete` 必须单独确认闭环。
+   - 后续再接批量 launch / stop / set tags。
 5. 每个前端小闭环必须跑前端测试、build 和浏览器 UI/UE 走查。
 
 ## 12. 验证命令记录

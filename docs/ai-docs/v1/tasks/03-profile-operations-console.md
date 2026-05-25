@@ -60,7 +60,7 @@
 - [x] 左侧 `ProfileList` 大列表虚拟滚动。
 - [x] 主区 `ProfileTable` 大列表虚拟滚动。
 - [x] 新增多选状态。
-- [ ] 新增 `BulkActionBar`。
+- [x] 新增 `BulkActionBar`。
 - [ ] 接入批量 launch。
 - [ ] 接入批量 stop。
 - [ ] 接入批量 health check。
@@ -94,7 +94,7 @@ cd frontend && npm run build
 - [x] 1440px 显示 dense table。
 - [x] 768px 表格不溢出。
 - [x] 375px 显示 card 模式或可用横向滚动。
-- [ ] 批量选择后 action bar 不遮挡主要操作。
+- [x] 批量选择后 action bar 不遮挡主要操作。
 - [ ] 长 proxy、长 tag、长 profile name 不撑破布局。
 
 ## 2026-05-26 列表筛选与排序小闭环
@@ -383,3 +383,71 @@ git diff --check
 - 本小闭环不引入 `react-window` 或 `@tanstack/react-virtual`；当前固定行高表格足以覆盖数百到低千级 profile。
 - 本小闭环不做服务端分页。服务端分页应等批量操作、全选筛选结果和服务端排序/筛选契约稳定后再进入。
 - 左侧虚拟滚动方向不撤销，但产品定位应从“全量 profile 管理入口”逐步调整为最近、分组、收藏、状态快捷过滤和导航兜底。
+
+## 2026-05-26 BulkActionBar 安全壳小闭环
+
+背景：
+
+- `ProfileTable` 已有多选状态和轻量 `N selected + Clear` 选择条。
+- 本小闭环只把选择条升级为独立 `BulkActionBar` 组件，为后续批量动作提供稳定 UI 容器。
+- 当前不接入任何批量 mutation，不伪造批量 launch / stop / health check / tag / delete 成功态。
+
+已完成：
+
+- [x] 新增 `frontend/src/components/BulkActionBar.tsx`。
+- [x] `ProfileTable` 用 `BulkActionBar` 替换原 inline 选择条，保留 `sticky top-0` 和 40px 高度，避免破坏 sticky table header 的 `top-10` 偏移。
+- [x] `BulkActionBar` 只消费受控 `selectedProfileIds` 派生出的 `selectedProfiles`，不持有选择状态。
+- [x] 展示：
+  - selected count。
+  - running count。
+  - stopped count。
+  - issue count（`error` / `warning` health）。
+  - `Clear`。
+- [x] 预留 `Check health`、`Launch selected`、`Stop selected`、`Tag selected`、`Delete selected` 按钮，但全部 disabled，不调用 API。
+- [x] 不展示 proxy、cookie、token 等敏感字段。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 11 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 23 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 58 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data` 使用 240 个 profile。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 选择首行后显示 `Bulk profile actions` toolbar。
+  - toolbar 显示 `1 selected`、running/stopped/issue 摘要。
+  - `Check health`、`Launch selected`、`Stop selected`、`Tag selected`、`Delete selected` 均为 disabled。
+  - `Clear` 可点击且不是 disabled。
+  - 主表滚动到中段后 toolbar 仍 sticky 可见，表头仍可见，主表仍只渲染窗口内行。
+- 移动 `390x844`：
+  - 刷新后 sidebar 默认收起。
+  - 选择首行后 toolbar 可见。
+  - `body.scrollWidth === viewportWidth`，页面本体没有横向撑破。
+  - 主表自身保留横向滚动，`scrollLeft` 可移动到右侧列。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+- 截图保存到：
+  - `/tmp/cloak-bulk-action-bar-desktop.png`
+  - `/tmp/cloak-bulk-action-bar-mobile.png`
+
+范围说明：
+
+- 本小闭环只完成 `BulkActionBar` 容器和只读摘要。
+- 不接入批量 launch / stop / health check / set tags / delete。
+- 下一步建议优先接入批量 health check，因为它是最低风险真实批量动作；delete 仍必须单独确认闭环。

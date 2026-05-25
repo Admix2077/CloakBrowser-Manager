@@ -1,6 +1,7 @@
-import { ArrowRight, X } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import { BulkActionBar } from "./BulkActionBar";
 import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
 
@@ -37,6 +38,10 @@ export function ProfileTable({
   const allVisibleSelected = profiles.length > 0 && selectedVisibleCount === profiles.length;
   const hasPartialVisibleSelection = selectedVisibleCount > 0 && !allVisibleSelected;
   const selectedCount = selectedProfileIds.size;
+  const selectedProfiles = useMemo(
+    () => profiles.filter((profile) => selectedProfileIds.has(profile.id)),
+    [profiles, selectedProfileIds],
+  );
   const shouldVirtualize = profiles.length > PROFILE_TABLE_VIRTUAL_THRESHOLD;
   const virtualWindow = useMemo(
     () => getProfileTableVirtualWindow(profiles.length, scrollTop, viewportHeight),
@@ -86,19 +91,12 @@ export function ProfileTable({
     >
       <div className="min-w-[1040px]">
         {selectedCount > 0 && (
-          <div className="sticky top-0 z-20 flex h-10 items-center gap-3 border-b border-border bg-surface-1 px-3 text-xs">
-            <span className="font-medium text-gray-200">{selectedCount} selected</span>
-            {onClearSelection && (
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-gray-300 transition-colors hover:border-border-hover hover:bg-surface-3"
-                onClick={onClearSelection}
-              >
-                <X className="h-3.5 w-3.5" />
-                Clear
-              </button>
-            )}
-          </div>
+          <BulkActionBar
+            selectedCount={selectedCount}
+            selectedProfiles={selectedProfiles}
+            healthByProfileId={healthByProfileId}
+            onClearSelection={onClearSelection}
+          />
         )}
         <table className="w-full border-separate border-spacing-0 text-left text-xs">
           <thead className={`sticky z-10 bg-surface-0/95 backdrop-blur ${selectedCount > 0 ? "top-10" : "top-0"}`}>

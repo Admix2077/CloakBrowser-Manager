@@ -158,6 +158,28 @@ describe("ProfileTable", () => {
     expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
   });
 
+  it("shows a bulk action bar with selected profile health and runtime summary", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        onClearSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 selected")).toBeTruthy();
+    expect(screen.getByText("1 running")).toBeTruthy();
+    expect(screen.getByText("1 stopped")).toBeTruthy();
+    expect(screen.getByText("1 issue")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("opens the existing profile detail flow when a row action is clicked", () => {
     const onSelect = vi.fn();
     render(
