@@ -371,6 +371,45 @@ DISABLED_DO_NOT_PUSH_TO_UPSTREAM
 - `gh auth status` 显示 active account 为 `Admix2077`，但 token/API 当前不可用或超时，不能用 CLI 创建私有仓库。
 - 后续需要用户重新完成 `gh auth login`，或在 `Admix2077` 账号下手动创建私有仓库并提供 remote URL，再新增独立 remote 推送。
 
+### 10.5 03 Profile 运营台：列表筛选与排序
+
+完成内容：
+
+- 新增 `frontend/src/lib/filters.ts`，集中实现 profile 过滤和排序。
+- 新增 `frontend/src/components/ProfileFilters.tsx`。
+- 现有 `ProfileList` 接入紧凑筛选区，仍保持 sidebar 单选 profile -> 右侧编辑/VNC 的原有路径。
+- 支持：
+  - search。
+  - runtime status。
+  - health status。
+  - proxy exists。
+  - country。
+  - tag。
+  - sort by risk / last checked / name / runtime / country。
+- 默认按风险排序：`error -> warning -> unknown -> good`。
+- `last checked` 优先使用 `health.checked_at`，fallback 到 `profile.last_geoip_resolved_at`。
+- 搜索仍只匹配 profile name，不把 health 中文状态、tag 或 GeoIP 文案纳入搜索。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/filters.test.ts src/components/ProfileFilters.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 11 passed
+
+cd frontend && npm test -- --run
+# 8 passed, 41 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器走查：
+
+- 使用 `agent-browser` 打开 `http://127.0.0.1:5173/`。
+- 桌面 `1440x900` 与移动 `390x844` 视口已检查。
+- 默认风险排序、health/proxy/country/search 过滤、点击筛选结果进入编辑页、点击 `New Profile` 进入创建页均已验证。
+- 控制台无相关应用错误。
+
 ## 11. 推荐下一步执行计划
 
 下一次 session 可以从这个顺序开始：

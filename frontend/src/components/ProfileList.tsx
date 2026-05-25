@@ -1,12 +1,19 @@
-import { Plus, Search, Monitor } from "lucide-react";
-import { useState } from "react";
+import { Plus, Monitor } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import {
+  defaultProfileFilters,
+  filterAndSortProfiles,
+  getProfileFilterOptions,
+  type ProfileFilterState,
+} from "../lib/filters";
 import {
   getHealthGeoipParts,
   getHealthTone,
   getHealthWarningSummary,
 } from "../lib/health";
 import { HealthBadge } from "./HealthBadge";
+import { ProfileFilters } from "./ProfileFilters";
 import { StatusIndicator } from "./StatusIndicator";
 
 interface ProfileListProps {
@@ -24,12 +31,16 @@ export function ProfileList({
   onNew,
   healthByProfileId = {},
 }: ProfileListProps) {
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
 
-  const filtered = profiles.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()),
+  const filterOptions = useMemo(
+    () => getProfileFilterOptions(profiles, healthByProfileId),
+    [healthByProfileId, profiles],
   );
-
+  const filtered = useMemo(
+    () => filterAndSortProfiles(profiles, healthByProfileId, filters),
+    [filters, healthByProfileId, profiles],
+  );
   const runningCount = profiles.filter((p) => p.status === "running").length;
 
   return (
@@ -45,17 +56,11 @@ export function ProfileList({
             {runningCount} running
           </div>
         )}
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
-          <input
-            type="text"
-            placeholder="Search profiles..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="input pl-8 py-1.5 text-xs"
-          />
-        </div>
+        <ProfileFilters
+          value={filters}
+          options={filterOptions}
+          onChange={setFilters}
+        />
       </div>
 
       {/* Profile list */}
