@@ -5,6 +5,7 @@ import {
   defaultProfileFilters,
   filterAndSortProfiles,
   getProfileFilterOptions,
+  type ProfileFilterOptions,
   type ProfileFilterState,
 } from "../lib/filters";
 import {
@@ -22,6 +23,9 @@ interface ProfileListProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   healthByProfileId?: Record<string, ProfileHealthResponse | undefined>;
+  filters?: ProfileFilterState;
+  filterOptions?: ProfileFilterOptions;
+  onFiltersChange?: (filters: ProfileFilterState) => void;
 }
 
 export function ProfileList({
@@ -30,12 +34,17 @@ export function ProfileList({
   onSelect,
   onNew,
   healthByProfileId = {},
+  filters: controlledFilters,
+  filterOptions: controlledFilterOptions,
+  onFiltersChange,
 }: ProfileListProps) {
-  const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
+  const [internalFilters, setInternalFilters] = useState<ProfileFilterState>(defaultProfileFilters);
+  const filters = controlledFilters ?? internalFilters;
+  const setFilters = onFiltersChange ?? setInternalFilters;
 
   const filterOptions = useMemo(
-    () => getProfileFilterOptions(profiles, healthByProfileId),
-    [healthByProfileId, profiles],
+    () => controlledFilterOptions ?? getProfileFilterOptions(profiles, healthByProfileId),
+    [controlledFilterOptions, healthByProfileId, profiles],
   );
   const filtered = useMemo(
     () => filterAndSortProfiles(profiles, healthByProfileId, filters),

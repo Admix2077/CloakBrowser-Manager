@@ -410,6 +410,72 @@ cd frontend && npm run build
 - 默认风险排序、health/proxy/country/search 过滤、点击筛选结果进入编辑页、点击 `New Profile` 进入创建页均已验证。
 - 控制台无相关应用错误。
 
+### 10.6 03 Profile 运营台：只读 ProfileTable 主区
+
+完成内容：
+
+- 新增 `frontend/src/components/ProfileTable.tsx`。
+- 新增 `frontend/src/components/ProfileTable.test.tsx`。
+- 新增 `frontend/src/App.test.tsx`，覆盖 sidebar 筛选/排序同步主表格，以及窄屏默认收起 sidebar。
+- `AppContent` 将 `ProfileFilterState` 上提，`ProfileList` 和 `ProfileTable` 共享同一组筛选、排序结果。
+- `ProfileTable` 作为 `view === "empty"` 的主区 dense table，展示：
+  - profile。
+  - runtime。
+  - health。
+  - proxy。
+  - IP。
+  - country。
+  - timezone。
+  - locale。
+  - tags。
+  - last checked。
+  - actions。
+- `ProfileTable` 不再组件内二次排序，只消费 `AppContent` 传入的 filtered rows，避免覆盖用户选择的 `Name` / `Runtime` / `Country` / `Last checked` 排序。
+- `Open` action 复用现有 `onSelect(profile.id)`，进入原有 edit / VNC viewer 流程。
+- proxy 列显示可诊断但不暴露账号密码的标签：
+  - 有效 URL 显示 `protocol//host`。
+  - 无效 URL 显示 `Invalid proxy`。
+  - 无 proxy 显示 `-`。
+  - 可见文本和 `title` 均不保留 proxy 用户名密码。
+- 窄屏初始收起 sidebar，让 390px 视口优先显示主表格；用户仍可通过 top bar 按钮打开筛选 sidebar。
+
+已跑验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 13 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 49 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用临时 QA 数据目录 `/tmp/cloakbrowser-manager-qa-data`。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- `agent-browser` 在当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 截图保存到：
+  - `/tmp/cloak-profile-table-desktop-v2.png`
+  - `/tmp/cloak-profile-table-768-v2.png`
+  - `/tmp/cloak-profile-table-mobile-v2.png`
+  - `/tmp/cloak-profile-table-mobile-sidebar-v2.png`
+- 桌面 `1440x900` 显示 dense table。
+- `768x900` body 未横向撑破，table 在主区内横向滚动。
+- `390x844` 默认 sidebar 收起，主表格占满首屏；打开 sidebar 后筛选区可用。
+- 已验证 `Sort profiles = Name` 会同步主表格排序。
+- 已验证 `Health status = 不可用` 会同步主表格筛选。
+- 已验证点击 `Open QA Invalid Proxy` 进入原有编辑表单，`Launch`、`Delete`、`Cancel`、`Save` 仍可见。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+
+范围说明：
+
+- 03 模块仍未完成。
+- 本小闭环不包含多选 checkbox、`BulkActionBar`、批量 launch/stop/health check/set tags/delete、右侧 summary panel 或移动 card list。
+- `frontend/tsconfig.tsbuildinfo` 是当前仓库已跟踪的 TypeScript build metadata，历史前端提交也会更新；本轮作为显式已跟踪编译元数据处理，不做单独清理。
+
 ## 11. 推荐下一步执行计划
 
 下一次 session 可以从这个顺序开始：
@@ -426,9 +492,9 @@ cd frontend && npm run build
    - `cd frontend && npm test -- --run`
    - `cd frontend && npm run build`
 4. 从 03 Profile 运营台开始推进第一个可验证小闭环：
-   - Profile list/table 的运营字段密度。
-   - health / proxy / GeoIP / tags / runtime status 的筛选和排序。
-   - 多选和批量操作入口的最小闭环。
+   - 多选状态。
+   - `BulkActionBar` 只显示选中数量、清空选择和安全占位动作。
+   - 第一批真实批量动作建议从 `health check` 开始，`delete` 必须单独确认闭环。
 5. 每个前端小闭环必须跑前端测试、build 和浏览器 UI/UE 走查。
 
 ## 12. 验证命令记录

@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileList } from "./ProfileList";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import { defaultProfileFilters } from "../lib/filters";
 
 const profile: Profile = {
   id: "profile-1",
@@ -266,5 +267,25 @@ describe("ProfileList operations filters", () => {
 
     expect(onSelect).toHaveBeenCalledWith("profile-running");
     expect(onNew).toHaveBeenCalled();
+  });
+
+  it("can be controlled by shared operations filters", () => {
+    render(
+      <ProfileList
+        profiles={[runningProfile, stoppedProfile]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        healthByProfileId={{
+          "profile-running": runningWarningHealth,
+          "profile-stopped": errorHealth,
+        }}
+        filters={{ ...defaultProfileFilters, status: "running" }}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Running US Profile")).toBeTruthy();
+    expect(screen.queryByText("Stopped JP Profile")).toBeNull();
   });
 });

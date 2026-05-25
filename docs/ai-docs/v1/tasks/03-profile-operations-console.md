@@ -89,9 +89,9 @@ cd frontend && npm run build
 
 ## 浏览器验收
 
-- [ ] 1440px 显示 dense table。
-- [ ] 768px 表格不溢出。
-- [ ] 375px 显示 card 模式或可用横向滚动。
+- [x] 1440px 显示 dense table。
+- [x] 768px 表格不溢出。
+- [x] 375px 显示 card 模式或可用横向滚动。
 - [ ] 批量选择后 action bar 不遮挡主要操作。
 - [ ] 长 proxy、长 tag、长 profile name 不撑破布局。
 
@@ -158,3 +158,57 @@ cd frontend && npm run build
 
 - 本小闭环没有新增多选、批量操作或完整 `ProfileTable`，避免把当前 `selectedId` 编辑对象和后续批量选择集合混在一起。
 - 后续继续 03 时，应基于 `filters.ts` 迁移到 dense table / card list，而不是重写筛选规则。
+
+## 2026-05-26 只读 ProfileTable 主区小闭环
+
+已完成：
+
+- [x] 新增 `frontend/src/components/ProfileTable.tsx`，作为 `view === "empty"` 的主区 dense table。
+- [x] 表格展示 profile、runtime、health、proxy、IP、country、timezone、locale、tags、last checked、actions。
+- [x] 表格 `Open` action 复用现有 `onSelect(profile.id)`，进入原有 edit / VNC viewer 流。
+- [x] `AppContent` 上提 `ProfileFilterState`，让 sidebar list 和 main table 共享同一组筛选、排序结果。
+- [x] `ProfileTable` 只消费传入 rows，不在组件内二次默认排序，避免覆盖用户选择的排序方式。
+- [x] proxy 列显示可诊断但不暴露账号密码的标签：有效 URL 显示 `protocol//host`，无效 URL 显示 `Invalid proxy`；可见文本与 `title` 都不保留 proxy 凭据。
+- [x] 窄屏初始收起 sidebar，让 390px 视口优先显示主表格；用户仍可通过 top bar 按钮打开筛选 sidebar。
+- [x] 新增 `frontend/src/App.test.tsx`，覆盖 sidebar 筛选/排序同步主表格，以及窄屏默认收起 sidebar。
+- [x] 新增 `frontend/src/components/ProfileTable.test.tsx`，覆盖 dense columns、传入顺序、open action 和筛选空态。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 13 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 49 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 后端继续使用临时 QA 数据目录 `/tmp/cloakbrowser-manager-qa-data`。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`；当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox` 才能启动浏览器。
+- 桌面 `1440x900`：
+  - dense table 可见。
+  - 默认风险排序为 `不可用 -> 需关注 -> 未检测 -> 可继续`。
+  - proxy 列对无效 proxy 显示 `Invalid proxy`，有效 proxy 只显示 `protocol//host`，可见文本和 `title` 均不暴露账号密码。
+- 平板 `768x900`：
+  - 页面 body 没有横向撑破。
+  - table 在主区内横向滚动，sidebar 不挤破页面。
+- 移动 `390x844`：
+  - 初始 sidebar 收起，主表格占满首屏。
+  - 点击 top bar sidebar 按钮后，筛选 sidebar 可打开。
+  - 主表格仍可横向滚动。
+- 交互：
+  - sidebar 选择 `Sort profiles = Name` 后，主表格同步按名称排序。
+  - sidebar 选择 `Health status = 不可用` 后，主表格只显示 invalid proxy profile。
+  - 点击表格 `Open QA Invalid Proxy` 进入原有编辑表单，`Launch` 按钮、`Delete`、`Cancel`、`Save` 仍可见。
+  - 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+
+范围说明：
+
+- 本小闭环仍不实现多选 checkbox、批量 action bar、批量 launch/stop/delete/health check、右侧 summary panel 或 card list。
+- 顶层 `新增 ProfileTable` 任务仍保持未完成，因为正式运营台 table 还需要和后续多选/批量操作闭环合并。

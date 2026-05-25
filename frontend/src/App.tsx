@@ -1,16 +1,27 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { Lock, PanelLeftClose, PanelLeft } from "lucide-react";
 import { useProfiles } from "./hooks/useProfiles";
 import { api, setOnUnauthorized, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
+import { ProfileTable } from "./components/ProfileTable";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
+import {
+  defaultProfileFilters,
+  filterAndSortProfiles,
+  getProfileFilterOptions,
+  type ProfileFilterState,
+} from "./lib/filters";
 
 type AuthState = "checking" | "required" | "ok" | "error";
 type View = "empty" | "create" | "edit" | "view";
+
+function getInitialSidebarOpen(): boolean {
+  return typeof window === "undefined" || window.innerWidth >= 768;
+}
 
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>("checking");
@@ -102,9 +113,18 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
+  const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
+  const filterOptions = useMemo(
+    () => getProfileFilterOptions(profiles, healthByProfileId),
+    [healthByProfileId, profiles],
+  );
+  const filteredProfiles = useMemo(
+    () => filterAndSortProfiles(profiles, healthByProfileId, filters),
+    [filters, healthByProfileId, profiles],
+  );
 
   const handleSelect = useCallback((id: string) => {
     setSelectedId(id);
@@ -172,6 +192,9 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             onSelect={handleSelect}
             onNew={handleNew}
             healthByProfileId={healthByProfileId}
+            filters={filters}
+            filterOptions={filterOptions}
+            onFiltersChange={setFilters}
           />
         </div>
       )}
@@ -225,11 +248,11 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Content */}
         <div className="flex-1 overflow-y-auto overscroll-contain">
           {view === "empty" && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <p className="text-gray-500 text-sm">Select a profile or create a new one</p>
-              </div>
-            </div>
+            <ProfileTable
+              profiles={filteredProfiles}
+              healthByProfileId={healthByProfileId}
+              onSelect={handleSelect}
+            />
           )}
 
           {view === "create" && (
