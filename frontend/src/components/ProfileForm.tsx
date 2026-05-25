@@ -217,18 +217,6 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
             </div>
             <div>
-              <label className="label">Platform</label>
-              <select
-                className="input"
-                value={form.platform}
-                onChange={(e) => set("platform", e.target.value)}
-              >
-                <option value="windows">Windows</option>
-                <option value="macos">macOS</option>
-                <option value="linux">Linux</option>
-              </select>
-            </div>
-            <div>
               <label className="label">Fingerprint Seed</label>
               <div className="flex gap-2">
                 <input
@@ -307,15 +295,6 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 />
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.geoip ?? false}
-                onChange={(e) => set("geoip", e.target.checked)}
-                className="rounded border-border bg-surface-2"
-              />
-              Auto-detect timezone/locale from proxy IP (GeoIP)
-            </label>
           </div>
         </section>
 
@@ -423,19 +402,6 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
               Human-like mouse, keyboard, and scroll behavior
             </label>
-            {form.humanize && (
-              <div>
-                <label className="label">Human Preset</label>
-                <select
-                  className="input"
-                  value={form.human_preset}
-                  onChange={(e) => set("human_preset", e.target.value)}
-                >
-                  <option value="default">Default (normal speed)</option>
-                  <option value="careful">Careful (slower, deliberate)</option>
-                </select>
-              </div>
-            )}
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
                 type="checkbox"
@@ -466,15 +432,6 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 <option value="dark">Dark</option>
                 <option value="no-preference">No preference</option>
               </select>
-            </div>
-            <div>
-              <label className="label">User Agent</label>
-              <input
-                className="input"
-                value={form.user_agent ?? ""}
-                onChange={(e) => set("user_agent", e.target.value || null)}
-                placeholder="Auto (from binary)"
-              />
             </div>
           </div>
         </section>
@@ -534,7 +491,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         {/* Launch Args */}
         <section>
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Firefox Launch Args</h3>
-          <p className="text-xs text-gray-500 mb-2">Custom Firefox arguments passed to invisible_playwright at launch.</p>
+          <p className="text-xs text-gray-500 mb-2">
+            Custom Firefox arguments passed to invisible_playwright at launch. Chromium/CDP/profile flags are ignored.
+          </p>
           {(form.launch_args ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.launch_args ?? []).map((arg, idx) => (

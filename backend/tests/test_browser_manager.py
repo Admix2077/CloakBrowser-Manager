@@ -315,3 +315,31 @@ async def test_cleanup_stale_kills_scoped_invisible_playwright_firefox(
     assert ["pkill", "-f", bm.INVISIBLE_FIREFOX_PROCESS_PATTERN] in calls
     assert "invisible-playwright" in bm.INVISIBLE_FIREFOX_PROCESS_PATTERN
     assert "firefox" in bm.INVISIBLE_FIREFOX_PROCESS_PATTERN
+
+
+@pytest.mark.asyncio
+async def test_auto_launch_all_launches_only_enabled_profiles(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from backend import database as db
+
+    mgr = BrowserManager()
+    launched: list[str] = []
+
+    profiles = [
+        {"id": "manual", "name": "Manual", "auto_launch": False},
+        {"id": "auto-1", "name": "Auto 1", "auto_launch": True},
+        {"id": "auto-2", "name": "Auto 2", "auto_launch": True},
+    ]
+
+    async def fake_launch(profile: dict):
+        launched.append(profile["id"])
+        if profile["id"] == "auto-1":
+            raise RuntimeError("launch failed")
+
+    monkeypatch.setattr(db, "list_profiles", lambda: profiles)
+    monkeypatch.setattr(mgr, "launch", fake_launch)
+
+    await mgr.auto_launch_all()
+
+    assert launched == ["auto-1", "auto-2"]

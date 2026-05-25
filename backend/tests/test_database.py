@@ -105,6 +105,12 @@ def test_create_profile_defaults(tmp_db: Path):
     assert p["geoip"] == 0
     assert p["human_preset"] == "default"
     assert p["launch_args"] == []
+    assert p["auto_launch"] == 0
+
+
+def test_create_profile_with_auto_launch(tmp_db: Path):
+    p = db.create_profile("Auto", auto_launch=True)
+    assert p["auto_launch"] == 1
 
 
 def test_create_profile_with_launch_args(tmp_db: Path):
@@ -138,6 +144,14 @@ def test_list_profiles_includes_launch_args(tmp_db: Path):
     args_by_name = {p["name"]: p["launch_args"] for p in profiles}
     assert args_by_name["A"] == ["--arg1"]
     assert args_by_name["B"] == []
+
+
+def test_list_profiles_includes_auto_launch(tmp_db: Path):
+    db.create_profile("Auto", auto_launch=True)
+    db.create_profile("Manual", auto_launch=False)
+    profiles = db.list_profiles()
+    auto_by_name = {p["name"]: p["auto_launch"] for p in profiles}
+    assert auto_by_name == {"Auto": 1, "Manual": 0}
 
 
 # ── get_profile ──────────────────────────────────────────────────────────────
@@ -190,6 +204,11 @@ def test_update_profile_partial(sample_profile: dict):
     updated = db.update_profile(sample_profile["id"], name="Renamed")
     assert updated["name"] == "Renamed"
     assert updated["fingerprint_seed"] == 12345  # unchanged
+
+
+def test_update_profile_auto_launch(sample_profile: dict):
+    updated = db.update_profile(sample_profile["id"], auto_launch=True)
+    assert updated["auto_launch"] == 1
 
 
 def test_update_profile_tags_replace(tmp_db: Path):

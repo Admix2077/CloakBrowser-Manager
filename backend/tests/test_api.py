@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -76,6 +77,24 @@ def test_update_profile(app_client: TestClient):
     assert resp.json()["name"] == "Renamed"
 
 
+def test_create_update_get_profile_auto_launch_api(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={
+        "name": "AutoLaunch",
+        "auto_launch": True,
+    })
+    assert create.status_code == 201
+    pid = create.json()["id"]
+    assert create.json()["auto_launch"] is True
+
+    get_resp = app_client.get(f"/api/profiles/{pid}")
+    assert get_resp.status_code == 200
+    assert get_resp.json()["auto_launch"] is True
+
+    update = app_client.put(f"/api/profiles/{pid}", json={"auto_launch": False})
+    assert update.status_code == 200
+    assert update.json()["auto_launch"] is False
+
+
 def test_update_profile_not_found(app_client: TestClient):
     resp = app_client.put("/api/profiles/nonexistent", json={"name": "x"})
     assert resp.status_code == 404
@@ -112,6 +131,29 @@ def test_delete_profile_stops_running(app_client: TestClient):
     resp = app_client.delete(f"/api/profiles/{pid}")
     assert resp.status_code == 200
     main.browser_mgr.stop.assert_called_once_with(pid)
+
+
+def test_tags_api_update_replace_and_clear(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={
+        "name": "Tags",
+        "tags": [{"tag": "old", "color": "#ef4444"}],
+    })
+    assert create.status_code == 201
+    pid = create.json()["id"]
+
+    update = app_client.put(f"/api/profiles/{pid}", json={
+        "tags": [{"tag": "new", "color": "#22c55e"}],
+    })
+    assert update.status_code == 200
+    assert update.json()["tags"] == [{"tag": "new", "color": "#22c55e"}]
+
+    listed = app_client.get("/api/profiles").json()
+    listed_profile = next(p for p in listed if p["id"] == pid)
+    assert listed_profile["tags"] == [{"tag": "new", "color": "#22c55e"}]
+
+    cleared = app_client.put(f"/api/profiles/{pid}", json={"tags": []})
+    assert cleared.status_code == 200
+    assert cleared.json()["tags"] == []
 
 
 # ── Profile Status ───────────────────────────────────────────────────────────
@@ -153,25 +195,87 @@ def test_launch_invalid_proxy_400(app_client: TestClient):
     """ValueError from browser_mgr.launch should map to 400."""
     create = app_client.post("/api/profiles", json={"name": "BadProxy"})
     pid = create.json()["id"]
-    main.browser_mgr.launch = AsyncMock(side_effect=ValueError("Invalid proxy scheme 'ftp'"))
-    resp = app_client.post(f"/api/profiles/{pid}/launch")
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(side_effect=ValueError("Invalid proxy scheme 'ftp'")),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/launch")
     assert resp.status_code == 400
     assert "ftp" in resp.json()["detail"]
+
+
+def test_launch_invalid_proxy_real_validation_400(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={
+        "name": "BadProxyReal",
+        "proxy": "ftp://bad:21",
+    })
+    pid = create.json()["id"]
+
+    with patch.object(main.browser_mgr.vnc, "allocate", new=AsyncMock(return_value=(100, 6100))), \
+         patch.object(main.browser_mgr.vnc, "start_vnc", new=AsyncMock()), \
+         patch.object(main.browser_mgr.vnc, "stop_vnc", new=AsyncMock()):
+        resp = app_client.post(f"/api/profiles/{pid}/launch")
+
+    assert resp.status_code == 400
+    assert "Invalid proxy scheme 'ftp'" in resp.json()["detail"]
 
 
 def test_launch_failure_500(app_client: TestClient):
     """Generic exception from browser_mgr.launch should map to 500."""
     create = app_client.post("/api/profiles", json={"name": "Crash"})
     pid = create.json()["id"]
-    main.browser_mgr.launch = AsyncMock(side_effect=RuntimeError("Xvnc failed"))
-    resp = app_client.post(f"/api/profiles/{pid}/launch")
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(side_effect=RuntimeError("Xvnc failed")),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/launch")
     assert resp.status_code == 500
     assert resp.json()["detail"] == "Failed to launch browser"
+
+
+def test_launch_success_response_invisible_playwright_no_cdp(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "LaunchOk"})
+    pid = create.json()["id"]
+    running = RunningProfile(
+        profile_id=pid,
+        context=MagicMock(),
+        display=101,
+        ws_port=6101,
+        engine="invisible_playwright",
+    )
+
+    with patch.object(main.browser_mgr, "launch", new=AsyncMock(return_value=running)):
+        resp = app_client.post(f"/api/profiles/{pid}/launch")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "profile_id": pid,
+        "status": "running",
+        "vnc_ws_port": 6101,
+        "display": ":101",
+        "cdp_url": None,
+    }
 
 
 def test_stop_not_running(app_client: TestClient):
     resp = app_client.post("/api/profiles/nonexistent/stop")
     assert resp.status_code == 404
+
+
+def test_stop_success_calls_manager_and_returns_ok(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "StopOk"})
+    pid = create.json()["id"]
+    main.browser_mgr.running[pid] = MagicMock(spec=RunningProfile)
+
+    with patch.object(main.browser_mgr, "stop", new=AsyncMock()) as stop:
+        resp = app_client.post(f"/api/profiles/{pid}/stop")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    stop.assert_awaited_once_with(pid)
+    main.browser_mgr.running.pop(pid, None)
 
 
 # ── System Status ────────────────────────────────────────────────────────────
@@ -507,4 +611,53 @@ def test_ws_allows_no_origin(app_client: TestClient):
             pass
     except Exception as exc:
         assert "4403" not in str(exc)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_vnc_proxy_connects_websockify_path(app_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    create = app_client.post("/api/profiles", json={"name": "VncPath"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+    captured: dict[str, object] = {}
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        async def send(self, data: bytes):
+            captured["sent"] = data
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            captured["url"] = url
+            captured["kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+
+    with app_client.websocket_connect(
+        f"/api/profiles/{pid}/vnc",
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    assert captured["url"] == "ws://127.0.0.1:6100/websockify"
+    kwargs = captured["kwargs"]
+    assert kwargs["subprotocols"] == ["binary"]
+    assert kwargs["compression"] is None
+    assert kwargs["ping_interval"] is None
     main.browser_mgr.running.pop(pid, None)

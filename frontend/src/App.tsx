@@ -181,7 +181,6 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <div className="flex items-center gap-2">
                 <StatusIndicator status={selected.status} size="md" />
                 <span className="text-sm font-medium">{selected.name}</span>
-                <span className="text-xs text-gray-500 capitalize">{selected.platform}</span>
               </div>
             )}
           </div>
