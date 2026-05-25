@@ -83,6 +83,7 @@ describe("ProfileSummaryPanel", () => {
 
     expect(screen.getByRole("complementary", { name: "Profile summary" })).toBeTruthy();
     expect(screen.getByText("Seller US")).toBeTruthy();
+    expect(screen.getByText("Inspector")).toBeTruthy();
     expect(screen.getAllByText("不可用").length).toBeGreaterThan(0);
     expect(screen.getByText("Proxy URL missing port: http://proxy.example")).toBeTruthy();
     expect(screen.getByText("stopped")).toBeTruthy();

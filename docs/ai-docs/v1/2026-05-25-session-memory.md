@@ -1525,3 +1525,106 @@ git diff --check
 - 批量 delete 未接入，仍需确认弹窗和测试。
 - 服务端分页未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待后续。
+
+## 24. 2026-05-26 Profile 运营台控件质感 polish 小闭环
+
+背景：
+
+- Jeff 反馈当前界面质感和细节仍不够，尤其 checkbox 等控件显得 low。
+- 本轮暂停继续堆功能，使用 `ui-ux-pro-max` / frontend design 方向做 UI polish。
+- 参考 `/home/jeff/code/reference-repos/saas_kit` 的 B2B SaaS app shell / data table 质感，只借鉴视觉与交互模式；没有迁入 auth、db、payment、schema 或业务逻辑。
+
+设计判断：
+
+- 当前 UI low 的主要原因不是信息架构，而是边框、阴影、渐变、圆角和卡片层级过多。
+- checkbox 在密表内需要更扁平、更像 data-table control。
+- bulk action bar 需要从“浮动按钮组”收敛成 compact command bar。
+- table row 的 selected / previewed 状态需要降低渐变噪声，保留轻背景和左侧状态线。
+- inspector 需要更像只读审计面板，降低 header 渐变和 icon 方块装饰。
+
+实现：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - checkbox 改为更扁平的 16px 控件，并将选择列扩到 42px 以匹配 28px 命中区，保留真实 input、focus ring、半选态、`aria-checked="mixed"`。
+  - selected / previewed row 从横向渐变降噪为轻背景 + 左侧状态线。
+  - 表格行分隔改为 `slate-100`，保留固定 64px 行高、120 阈值虚拟滚动、`min-w-[840px]` 和 table region 自身横向滚动。
+- `frontend/src/components/BulkActionBar.tsx`
+  - bulk toolbar 改为 compact command bar。
+  - `Check health` 改为可见主动作文案。
+  - `Delete selected` 继续 disabled，并以弱 danger 样式表达高风险未接入。
+  - tag form 自动 focus / Escape 取消 / 真实批量 set tags 语义保持。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - 降低 header 渐变、section icon 方块、divide line 装饰密度。
+  - proxy 凭据脱敏语义保持。
+- `frontend/src/App.tsx`
+  - app shell 背景、top bar、summary tiles、table panel 阴影和边框细化。
+  - 信息架构保持：左侧 rail 做 shortcuts / quick views，主区 table 承担核心运营。
+
+测试更新：
+
+- `ProfileTable.test.tsx`
+  - 新增 table 横滚只在 `Profile operations table` region 内的结构断言。
+  - 新增 selected / previewed row `data-state` 断言，确认不隐藏 `Open` actions。
+  - 新增 `Check health` 可见文案断言。
+- `App.test.tsx`
+  - 窄屏用例补充 table region `overflow-auto` 断言。
+- `ProfileSummaryPanel.test.tsx`
+  - 补充 inspector header 仍可见断言。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 3 passed, 32 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 87 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 前端：`http://127.0.0.1:5173/`。
+- QA 后端：`http://127.0.0.1:8080/`。
+- QA 数据：现有 2 个 profile + 本轮追加 160 个 `Polish QA Profile`，总计 162 个 profiles。
+- 桌面 `1440x900`：
+  - 首屏可见 operations rail、summary tiles、filter toolbar、dense table、inspector。
+  - `Actions` 列和 `Open ...` 按钮可访问。
+  - 选择两个 profile 后 bulk bar 显示 `2 selected`，`Check health / Launch / Tag` 可用，`Stop / Delete` disabled。
+  - `Tag selected` 输入 `polish` 后真实更新选中 profiles，tag filter 出现 `polish`。
+  - 点击 `Check health` 后真实调用健康检测，country filter 出现 `US`。
+  - 主表滚动到约第 120 行后首屏早期 profile 离开 DOM，可见 `Polish QA Profile 113` 至 `120`，虚拟滚动仍生效。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`table.scrollWidth=846`、`table.clientWidth=352`。
+  - 横向滚动到右侧后 `Actions` / `Open` 仍可访问。
+  - 打开 sidebar overlay 后 body 仍不横向撑破。
+- console / errors 无相关前端错误，仅有 Vite debug 和 React DevTools info。
+
+截图：
+
+- `/tmp/cloak-ui-polish-desktop.png`
+- `/tmp/cloak-ui-polish-bulk-selected.png`
+- `/tmp/cloak-ui-polish-bulk-tag-form.png`
+- `/tmp/cloak-ui-polish-bulk-tag-applied.png`
+- `/tmp/cloak-ui-polish-health-check.png`
+- `/tmp/cloak-ui-polish-virtual-scroll.png`
+- `/tmp/cloak-ui-polish-mobile.png`
+- `/tmp/cloak-ui-polish-mobile-actions.png`
+- `/tmp/cloak-ui-polish-mobile-sidebar.png`
+
+仍未做：
+
+- 批量 delete 未接入，仍需确认弹窗和测试。
+- 服务端分页未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待后续。

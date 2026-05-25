@@ -1119,3 +1119,122 @@ git diff --check
 - 本小闭环不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 本小闭环不改 Profile 创建/编辑/VNC viewer 的现有流，只保持不破坏。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待 03 后续小闭环。
+
+## 2026-05-26 Profile 运营台控件质感 polish 小闭环
+
+背景：
+
+- Jeff 反馈当前界面质感和细节还不够，尤其 checkbox 等控件显得 low。
+- 本轮暂停继续堆功能，只做 Profile 运营台 UI/UE polish，不改变已完成的真实功能、测试、性能语义和虚拟滚动。
+
+设计审计结论：
+
+- 当前 UI 显得低质感的主要原因不是信息架构错误，而是边框、阴影、渐变、圆角和卡片层级过多。
+- checkbox 原先视觉层级偏重，在密集表格里像独立装饰控件。
+- bulk action bar 原先外层 sticky、内层按钮组、阴影和 blur 叠加，显得像浮动组件拼贴。
+- table row 原先 selected / previewed 使用横向渐变，和每格边框叠加后噪声较高。
+- inspector 原先 section icon 方块、header 渐变和 divide line 都在抢层级。
+
+参考方向：
+
+- 使用 `ui-ux-pro-max` 的 B2B SaaS / data table 建议：浅色背景、蓝色主操作、琥珀风险提示、低动画、稳定 focus 状态。
+- 参考 `/home/jeff/code/reference-repos/saas_kit` 的 app shell / data table 细节，只借鉴 sticky table header、细边框、紧凑 command bar、selected row data-state，不迁入 auth/db/payment/schema 或业务逻辑。
+
+已完成：
+
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - checkbox 改为更扁平的 16px 控件，并将选择列扩到 42px 以匹配 28px 命中区，保留真实 `input`、focus ring、半选态和 `aria-checked="mixed"`。
+  - selected / previewed row 从横向渐变降噪为轻背景 + 左侧状态线。
+  - 表格边界改为更轻的 `slate-100` 行分隔，保留 64px 固定行高和虚拟滚动阈值。
+  - 保留 `min-w-[840px]` 和 table region 自身 `overflow-auto`，移动端 body 不承担横向滚动。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - bulk toolbar 改为紧凑 command bar。
+  - `Check health` 作为可见主动作文案，保留 aria label。
+  - `Delete selected` 继续 disabled，并以弱 danger 样式表达高风险未接入。
+  - tag form 保留自动 focus、Escape 取消和真实批量 set tags。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - 降低 header 渐变、section icon 方块和 divide line 装饰密度。
+  - 保留 inspector 只读预览语义和 proxy 凭据脱敏。
+- [x] `frontend/src/App.tsx`
+  - app shell 背景、top bar、summary tiles、table panel 阴影和边框细化。
+  - 保留左侧 rail 作为 shortcuts / quick views，主区 table 仍承担核心运营。
+
+测试更新：
+
+- `ProfileTable.test.tsx`
+  - 新增 table 横向滚动只在 `Profile operations table` region 内的结构断言。
+  - 新增 selected / previewed row `data-state` 断言，确认不隐藏 `Open` actions。
+  - 新增 `Check health` 可见文案断言，避免只靠 aria label 通过。
+- `App.test.tsx`
+  - 窄屏用例补充 table region `overflow-auto` 断言。
+- `ProfileSummaryPanel.test.tsx`
+  - 补充 inspector header 仍可见的断言。
+
+保持不变：
+
+- 主表 `min-w-[840px]`、表格自身横向滚动、桌面/移动 `Actions` 可访问。
+- 移动端 body 不横向撑破。
+- 主表超过 120 条固定 64px 行高虚拟滚动。
+- 左侧超过 80 条固定 112px item 虚拟滚动。
+- `Check health` / bulk launch / bulk stop / bulk set tags 真实动作语义保留。
+- `Delete selected` 高风险动作仍 disabled。
+- proxy visible text / title 仍不暴露凭据。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 3 passed, 32 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 87 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 前端：`http://127.0.0.1:5173/`。
+- QA 后端：`http://127.0.0.1:8080/`。
+- QA 数据：现有 2 个 profile + 本轮追加 160 个 `Polish QA Profile`，总计 162 个 profiles。
+- 桌面 `1440x900`：
+  - 首屏可见左侧 operations rail、summary tiles、filter toolbar、dense table、inspector。
+  - `Actions` 列和 `Open ...` 按钮可访问。
+  - 选择两个 profile 后 bulk bar 显示 `2 selected`，`Check health / Launch / Tag` 可用，`Stop / Delete` disabled。
+  - `Tag selected` 输入 `polish` 后真实更新选中 profiles，tag filter 出现 `polish`。
+  - 点击 `Check health` 后真实调用健康检测，country filter 出现 `US`。
+  - 主表滚动到约第 120 行后首屏早期 profile 离开 DOM，可见 `Polish QA Profile 113` 至 `120`，虚拟滚动仍生效。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`table.scrollWidth=846`、`table.clientWidth=352`。
+  - 横向滚动到右侧后 `Actions` / `Open` 仍可访问。
+  - 打开 sidebar overlay 后 body 仍不横向撑破。
+- console / errors 无相关前端错误，仅有 Vite debug 和 React DevTools info。
+
+截图：
+
+- `/tmp/cloak-ui-polish-desktop.png`
+- `/tmp/cloak-ui-polish-bulk-selected.png`
+- `/tmp/cloak-ui-polish-bulk-tag-form.png`
+- `/tmp/cloak-ui-polish-bulk-tag-applied.png`
+- `/tmp/cloak-ui-polish-health-check.png`
+- `/tmp/cloak-ui-polish-virtual-scroll.png`
+- `/tmp/cloak-ui-polish-mobile.png`
+- `/tmp/cloak-ui-polish-mobile-actions.png`
+- `/tmp/cloak-ui-polish-mobile-sidebar.png`
+
+范围说明：
+
+- 本小闭环不接入批量 delete；该动作仍必须单独做确认弹窗和后端/前端测试。
+- 本小闭环不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- 本小闭环不改 Profile 创建/编辑/VNC viewer 的现有流，只保持不破坏。
+- 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待 03 后续小闭环。

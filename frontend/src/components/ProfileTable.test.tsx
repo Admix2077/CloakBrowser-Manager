@@ -161,6 +161,38 @@ describe("ProfileTable", () => {
     expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
   });
 
+  it("keeps horizontal scrolling isolated to the operations table region", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const region = screen.getByRole("region", { name: "Profile operations table" });
+    expect(region.className).toContain("overflow-auto");
+    expect(region.firstElementChild?.className).toContain("min-w-[840px]");
+    expect(document.querySelector("col")?.getAttribute("style")).toContain("width: 42px");
+  });
+
+  it("marks selected and previewed rows without hiding row actions", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        previewProfileId="error"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Preview Good US" }).closest("tr")?.getAttribute("data-state")).toBe("selected");
+    expect(screen.getByRole("button", { name: "Preview Broken Proxy" }).closest("tr")?.getAttribute("data-state")).toBe("previewed");
+    expect(screen.getByRole("button", { name: "Open Good US" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Broken Proxy" })).toBeTruthy();
+  });
+
   it("keeps checkbox inputs focusable when selection handlers are available", () => {
     render(
       <ProfileTable
@@ -215,6 +247,7 @@ describe("ProfileTable", () => {
     expect(screen.getByText("1 stopped")).toBeTruthy();
     expect(screen.getByText("1 issue")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByRole("button", { name: "Check health" }).textContent).toContain("Check health");
     fireEvent.click(screen.getByRole("button", { name: "Check health" }));
     expect(onCheckHealth).toHaveBeenCalledTimes(1);
     expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(false);

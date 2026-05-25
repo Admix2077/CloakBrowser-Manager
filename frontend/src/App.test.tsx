@@ -152,6 +152,7 @@ describe("App operations console", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    expect(screen.getByRole("region", { name: "Profile operations table" }).className).toContain("overflow-auto");
     expect(screen.getByLabelText("Search profiles")).toBeTruthy();
     expect(screen.queryByText("Quick views")).toBeNull();
     expect(screen.getByTitle("Show sidebar")).toBeTruthy();

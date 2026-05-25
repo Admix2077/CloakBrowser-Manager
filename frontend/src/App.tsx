@@ -298,7 +298,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   }
 
   return (
-    <div className="flex h-screen bg-surface-0 text-slate-900">
+    <div className="flex h-screen bg-[#f6f8fb] text-slate-900">
       {/* Sidebar */}
       {sidebarOpen && (
         <>
@@ -308,7 +308,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             className="fixed inset-0 z-30 bg-slate-950/20 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-40 w-[264px] border-r border-border bg-surface-1 shadow-panel md:relative md:inset-auto md:z-auto md:flex-shrink-0 md:shadow-hairline">
+          <div className="fixed inset-y-0 left-0 z-40 w-[264px] border-r border-slate-200 bg-white shadow-panel md:relative md:inset-auto md:z-auto md:flex-shrink-0 md:shadow-hairline">
             <ProfileList
               profiles={profiles}
               selectedId={selectedId}
@@ -327,7 +327,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       {/* Main panel */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="flex min-h-14 items-center justify-between border-b border-border bg-surface-1 px-4 py-2.5 shadow-hairline">
+        <div className="flex min-h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -348,7 +348,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               </p>
             </div>
             {selected && (
-              <div className="hidden items-center gap-2 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 md:flex">
+              <div className="hidden items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] md:flex">
                 <StatusIndicator status={selected.status} size="md" />
                 <span className="max-w-[220px] truncate text-sm font-medium text-slate-700">{selected.name}</span>
               </div>
@@ -392,7 +392,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {view === "empty" && (
-            <div className="flex h-full min-h-0 flex-col gap-4 p-3 sm:p-4 lg:p-5">
+            <div className="flex h-full min-h-0 flex-col gap-3 p-3 sm:p-4 lg:p-5">
               <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
                   <h2 className="text-xl font-semibold tracking-tight text-slate-950">Profile operations</h2>
@@ -407,7 +407,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
                 </div>
               </section>
-              <section className="rounded-lg border border-slate-200 bg-white/85 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02]">
+              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02]">
                 <ProfileFilters
                   value={filters}
                   options={filterOptions}
@@ -416,7 +416,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 />
               </section>
               <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-panel ring-1 ring-slate-900/[0.02] lg:min-h-0">
+                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)] ring-1 ring-slate-900/[0.02] lg:min-h-0">
                   <ProfileTable
                     profiles={filteredProfiles}
                     healthByProfileId={healthByProfileId}
@@ -493,14 +493,14 @@ function SummaryTile({
   tone?: "neutral" | "success" | "warning" | "danger";
 }) {
   const toneClassName = {
-    neutral: "border-border bg-surface-2 text-slate-700",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    warning: "border-amber-200 bg-amber-50 text-amber-800",
-    danger: "border-red-200 bg-red-50 text-red-700",
+    neutral: "border-slate-200 bg-white text-slate-700 before:bg-slate-300",
+    success: "border-emerald-200 bg-emerald-50/70 text-emerald-700 before:bg-emerald-500",
+    warning: "border-amber-200 bg-amber-50/75 text-amber-800 before:bg-amber-500",
+    danger: "border-red-200 bg-red-50/75 text-red-700 before:bg-red-500",
   }[tone];
 
   return (
-    <div className={`min-w-[92px] rounded-lg border px-3 py-2 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] ${toneClassName}`}>
+    <div className={`relative min-w-[92px] overflow-hidden rounded-lg border px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] before:absolute before:inset-x-0 before:top-0 before:h-0.5 ${toneClassName}`}>
       <div className="text-lg font-semibold leading-5 tabular-nums">{value}</div>
       <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] opacity-75">
         {label}
