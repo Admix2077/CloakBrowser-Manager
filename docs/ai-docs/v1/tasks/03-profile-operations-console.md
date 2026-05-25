@@ -95,7 +95,7 @@ cd frontend && npm run build
 - [x] 768px 表格不溢出。
 - [x] 375px 显示 card 模式或可用横向滚动。
 - [x] 批量选择后 action bar 不遮挡主要操作。
-- [ ] 长 proxy、长 tag、长 profile name 不撑破布局。
+- [x] 长 proxy、长 tag、长 profile name 不撑破布局。
 
 ## 2026-05-26 列表筛选与排序小闭环
 
@@ -451,3 +451,100 @@ git diff --check
 - 本小闭环只完成 `BulkActionBar` 容器和只读摘要。
 - 不接入批量 launch / stop / health check / set tags / delete。
 - 下一步建议优先接入批量 health check，因为它是最低风险真实批量动作；delete 仍必须单独确认闭环。
+
+## 2026-05-26 Profile 运营台 UI/UE 质感小闭环
+
+背景：
+
+- Jeff 反馈当前前端整体质感偏低，运营台 UE 不够专业；本轮暂停继续堆功能，优先做 Profile 运营台 UI/UE 小闭环。
+- 使用 `ui-ux-pro-max` 生成设计系统，推荐方向为 `Data-Dense Dashboard`，默认浅色 B2B 运营台，而不是继续加重深色开发面板。
+- `/home/jeff/code/repo/sasskit` 不存在，实际参考目录为 `/home/jeff/code/reference-repos/saas_kit`；参考 `ai-shipany-template-two` 的 admin 截图、`ai-mksaas-template` 的 dashboard sidebar / users table / data-table toolbar。
+
+已完成：
+
+- [x] 将默认视觉从低质感深色面板切到浅色 B2B operations console：
+  - `surface` / `border` / `accent` token 改为 slate + blue + low-noise surfaces。
+  - body、按钮、输入、select、textarea、scrollbar、focus ring 调整为浅色可读体系。
+- [x] 左侧从“全量 profile 长列表主入口”降级为 operations rail：
+  - `All profiles`。
+  - `Running profiles`。
+  - `Stopped profiles`。
+  - `Unavailable profiles`。
+  - `Needs attention`。
+  - `No proxy`。
+  - quick views 直接写入现有 `ProfileFilterState`，不新增假状态。
+- [x] 主区升级为运营台核心：
+  - 顶部状态摘要。
+  - 主区搜索、筛选、排序 toolbar。
+  - 表格卡片 surface。
+  - fixed column layout，1440px 桌面可直接看到 `Actions` 列。
+- [x] 保留既有功能语义：
+  - profile 创建 / 编辑 / 删除流。
+  - 单 profile launch / stop。
+  - VNC viewer。
+  - `Open` 进入原详情 / VNC 流。
+  - proxy 脱敏显示，不在 table 文本或 `title` 暴露凭据。
+- [x] 保留既有性能语义：
+  - 左侧 `ProfileList` 超过 80 条虚拟滚动。
+  - 主区 `ProfileTable` 超过 120 条虚拟滚动。
+  - 表头全选仍作用当前筛选结果全集，不局限于虚拟窗口。
+  - 筛选变化后滚动回顶部。
+- [x] 移动端 sidebar 改为 overlay 抽屉：
+  - 初始窄屏仍默认收起 sidebar。
+  - 主区搜索筛选仍可用。
+  - 打开 sidebar 不再把 body 撑宽。
+  - 主表自身保留横向滚动。
+- [x] 新增 `frontend/src/App.test.tsx` 覆盖：
+  - quick views 驱动主运营表格。
+  - 窄屏 sidebar 收起时主区筛选仍可用。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileList.test.tsx src/components/ProfileFilters.test.tsx src/components/ProfileTable.test.tsx
+# 4 passed, 25 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 16 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 59 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data` 写入 240 个 profiles。
+- 后端：`http://127.0.0.1:8080`。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 左侧 rail 显示 quick views，不再把全量 profile 列表作为唯一入口。
+  - 主区显示状态摘要、搜索筛选 toolbar 和 dense table。
+  - `Actions` 列在 1440px 桌面可见。
+  - 点击 `Needs attention` 后 `Health status` select 同步为 `warning`，主表行数为 26。
+  - 选择首行后显示 `Bulk profile actions`，`1 selected` 可见。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - 主区搜索筛选可用。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表横向滚动保留，`tableScrollWidth=1068`、`tableClientWidth=358`。
+  - 打开 sidebar 后为 overlay 抽屉，body 仍不横向撑破。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+- 截图保存到：
+  - `/tmp/cloak-ui-refresh-desktop.png`
+  - `/tmp/cloak-ui-refresh-quick-view.png`
+  - `/tmp/cloak-ui-refresh-bulk.png`
+  - `/tmp/cloak-ui-refresh-mobile.png`
+  - `/tmp/cloak-ui-refresh-mobile-sidebar.png`
+
+范围说明：
+
+- 本小闭环不接入批量 launch / stop / health check / set tags / delete。
+- 本小闭环不新增后端 API，不改变健康计算、筛选排序、虚拟滚动和 proxy 脱敏契约。
+- 下一步继续 03 时，建议优先做 `ProfileSummaryPanel` 或接入最低风险的批量 `health_check`；右侧 summary panel 完成后再考虑把 `Open` 从整页切换改为“表格 + 详情抽屉/右栏”的连续运营形态。

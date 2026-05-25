@@ -5,20 +5,32 @@ interface ProfileFiltersProps {
   value: ProfileFilterState;
   options: ProfileFilterOptions;
   onChange: (value: ProfileFilterState) => void;
+  layout?: "rail" | "toolbar";
+  labelPrefix?: string;
 }
 
-export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps) {
+export function ProfileFilters({
+  value,
+  options,
+  onChange,
+  layout = "rail",
+  labelPrefix = "",
+}: ProfileFiltersProps) {
   const update = <K extends keyof ProfileFilterState>(key: K, nextValue: ProfileFilterState[K]) => {
     onChange({ ...value, [key]: nextValue });
   };
+  const labelled = (label: string) => labelPrefix ? `${labelPrefix} ${label}` : label;
 
   return (
-    <div className="space-y-2">
-      <label className="sr-only" htmlFor="profile-search">Search profiles</label>
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
+    <div className={layout === "toolbar" ? "grid grid-cols-2 gap-2 lg:grid-cols-[minmax(220px,1fr)_repeat(6,minmax(106px,136px))]" : "space-y-2"}>
+      <label className="sr-only" htmlFor={filterId(labelled("Search profiles"))}>
+        {labelled("Search profiles")}
+      </label>
+      <div className={layout === "toolbar" ? "relative col-span-2 lg:col-span-1" : "relative"}>
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
         <input
-          id="profile-search"
+          id={filterId(labelled("Search profiles"))}
+          aria-label={labelled("Search profiles")}
           type="text"
           placeholder="Search profiles..."
           value={value.search}
@@ -27,9 +39,9 @@ export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className={layout === "toolbar" ? "contents" : "grid grid-cols-2 gap-2"}>
         <FilterSelect
-          label="Runtime status"
+          label={labelled("Runtime status")}
           value={value.status}
           onChange={(nextValue) => update("status", nextValue as ProfileFilterState["status"])}
           options={[
@@ -39,7 +51,7 @@ export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps
           ]}
         />
         <FilterSelect
-          label="Health status"
+          label={labelled("Health status")}
           value={value.health}
           onChange={(nextValue) => update("health", nextValue as ProfileFilterState["health"])}
           options={[
@@ -51,7 +63,7 @@ export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps
           ]}
         />
         <FilterSelect
-          label="Proxy filter"
+          label={labelled("Proxy filter")}
           value={value.proxy}
           onChange={(nextValue) => update("proxy", nextValue as ProfileFilterState["proxy"])}
           options={[
@@ -61,7 +73,7 @@ export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps
           ]}
         />
         <FilterSelect
-          label="Country filter"
+          label={labelled("Country filter")}
           value={value.country}
           onChange={(nextValue) => update("country", nextValue)}
           options={[
@@ -70,7 +82,7 @@ export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps
           ]}
         />
         <FilterSelect
-          label="Tag filter"
+          label={labelled("Tag filter")}
           value={value.tag}
           onChange={(nextValue) => update("tag", nextValue)}
           options={[
@@ -79,7 +91,7 @@ export function ProfileFilters({ value, options, onChange }: ProfileFiltersProps
           ]}
         />
         <FilterSelect
-          label="Sort profiles"
+          label={labelled("Sort profiles")}
           value={value.sortBy}
           onChange={(nextValue) => update("sortBy", nextValue as ProfileFilterState["sortBy"])}
           options={[
@@ -103,7 +115,7 @@ interface FilterSelectProps {
 }
 
 function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
-  const id = `profile-filter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  const id = filterId(label);
 
   return (
     <div>
@@ -113,7 +125,7 @@ function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-8 w-full rounded-md border border-border bg-surface-2 px-2 text-xs text-gray-200 outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent/50"
+        className="h-9 w-full rounded-lg border border-border bg-surface-1 px-2.5 text-xs font-medium text-slate-700 shadow-hairline outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15"
       >
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>
@@ -123,4 +135,8 @@ function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
       </select>
     </div>
   );
+}
+
+function filterId(label: string): string {
+  return `profile-filter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }

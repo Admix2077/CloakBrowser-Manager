@@ -172,10 +172,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-6 max-w-2xl mx-auto">
+    <form onSubmit={handleSubmit} className="mx-auto max-w-3xl p-4 sm:p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">
+          <h2 className="text-lg font-semibold text-slate-950">
             {isEdit ? "Edit Profile" : "New Profile"}
           </h2>
           {isEdit && onDelete && (
@@ -204,7 +204,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
       <div className="space-y-5">
         {/* Basic */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Basic</h3>
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Basic</h3>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
               <label className="label">Profile Name</label>
@@ -264,7 +264,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Network */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Network</h3>
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Network</h3>
           <div className="space-y-3">
             <div>
               <label className="label">Proxy</label>
@@ -300,7 +300,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Hardware */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Hardware</h3>
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Hardware</h3>
           <div className="space-y-3">
             <div>
               <label className="label">Screen Resolution</label>
@@ -391,32 +391,32 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Behavior */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Behavior</h3>
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Behavior</h3>
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={form.humanize ?? false}
                 onChange={(e) => set("humanize", e.target.checked)}
-                className="rounded border-border bg-surface-2"
+                className="rounded border-border bg-surface-1 text-accent"
               />
               Human-like mouse, keyboard, and scroll behavior
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={form.clipboard_sync ?? true}
                 onChange={(e) => set("clipboard_sync", e.target.checked)}
-                className="rounded border-border bg-surface-2"
+                className="rounded border-border bg-surface-1 text-accent"
               />
               Enable clipboard sync by default in VNC viewer
             </label>
-            <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={form.auto_launch ?? false}
                 onChange={(e) => set("auto_launch", e.target.checked)}
-                className="rounded border-border bg-surface-2"
+                className="rounded border-border bg-surface-1 text-accent"
               />
               Launch automatically when container starts
             </label>
@@ -438,13 +438,13 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Tags */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Tags</h3>
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Tags</h3>
           {(form.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.tags ?? []).map((t) => (
                 <span
                   key={t.tag}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-surface-3 text-gray-300"
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-surface-2 text-slate-700"
                   style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
                 >
                   {t.tag}
@@ -469,7 +469,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                   className="w-4 h-4 rounded-full border-2 transition-transform"
                   style={{
                     backgroundColor: c,
-                    borderColor: tagColor === c ? "#fff" : "transparent",
+                    borderColor: tagColor === c ? "#0f172a" : "transparent",
                     transform: tagColor === c ? "scale(1.2)" : undefined,
                   }}
                 />
@@ -490,8 +490,8 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Launch Args */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Firefox Launch Args</h3>
-          <p className="text-xs text-gray-500 mb-2">
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Firefox Launch Args</h3>
+          <p className="text-xs text-slate-500 mb-2">
             Custom Firefox arguments passed to invisible_playwright at launch. Only Firefox-compatible launch arguments are applied.
           </p>
           {(form.launch_args ?? []).length > 0 && (
@@ -499,7 +499,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               {(form.launch_args ?? []).map((arg, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-surface-3 text-gray-300 font-mono"
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-surface-2 text-slate-700 font-mono"
                 >
                   {arg}
                   <button
@@ -529,7 +529,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Notes */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Notes</h3>
+          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Notes</h3>
           <textarea
             className="input min-h-[80px] resize-y"
             value={form.notes ?? ""}

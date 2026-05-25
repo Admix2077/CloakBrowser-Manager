@@ -28,9 +28,9 @@ export function BulkActionBar({
     <div
       role="toolbar"
       aria-label="Bulk profile actions"
-      className="sticky top-0 z-20 flex h-10 items-center gap-3 border-b border-border bg-surface-1 px-3 text-xs"
+      className="sticky top-0 z-20 flex h-10 items-center gap-3 border-b border-blue-100 bg-blue-50/95 px-3 text-xs backdrop-blur"
     >
-      <span className="font-medium text-gray-200">{selectedCount} selected</span>
+      <span className="font-semibold text-blue-900">{selectedCount} selected</span>
       <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
       <SummaryPill label={`${stoppedCount} stopped`} />
       <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
@@ -43,7 +43,7 @@ export function BulkActionBar({
         {onClearSelection && (
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-gray-300 transition-colors hover:border-border-hover hover:bg-surface-3"
+            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1 font-medium text-blue-700 shadow-hairline transition-colors hover:border-blue-300 hover:bg-blue-100"
             onClick={onClearSelection}
           >
             <X className="h-3.5 w-3.5" />
@@ -68,8 +68,8 @@ function SummaryPill({
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 ${
         tone === "warning"
-          ? "border-amber-500/25 bg-amber-500/10 text-amber-300"
-          : "border-border bg-surface-2 text-gray-400"
+          ? "border-amber-200 bg-amber-50 text-amber-800"
+          : "border-blue-100 bg-white text-slate-600"
       }`}
     >
       {icon}
@@ -92,10 +92,10 @@ function DisabledAction({
       type="button"
       disabled
       aria-label={label}
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 opacity-60 ${
+      className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 opacity-60 ${
         danger
-          ? "border-red-500/20 bg-red-500/10 text-red-300"
-          : "border-border bg-surface-2 text-gray-400"
+          ? "border-red-200 bg-red-50 text-red-700"
+          : "border-blue-100 bg-white text-slate-500"
       }`}
     >
       {icon}

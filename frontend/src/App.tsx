@@ -6,6 +6,7 @@ import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
 import { ProfileTable } from "./components/ProfileTable";
+import { ProfileFilters } from "./components/ProfileFilters";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
@@ -49,8 +50,8 @@ export default function App() {
 
   if (authState === "checking") {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Loading...</div>
+      <div className="flex h-screen items-center justify-center bg-surface-0">
+        <div className="text-sm text-slate-500">Loading...</div>
       </div>
     );
   }
@@ -59,7 +60,7 @@ export default function App() {
     return (
       <div className="h-screen flex items-center justify-center bg-surface-0">
         <div className="text-center">
-          <p className="text-red-400 text-sm mb-2">Unable to reach the server</p>
+          <p className="mb-2 text-sm text-red-700">Unable to reach the server</p>
           <button
             onClick={() => {
               setAuthState("checking");
@@ -70,7 +71,7 @@ export default function App() {
                 })
                 .catch(() => setAuthState("error"));
             }}
-            className="text-xs text-gray-400 hover:text-gray-200 underline"
+            className="text-xs text-slate-500 underline hover:text-slate-900"
           >
             Retry
           </button>
@@ -126,6 +127,22 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     () => filterAndSortProfiles(profiles, healthByProfileId, filters),
     [filters, healthByProfileId, profiles],
   );
+  const consoleStats = useMemo(() => {
+    const issueCount = profiles.filter((profile) => {
+      const status = healthByProfileId[profile.id]?.status;
+      return status === "error" || status === "warning";
+    }).length;
+    const unavailableCount = profiles.filter((profile) => healthByProfileId[profile.id]?.status === "error").length;
+
+    return {
+      total: profiles.length,
+      visible: filteredProfiles.length,
+      running: profiles.filter((profile) => profile.status === "running").length,
+      stopped: profiles.filter((profile) => profile.status === "stopped").length,
+      issues: issueCount,
+      unavailable: unavailableCount,
+    };
+  }, [filteredProfiles.length, healthByProfileId, profiles]);
 
   useEffect(() => {
     const visibleIds = new Set(filteredProfiles.map((profile) => profile.id));
@@ -210,46 +227,66 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="text-gray-500 text-sm">Loading...</div>
+      <div className="flex h-screen items-center justify-center bg-surface-0">
+        <div className="text-sm text-slate-500">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex">
+    <div className="flex h-screen bg-surface-0 text-slate-900">
       {/* Sidebar */}
       {sidebarOpen && (
-        <div className="w-64 border-r border-border bg-surface-1 flex-shrink-0">
-          <ProfileList
-            profiles={profiles}
-            selectedId={selectedId}
-            onSelect={handleSelect}
-            onNew={handleNew}
-            healthByProfileId={healthByProfileId}
-            filters={filters}
-            filterOptions={filterOptions}
-            onFiltersChange={setFilters}
+        <>
+          <button
+            type="button"
+            aria-label="Close sidebar backdrop"
+            className="fixed inset-0 z-30 bg-slate-950/20 md:hidden"
+            onClick={() => setSidebarOpen(false)}
           />
-        </div>
+          <div className="fixed inset-y-0 left-0 z-40 w-[280px] border-r border-border bg-surface-1 shadow-panel md:relative md:inset-auto md:z-auto md:flex-shrink-0 md:shadow-hairline">
+            <ProfileList
+              profiles={profiles}
+              selectedId={selectedId}
+              onSelect={handleSelect}
+              onNew={handleNew}
+              healthByProfileId={healthByProfileId}
+              filters={filters}
+              filterOptions={filterOptions}
+              onFiltersChange={setFilters}
+              showFilters={false}
+            />
+          </div>
+        </>
       )}
 
       {/* Main panel */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-surface-1">
+        <div className="flex items-center justify-between border-b border-border bg-surface-1 px-4 py-3 shadow-hairline">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-gray-500 hover:text-gray-300 p-1"
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-surface-2 hover:text-slate-900"
               title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
               {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
             </button>
-            {selected && (
+            <div>
               <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-950">Profile Operations</span>
+                <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                  {consoleStats.visible} shown
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {consoleStats.total} profiles · {consoleStats.running} running · {consoleStats.issues} need review
+              </p>
+            </div>
+            {selected && (
+              <div className="hidden items-center gap-2 rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 md:flex">
                 <StatusIndicator status={selected.status} size="md" />
-                <span className="text-sm font-medium">{selected.name}</span>
+                <span className="max-w-[220px] truncate text-sm font-medium text-slate-700">{selected.name}</span>
               </div>
             )}
           </div>
@@ -264,7 +301,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             {authRequired && (
               <button
                 onClick={onLogout}
-                className="text-gray-500 hover:text-gray-300 p-1"
+                className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-surface-2 hover:text-slate-900"
                 title="Log out"
               >
                 <Lock className="h-3.5 w-3.5" />
@@ -275,23 +312,46 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
         {/* Error banner */}
         {error && (
-          <div className="px-4 py-2 bg-red-600/15 border-b border-red-600/30 text-red-400 text-sm">
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
             {error}
           </div>
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {view === "empty" && (
-            <ProfileTable
-              profiles={filteredProfiles}
-              healthByProfileId={healthByProfileId}
-              onSelect={handleSelect}
-              selectedProfileIds={selectedProfileIds}
-              onToggleProfileSelection={handleToggleProfileSelection}
-              onToggleVisibleSelection={handleToggleVisibleSelection}
-              onClearSelection={() => setSelectedProfileIds(new Set())}
-            />
+            <div className="flex h-full min-h-0 flex-col gap-4 p-3 sm:p-4 lg:p-6">
+              <section className="rounded-lg border border-border bg-surface-1 p-3 shadow-panel">
+                <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-950">Profile fleet</h2>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <SummaryTile label="Running" value={consoleStats.running} tone="success" />
+                    <SummaryTile label="Stopped" value={consoleStats.stopped} />
+                    <SummaryTile label="Issues" value={consoleStats.issues} tone="warning" />
+                    <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
+                  </div>
+                </div>
+                <ProfileFilters
+                  value={filters}
+                  options={filterOptions}
+                  onChange={setFilters}
+                  layout="toolbar"
+                />
+              </section>
+              <section className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-panel">
+                <ProfileTable
+                  profiles={filteredProfiles}
+                  healthByProfileId={healthByProfileId}
+                  onSelect={handleSelect}
+                  selectedProfileIds={selectedProfileIds}
+                  onToggleProfileSelection={handleToggleProfileSelection}
+                  onToggleVisibleSelection={handleToggleVisibleSelection}
+                  onClearSelection={() => setSelectedProfileIds(new Set())}
+                />
+              </section>
+            </div>
           )}
 
           {view === "create" && (
@@ -324,6 +384,32 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             />
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "neutral" | "success" | "warning" | "danger";
+}) {
+  const toneClassName = {
+    neutral: "border-border bg-surface-2 text-slate-700",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+    danger: "border-red-200 bg-red-50 text-red-700",
+  }[tone];
+
+  return (
+    <div className={`min-w-[92px] rounded-lg border px-3 py-2 ${toneClassName}`}>
+      <div className="text-lg font-semibold leading-5 tabular-nums">{value}</div>
+      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] opacity-75">
+        {label}
       </div>
     </div>
   );

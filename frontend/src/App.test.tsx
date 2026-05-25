@@ -127,7 +127,7 @@ describe("App operations console", () => {
     expect(tableProfileNames()[0]).toContain("Alpha Good");
   });
 
-  it("starts with the sidebar collapsed on narrow screens", async () => {
+  it("starts with the sidebar collapsed on narrow screens while keeping main operations filters available", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 390,
@@ -136,7 +136,8 @@ describe("App operations console", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
-    expect(screen.queryByPlaceholderText("Search profiles...")).toBeNull();
+    expect(screen.getByLabelText("Search profiles")).toBeTruthy();
+    expect(screen.queryByText("Quick views")).toBeNull();
     expect(screen.getByTitle("Show sidebar")).toBeTruthy();
   });
 
@@ -163,5 +164,16 @@ describe("App operations console", () => {
 
     expect(screen.getByText("1 selected")).toBeTruthy();
     expect((screen.getByLabelText("Select Alpha Good") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("uses sidebar quick views to drive the main operations table", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Unavailable profiles" }));
+
+    expect(tableProfileNames()).toHaveLength(1);
+    expect(tableProfileNames()[0]).toContain("Beta Broken");
+    expect((screen.getByLabelText("Health status") as HTMLSelectElement).value).toBe("error");
   });
 });

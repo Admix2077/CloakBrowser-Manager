@@ -885,3 +885,84 @@ UI/UE 预审：
 - 状态短文案建议：`good = 可继续`、`warning = 需关注`、`error = 不可用`、`unknown = 未检测`。
 - 色彩应低饱和，避免和运行态绿点、tag 多色冲突；warning 用 amber，error 沿用 red，unknown 用中性灰，good 用弱绿色或灰底小绿点。
 - `HealthBadge` 必须有可访问名称或 tooltip，不能只靠颜色表达状态。
+
+## 17. 2026-05-26 Profile 运营台 UI/UE 质感小闭环
+
+Jeff 反馈当前前端整体偏 low、运营台 UE 不够专业，本轮暂停继续堆功能，优先优化 Profile 运营台体验。
+
+设计判断：
+
+- 数百 profile 不应主要靠左侧长列表滚动管理。
+- 左侧应定位为 quick views、分组、最近、快捷入口和导航兜底。
+- 主区应承担核心运营：搜索、筛选、表格、多选、批量操作和状态扫视。
+- 默认视觉从深色开发面板改为浅色 B2B / data-dense dashboard，更适合长时间运营管理。
+
+实现范围：
+
+- `App.tsx`：
+  - 顶部变为 `Profile Operations`。
+  - 主区新增 summary tiles 和 toolbar。
+  - 移动端 sidebar 改成 overlay 抽屉，打开后不再撑宽 body。
+- `ProfileList.tsx`：
+  - 左侧新增 quick views：`All profiles`、`Running profiles`、`Stopped profiles`、`Unavailable profiles`、`Needs attention`、`No proxy`。
+  - quick views 直接写入现有 `ProfileFilterState`。
+  - 保留左侧虚拟滚动，只作为 matching profiles 扫视区。
+- `ProfileFilters.tsx`：
+  - 支持 `rail` / `toolbar` 两种布局。
+  - 主区使用 toolbar 布局。
+- `ProfileTable.tsx`：
+  - 改为 `table-fixed` 和固定列宽。
+  - 长字段截断，不撑破布局。
+  - 1440px 桌面可直接看到 `Actions` 列。
+- `BulkActionBar.tsx`：
+  - 改为浅色 sticky command bar。
+  - 仍然只做 disabled 安全壳，不调用批量 API。
+- `tailwind.config.ts` / `globals.css`：
+  - `surface`、`border`、`accent` 改为浅色 B2B token。
+  - 更新按钮、输入、select、textarea、focus、scrollbar。
+- `LoginPage`、`ProfileForm`、`ProfileViewer`、`LaunchButton` 做浅色 token 兼容，避免默认浅色主题下不可读。
+
+测试与验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileList.test.tsx src/components/ProfileFilters.test.tsx src/components/ProfileTable.test.tsx
+# 4 passed, 25 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 59 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- 使用临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data`，共 240 个 profiles。
+- 使用 `agent-browser`，环境变量 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 主区 summary / toolbar / dense table 可见。
+  - quick view `Needs attention` 可驱动 `Health status=warning`，主表显示 26 行。
+  - 选择首行后 `Bulk profile actions` 和 `1 selected` 可见。
+  - 控制台无相关应用错误。
+- 移动 `390x844`：
+  - 初始 sidebar 收起，主区搜索筛选可用。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，body 不横向撑破。
+  - 打开 sidebar 后为 overlay 抽屉，body 仍不横向撑破。
+
+截图：
+
+- `/tmp/cloak-ui-refresh-desktop.png`
+- `/tmp/cloak-ui-refresh-quick-view.png`
+- `/tmp/cloak-ui-refresh-bulk.png`
+- `/tmp/cloak-ui-refresh-mobile.png`
+- `/tmp/cloak-ui-refresh-mobile-sidebar.png`
+
+仍未做：
+
+- 批量 launch / stop / health check / tag / delete 仍未接入。
+- `ProfileSummaryPanel` / 右侧详情栏仍未落地。
+- `Open` 仍然切换到原详情页，后续可改为“表格 + 详情抽屉/右栏”的连续运营形态。

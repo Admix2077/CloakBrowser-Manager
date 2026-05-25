@@ -86,10 +86,10 @@ export function ProfileTable({
       ref={scrollRef}
       role="region"
       aria-label="Profile operations table"
-      className="h-full overflow-auto"
+      className="h-full overflow-auto bg-surface-1"
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
-      <div className="min-w-[1040px]">
+      <div className="min-w-[1068px]">
         {selectedCount > 0 && (
           <BulkActionBar
             selectedCount={selectedCount}
@@ -98,10 +98,24 @@ export function ProfileTable({
             onClearSelection={onClearSelection}
           />
         )}
-        <table className="w-full border-separate border-spacing-0 text-left text-xs">
-          <thead className={`sticky z-10 bg-surface-0/95 backdrop-blur ${selectedCount > 0 ? "top-10" : "top-0"}`}>
-            <tr className="text-gray-500">
-              <th aria-label="Select" className="w-10 border-b border-border px-3 py-2 font-medium">
+        <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
+          <colgroup>
+            <col style={{ width: 40 }} />
+            <col style={{ width: 176 }} />
+            <col style={{ width: 88 }} />
+            <col style={{ width: 86 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 86 }} />
+            <col style={{ width: 68 }} />
+            <col style={{ width: 106 }} />
+            <col style={{ width: 58 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 88 }} />
+            <col style={{ width: 90 }} />
+          </colgroup>
+          <thead className={`sticky z-10 bg-surface-1/95 backdrop-blur ${selectedCount > 0 ? "top-10" : "top-0"}`}>
+            <tr className="text-slate-500">
+              <th aria-label="Select" className="w-10 border-b border-border bg-surface-2 px-3 py-2 font-semibold">
                 <SelectionCheckbox
                   label="Select all visible profiles"
                   checked={allVisibleSelected}
@@ -127,7 +141,7 @@ export function ProfileTable({
           <tbody>
             {profiles.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-10 text-center text-gray-500">
+                <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
                   No profiles in this view
                 </td>
               </tr>
@@ -182,7 +196,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="border-b border-border px-3 py-2 font-medium">
+    <th className="truncate border-b border-border bg-surface-2 px-3 py-2 font-semibold uppercase tracking-[0.08em]">
       {children}
     </th>
   );
@@ -217,7 +231,7 @@ function SelectionCheckbox({
       checked={checked}
       disabled={disabled}
       onChange={onChange}
-      className="h-4 w-4 rounded border-border bg-surface-2 text-accent focus:ring-1 focus:ring-accent/60"
+      className="h-4 w-4 rounded border-border bg-surface-1 text-accent focus:ring-2 focus:ring-accent/20"
     />
   );
 }
@@ -246,7 +260,12 @@ function ProfileTableRow({
   const proxyLabel = formatProxyLabel(profile.proxy);
 
   return (
-    <tr className="group border-b border-border hover:bg-surface-1" style={{ height: PROFILE_TABLE_ROW_HEIGHT }}>
+    <tr
+      className={`group border-b border-border transition-colors ${
+        selected ? "bg-blue-50/70 hover:bg-blue-50" : "hover:bg-surface-2"
+      }`}
+      style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
+    >
       <td className="border-b border-border px-3 py-2">
         <SelectionCheckbox
           label={`Select ${profile.name}`}
@@ -256,13 +275,13 @@ function ProfileTableRow({
         />
       </td>
       <td className="border-b border-border px-3 py-2">
-        <div className="max-w-[180px] truncate text-sm font-medium text-gray-100" title={profile.name}>
+        <div className="max-w-[180px] truncate text-sm font-semibold text-slate-950" title={profile.name}>
           {profile.name}
         </div>
-        <div className="mt-0.5 text-[11px] text-gray-600">{profile.id.slice(0, 8)}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</div>
       </td>
-      <td className="border-b border-border px-3 py-2">
-        <span className="inline-flex items-center gap-1.5 text-gray-300">
+      <td className="truncate border-b border-border px-3 py-2">
+        <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
           <span>{profile.status}</span>
         </span>
@@ -271,36 +290,36 @@ function ProfileTableRow({
         <HealthBadge health={health} compact />
       </td>
       <td className="border-b border-border px-3 py-2">
-        <span className="block max-w-[150px] truncate text-gray-400" title={proxyLabel}>
+        <span className="block truncate font-mono text-[11px] text-slate-600" title={proxyLabel}>
           {proxyLabel}
         </span>
       </td>
-      <td className="border-b border-border px-3 py-2 text-gray-400">{ip ?? "-"}</td>
-      <td className="border-b border-border px-3 py-2 text-gray-400">{country ?? "-"}</td>
-      <td className="border-b border-border px-3 py-2 text-gray-400">{timezone ?? "-"}</td>
-      <td className="border-b border-border px-3 py-2 text-gray-400">{locale ?? "-"}</td>
+      <td className="truncate border-b border-border px-3 py-2 font-mono text-[11px] text-slate-600" title={ip ?? undefined}>{ip ?? "-"}</td>
+      <td className="truncate border-b border-border px-3 py-2 font-medium text-slate-600" title={country ?? undefined}>{country ?? "-"}</td>
+      <td className="truncate border-b border-border px-3 py-2 text-slate-600" title={timezone ?? undefined}>{timezone ?? "-"}</td>
+      <td className="truncate border-b border-border px-3 py-2 text-slate-600" title={locale ?? undefined}>{locale ?? "-"}</td>
       <td className="border-b border-border px-3 py-2">
         <div className="flex max-h-10 max-w-[150px] flex-wrap gap-1 overflow-hidden">
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
             <span
               key={tag.tag}
-              className="rounded-full bg-surface-4 px-1.5 py-0.5 text-[10px] text-gray-400"
+              className="rounded-full border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
               style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
             >
               {tag.tag}
             </span>
           )) : (
-            <span className="text-gray-600">-</span>
+            <span className="text-slate-400">-</span>
           )}
         </div>
       </td>
-      <td className="border-b border-border px-3 py-2 text-gray-400">
+      <td className="truncate border-b border-border px-3 py-2 text-slate-500">
         {formatTimestamp(lastChecked)}
       </td>
       <td className="border-b border-border px-3 py-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-gray-300 transition-colors hover:border-border-hover hover:bg-surface-3"
+          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >

@@ -1,4 +1,5 @@
-import { Plus, Monitor } from "lucide-react";
+import { AlertTriangle, Layers3, Play, Plus, ShieldAlert, Square, WifiOff } from "lucide-react";
+import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import {
@@ -31,6 +32,7 @@ interface ProfileListProps {
   filters?: ProfileFilterState;
   filterOptions?: ProfileFilterOptions;
   onFiltersChange?: (filters: ProfileFilterState) => void;
+  showFilters?: boolean;
 }
 
 export function ProfileList({
@@ -42,6 +44,7 @@ export function ProfileList({
   filters: controlledFilters,
   filterOptions: controlledFilterOptions,
   onFiltersChange,
+  showFilters = true,
 }: ProfileListProps) {
   const [internalFilters, setInternalFilters] = useState<ProfileFilterState>(defaultProfileFilters);
   const filters = controlledFilters ?? internalFilters;
@@ -56,6 +59,10 @@ export function ProfileList({
     [filters, healthByProfileId, profiles],
   );
   const runningCount = profiles.filter((p) => p.status === "running").length;
+  const quickViews = useMemo(
+    () => buildQuickViews(profiles, healthByProfileId),
+    [healthByProfileId, profiles],
+  );
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(PROFILE_LIST_FALLBACK_VIEWPORT_HEIGHT);
@@ -94,26 +101,64 @@ export function ProfileList({
   }, [filters]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col bg-surface-1">
       {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <Monitor className="h-4 w-4 text-accent" />
-          <h1 className="text-sm font-semibold tracking-tight">Invisible Browser Manager</h1>
+      <div className="border-b border-border p-4">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-accent">
+            <Layers3 className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-semibold tracking-tight text-slate-950">
+              CloakBrowser
+            </h1>
+            <p className="text-[11px] font-medium text-slate-500">Runtime operations</p>
+          </div>
         </div>
-        {runningCount > 0 && (
-          <div className="text-xs text-gray-500 mb-3">
-            {runningCount} running
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <RailMetric label="Profiles" value={profiles.length} />
+          <RailMetric label="Running" value={runningCount} />
+        </div>
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Quick views
+            </span>
+            <span className="text-[11px] text-slate-400">{filtered.length} shown</span>
+          </div>
+          <div className="grid gap-1.5">
+            {quickViews.map((view) => (
+              <QuickViewButton
+                key={view.label}
+                icon={view.icon}
+                label={view.label}
+                count={view.count}
+                active={matchesQuickView(filters, view.filters)}
+                onClick={() => setFilters(view.filters)}
+              />
+            ))}
+          </div>
+        </div>
+        {showFilters && (
+          <div className="mt-4 border-t border-border pt-4">
+            <ProfileFilters
+              value={filters}
+              options={filterOptions}
+              onChange={setFilters}
+            />
           </div>
         )}
-        <ProfileFilters
-          value={filters}
-          options={filterOptions}
-          onChange={setFilters}
-        />
       </div>
 
       {/* Profile list */}
+      <div className="border-b border-border px-4 py-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Matching profiles
+          </span>
+          <span className="text-[11px] text-slate-400">virtualized</span>
+        </div>
+      </div>
       <div
         ref={listRef}
         role="region"
@@ -122,7 +167,7 @@ export function ProfileList({
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
       >
         {filtered.length === 0 && (
-          <div className="text-center text-gray-500 text-xs py-8">
+          <div className="py-8 text-center text-xs text-slate-500">
             {profiles.length === 0 ? "No profiles yet" : "No matches"}
           </div>
         )}
@@ -164,13 +209,115 @@ export function ProfileList({
       </div>
 
       {/* New profile button */}
-      <div className="p-3 border-t border-border">
+      <div className="border-t border-border p-3">
         <button onClick={onNew} className="btn-secondary w-full flex items-center justify-center gap-1.5">
           <Plus className="h-3.5 w-3.5" />
           <span>New Profile</span>
         </button>
       </div>
     </div>
+  );
+}
+
+interface QuickView {
+  label: string;
+  count: number;
+  icon: ReactNode;
+  filters: ProfileFilterState;
+}
+
+function buildQuickViews(
+  profiles: Profile[],
+  healthByProfileId: Record<string, ProfileHealthResponse | undefined>,
+): QuickView[] {
+  const countHealth = (status: NonNullable<ProfileHealthResponse["status"]>) =>
+    profiles.filter((profile) => (healthByProfileId[profile.id]?.status ?? "unknown") === status).length;
+
+  return [
+    {
+      label: "All profiles",
+      count: profiles.length,
+      icon: <Layers3 className="h-3.5 w-3.5" />,
+      filters: defaultProfileFilters,
+    },
+    {
+      label: "Running profiles",
+      count: profiles.filter((profile) => profile.status === "running").length,
+      icon: <Play className="h-3.5 w-3.5" />,
+      filters: { ...defaultProfileFilters, status: "running" },
+    },
+    {
+      label: "Stopped profiles",
+      count: profiles.filter((profile) => profile.status === "stopped").length,
+      icon: <Square className="h-3.5 w-3.5" />,
+      filters: { ...defaultProfileFilters, status: "stopped" },
+    },
+    {
+      label: "Unavailable profiles",
+      count: countHealth("error"),
+      icon: <ShieldAlert className="h-3.5 w-3.5" />,
+      filters: { ...defaultProfileFilters, health: "error" },
+    },
+    {
+      label: "Needs attention",
+      count: countHealth("warning"),
+      icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      filters: { ...defaultProfileFilters, health: "warning" },
+    },
+    {
+      label: "No proxy",
+      count: profiles.filter((profile) => !profile.proxy).length,
+      icon: <WifiOff className="h-3.5 w-3.5" />,
+      filters: { ...defaultProfileFilters, proxy: "without_proxy" },
+    },
+  ];
+}
+
+function matchesQuickView(current: ProfileFilterState, target: ProfileFilterState): boolean {
+  return Object.keys(defaultProfileFilters).every((key) => {
+    const filterKey = key as keyof ProfileFilterState;
+    return current[filterKey] === target[filterKey];
+  });
+}
+
+function RailMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface-2 px-2.5 py-2">
+      <div className="text-base font-semibold tabular-nums text-slate-950">{value}</div>
+      <div className="text-[10px] font-medium uppercase tracking-[0.08em] text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function QuickViewButton({
+  icon,
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-xs font-medium transition-colors ${
+        active
+          ? "border-blue-200 bg-blue-50 text-blue-700"
+          : "border-transparent text-slate-600 hover:border-border hover:bg-surface-2 hover:text-slate-950"
+      }`}
+    >
+      <span className={active ? "text-blue-600" : "text-slate-400"}>{icon}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span aria-hidden="true" className={`tabular-nums ${active ? "text-blue-600" : "text-slate-400"}`}>{count}</span>
+    </button>
   );
 }
 
@@ -219,13 +366,13 @@ function ProfileListItem({
         virtualized ? "h-[108px] overflow-hidden" : ""
       } ${
         selected
-          ? "bg-surface-3 border border-border-hover"
-          : "hover:bg-surface-2 border border-transparent"
+          ? "border border-blue-200 bg-blue-50 shadow-hairline"
+          : "border border-transparent hover:border-border hover:bg-surface-2"
       }`}
     >
       <div className="flex min-w-0 items-center gap-2">
         <StatusIndicator status={profile.status} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{profile.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{profile.name}</span>
         <span className="ml-auto shrink-0">
           <HealthBadge health={health} compact />
         </span>
@@ -234,7 +381,7 @@ function ProfileListItem({
       {hasMeta && (
         <div className="mt-1 ml-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {profile.proxy && (
-            <span className="text-xs text-gray-500">Proxy</span>
+            <span className="text-xs text-slate-500">Proxy</span>
           )}
           {warningSummary && (
             <span
@@ -245,7 +392,7 @@ function ProfileListItem({
             </span>
           )}
           {geoipParts.map((part) => (
-            <span key={part} className="text-xs text-gray-500">
+            <span key={part} className="text-xs text-slate-500">
               {part}
             </span>
           ))}
@@ -257,7 +404,7 @@ function ProfileListItem({
           {profile.tags.map((t) => (
             <span
               key={t.tag}
-              className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-4 text-gray-400"
+              className="rounded-full bg-surface-4 px-1.5 py-0.5 text-[10px] text-slate-600"
               style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
             >
               {t.tag}

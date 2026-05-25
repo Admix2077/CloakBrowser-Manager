@@ -36,28 +36,28 @@ export function getHealthTone(status: HealthStatus | undefined): {
   switch (status) {
     case "good":
       return {
-        badgeClassName: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-        dotClassName: "bg-emerald-400",
-        summaryClassName: "text-emerald-300/80",
+        badgeClassName: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        dotClassName: "bg-emerald-500",
+        summaryClassName: "text-emerald-700",
       };
     case "warning":
       return {
-        badgeClassName: "border-amber-400/20 bg-amber-400/10 text-amber-300",
-        dotClassName: "bg-amber-300",
-        summaryClassName: "text-amber-200/80",
+        badgeClassName: "border-amber-200 bg-amber-50 text-amber-800",
+        dotClassName: "bg-amber-500",
+        summaryClassName: "text-amber-800",
       };
     case "error":
       return {
-        badgeClassName: "border-red-600/30 bg-red-600/15 text-red-400",
-        dotClassName: "bg-red-400",
-        summaryClassName: "text-red-300/80",
+        badgeClassName: "border-red-200 bg-red-50 text-red-700",
+        dotClassName: "bg-red-500",
+        summaryClassName: "text-red-700",
       };
     case "unknown":
     default:
       return {
-        badgeClassName: "border-border bg-surface-3 text-gray-400",
-        dotClassName: "bg-gray-500",
-        summaryClassName: "text-gray-500",
+        badgeClassName: "border-border bg-surface-2 text-slate-600",
+        dotClassName: "bg-slate-400",
+        summaryClassName: "text-slate-500",
       };
   }
 }

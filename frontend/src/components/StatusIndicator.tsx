@@ -16,7 +16,7 @@ export function StatusIndicator({ status, size = "sm" }: StatusIndicatorProps) {
       )}
       <span
         className={`relative inline-flex ${sizeClass} rounded-full ${
-          isRunning ? "bg-emerald-400" : "bg-gray-500"
+          isRunning ? "bg-emerald-500" : "bg-slate-400"
         }`}
       />
     </span>

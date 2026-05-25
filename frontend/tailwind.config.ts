@@ -7,20 +7,24 @@ export default {
     extend: {
       colors: {
         surface: {
-          0: "#0a0a0a",
-          1: "#111111",
-          2: "#1a1a1a",
-          3: "#222222",
-          4: "#2a2a2a",
+          0: "#f6f8fb",
+          1: "#ffffff",
+          2: "#f8fafc",
+          3: "#eff6ff",
+          4: "#e2e8f0",
         },
         border: {
-          DEFAULT: "#2a2a2a",
-          hover: "#3a3a3a",
+          DEFAULT: "#dbe3ef",
+          hover: "#aebed2",
         },
         accent: {
-          DEFAULT: "#6366f1",
-          hover: "#818cf8",
+          DEFAULT: "#2563eb",
+          hover: "#1d4ed8",
         },
+      },
+      boxShadow: {
+        panel: "0 18px 45px rgba(15, 23, 42, 0.08)",
+        hairline: "0 1px 2px rgba(15, 23, 42, 0.05)",
       },
     },
   },

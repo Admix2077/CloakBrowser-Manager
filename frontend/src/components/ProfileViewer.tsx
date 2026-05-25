@@ -235,8 +235,8 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-red-400 text-sm mb-2">Connection failed</p>
-          <p className="text-gray-500 text-xs">{error}</p>
+          <p className="mb-2 text-sm text-red-700">Connection failed</p>
+          <p className="text-xs text-slate-500">{error}</p>
         </div>
       </div>
     );
@@ -245,10 +245,10 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
   return (
     <div className="relative h-full flex flex-col">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-surface-1 border-b border-border">
+      <div className="flex items-center justify-between border-b border-border bg-surface-1 px-3 py-1.5">
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-yellow-400 animate-pulse"}`} />
-          <span className="text-xs text-gray-400">
+          <span className="text-xs font-medium text-slate-600">
             {connected ? "Connected" : "Connecting..."}
           </span>
         </div>
@@ -265,8 +265,8 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
             }}
             className={`p-1 ${
               automationUrl
-                ? automationCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
-                : "text-gray-700 cursor-not-allowed"
+                ? automationCopied ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
+                : "text-slate-300 cursor-not-allowed"
             }`}
             title={
               automationUrl
@@ -284,7 +284,7 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
           </button>
           <button
             onClick={() => { console.log("[clipboard] toggle:", !clipboardSync); setClipboardSync(!clipboardSync); }}
-            className={`p-1 ${clipboardSync ? "text-accent" : "text-gray-500 hover:text-gray-300"}`}
+            className={`p-1 ${clipboardSync ? "text-accent" : "text-slate-500 hover:text-slate-900"}`}
             title={clipboardSync ? "Disable clipboard sync" : "Enable clipboard sync"}
             disabled={!connected}
           >
@@ -292,7 +292,7 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
           </button>
           <button
             onClick={toggleFullscreen}
-            className="text-gray-500 hover:text-gray-300 p-1"
+            className="p-1 text-slate-500 hover:text-slate-900"
             title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
