@@ -1,10 +1,14 @@
 import { ArrowRight, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
 
 const EMPTY_SELECTION = new Set<string>();
+const PROFILE_TABLE_VIRTUAL_THRESHOLD = 120;
+const PROFILE_TABLE_ROW_HEIGHT = 64;
+const PROFILE_TABLE_OVERSCAN = 8;
+const PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT = 640;
 
 interface ProfileTableProps {
   profiles: Profile[];
@@ -25,14 +29,61 @@ export function ProfileTable({
   onToggleVisibleSelection,
   onClearSelection,
 }: ProfileTableProps) {
-  const visibleIds = profiles.map((profile) => profile.id);
-  const selectedVisibleCount = visibleIds.filter((id) => selectedProfileIds.has(id)).length;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT);
+  const filteredIds = useMemo(() => profiles.map((profile) => profile.id), [profiles]);
+  const selectedVisibleCount = filteredIds.filter((id) => selectedProfileIds.has(id)).length;
   const allVisibleSelected = profiles.length > 0 && selectedVisibleCount === profiles.length;
   const hasPartialVisibleSelection = selectedVisibleCount > 0 && !allVisibleSelected;
   const selectedCount = selectedProfileIds.size;
+  const shouldVirtualize = profiles.length > PROFILE_TABLE_VIRTUAL_THRESHOLD;
+  const virtualWindow = useMemo(
+    () => getProfileTableVirtualWindow(profiles.length, scrollTop, viewportHeight),
+    [profiles.length, scrollTop, viewportHeight],
+  );
+  const visibleProfiles = shouldVirtualize
+    ? profiles.slice(virtualWindow.start, virtualWindow.end)
+    : profiles;
+  const topSpacerHeight = shouldVirtualize ? virtualWindow.start * PROFILE_TABLE_ROW_HEIGHT : 0;
+  const bottomSpacerHeight = shouldVirtualize
+    ? (profiles.length - virtualWindow.end) * PROFILE_TABLE_ROW_HEIGHT
+    : 0;
+  const profileWindowKey = filteredIds.join("\u0000");
+
+  useLayoutEffect(() => {
+    const scrollContainer = scrollRef.current;
+    if (!scrollContainer) return;
+
+    const updateViewportHeight = () => {
+      setViewportHeight(scrollContainer.clientHeight || PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT);
+    };
+
+    updateViewportHeight();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateViewportHeight);
+      return () => window.removeEventListener("resize", updateViewportHeight);
+    }
+
+    const observer = new ResizeObserver(updateViewportHeight);
+    observer.observe(scrollContainer);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setScrollTop(0);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [profileWindowKey]);
 
   return (
-    <div className="h-full overflow-auto">
+    <div
+      ref={scrollRef}
+      role="region"
+      aria-label="Profile operations table"
+      className="h-full overflow-auto"
+      onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+    >
       <div className="min-w-[1040px]">
         {selectedCount > 0 && (
           <div className="sticky top-0 z-20 flex h-10 items-center gap-3 border-b border-border bg-surface-1 px-3 text-xs">
@@ -58,7 +109,7 @@ export function ProfileTable({
                   checked={allVisibleSelected}
                   indeterminate={hasPartialVisibleSelection}
                   disabled={profiles.length === 0 || !onToggleVisibleSelection}
-                  onChange={() => onToggleVisibleSelection?.(visibleIds, !allVisibleSelected)}
+                  onChange={() => onToggleVisibleSelection?.(filteredIds, !allVisibleSelected)}
                 />
                 <span className="sr-only">Select</span>
               </th>
@@ -83,21 +134,51 @@ export function ProfileTable({
                 </td>
               </tr>
             ) : (
-              profiles.map((profile) => (
-                <ProfileTableRow
-                  key={profile.id}
-                  profile={profile}
-                  health={healthByProfileId[profile.id]}
-                  onSelect={onSelect}
-                  selected={selectedProfileIds.has(profile.id)}
-                  onToggleSelection={onToggleProfileSelection}
-                />
-              ))
+              <>
+                {topSpacerHeight > 0 && <ProfileTableSpacer height={topSpacerHeight} />}
+                {visibleProfiles.map((profile) => (
+                  <ProfileTableRow
+                    key={profile.id}
+                    profile={profile}
+                    health={healthByProfileId[profile.id]}
+                    onSelect={onSelect}
+                    selected={selectedProfileIds.has(profile.id)}
+                    onToggleSelection={onToggleProfileSelection}
+                  />
+                ))}
+                {bottomSpacerHeight > 0 && <ProfileTableSpacer height={bottomSpacerHeight} />}
+              </>
             )}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function getProfileTableVirtualWindow(
+  total: number,
+  scrollTop: number,
+  viewportHeight: number,
+): { start: number; end: number } {
+  if (total === 0) return { start: 0, end: 0 };
+
+  const visibleCount = Math.ceil(
+    Math.max(viewportHeight, PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT) / PROFILE_TABLE_ROW_HEIGHT,
+  );
+  const windowSize = visibleCount + PROFILE_TABLE_OVERSCAN * 2;
+  const maxStart = Math.max(0, total - windowSize);
+  const rawStart = Math.floor(scrollTop / PROFILE_TABLE_ROW_HEIGHT) - PROFILE_TABLE_OVERSCAN;
+  const start = Math.min(Math.max(0, rawStart), maxStart);
+  const end = Math.min(total, start + windowSize);
+  return { start, end };
+}
+
+function ProfileTableSpacer({ height }: { height: number }) {
+  return (
+    <tr aria-hidden="true" style={{ height }}>
+      <td colSpan={12} className="border-0 p-0" />
+    </tr>
   );
 }
 
@@ -167,7 +248,7 @@ function ProfileTableRow({
   const proxyLabel = formatProxyLabel(profile.proxy);
 
   return (
-    <tr className="group border-b border-border hover:bg-surface-1">
+    <tr className="group border-b border-border hover:bg-surface-1" style={{ height: PROFILE_TABLE_ROW_HEIGHT }}>
       <td className="border-b border-border px-3 py-2">
         <SelectionCheckbox
           label={`Select ${profile.name}`}
@@ -201,7 +282,7 @@ function ProfileTableRow({
       <td className="border-b border-border px-3 py-2 text-gray-400">{timezone ?? "-"}</td>
       <td className="border-b border-border px-3 py-2 text-gray-400">{locale ?? "-"}</td>
       <td className="border-b border-border px-3 py-2">
-        <div className="flex max-w-[150px] flex-wrap gap-1">
+        <div className="flex max-h-10 max-w-[150px] flex-wrap gap-1 overflow-hidden">
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
             <span
               key={tag.tag}

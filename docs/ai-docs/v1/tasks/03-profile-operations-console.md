@@ -58,6 +58,7 @@
   - country。
   - last_geoip_resolved_at。
 - [x] 左侧 `ProfileList` 大列表虚拟滚动。
+- [x] 主区 `ProfileTable` 大列表虚拟滚动。
 - [x] 新增多选状态。
 - [ ] 新增 `BulkActionBar`。
 - [ ] 接入批量 launch。
@@ -315,3 +316,70 @@ cd frontend && npm run build
 - 主区 `ProfileTable` 当前仍会全量渲染过滤结果；几百行时短期可接受，但上千 profile 时应继续做主表格虚拟滚动。
 - 本小闭环不引入 `react-window` 或 `@tanstack/react-virtual`；如果后续要求左侧 item 保持完全可变高度、多行 warning/tag 完整展示，再考虑引入支持测量动态高度的虚拟滚动库。
 - 本小闭环不做服务端分页。服务端分页需要重新定义筛选、排序、select filtered 和批量操作契约，建议等 API/批量动作语义稳定后再进入。
+
+## 2026-05-26 主区 ProfileTable 虚拟滚动小闭环
+
+背景：
+
+- 左侧 `ProfileList` 已完成大列表虚拟滚动，但主区 `ProfileTable` 仍会全量渲染过滤结果。
+- Jeff 进一步确认信息架构方向：运营台应以主区域表格、搜索筛选和批量操作为核心；左侧只应逐步降级为最近、分组、快捷入口和性能兜底。
+
+已完成：
+
+- [x] `ProfileTable` 在过滤结果超过 120 条时启用固定行高虚拟窗口。
+- [x] 保留原生 `table` / `thead` / `tbody` / `tr` 语义，用顶部和底部 spacer row 撑出总高度。
+- [x] 表格行高度收敛为 64px，tag 区域限制最大高度，避免长 tag 撑破虚拟滚动估算。
+- [x] 虚拟窗口包含 overscan，减少滚动时的空白感。
+- [x] `Profile operations table` 成为主表滚动根，sticky 选择条和 sticky 表头仍在同一容器内工作。
+- [x] 筛选结果变化后重置主表滚动位置，避免从大列表中段切到少量结果时出现空白窗口。
+- [x] 表头 `Select all visible profiles` 继续作用于当前筛选后的全部 rows，而不是当前虚拟窗口 rows。
+- [x] 滚动后可见行的 checkbox 和 `Open` action 仍按正确 profile id 工作。
+- [x] proxy 列继续只显示脱敏后的 `protocol//host` 或 `Invalid proxy`，不暴露 proxy 凭据。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 10 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 22 passed
+
+cd frontend && npm test -- --run
+# 10 passed, 57 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-qa-data` 写入 240 个 `Perf Table Profile`。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 主区 `Profile operations table` 只渲染约 30 个 `Open Perf Table Profile` 按钮，而不是 240 个。
+  - 主表 `scrollHeight` 正常增大，滚动条可用。
+  - 滚动到中段后 `Perf Table Profile 120` 出现在主表窗口内，`Perf Table Profile 000` 不在主表 DOM 内。
+  - 点击 `Select Perf Table Profile 120` 后显示 `1 selected`。
+  - 点击表头 `Select all visible profiles` 后显示 `240 selected`，证明全选语义仍是当前筛选结果全集。
+  - 搜索 `239` 后主表回到顶部，只显示 `Perf Table Profile 239`，没有旧虚拟窗口残留。
+- 移动 `390x844`：
+  - 刷新后 sidebar 默认收起。
+  - 主表仍只渲染窗口内行。
+  - `body.scrollWidth === viewportWidth`，页面本体没有横向撑破。
+  - 主表自身保留横向滚动，`scrollWidth` 为 1040，`scrollLeft` 可移动到右侧列。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+- 截图保存到：
+  - `/tmp/cloak-profile-table-virtualized-desktop.png`
+  - `/tmp/cloak-profile-table-virtualized-mobile.png`
+  - `/tmp/cloak-profile-table-virtualized-mobile-initial.png`
+
+范围说明：
+
+- 本小闭环不引入 `react-window` 或 `@tanstack/react-virtual`；当前固定行高表格足以覆盖数百到低千级 profile。
+- 本小闭环不做服务端分页。服务端分页应等批量操作、全选筛选结果和服务端排序/筛选契约稳定后再进入。
+- 左侧虚拟滚动方向不撤销，但产品定位应从“全量 profile 管理入口”逐步调整为最近、分组、收藏、状态快捷过滤和导航兜底。

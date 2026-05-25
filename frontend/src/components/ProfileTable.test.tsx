@@ -68,6 +68,13 @@ const profiles = [
   }),
 ];
 
+function tableProfile(index: number): Profile {
+  return profile({
+    id: `table-${index}`,
+    name: `Table Profile ${index.toString().padStart(3, "0")}`,
+  });
+}
+
 const healthByProfileId = {
   good: health("good", {
     status: "good",
@@ -214,5 +221,103 @@ describe("ProfileTable", () => {
     );
 
     expect(screen.getByText("No profiles in this view")).toBeTruthy();
+  });
+
+  it("virtualizes large profile tables while keeping row actions usable", () => {
+    const onSelect = vi.fn();
+    const profiles = Array.from({ length: 300 }, (_, index) => tableProfile(index));
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={{}}
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(screen.getByText("Table Profile 000")).toBeTruthy();
+    expect(screen.queryByText("Table Profile 120")).toBeNull();
+
+    const table = screen.getByRole("region", { name: "Profile operations table" });
+    fireEvent.scroll(table, { target: { scrollTop: 64 * 120 } });
+
+    expect(screen.queryByText("Table Profile 000")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Table Profile 120" }));
+    expect(onSelect).toHaveBeenCalledWith("table-120");
+  });
+
+  it("selects the full filtered table set even when only a virtual window is rendered", () => {
+    const onToggleVisibleSelection = vi.fn();
+    const profiles = Array.from({ length: 300 }, (_, index) => tableProfile(index));
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleVisibleSelection={onToggleVisibleSelection}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Select all visible profiles"));
+
+    expect(onToggleVisibleSelection).toHaveBeenCalledWith(
+      profiles.map((item) => item.id),
+      true,
+    );
+  });
+
+  it("keeps row selection controlled after a virtualized row leaves and re-enters the DOM", () => {
+    const profiles = Array.from({ length: 300 }, (_, index) => tableProfile(index));
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["table-0"])}
+        onToggleProfileSelection={vi.fn()}
+      />,
+    );
+
+    const table = screen.getByRole("region", { name: "Profile operations table" });
+    expect((screen.getByLabelText("Select Table Profile 000") as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.scroll(table, { target: { scrollTop: 64 * 120 } });
+    expect(screen.queryByLabelText("Select Table Profile 000")).toBeNull();
+
+    fireEvent.scroll(table, { target: { scrollTop: 0 } });
+    expect((screen.getByLabelText("Select Table Profile 000") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("resets a large virtualized table to the empty state without stale rows", () => {
+    const profiles = Array.from({ length: 300 }, (_, index) => tableProfile(index));
+    const { rerender } = render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const table = screen.getByRole("region", { name: "Profile operations table" });
+    fireEvent.scroll(table, { target: { scrollTop: 64 * 120 } });
+    expect(screen.getByText("Table Profile 120")).toBeTruthy();
+
+    rerender(
+      <ProfileTable
+        profiles={[]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+        onToggleVisibleSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("No profiles in this view")).toBeTruthy();
+    expect(screen.queryByText("Table Profile 120")).toBeNull();
+    expect((screen.getByLabelText("Select all visible profiles") as HTMLInputElement).disabled).toBe(true);
   });
 });
