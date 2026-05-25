@@ -326,6 +326,193 @@ describe("useProfiles", () => {
     });
   });
 
+  it("adds a tag to selected profiles without removing existing tags", async () => {
+    const taggedProfile = {
+      ...fakeProfile,
+      id: "tagged-123",
+      name: "Tagged",
+      tags: [{ tag: "existing", color: "#22c55e" }],
+    };
+    const plainProfile = { ...fakeProfile, id: "plain-123", name: "Plain" };
+    mockApi.listProfiles.mockResolvedValue([taggedProfile, plainProfile]);
+    mockApi.updateProfile.mockImplementation((id: string, data: { tags?: { tag: string; color: string | null }[] }) => {
+      const source = id === "tagged-123" ? taggedProfile : plainProfile;
+      return Promise.resolve({ ...source, tags: data.tags ?? [] });
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+    mockApi.getProfileHealth.mockClear();
+
+    let tagResult;
+    await act(async () => {
+      tagResult = await result.current.addTagsToProfiles(["tagged-123", "plain-123"], [
+        { tag: "ops", color: "#6366f1" },
+      ]);
+    });
+
+    expect(mockApi.updateProfile).toHaveBeenCalledWith("tagged-123", {
+      tags: [
+        { tag: "existing", color: "#22c55e" },
+        { tag: "ops", color: "#6366f1" },
+      ],
+    });
+    expect(mockApi.updateProfile).toHaveBeenCalledWith("plain-123", {
+      tags: [{ tag: "ops", color: "#6366f1" }],
+    });
+    expect(mockApi.listProfiles).toHaveBeenCalledTimes(1);
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("tagged-123");
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("plain-123");
+    expect(tagResult).toMatchObject({
+      requestedCount: 2,
+      taggedCount: 2,
+      failedCount: 0,
+      skippedUnchangedCount: 0,
+    });
+  });
+
+  it("keeps existing tag color when a bulk tag already exists", async () => {
+    const taggedProfile = {
+      ...fakeProfile,
+      id: "tagged-123",
+      name: "Tagged",
+      tags: [{ tag: "ops", color: "#22c55e" }],
+    };
+    mockApi.listProfiles.mockResolvedValue([taggedProfile]);
+    mockApi.updateProfile.mockImplementation((id: string, data: { tags?: { tag: string; color: string | null }[] }) => {
+      return Promise.resolve({ ...taggedProfile, tags: data.tags ?? [] });
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+    mockApi.getProfileHealth.mockClear();
+
+    let tagResult;
+    await act(async () => {
+      tagResult = await result.current.addTagsToProfiles(["tagged-123"], [
+        { tag: "ops", color: "#6366f1" },
+        { tag: "qa", color: "#0ea5e9" },
+      ]);
+    });
+
+    expect(mockApi.updateProfile).toHaveBeenCalledWith("tagged-123", {
+      tags: [
+        { tag: "ops", color: "#22c55e" },
+        { tag: "qa", color: "#0ea5e9" },
+      ],
+    });
+    expect(tagResult).toMatchObject({
+      requestedCount: 1,
+      taggedCount: 1,
+      failedCount: 0,
+      skippedUnchangedCount: 0,
+    });
+  });
+
+  it("skips selected profiles when bulk tags would not change them", async () => {
+    const taggedProfile = {
+      ...fakeProfile,
+      id: "tagged-123",
+      name: "Tagged",
+      tags: [{ tag: "ops", color: "#22c55e" }],
+    };
+    mockApi.listProfiles.mockResolvedValue([taggedProfile]);
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+
+    let tagResult;
+    await act(async () => {
+      tagResult = await result.current.addTagsToProfiles(["tagged-123"], [
+        { tag: " ops ", color: "#6366f1" },
+      ]);
+    });
+
+    expect(mockApi.updateProfile).not.toHaveBeenCalled();
+    expect(mockApi.listProfiles).not.toHaveBeenCalled();
+    expect(tagResult).toMatchObject({
+      requestedCount: 1,
+      taggedCount: 0,
+      failedCount: 0,
+      skippedUnchangedCount: 1,
+    });
+  });
+
+  it("reports selected profile ids that disappear before bulk tagging", async () => {
+    mockApi.listProfiles.mockResolvedValue([fakeProfile]);
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+
+    let tagResult;
+    await act(async () => {
+      tagResult = await result.current.addTagsToProfiles(["missing-123"], [
+        { tag: "ops", color: "#6366f1" },
+      ]);
+    });
+
+    expect(mockApi.updateProfile).not.toHaveBeenCalled();
+    expect(mockApi.listProfiles).not.toHaveBeenCalled();
+    expect(tagResult).toMatchObject({
+      requestedCount: 1,
+      taggedCount: 0,
+      failedCount: 1,
+      skippedUnchangedCount: 0,
+    });
+    expect(result.current.error).toBe("Failed to tag 1 profile(s): Profile missing-123 is no longer available");
+  });
+
+  it("reports partial bulk tag failures while refreshing successful profiles", async () => {
+    const taggedProfile = {
+      ...fakeProfile,
+      id: "tagged-123",
+      name: "Tagged",
+    };
+    const failingProfile = {
+      ...fakeProfile,
+      id: "fail-123",
+      name: "Failing",
+    };
+    mockApi.listProfiles.mockResolvedValue([taggedProfile, failingProfile]);
+    mockApi.updateProfile.mockImplementation((id: string, data: { tags?: { tag: string; color: string | null }[] }) => {
+      if (id === "tagged-123") return Promise.resolve({ ...taggedProfile, tags: data.tags ?? [] });
+      return Promise.reject(new Error("Tag failed for proxy http://user:secret@proxy.example:8080"));
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+    mockApi.getProfileHealth.mockClear();
+
+    let tagResult;
+    await act(async () => {
+      tagResult = await result.current.addTagsToProfiles(["tagged-123", "fail-123"], [
+        { tag: "ops", color: "#6366f1" },
+      ]);
+    });
+
+    expect(mockApi.updateProfile).toHaveBeenCalledWith("tagged-123", {
+      tags: [{ tag: "ops", color: "#6366f1" }],
+    });
+    expect(mockApi.updateProfile).toHaveBeenCalledWith("fail-123", {
+      tags: [{ tag: "ops", color: "#6366f1" }],
+    });
+    expect(mockApi.listProfiles).toHaveBeenCalledTimes(1);
+    expect(mockApi.getProfileHealth).toHaveBeenCalledTimes(1);
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("tagged-123");
+    expect(tagResult).toMatchObject({
+      requestedCount: 2,
+      taggedCount: 1,
+      failedCount: 1,
+      skippedUnchangedCount: 0,
+    });
+    expect(result.current.error).toBe("Failed to tag 1 profile(s): Tag failed for proxy http://proxy.example:8080");
+  });
+
   it("runs active health checks and writes successful results into the health cache", async () => {
     const checkedHealth = {
       ...fakeHealth,

@@ -10,6 +10,7 @@ import { redactUrlCredentials } from "../lib/profileDisplay";
 const HEALTH_CHECK_CONCURRENCY = 6;
 const BULK_LAUNCH_CONCURRENCY = 2;
 const BULK_STOP_CONCURRENCY = 2;
+const BULK_TAG_CONCURRENCY = 4;
 
 export interface BulkLaunchResult {
   requestedCount: number;
@@ -26,6 +27,15 @@ export interface BulkStopResult {
   skippedStoppedCount: number;
   failedCount: number;
 }
+
+export interface BulkTagResult {
+  requestedCount: number;
+  taggedCount: number;
+  skippedUnchangedCount: number;
+  failedCount: number;
+}
+
+type ProfileTag = NonNullable<ProfileCreateData["tags"]>[number];
 
 export function useProfiles() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -339,6 +349,100 @@ export function useProfiles() {
     [profiles, refresh, refreshHealth],
   );
 
+  const addTagsToProfiles = useCallback(
+    async (profileIds: string[], tags: ProfileTag[]): Promise<BulkTagResult> => {
+      const ids = [...new Set(profileIds.filter(Boolean))];
+      const normalizedTags = normalizeTags(tags);
+      const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+      const successfulIds: string[] = [];
+      const failureMessages: string[] = [];
+      let skippedUnchangedCount = 0;
+      let failedCount = 0;
+      let cursor = 0;
+
+      const result: BulkTagResult = {
+        requestedCount: ids.length,
+        taggedCount: 0,
+        skippedUnchangedCount: 0,
+        failedCount: 0,
+      };
+
+      if (ids.length === 0 || normalizedTags.length === 0) {
+        setOperationError(null);
+        result.skippedUnchangedCount = ids.length;
+        return result;
+      }
+
+      const taggable = ids
+        .map((id) => {
+          const profile = profileById.get(id);
+          if (!profile) {
+            failedCount += 1;
+            failureMessages.push(`Profile ${id} is no longer available`);
+            return null;
+          }
+          const mergedTags = mergeProfileTags(profile.tags, normalizedTags);
+          if (areTagsEqual(profile.tags, mergedTags)) {
+            skippedUnchangedCount += 1;
+            return null;
+          }
+          return { id, mergedTags };
+        })
+        .filter((item): item is { id: string; mergedTags: ProfileTag[] } => item !== null);
+
+      if (taggable.length === 0) {
+        result.skippedUnchangedCount = skippedUnchangedCount;
+        result.failedCount = failedCount;
+        if (failedCount > 0) {
+          const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+          const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
+          setOperationError(`Failed to tag ${failedCount} profile(s)${reasonSummary}`);
+        } else {
+          setOperationError(null);
+        }
+        return result;
+      }
+
+      const workerCount = Math.min(BULK_TAG_CONCURRENCY, taggable.length);
+      await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+          while (cursor < taggable.length) {
+            const item = taggable[cursor];
+            cursor += 1;
+            if (!item) continue;
+            try {
+              await api.updateProfile(item.id, { tags: item.mergedTags });
+              successfulIds.push(item.id);
+            } catch (err) {
+              failedCount += 1;
+              failureMessages.push(err instanceof Error ? err.message : "Failed to tag profile");
+            }
+          }
+        }),
+      );
+
+      await refresh();
+      if (successfulIds.length > 0) {
+        await refreshHealth(successfulIds);
+      }
+
+      result.taggedCount = successfulIds.length;
+      result.skippedUnchangedCount = skippedUnchangedCount;
+      result.failedCount = failedCount;
+
+      if (failedCount > 0) {
+        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
+        setOperationError(`Failed to tag ${failedCount} profile(s)${reasonSummary}`);
+      } else {
+        setOperationError(null);
+      }
+
+      return result;
+    },
+    [profiles, refresh, refreshHealth],
+  );
+
   return {
     profiles,
     healthByProfileId,
@@ -354,5 +458,37 @@ export function useProfiles() {
     launchProfiles,
     stop,
     stopProfiles,
+    addTagsToProfiles,
   };
+}
+
+function normalizeTags(tags: ProfileTag[]): ProfileTag[] {
+  const byName = new Map<string, ProfileTag>();
+  tags.forEach((tag) => {
+    const name = tag.tag.trim();
+    if (!name) return;
+    byName.set(name, { tag: name, color: tag.color ?? null });
+  });
+  return [...byName.values()];
+}
+
+function mergeProfileTags(existingTags: ProfileTag[], incomingTags: ProfileTag[]): ProfileTag[] {
+  const merged = new Map<string, ProfileTag>();
+  existingTags.forEach((tag) => {
+    const name = tag.tag.trim();
+    if (!name) return;
+    merged.set(name, { tag: name, color: tag.color ?? null });
+  });
+  incomingTags.forEach((tag) => {
+    if (!merged.has(tag.tag)) merged.set(tag.tag, tag);
+  });
+  return [...merged.values()];
+}
+
+function areTagsEqual(left: ProfileTag[], right: ProfileTag[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((tag, index) => {
+    const other = right[index];
+    return other?.tag === tag.tag && (other.color ?? null) === (tag.color ?? null);
+  });
 }

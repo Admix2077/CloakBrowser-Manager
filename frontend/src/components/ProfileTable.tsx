@@ -28,6 +28,8 @@ interface ProfileTableProps {
   launchingSelectedProfiles?: boolean;
   onStopSelectedProfiles?: (ids: string[]) => Promise<void> | void;
   stoppingSelectedProfiles?: boolean;
+  onAddTagsToSelectedProfiles?: (ids: string[], tags: Profile["tags"]) => Promise<void> | void;
+  taggingSelectedProfiles?: boolean;
 }
 
 export function ProfileTable({
@@ -46,6 +48,8 @@ export function ProfileTable({
   launchingSelectedProfiles = false,
   onStopSelectedProfiles,
   stoppingSelectedProfiles = false,
+  onAddTagsToSelectedProfiles,
+  taggingSelectedProfiles = false,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -123,6 +127,13 @@ export function ProfileTable({
               selectedProfiles.filter((profile) => profile.status === "running").map((profile) => profile.id),
             )}
             stopping={stoppingSelectedProfiles}
+            onAddTags={onAddTagsToSelectedProfiles
+              ? (tags) => onAddTagsToSelectedProfiles(
+                selectedProfiles.map((profile) => profile.id),
+                tags,
+              )
+              : undefined}
+            tagging={taggingSelectedProfiles}
           />
         )}
         <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
@@ -141,8 +152,8 @@ export function ProfileTable({
             <col style={{ width: 80 }} />
           </colgroup>
           <thead className={`sticky z-10 bg-white/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
-            <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.26)]">
-              <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/90 px-2 py-2 font-semibold">
+            <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.30)]">
+              <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/95 px-2 py-2 font-semibold">
                 <SelectionCheckbox
                   label="Select all visible profiles"
                   checked={allVisibleSelected}
@@ -225,7 +236,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="truncate border-b border-slate-200 bg-slate-50/90 px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+    <th className="truncate border-b border-slate-200 bg-slate-50/95 px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
       {children}
     </th>
   );
@@ -270,10 +281,10 @@ function SelectionCheckbox({
       />
       <span
         aria-hidden="true"
-        className={`flex h-4 w-4 items-center justify-center rounded-[5px] border shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-white ${
+        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[6px] border shadow-[0_1px_1px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/30 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-white ${
           checked || indeterminate
-            ? "border-blue-600 bg-blue-600 text-white"
-            : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-300 group-hover/checkbox:bg-blue-50"
+            ? "border-blue-600 bg-gradient-to-b from-blue-500 to-blue-600 text-white"
+            : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50 group-hover/checkbox:ring-blue-100"
         }`}
       >
         {indeterminate ? (
@@ -317,9 +328,9 @@ function ProfileTableRow({
     <tr
       className={`group border-b border-border transition-colors duration-150 ${
         selected
-          ? "bg-blue-50/60 hover:bg-blue-50/80"
+          ? "bg-gradient-to-r from-blue-50/95 via-blue-50/45 to-white hover:from-blue-50 hover:via-blue-50/70 hover:to-blue-50/20"
           : previewed
-            ? "bg-slate-50/90 hover:bg-slate-100/80"
+            ? "bg-gradient-to-r from-slate-100/90 via-slate-50/80 to-white hover:from-slate-100 hover:via-slate-100/80 hover:to-slate-50"
             : "hover:bg-slate-50/80"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
@@ -339,7 +350,9 @@ function ProfileTableRow({
       <td className="border-b border-border px-2 py-2">
         <button
           type="button"
-          className="block max-w-[180px] truncate rounded-md text-left text-sm font-semibold text-slate-950 transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className={`block max-w-[180px] truncate rounded-md text-left text-sm font-semibold transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+            selected ? "text-blue-950" : "text-slate-950"
+          }`}
           title={profile.name}
           aria-label={`Preview ${profile.name}`}
           onClick={() => onPreview?.(profile.id)}
@@ -371,7 +384,7 @@ function ProfileTableRow({
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
             <span
               key={tag.tag}
-              className="rounded-full border border-border bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
+              className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]"
               style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
             >
               {tag.tag}
@@ -387,7 +400,7 @@ function ProfileTableRow({
       <td className="border-b border-border px-2 py-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 group-hover:border-slate-300"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >

@@ -1426,3 +1426,102 @@ git diff --check
 - 批量 set tags / delete 未接入。
 - 服务端分页未做；当前仍用固定行高虚拟滚动覆盖数百 profile。
 - 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态未进入本闭环。
+
+## 23. 2026-05-26 批量 set tags 与控件 polish 收口小闭环
+
+本轮继续按 Jeff 最新反馈处理 Profile 运营台的高质感 UI polish，同时把上一轮预留的 `Tag selected` 接成真实批量 set tags。
+
+设计判断：
+
+- 当前信息架构继续保持：左侧 rail 是 quick views / shortcuts，主区 table 是数百 profile 的核心运营面，右侧 inspector 做快速预览。
+- 真正需要收口的是控件细节和真实动作：
+  - checkbox 需要更像专业 data table control。
+  - bulk action 需要短文案、清晰主次和弱态 danger。
+  - `Tag selected` 不应继续作为 disabled 占位。
+  - 高风险 `Delete selected` 必须继续 disabled，且视觉上不能像可点击危险主按钮。
+
+实现范围：
+
+- `frontend/src/hooks/useProfiles.ts`
+  - 新增 `addTagsToProfiles(profileIds, tags)`。
+  - ids 去重，tag trim / 去空 / 去重。
+  - 基于当前 `profiles` 中的 `profile.tags` 合并，只传 `{ tags }` 给 `api.updateProfile`。
+  - 已有同名 tag 保留原 color，不覆盖运营已有标签。
+  - 未变化 profile 跳过，不触发 update / refresh。
+  - 选中态与列表刷新发生竞态时，已消失的 profile id 明确计入 failedCount，不静默丢失。
+  - 并发上限 4；成功后 refresh profiles 和成功 ids 的 health cache。
+  - 部分失败写入脱敏后的 operation error。
+- `frontend/src/App.tsx`
+  - 接入 `addTagsToProfiles`。
+  - 新增 `bulkTagging` 状态，并传入 `ProfileTable`。
+- `frontend/src/components/BulkActionBar.tsx`
+  - `Tag selected` 打开内联 tag form。
+  - 输入框自动 focus，Escape 取消。
+  - 可见文案压缩为 `Health / Launch / Stop / Tag / Delete`，保留原 aria-label 语义。
+  - `Delete selected` 继续 disabled，弱化 danger disabled 样式。
+- `frontend/src/components/ProfileTable.tsx`
+  - checkbox 视觉升级为 18px custom control，保留真实 input、focus-visible、mixed state。
+  - selected / previewed row 使用更克制的渐变与左侧状态线。
+  - tag chip 增加轻微 inset polish。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header 增加 `Previewing / Inspector` 上下文。
+- 测试：
+  - hook 覆盖追加 tag、不移除已有 tag、不覆盖同名 tag color、无变化跳过。
+  - table 覆盖 tag form、自动 focus、tagging disabled/loading。
+  - App 覆盖当前 selected profiles 的批量 tag 调用，且 delete 仍 disabled。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts
+# 1 passed, 21 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 19 passed
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 passed, 10 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 85 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- 临时 QA 数据目录：`/tmp/cloakbrowser-manager-qa-data-polish`。
+- QA 后端：`http://127.0.0.1:8092/`。
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 选择 `QA Existing Tag` 与 `QA Plain Profile` 后，bulk toolbar 显示 `2 selected`。
+  - `Check health` 可用，`Launch` 可用，`Stop` disabled，`Tag` 可用，`Delete` disabled 且弱态。
+  - tag form 自动 focus，输入后 action bar 不折行。
+  - 提交 `ops` 后：已有 `existing` 保留，两个选中 profile 都追加 `ops`，tag filter 出现 `ops`。
+  - 点击 `Check health` 后 health / GeoIP / Last checked 更新，证明批量健康检测仍真实可用。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`table.scrollWidth=840`、`table.clientWidth=358`。
+- console / errors 无相关前端错误。
+
+截图：
+
+- `/tmp/cloak-polish-selected-desktop.png`
+- `/tmp/cloak-polish-bulk-tag-form-desktop.png`
+- `/tmp/cloak-polish-bulk-tag-applied-desktop.png`
+- `/tmp/cloak-polish-health-check-desktop.png`
+- `/tmp/cloak-polish-mobile.png`
+
+仍未做：
+
+- 批量 delete 未接入，仍需确认弹窗和测试。
+- 服务端分页未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待后续。

@@ -27,6 +27,7 @@ const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
 const mockCheckHealth = vi.fn();
 const mockLaunchProfiles = vi.fn();
 const mockStopProfiles = vi.fn();
+const mockAddTagsToProfiles = vi.fn();
 
 function profile(overrides: Partial<Profile>): Profile {
   return {
@@ -95,6 +96,8 @@ beforeEach(() => {
   mockLaunchProfiles.mockResolvedValue(undefined);
   mockStopProfiles.mockReset();
   mockStopProfiles.mockResolvedValue(undefined);
+  mockAddTagsToProfiles.mockReset();
+  mockAddTagsToProfiles.mockResolvedValue(undefined);
   mockUseProfiles.mockReturnValue({
     profiles: [
       profile({ id: "beta", name: "Beta Broken" }),
@@ -114,6 +117,7 @@ beforeEach(() => {
     checkHealth: mockCheckHealth,
     launchProfiles: mockLaunchProfiles,
     stopProfiles: mockStopProfiles,
+    addTagsToProfiles: mockAddTagsToProfiles,
   });
 });
 
@@ -232,6 +236,7 @@ describe("App operations console", () => {
       checkHealth: mockCheckHealth,
       launchProfiles: mockLaunchProfiles,
       stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
     });
 
     render(<App />);
@@ -245,7 +250,27 @@ describe("App operations console", () => {
     await waitFor(() => {
       expect(mockStopProfiles).toHaveBeenCalledWith(["running"]);
     });
-    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("adds a bulk tag to the currently selected profiles", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText("Select Beta Broken"));
+    fireEvent.click(screen.getByLabelText("Select Alpha Good"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
+    fireEvent.change(screen.getByLabelText("Bulk tag name"), { target: { value: "ops" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply tag" }));
+
+    await waitFor(() => {
+      expect(mockAddTagsToProfiles).toHaveBeenCalledWith(
+        ["beta", "alpha"],
+        [{ tag: "ops", color: "#6366f1" }],
+      );
+    });
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

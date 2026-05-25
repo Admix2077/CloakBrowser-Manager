@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Lock, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles } from "./hooks/useProfiles";
-import { api, setOnUnauthorized, type ProfileCreateData } from "./lib/api";
+import { api, setOnUnauthorized, type Profile, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
@@ -115,6 +115,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     stop,
     stopProfiles,
     checkHealth,
+    addTagsToProfiles,
   } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
@@ -125,6 +126,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [bulkHealthChecking, setBulkHealthChecking] = useState(false);
   const [bulkLaunching, setBulkLaunching] = useState(false);
   const [bulkStopping, setBulkStopping] = useState(false);
+  const [bulkTagging, setBulkTagging] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -277,6 +279,16 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     }
   }, [stopProfiles]);
 
+  const handleAddTagsToSelectedProfiles = useCallback(async (ids: string[], tags: Profile["tags"]) => {
+    if (ids.length === 0 || tags.length === 0) return;
+    setBulkTagging(true);
+    try {
+      await addTagsToProfiles(ids, tags);
+    } finally {
+      setBulkTagging(false);
+    }
+  }, [addTagsToProfiles]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-surface-0">
@@ -421,6 +433,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     launchingSelectedProfiles={bulkLaunching}
                     onStopSelectedProfiles={handleStopSelectedProfiles}
                     stoppingSelectedProfiles={bulkStopping}
+                    onAddTagsToSelectedProfiles={handleAddTagsToSelectedProfiles}
+                    taggingSelectedProfiles={bulkTagging}
                   />
                 </div>
                 <div className="min-h-[360px] min-w-0 lg:min-h-0">

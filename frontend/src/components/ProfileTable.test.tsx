@@ -227,6 +227,48 @@ describe("ProfileTable", () => {
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("opens a bulk tag form and submits a new tag for selected profiles", () => {
+    const onTagSelected = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        onAddTagsToSelectedProfiles={onTagSelected}
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
+    expect(document.activeElement).toBe(screen.getByLabelText("Bulk tag name"));
+    fireEvent.change(screen.getByLabelText("Bulk tag name"), { target: { value: "ops" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply tag" }));
+
+    expect(onTagSelected).toHaveBeenCalledWith(
+      ["good", "error"],
+      [{ tag: "ops", color: "#6366f1" }],
+    );
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("disables the bulk tag action while tags are applying", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        onAddTagsToSelectedProfiles={vi.fn()}
+        taggingSelectedProfiles
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Applying tag" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Applying...")).toBeTruthy();
+  });
+
   it("disables the bulk launch button while launch is running", () => {
     render(
       <ProfileTable

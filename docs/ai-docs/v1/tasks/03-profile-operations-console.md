@@ -64,7 +64,7 @@
 - [x] 接入批量 launch。
 - [x] 接入批量 stop。
 - [x] 接入批量 health check。
-- [ ] 接入批量 set tags。
+- [x] 接入批量 set tags。
 - [ ] 接入批量 delete，必须有确认。
 - [x] 新增 `ProfileSummaryPanel`：
   - health。
@@ -1013,3 +1013,109 @@ git diff --check
 - 本小闭环不做服务端分页。
 - 本小闭环不把 Profile 详情/VNC viewer 改成抽屉式连续运营形态。
 - 本小闭环不做窄屏 card list；移动端继续采用 table 自身横向滚动。
+
+## 2026-05-26 批量 set tags 与控件 polish 收口小闭环
+
+背景：
+
+- Jeff 继续反馈：当前界面质感和细节还不够，复选框等控件显得 low。
+- 上一轮 UI polish 后，`Tag selected` 仍是预留动作；本轮把它接成真实批量 set tags，同时继续压实 checkbox / bulk action / table row / toolbar / inspector 的高质感细节。
+- 继续参考 `/home/jeff/code/reference-repos/saas_kit` 的 B2B SaaS app shell / data table 设计思想；没有迁入 auth、db、payment、schema 或业务 action。
+
+已完成：
+
+- [x] `useProfiles.addTagsToProfiles(profileIds, tags)`：
+  - 对 profile ids 去重。
+  - 对 incoming tags trim / 去空 / 去重。
+  - 以当前 `profiles` 中的 `profile.tags` 为事实基础合并。
+  - 只调用 `api.updateProfile(id, { tags })`，不 spread 整个 profile，避免误写 proxy / fingerprint / runtime 字段。
+  - 已存在同名 tag 时保留原 tag / color，不覆盖运营已有标签含义。
+  - 未变化的 profile 直接跳过，不调用 update / refresh。
+  - 选中态与列表刷新发生竞态时，已消失的 profile id 明确计入 failedCount，不静默丢失。
+  - 批量并发限制为 4；成功后 refresh profiles，并对成功 ids refresh health cache。
+  - 部分失败汇总 `operationError`，错误消息继续走 `redactUrlCredentials`。
+- [x] `BulkActionBar` 接入真实 tag form：
+  - `Tag selected` 可打开内联 tag form。
+  - 输入框自动 focus，支持 Escape 取消。
+  - 表单提交后清空输入并关闭。
+  - `Delete selected` 继续 disabled，且 disabled danger 样式降噪，不再像可点击危险主按钮。
+  - 可见文案压缩为 `Health / Launch / Stop / Tag / Delete`，保留 `aria-label="Check health" / "Launch selected" / "Stop selected" / "Tag selected" / "Delete selected"`，减少桌面窄表格下 action bar 被横向裁切。
+- [x] `App.tsx` 接线：
+  - 从 `useProfiles()` 解构 `addTagsToProfiles`。
+  - 新增 `bulkTagging` 状态。
+  - 传入 `ProfileTable.onAddTagsToSelectedProfiles` 和 `taggingSelectedProfiles`。
+- [x] UI polish 追加：
+  - checkbox 视觉从 16px 基础框升级为 18px 低噪声 custom control，保留真实 input、focus ring、mixed state。
+  - selected / previewed row 改为更克制的横向渐变 + 左侧状态线。
+  - tag chip 增加轻微 inset highlight。
+  - inspector header 增加 `Previewing / Inspector` 轻量上下文，强化“表格预览、Open 进入详情”的信息架构。
+
+保持不变：
+
+- 主表 `min-w-[840px]`、表格自身横向滚动、桌面 `Actions` 列可见。
+- 移动端 body 不横向撑破。
+- 主表超过 120 条固定 64px 行高虚拟滚动。
+- 左侧超过 80 条固定 112px item 虚拟滚动。
+- `Check health` / bulk launch / bulk stop 真实动作语义保留。
+- `Delete selected` 高风险动作仍 disabled。
+- proxy visible text / title 仍不暴露凭据。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts
+# 1 passed, 21 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 19 passed
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 passed, 10 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 85 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据目录：`/tmp/cloakbrowser-manager-qa-data-polish`。
+- QA 后端：`http://127.0.0.1:8092/`，后端启动时 patch `backend.database.DATA_DIR/DB_PATH` 指向临时目录。
+- 使用 `agent-browser`，环境变量 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 选择 `QA Existing Tag` 和 `QA Plain Profile` 后，bulk toolbar 显示 `2 selected`。
+  - `Check health` 可用；`Launch` 可用；`Stop` disabled；`Tag` 可用；`Delete` disabled 且弱态。
+  - 打开 tag form 后输入框自动 focus，输入 `qa` 时 action bar 不折行。
+  - 实际提交 `ops` 后：
+    - `QA Existing Tag` 保留 `existing`，追加 `ops`。
+    - `QA Plain Profile` 追加 `ops`。
+    - tag filter 出现 `ops`。
+  - 点击 `Check health` 后 health 状态、GeoIP、Last checked 更新，批量健康检测真实可用。
+  - console / errors 无相关前端错误。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`table.scrollWidth=840`、`table.clientWidth=358`。
+
+截图：
+
+- `/tmp/cloak-polish-selected-desktop.png`
+- `/tmp/cloak-polish-bulk-tag-form-desktop.png`
+- `/tmp/cloak-polish-bulk-tag-applied-desktop.png`
+- `/tmp/cloak-polish-health-check-desktop.png`
+- `/tmp/cloak-polish-mobile.png`
+
+范围说明：
+
+- 本小闭环不接入批量 delete；该动作仍必须单独做确认弹窗和后端/前端测试。
+- 本小闭环不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- 本小闭环不改 Profile 创建/编辑/VNC viewer 的现有流，只保持不破坏。
+- 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态仍待 03 后续小闭环。
