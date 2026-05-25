@@ -6,6 +6,8 @@ import {
   type ProfileHealthResponse,
 } from "../lib/api";
 
+const HEALTH_CHECK_CONCURRENCY = 6;
+
 export function useProfiles() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [healthByProfileId, setHealthByProfileId] = useState<
@@ -45,6 +47,47 @@ export function useProfiles() {
     },
     [],
   );
+
+  const checkHealth = useCallback(async (profileIds: string[]) => {
+    const ids = [...new Set(profileIds.filter(Boolean))];
+    if (ids.length === 0) return;
+
+    const successfulResults: [string, ProfileHealthResponse][] = [];
+    let failedCount = 0;
+    let cursor = 0;
+    const workerCount = Math.min(HEALTH_CHECK_CONCURRENCY, ids.length);
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (cursor < ids.length) {
+          const id = ids[cursor];
+          cursor += 1;
+          if (!id) continue;
+          try {
+            successfulResults.push([id, await api.checkProfileHealth(id)]);
+          } catch {
+            failedCount += 1;
+          }
+        }
+      }),
+    );
+
+    if (successfulResults.length > 0) {
+      setHealthByProfileId((prev) => {
+        const next = { ...prev };
+        successfulResults.forEach(([id, health]) => {
+          next[id] = health;
+        });
+        return next;
+      });
+    }
+
+    if (failedCount > 0) {
+      setError(`Failed to check health for ${failedCount} profile(s)`);
+    } else {
+      setError(null);
+    }
+  }, []);
 
   const refresh = useCallback(async (): Promise<Profile[] | undefined> => {
     try {
@@ -151,6 +194,7 @@ export function useProfiles() {
     error,
     refresh,
     refreshHealth,
+    checkHealth,
     create,
     update,
     remove,

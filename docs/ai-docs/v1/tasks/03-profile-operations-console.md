@@ -63,7 +63,7 @@
 - [x] 新增 `BulkActionBar`。
 - [ ] 接入批量 launch。
 - [ ] 接入批量 stop。
-- [ ] 接入批量 health check。
+- [x] 接入批量 health check。
 - [ ] 接入批量 set tags。
 - [ ] 接入批量 delete，必须有确认。
 - [x] 新增 `ProfileSummaryPanel`：
@@ -631,3 +631,95 @@ git diff --check
 - 本小闭环不接入批量 launch / stop / health check / set tags / delete。
 - 本小闭环不新增后端 API，不改变健康计算、筛选排序、虚拟滚动、批量选择和 proxy 脱敏契约。
 - 下一步继续 03 时，推荐优先接入最低风险的批量 `health_check`，再做批量 launch/stop；批量 delete 必须单独确认闭环。
+
+## 2026-05-26 Profile 运营台 IA/视觉二次收口与批量 health check 小闭环
+
+背景：
+
+- Jeff 反馈当前前端整体质感仍偏低，运营台 UE 需要从“继续堆功能”切换到“先把 Profile 管理体验打磨到专业运营台”。
+- 本轮使用 `ui-ux-pro-max` 生成 B2B SaaS operations dashboard 设计方向，并审阅 `/home/jeff/code/reference-repos/saas_kit`。用户给出的 `/home/jeff/code/repo/sasskit` 在本机不存在，实际参考目录为 `reference-repos/saas_kit`。
+- 参考结论：采用浅色、低噪声、data-dense B2B 运营台；借鉴 `ai-mksaas-template` 的数据表格/toolbar 方向和 `ai-supastarter-template` 的 app shell 克制感，不采用营销 hero、大面积渐变或紫色官网风格。
+
+已完成：
+
+- [x] 左侧从“全量 profile 管理主入口”进一步收敛为 operations rail：
+  - `Quick views` 文案调整为 `Saved views`。
+  - `Matching profiles / virtualized` 调整为 `Profile shortcuts / filtered`，移除实现味文案。
+  - 保留左侧列表虚拟滚动和选择能力，但定位为快捷入口和兜底导航。
+- [x] 主区成为核心运营台：
+  - 顶部增加主操作 `New Profile`。
+  - 主区拆成标题/指标 strip、筛选 toolbar、表格 + inspector。
+  - 主筛选 toolbar 增加可见短标签：`Search / Runtime / Health / Proxy / Country / Tag / Sort`。
+  - 桌面 rail 从 280px 收敛到 264px，右侧 inspector 从 320px 收敛到 280px。
+  - 主表 `min-width` 从 1068px 收敛到 840px，1440px 桌面可直接看到 `Actions` 列。
+- [x] 表格视觉和交互细节收口：
+  - 行、表头、checkbox、preview button、open button 的 hover/focus 状态更清楚。
+  - 表格列继续保留 profile、runtime、health、proxy、IP、country、timezone、locale、tags、last checked、actions。
+  - 保留主区 `ProfileTable` 超过 120 条虚拟滚动，表头全选仍作用当前筛选结果全集。
+- [x] 右侧 summary 改成 inspector 风格：
+  - header 使用轻背景，`Open profile` 为主按钮。
+  - section 使用 divider 分隔，减少卡片套卡片感。
+  - 保留 health、runtime、GeoIP、manual override、proxy、device 信息。
+- [x] `BulkActionBar` 的 `Check health` 接入真实批量健康检测：
+  - 复用已有 `api.checkProfileHealth(id)`。
+  - 不新增后端 bulk API。
+  - `useProfiles.checkHealth(ids)` 做去重、过滤空 id、最多 6 并发。
+  - 成功项写入 `healthByProfileId`，失败项不清空旧 health。
+  - 部分失败时设置 `Failed to check health for N profile(s)`。
+  - `Launch selected`、`Stop selected`、`Tag selected`、`Delete selected` 继续 disabled，不伪造能力。
+
+保留语义：
+
+- profile 创建 / 编辑 / 删除流保留。
+- 单 profile launch / stop / VNC viewer 流保留。
+- 表格 profile name 仍只做 preview，不进入编辑或 viewer。
+- `Open` 和右侧 `Open profile` 仍走原 `handleSelect()`。
+- 筛选、排序、多选、全选当前过滤结果、筛选后清理不可见选择语义保留。
+- proxy 可见文本、`title` 和 health warning 继续脱敏，不暴露用户名/密码。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileList.test.tsx src/components/ProfileFilters.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 6 passed, 40 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 66 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-ui-qa-data`，共 180 个 profiles。
+- 后端：`http://127.0.0.1:8080`。
+- Vite dev server：`http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，当前 Linux 环境需要 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 主区显示标题/指标 strip、带可见标签的筛选 toolbar、dense table 和右侧 inspector。
+  - 左侧显示 `Saved views` 和 `Profile shortcuts`，不再出现 `virtualized` 实现文案。
+  - 主表 `Actions` 列可直接看到，不需要先横向滚动。
+  - 选择首行后显示 `Bulk profile actions`，`Check health` 可点击，其他批量动作仍 disabled。
+  - 点击 `Check health` 后该 profile health 重新检测，summary `Last checked` 更新时间。
+- 移动 `390x844`：
+  - 初始 sidebar 收起，主区筛选可用。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`tableScrollWidth=840`、`tableClientWidth=352`。
+  - 打开 sidebar 后为 overlay 抽屉，body 不横向撑破。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+- 截图保存到：
+  - `/tmp/cloak-ui-ue-refresh-desktop-compact.png`
+  - `/tmp/cloak-ui-ue-refresh-bulk-selected.png`
+  - `/tmp/cloak-ui-ue-refresh-bulk-checked.png`
+  - `/tmp/cloak-ui-ue-refresh-mobile.png`
+  - `/tmp/cloak-ui-ue-refresh-mobile-sidebar.png`
+
+范围说明：
+
+- 本小闭环没有接入批量 launch / stop / set tags / delete。
+- 本小闭环没有做服务端分页；当前固定行高虚拟滚动覆盖数百 profile 场景。
+- 下一步继续 03 时，建议做“保留创建/编辑 profile 能力”的运营台内连续体验复核，或进入批量 launch/stop 的资源并发设计。

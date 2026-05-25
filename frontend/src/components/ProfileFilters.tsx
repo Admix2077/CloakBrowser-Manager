@@ -20,28 +20,33 @@ export function ProfileFilters({
     onChange({ ...value, [key]: nextValue });
   };
   const labelled = (label: string) => labelPrefix ? `${labelPrefix} ${label}` : label;
+  const showVisibleLabels = layout === "toolbar";
 
   return (
-    <div className={layout === "toolbar" ? "grid grid-cols-2 gap-2 lg:grid-cols-[minmax(220px,1fr)_repeat(6,minmax(106px,136px))]" : "space-y-2"}>
-      <label className="sr-only" htmlFor={filterId(labelled("Search profiles"))}>
-        {labelled("Search profiles")}
-      </label>
-      <div className={layout === "toolbar" ? "relative col-span-2 lg:col-span-1" : "relative"}>
-        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-        <input
-          id={filterId(labelled("Search profiles"))}
-          aria-label={labelled("Search profiles")}
-          type="text"
-          placeholder="Search profiles..."
-          value={value.search}
-          onChange={(event) => update("search", event.target.value)}
-          className="input pl-8 py-1.5 text-xs"
-        />
+    <div className={layout === "toolbar" ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}>
+      <div className={layout === "toolbar" ? "col-span-2 xl:col-span-1" : ""}>
+        <FilterLabel htmlFor={filterId(labelled("Search profiles"))} visible={showVisibleLabels}>
+          {showVisibleLabels ? "Search" : labelled("Search profiles")}
+        </FilterLabel>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <input
+            id={filterId(labelled("Search profiles"))}
+            aria-label={labelled("Search profiles")}
+            type="text"
+            placeholder="Search profiles..."
+            value={value.search}
+            onChange={(event) => update("search", event.target.value)}
+            className="input pl-8 py-1.5 text-xs"
+          />
+        </div>
       </div>
 
       <div className={layout === "toolbar" ? "contents" : "grid grid-cols-2 gap-2"}>
         <FilterSelect
           label={labelled("Runtime status")}
+          visibleLabel="Runtime"
+          showVisibleLabel={showVisibleLabels}
           value={value.status}
           onChange={(nextValue) => update("status", nextValue as ProfileFilterState["status"])}
           options={[
@@ -52,6 +57,8 @@ export function ProfileFilters({
         />
         <FilterSelect
           label={labelled("Health status")}
+          visibleLabel="Health"
+          showVisibleLabel={showVisibleLabels}
           value={value.health}
           onChange={(nextValue) => update("health", nextValue as ProfileFilterState["health"])}
           options={[
@@ -64,6 +71,8 @@ export function ProfileFilters({
         />
         <FilterSelect
           label={labelled("Proxy filter")}
+          visibleLabel="Proxy"
+          showVisibleLabel={showVisibleLabels}
           value={value.proxy}
           onChange={(nextValue) => update("proxy", nextValue as ProfileFilterState["proxy"])}
           options={[
@@ -74,6 +83,8 @@ export function ProfileFilters({
         />
         <FilterSelect
           label={labelled("Country filter")}
+          visibleLabel="Country"
+          showVisibleLabel={showVisibleLabels}
           value={value.country}
           onChange={(nextValue) => update("country", nextValue)}
           options={[
@@ -83,6 +94,8 @@ export function ProfileFilters({
         />
         <FilterSelect
           label={labelled("Tag filter")}
+          visibleLabel="Tag"
+          showVisibleLabel={showVisibleLabels}
           value={value.tag}
           onChange={(nextValue) => update("tag", nextValue)}
           options={[
@@ -92,6 +105,8 @@ export function ProfileFilters({
         />
         <FilterSelect
           label={labelled("Sort profiles")}
+          visibleLabel="Sort"
+          showVisibleLabel={showVisibleLabels}
           value={value.sortBy}
           onChange={(nextValue) => update("sortBy", nextValue as ProfileFilterState["sortBy"])}
           options={[
@@ -109,17 +124,19 @@ export function ProfileFilters({
 
 interface FilterSelectProps {
   label: string;
+  visibleLabel: string;
+  showVisibleLabel: boolean;
   value: string;
   options: readonly (readonly [string, string])[];
   onChange: (value: string) => void;
 }
 
-function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
+function FilterSelect({ label, visibleLabel, showVisibleLabel, value, options, onChange }: FilterSelectProps) {
   const id = filterId(label);
 
   return (
     <div>
-      <label className="sr-only" htmlFor={id}>{label}</label>
+      <FilterLabel htmlFor={id} visible={showVisibleLabel}>{showVisibleLabel ? visibleLabel : label}</FilterLabel>
       <select
         id={id}
         aria-label={label}
@@ -134,6 +151,17 @@ function FilterSelect({ label, value, options, onChange }: FilterSelectProps) {
         ))}
       </select>
     </div>
+  );
+}
+
+function FilterLabel({ htmlFor, visible, children }: { htmlFor: string; visible: boolean; children: string }) {
+  return (
+    <label
+      className={visible ? "mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500" : "sr-only"}
+      htmlFor={htmlFor}
+    >
+      {children}
+    </label>
   );
 }
 

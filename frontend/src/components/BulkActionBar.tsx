@@ -7,6 +7,8 @@ interface BulkActionBarProps {
   selectedProfiles: Profile[];
   healthByProfileId: Record<string, ProfileHealthResponse | undefined>;
   onClearSelection?: () => void;
+  onCheckHealth?: () => Promise<void> | void;
+  checkingHealth?: boolean;
 }
 
 export function BulkActionBar({
@@ -14,6 +16,8 @@ export function BulkActionBar({
   selectedProfiles,
   healthByProfileId,
   onClearSelection,
+  onCheckHealth,
+  checkingHealth = false,
 }: BulkActionBarProps) {
   if (selectedCount === 0) return null;
 
@@ -28,14 +32,23 @@ export function BulkActionBar({
     <div
       role="toolbar"
       aria-label="Bulk profile actions"
-      className="sticky top-0 z-20 flex h-10 items-center gap-3 border-b border-blue-100 bg-blue-50/95 px-3 text-xs backdrop-blur"
+      className="sticky top-0 z-20 flex h-11 items-center gap-3 overflow-x-auto border-b border-blue-100 bg-blue-50/95 px-3 text-xs backdrop-blur"
     >
       <span className="font-semibold text-blue-900">{selectedCount} selected</span>
       <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
       <SummaryPill label={`${stoppedCount} stopped`} />
       <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
       <div className="ml-auto flex items-center gap-2">
-        <DisabledAction icon={<HeartPulse className="h-3.5 w-3.5" />} label="Check health" />
+        <button
+          type="button"
+          disabled={!onCheckHealth || checkingHealth}
+          aria-label={checkingHealth ? "Checking health" : "Check health"}
+          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1 font-medium text-blue-700 shadow-hairline transition-colors hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => void onCheckHealth?.()}
+        >
+          <HeartPulse className="h-3.5 w-3.5" />
+          <span>{checkingHealth ? "Checking..." : "Check health"}</span>
+        </button>
         <DisabledAction icon={<Play className="h-3.5 w-3.5" />} label="Launch selected" />
         <DisabledAction icon={<Square className="h-3.5 w-3.5" />} label="Stop selected" />
         <DisabledAction icon={<Tags className="h-3.5 w-3.5" />} label="Tag selected" />

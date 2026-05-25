@@ -78,3 +78,17 @@ cd frontend && npm run build
 - `LoginPage`、`ProfileForm`、`ProfileViewer`、`LaunchButton` 做浅色 token 兼容，避免浅色默认主题下文本不可读。
 
 验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台 UI/UE 质感小闭环`。
+
+## 2026-05-26 Profile 运营台 IA/视觉二次收口
+
+本轮根据 Jeff 的 UI/UE 反馈暂停继续堆功能，先做 Profile 运营台的小闭环打磨：
+
+- 使用 `ui-ux-pro-max` 生成 B2B SaaS operations dashboard 方向。
+- 审阅 `/home/jeff/code/reference-repos/saas_kit`，借鉴 `ai-mksaas-template` 的数据表格/toolbar 和 `ai-supastarter-template` 的 B2B app shell 克制感。
+- 左侧从全量列表主入口进一步收敛为 `Saved views` / `Profile shortcuts` rail。
+- 主区变成核心运营面：标题/指标 strip、可见标签筛选 toolbar、dense table、右侧 inspector。
+- 主表压缩到 840px 最小宽度，桌面 1440px 可直接看到 `Actions` 列；移动端仍由表格自身横向滚动承载宽表。
+- summary panel 改成 inspector 分区样式，减少卡片套卡片。
+- `BulkActionBar` 接入真实 `Check health`，保留其他高风险批量动作 disabled。
+
+验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台 IA/视觉二次收口与批量 health check 小闭环`。

@@ -159,6 +159,8 @@ describe("ProfileTable", () => {
   });
 
   it("shows a bulk action bar with selected profile health and runtime summary", () => {
+    const onCheckHealth = vi.fn();
+
     render(
       <ProfileTable
         profiles={profiles}
@@ -166,6 +168,7 @@ describe("ProfileTable", () => {
         onSelect={vi.fn()}
         selectedProfileIds={new Set(["good", "error"])}
         onClearSelection={vi.fn()}
+        onCheckSelectedHealth={onCheckHealth}
       />,
     );
 
@@ -173,11 +176,29 @@ describe("ProfileTable", () => {
     expect(screen.getByText("1 running")).toBeTruthy();
     expect(screen.getByText("1 stopped")).toBeTruthy();
     expect(screen.getByText("1 issue")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Check health" }));
+    expect(onCheckHealth).toHaveBeenCalledTimes(1);
     expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("disables the bulk health check while checks are running", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        onCheckSelectedHealth={vi.fn()}
+        checkingSelectedHealth
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Checking health" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Checking...")).toBeTruthy();
   });
 
   it("opens the existing profile detail flow when a row action is clicked", () => {

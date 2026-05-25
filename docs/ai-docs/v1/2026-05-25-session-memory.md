@@ -1054,3 +1054,93 @@ git diff --check
 
 - 批量 launch / stop / health check / tag / delete 仍未接入。
 - 空态细分、窄屏 card list、VNC viewer 连续运营形态仍未进入本闭环。
+
+## 19. 2026-05-26 Profile 运营台 IA/视觉二次收口与批量 health check 小闭环
+
+本轮根据 Jeff 反馈暂停继续堆功能，优先处理 Profile 运营台 UI/UE 质感。
+
+设计判断：
+
+- 当前体验的主要问题不是单一配色，而是信息架构和层级不稳：左侧全量列表、主区表格、右侧自动预览同时争夺主工作区。
+- 数百 profile 的管理核心应是主区表格、搜索筛选、批量操作和右侧 inspector；左侧只做 saved views / shortcuts / 分组或最近入口。
+- `/home/jeff/code/repo/sasskit` 在本机不存在，实际参考目录为 `/home/jeff/code/reference-repos/saas_kit`。
+- 视觉方向采用浅色、低噪声、data-dense B2B 运营台，借鉴 `ai-mksaas-template` 的数据表格/toolbar 和 `ai-supastarter-template` 的 app shell，不采用营销 hero、大面积渐变或紫色官网风格。
+
+实现范围：
+
+- `frontend/src/App.tsx`
+  - 顶部标题收敛为 `Profiles`，增加主操作 `New Profile`。
+  - 主区拆成标题/指标 strip、筛选 toolbar、表格 + inspector。
+  - 左 rail 宽度从 280px 收敛到 264px，右 inspector 从 320px 收敛到 280px。
+  - 接入 `handleCheckSelectedHealth()`，批量检测期间传递 loading 状态。
+- `frontend/src/components/ProfileList.tsx`
+  - `Quick views` -> `Saved views`。
+  - `Matching profiles / virtualized` -> `Profile shortcuts / filtered`。
+  - 保留左侧虚拟滚动和选择能力，但产品定位降级为快捷入口。
+- `frontend/src/components/ProfileFilters.tsx`
+  - toolbar 模式增加可见短标签：`Search / Runtime / Health / Proxy / Country / Tag / Sort`。
+  - rail 模式继续使用 sr-only 完整 label，避免和 profile 行文本冲突。
+- `frontend/src/components/ProfileTable.tsx`
+  - 主表最小宽度从 1068px 收敛到 840px，列宽压实，1440px 桌面可看到 `Actions`。
+  - hover/focus/selected/preview 样式收口。
+  - `onCheckSelectedHealth` / `checkingSelectedHealth` props 接入 `BulkActionBar`。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - header 使用轻背景，`Open profile` 变为主按钮。
+  - 分区使用 divider，减少卡片套卡片。
+- `frontend/src/components/BulkActionBar.tsx`
+  - `Check health` 变成真实可点击动作。
+  - `Checking...` loading state。
+  - `Launch selected` / `Stop selected` / `Tag selected` / `Delete selected` 继续 disabled。
+- `frontend/src/hooks/useProfiles.ts`
+  - 新增 `checkHealth(ids)`。
+  - 去重、过滤空 id、最多 6 并发。
+  - 成功项写入 `healthByProfileId`，失败项不清空旧 health。
+  - 部分失败设置 `Failed to check health for N profile(s)`。
+
+测试与验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx src/components/ProfileList.test.tsx src/components/ProfileFilters.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 6 passed, 40 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 66 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+```
+
+浏览器验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-ui-qa-data`，共 180 个 profiles。
+- 后端 `http://127.0.0.1:8080`，Vite `http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，环境变量 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 主区显示标题/指标 strip、可见标签筛选 toolbar、dense table 和右侧 inspector。
+  - 左侧显示 `Saved views` / `Profile shortcuts`，不再出现 `virtualized`。
+  - `Actions` 列直接可见。
+  - 选择首行后 `Bulk profile actions` 可见，`Check health` 可点击，其他批量动作 disabled。
+  - 点击 `Check health` 后 summary `Last checked` 更新时间。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`tableScrollWidth=840`、`tableClientWidth=352`。
+  - 打开 sidebar 后为 overlay，body 不横向撑破。
+- 控制台无相关应用错误，仅有 Vite debug 与 React DevTools info。
+
+截图：
+
+- `/tmp/cloak-ui-ue-refresh-desktop-compact.png`
+- `/tmp/cloak-ui-ue-refresh-bulk-selected.png`
+- `/tmp/cloak-ui-ue-refresh-bulk-checked.png`
+- `/tmp/cloak-ui-ue-refresh-mobile.png`
+- `/tmp/cloak-ui-ue-refresh-mobile-sidebar.png`
+
+仍未做：
+
+- 批量 launch / stop / set tags / delete 仍未接入。
+- 服务端分页未做；当前仍采用固定行高虚拟滚动覆盖数百 profile。
+- 空态细分、窄屏 card list、VNC viewer 连续运营形态仍未进入本闭环。

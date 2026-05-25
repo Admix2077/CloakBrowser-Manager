@@ -105,14 +105,14 @@ export function ProfileList({
       {/* Header */}
       <div className="border-b border-border p-4">
         <div className="mb-4 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-accent">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-accent">
             <Layers3 className="h-4 w-4" />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold tracking-tight text-slate-950">
               CloakBrowser
             </h1>
-            <p className="text-[11px] font-medium text-slate-500">Runtime operations</p>
+            <p className="text-[11px] font-medium text-slate-500">Operations rail</p>
           </div>
         </div>
         <div className="mb-4 grid grid-cols-2 gap-2">
@@ -122,7 +122,7 @@ export function ProfileList({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Quick views
+              Saved views
             </span>
             <span className="text-[11px] text-slate-400">{filtered.length} shown</span>
           </div>
@@ -154,9 +154,9 @@ export function ProfileList({
       <div className="border-b border-border px-4 py-2">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
-            Matching profiles
+            Profile shortcuts
           </span>
-          <span className="text-[11px] text-slate-400">virtualized</span>
+          <span className="text-[11px] text-slate-400">filtered</span>
         </div>
       </div>
       <div
@@ -362,7 +362,7 @@ function ProfileListItem({
   return (
     <button
       onClick={() => onSelect(profile.id)}
-      className={`w-full text-left px-3 py-2.5 rounded-md mb-1 transition-colors ${
+      className={`mb-1 w-full rounded-lg px-3 py-2.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-accent/20 ${
         virtualized ? "h-[108px] overflow-hidden" : ""
       } ${
         selected

@@ -47,7 +47,7 @@ export function ProfileSummaryPanel({
       aria-label="Profile summary"
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-surface-1 shadow-panel"
     >
-      <div className="border-b border-border p-4">
+      <div className="border-b border-border bg-surface-2/70 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold text-slate-950" title={profile.name}>
@@ -59,7 +59,7 @@ export function ProfileSummaryPanel({
         </div>
         <button
           type="button"
-          className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+          className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-lg bg-accent px-2 py-1.5 text-xs font-medium text-white shadow-hairline transition-colors hover:bg-accent-hover focus:outline-none focus:ring-2 focus:ring-accent/25"
           onClick={() => onOpenProfile(profile.id)}
           aria-label={`Open ${profile.name}`}
         >
@@ -68,7 +68,7 @@ export function ProfileSummaryPanel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 divide-y divide-border overflow-y-auto">
         <SummarySection icon={<ShieldAlert className="h-3.5 w-3.5" />} title="Health">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-slate-500">Status</span>
@@ -130,12 +130,12 @@ function SummarySection({
   children: ReactNode;
 }) {
   return (
-    <section>
+    <section className="p-4">
       <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
         {icon}
         {title}
       </div>
-      <div className="space-y-1.5 rounded-lg border border-border bg-surface-2 p-3">
+      <div className="space-y-1.5">
         {children}
       </div>
     </section>

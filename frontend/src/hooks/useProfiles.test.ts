@@ -12,6 +12,7 @@ vi.mock("../lib/api", () => ({
     launchProfile: vi.fn(),
     stopProfile: vi.fn(),
     getProfileHealth: vi.fn(),
+    checkProfileHealth: vi.fn(),
   },
 }));
 
@@ -25,6 +26,7 @@ const mockApi = api as {
   launchProfile: ReturnType<typeof vi.fn>;
   stopProfile: ReturnType<typeof vi.fn>;
   getProfileHealth: ReturnType<typeof vi.fn>;
+  checkProfileHealth: ReturnType<typeof vi.fn>;
 };
 
 const fakeProfile = {
@@ -68,8 +70,10 @@ const fakeHealth = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   mockApi.listProfiles.mockResolvedValue([fakeProfile]);
   mockApi.getProfileHealth.mockResolvedValue(fakeHealth);
+  mockApi.checkProfileHealth.mockResolvedValue(fakeHealth);
 });
 
 afterEach(() => {
@@ -180,5 +184,54 @@ describe("useProfiles", () => {
     });
 
     expect(mockApi.getProfileHealth).toHaveBeenCalledWith("abc-123");
+  });
+
+  it("runs active health checks and writes successful results into the health cache", async () => {
+    const checkedHealth = {
+      ...fakeHealth,
+      status: "warning" as const,
+      checked_at: "2026-05-25T02:00:00Z",
+      warnings: [{
+        code: "geoip_stale" as const,
+        message: "最近一次 GeoIP 检测结果已过期。",
+        severity: "warning" as const,
+        action: "重新运行健康检测刷新出口 IP 指纹。",
+      }],
+    };
+    mockApi.checkProfileHealth.mockResolvedValueOnce(checkedHealth);
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.checkHealth(["abc-123", "abc-123"]);
+    });
+
+    expect(mockApi.checkProfileHealth).toHaveBeenCalledTimes(1);
+    expect(mockApi.checkProfileHealth).toHaveBeenCalledWith("abc-123");
+    expect(result.current.healthByProfileId["abc-123"]).toEqual(checkedHealth);
+  });
+
+  it("keeps successful bulk health results when another check fails", async () => {
+    const checkedHealth = {
+      ...fakeHealth,
+      status: "warning" as const,
+      checked_at: "2026-05-25T02:00:00Z",
+    };
+    mockApi.checkProfileHealth.mockImplementation((id: string) => {
+      if (id === "abc-123") return Promise.resolve(checkedHealth);
+      return Promise.reject(new Error("Network error"));
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.checkHealth(["abc-123", "missing"]);
+    });
+
+    expect(mockApi.checkProfileHealth).toHaveBeenCalledTimes(2);
+    expect(result.current.healthByProfileId["abc-123"]).toEqual(checkedHealth);
+    expect(result.current.error).toBe("Failed to check health for 1 profile(s)");
   });
 });

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Lock, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Lock, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles } from "./hooks/useProfiles";
 import { api, setOnUnauthorized, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
@@ -112,6 +112,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     remove,
     launch,
     stop,
+    checkHealth,
   } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
@@ -119,6 +120,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => new Set());
   const [previewProfileId, setPreviewProfileId] = useState<string | null>(null);
+  const [bulkHealthChecking, setBulkHealthChecking] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -241,6 +243,16 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     });
   }, []);
 
+  const handleCheckSelectedHealth = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setBulkHealthChecking(true);
+    try {
+      await checkHealth(ids);
+    } finally {
+      setBulkHealthChecking(false);
+    }
+  }, [checkHealth]);
+
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-surface-0">
@@ -260,7 +272,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             className="fixed inset-0 z-30 bg-slate-950/20 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 z-40 w-[280px] border-r border-border bg-surface-1 shadow-panel md:relative md:inset-auto md:z-auto md:flex-shrink-0 md:shadow-hairline">
+          <div className="fixed inset-y-0 left-0 z-40 w-[264px] border-r border-border bg-surface-1 shadow-panel md:relative md:inset-auto md:z-auto md:flex-shrink-0 md:shadow-hairline">
             <ProfileList
               profiles={profiles}
               selectedId={selectedId}
@@ -279,18 +291,18 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       {/* Main panel */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-border bg-surface-1 px-4 py-3 shadow-hairline">
+        <div className="flex min-h-14 items-center justify-between border-b border-border bg-surface-1 px-4 py-2.5 shadow-hairline">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-surface-2 hover:text-slate-900"
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-surface-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-accent/20"
               title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
               {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
             </button>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-950">Profile Operations</span>
+                <span className="text-sm font-semibold text-slate-950">Profiles</span>
                 <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-slate-500">
                   {consoleStats.visible} shown
                 </span>
@@ -307,6 +319,14 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleNew}
+              className="btn-primary inline-flex items-center gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Profile
+            </button>
             {selected && (
               <LaunchButton
                 status={selected.status}
@@ -336,19 +356,22 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {view === "empty" && (
-            <div className="flex h-full min-h-0 flex-col gap-4 p-3 sm:p-4 lg:p-6">
-              <section className="rounded-lg border border-border bg-surface-1 p-3 shadow-panel">
-                <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div>
-                    <h2 className="text-base font-semibold text-slate-950">Profile fleet</h2>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <SummaryTile label="Running" value={consoleStats.running} tone="success" />
-                    <SummaryTile label="Stopped" value={consoleStats.stopped} />
-                    <SummaryTile label="Issues" value={consoleStats.issues} tone="warning" />
-                    <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
-                  </div>
+            <div className="flex h-full min-h-0 flex-col gap-4 p-3 sm:p-4 lg:p-5">
+              <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
+                <div className="min-w-0">
+                  <h2 className="text-xl font-semibold tracking-tight text-slate-950">Profile operations</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {consoleStats.total} profiles · {consoleStats.running} running · {consoleStats.issues} need review
+                  </p>
                 </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <SummaryTile label="Running" value={consoleStats.running} tone="success" />
+                  <SummaryTile label="Stopped" value={consoleStats.stopped} />
+                  <SummaryTile label="Issues" value={consoleStats.issues} tone="warning" />
+                  <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
+                </div>
+              </section>
+              <section className="rounded-lg border border-border bg-surface-1 p-3 shadow-hairline">
                 <ProfileFilters
                   value={filters}
                   options={filterOptions}
@@ -356,7 +379,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   layout="toolbar"
                 />
               </section>
-              <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-border bg-surface-1 shadow-panel lg:min-h-0">
                   <ProfileTable
                     profiles={filteredProfiles}
@@ -368,6 +391,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     onClearSelection={() => setSelectedProfileIds(new Set())}
                     previewProfileId={previewProfile?.id ?? null}
                     onPreviewProfile={setPreviewProfileId}
+                    onCheckSelectedHealth={handleCheckSelectedHealth}
+                    checkingSelectedHealth={bulkHealthChecking}
                   />
                 </div>
                 <div className="min-h-[360px] min-w-0 lg:min-h-0">

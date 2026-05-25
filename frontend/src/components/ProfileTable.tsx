@@ -22,6 +22,8 @@ interface ProfileTableProps {
   onClearSelection?: () => void;
   previewProfileId?: string | null;
   onPreviewProfile?: (id: string) => void;
+  onCheckSelectedHealth?: (ids: string[]) => Promise<void> | void;
+  checkingSelectedHealth?: boolean;
 }
 
 export function ProfileTable({
@@ -34,6 +36,8 @@ export function ProfileTable({
   onClearSelection,
   previewProfileId,
   onPreviewProfile,
+  onCheckSelectedHealth,
+  checkingSelectedHealth = false,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -94,33 +98,35 @@ export function ProfileTable({
       className="h-full overflow-auto bg-surface-1"
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
-      <div className="min-w-[1068px]">
+      <div className="min-w-[840px]">
         {selectedCount > 0 && (
           <BulkActionBar
             selectedCount={selectedCount}
             selectedProfiles={selectedProfiles}
             healthByProfileId={healthByProfileId}
             onClearSelection={onClearSelection}
+            onCheckHealth={() => onCheckSelectedHealth?.(selectedProfiles.map((profile) => profile.id))}
+            checkingHealth={checkingSelectedHealth}
           />
         )}
         <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
           <colgroup>
-            <col style={{ width: 40 }} />
-            <col style={{ width: 176 }} />
-            <col style={{ width: 88 }} />
-            <col style={{ width: 86 }} />
-            <col style={{ width: 110 }} />
-            <col style={{ width: 86 }} />
+            <col style={{ width: 36 }} />
+            <col style={{ width: 142 }} />
+            <col style={{ width: 66 }} />
+            <col style={{ width: 72 }} />
+            <col style={{ width: 84 }} />
             <col style={{ width: 68 }} />
-            <col style={{ width: 106 }} />
-            <col style={{ width: 58 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 88 }} />
-            <col style={{ width: 90 }} />
+            <col style={{ width: 44 }} />
+            <col style={{ width: 78 }} />
+            <col style={{ width: 50 }} />
+            <col style={{ width: 56 }} />
+            <col style={{ width: 64 }} />
+            <col style={{ width: 80 }} />
           </colgroup>
-          <thead className={`sticky z-10 bg-surface-1/95 backdrop-blur ${selectedCount > 0 ? "top-10" : "top-0"}`}>
+          <thead className={`sticky z-10 bg-surface-1/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
             <tr className="text-slate-500">
-              <th aria-label="Select" className="w-10 border-b border-border bg-surface-2 px-3 py-2 font-semibold">
+              <th aria-label="Select" className="w-9 border-b border-border bg-surface-2 px-2 py-2 font-semibold">
                 <SelectionCheckbox
                   label="Select all visible profiles"
                   checked={allVisibleSelected}
@@ -203,7 +209,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="truncate border-b border-border bg-surface-2 px-3 py-2 font-semibold uppercase tracking-[0.08em]">
+    <th className="truncate border-b border-border bg-surface-2 px-2 py-2.5 font-semibold uppercase tracking-[0.08em] text-slate-500">
       {children}
     </th>
   );
@@ -274,14 +280,14 @@ function ProfileTableRow({
     <tr
       className={`group border-b border-border transition-colors ${
         selected
-          ? "bg-blue-50/70 hover:bg-blue-50"
+          ? "bg-blue-50/80 hover:bg-blue-50"
           : previewed
             ? "bg-slate-50 hover:bg-slate-100"
-            : "hover:bg-surface-2"
+            : "hover:bg-slate-50"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
     >
-      <td className="border-b border-border px-3 py-2">
+      <td className="border-b border-border px-2 py-2">
         <SelectionCheckbox
           label={`Select ${profile.name}`}
           checked={selected}
@@ -289,10 +295,10 @@ function ProfileTableRow({
           onChange={() => onToggleSelection?.(profile.id)}
         />
       </td>
-      <td className="border-b border-border px-3 py-2">
+      <td className="border-b border-border px-2 py-2">
         <button
           type="button"
-          className="block max-w-[180px] truncate text-left text-sm font-semibold text-slate-950 underline-offset-2 hover:text-blue-700 hover:underline"
+          className="block max-w-[180px] truncate rounded-sm text-left text-sm font-semibold text-slate-950 underline-offset-2 hover:text-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-accent/20"
           title={profile.name}
           aria-label={`Preview ${profile.name}`}
           onClick={() => onPreview?.(profile.id)}
@@ -301,25 +307,25 @@ function ProfileTableRow({
         </button>
         <div className="mt-0.5 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</div>
       </td>
-      <td className="truncate border-b border-border px-3 py-2">
+      <td className="truncate border-b border-border px-2 py-2">
         <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
           <span>{profile.status}</span>
         </span>
       </td>
-      <td className="border-b border-border px-3 py-2">
+      <td className="border-b border-border px-2 py-2">
         <HealthBadge health={health} compact />
       </td>
-      <td className="border-b border-border px-3 py-2">
+      <td className="border-b border-border px-2 py-2">
         <span className="block truncate font-mono text-[11px] text-slate-600" title={proxyLabel}>
           {proxyLabel}
         </span>
       </td>
-      <td className="truncate border-b border-border px-3 py-2 font-mono text-[11px] text-slate-600" title={ip ?? undefined}>{ip ?? "-"}</td>
-      <td className="truncate border-b border-border px-3 py-2 font-medium text-slate-600" title={country ?? undefined}>{country ?? "-"}</td>
-      <td className="truncate border-b border-border px-3 py-2 text-slate-600" title={timezone ?? undefined}>{timezone ?? "-"}</td>
-      <td className="truncate border-b border-border px-3 py-2 text-slate-600" title={locale ?? undefined}>{locale ?? "-"}</td>
-      <td className="border-b border-border px-3 py-2">
+      <td className="truncate border-b border-border px-2 py-2 font-mono text-[11px] text-slate-600" title={ip ?? undefined}>{ip ?? "-"}</td>
+      <td className="truncate border-b border-border px-2 py-2 font-medium text-slate-600" title={country ?? undefined}>{country ?? "-"}</td>
+      <td className="truncate border-b border-border px-2 py-2 text-slate-600" title={timezone ?? undefined}>{timezone ?? "-"}</td>
+      <td className="truncate border-b border-border px-2 py-2 text-slate-600" title={locale ?? undefined}>{locale ?? "-"}</td>
+      <td className="border-b border-border px-2 py-2">
         <div className="flex max-h-10 max-w-[150px] flex-wrap gap-1 overflow-hidden">
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
             <span
@@ -334,13 +340,13 @@ function ProfileTableRow({
           )}
         </div>
       </td>
-      <td className="truncate border-b border-border px-3 py-2 text-slate-500">
+      <td className="truncate border-b border-border px-2 py-2 text-slate-500">
         {formatTimestamp(lastChecked)}
       </td>
-      <td className="border-b border-border px-3 py-2">
+      <td className="border-b border-border px-2 py-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
+          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-accent/20"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >
