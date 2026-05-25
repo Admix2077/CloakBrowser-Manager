@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -205,6 +206,30 @@ def test_build_invisible_kwargs_omits_empty_optional_values(tmp_path: Path):
     assert kwargs["extra_args"] == []
 
 
+def test_build_invisible_kwargs_filters_chromium_only_launch_args(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "launch_args": [
+            "--private-window",
+            "--remote-debugging-port=9222",
+            "--remote-debugging-address",
+            "0.0.0.0",
+            "--fingerprint=123",
+            "--fingerprint-platform=windows",
+            "--disable-features=AutomationControlled",
+            "--use-angle=swiftshader",
+            "--load-extension",
+            "/data/chrome-extension",
+            "--profile",
+            "/tmp/other-profile",
+            "--headless",
+        ],
+    })
+
+    assert kwargs["extra_args"] == ["--private-window"]
+
+
 # ── launch lifecycle ─────────────────────────────────────────────────────────
 
 
@@ -268,3 +293,25 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     await mgr.stop("profile-1")
     assert launch.closed is True
     mgr.vnc.stop_vnc.assert_awaited_once_with(100)
+
+
+@pytest.mark.asyncio
+async def test_cleanup_stale_kills_scoped_invisible_playwright_firefox(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    mgr = BrowserManager()
+    mgr.vnc.cleanup_stale = AsyncMock()  # type: ignore[attr-defined]
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], capture_output: bool):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(bm.subprocess, "run", fake_run)
+
+    await mgr.cleanup_stale()
+
+    mgr.vnc.cleanup_stale.assert_awaited_once()
+    assert ["pkill", "-f", bm.INVISIBLE_FIREFOX_PROCESS_PATTERN] in calls
+    assert "invisible-playwright" in bm.INVISIBLE_FIREFOX_PROCESS_PATTERN
+    assert "firefox" in bm.INVISIBLE_FIREFOX_PROCESS_PATTERN

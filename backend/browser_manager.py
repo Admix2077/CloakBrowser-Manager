@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,8 @@ from invisible_playwright.async_api import InvisiblePlaywright
 from .vnc_manager import VNCManager
 
 logger = logging.getLogger("cloakbrowser.manager.browser")
+
+INVISIBLE_FIREFOX_PROCESS_PATTERN = r"\.cache/invisible-playwright/.*/firefox"
 
 
 def _normalize_proxy(raw: str) -> str:
@@ -105,6 +108,77 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     return pin
 
 
+_CHROMIUM_ONLY_ARG_PREFIXES = (
+    "--remote-debugging-port",
+    "--remote-debugging-address",
+    "--remote-allow-origins",
+    "--fingerprint",
+    "--disable-features",
+    "--enable-features",
+    "--disable-blink-features",
+    "--enable-blink-features",
+    "--use-angle",
+    "--load-extension",
+    "--disable-extensions-except",
+    "--user-agent",
+    "--profile",
+    "-profile",
+    "-P",
+)
+
+_CHROMIUM_ONLY_ARG_EXACT = (
+    "--disable-infobars",
+    "--test-type",
+    "--headless",
+)
+
+_CHROMIUM_ONLY_ARGS_WITH_VALUE = (
+    "--remote-debugging-port",
+    "--remote-debugging-address",
+    "--remote-allow-origins",
+    "--load-extension",
+    "--disable-extensions-except",
+    "--user-agent",
+    "--profile",
+    "-profile",
+    "-P",
+)
+
+
+def _filter_firefox_launch_args(raw_args: list[str] | None) -> list[str]:
+    """Drop Chromium/CDP/profile flags that break invisible_playwright Firefox."""
+    if not raw_args:
+        return []
+
+    filtered: list[str] = []
+    skip_next = False
+    for arg in raw_args:
+        if skip_next:
+            skip_next = False
+            continue
+
+        if arg in _CHROMIUM_ONLY_ARG_EXACT:
+            continue
+
+        blocked_prefix = next(
+            (
+                prefix
+                for prefix in _CHROMIUM_ONLY_ARG_PREFIXES
+                if arg == prefix or arg.startswith(f"{prefix}=")
+                or (prefix == "--fingerprint" and arg.startswith("--fingerprint-"))
+            ),
+            None,
+        )
+        if blocked_prefix:
+            if arg == blocked_prefix and blocked_prefix in _CHROMIUM_ONLY_ARGS_WITH_VALUE:
+                skip_next = True
+            continue
+
+        filtered.append(arg)
+
+    return filtered
+
+
 def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     """Build kwargs for InvisiblePlaywright from a Manager profile."""
     return {
@@ -112,7 +186,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         "pin": _build_invisible_pin(profile),
         "headless": False,
         "proxy": _proxy_to_invisible(profile.get("proxy") or None),
-        "extra_args": list(profile.get("launch_args") or []),
+        "extra_args": _filter_firefox_launch_args(profile.get("launch_args") or []),
         "humanize": bool(profile.get("humanize", False)),
         "locale": profile.get("locale") or "en-US",
         "timezone": profile.get("timezone") or "",
@@ -311,6 +385,15 @@ class BrowserManager:
     async def cleanup_stale(self):
         """Kill orphan processes from previous container runs."""
         await self.vnc.cleanup_stale()
+        try:
+            result = subprocess.run(
+                ["pkill", "-f", INVISIBLE_FIREFOX_PROCESS_PATTERN],
+                capture_output=True,
+            )
+            if result.returncode == 0:
+                logger.info("Cleaned up stale invisible_playwright Firefox processes")
+        except FileNotFoundError:
+            logger.debug("pkill not found, skipping stale Firefox cleanup")
 
     async def auto_launch_all(self):
         """Launch all profiles with auto_launch=True. Called on startup."""

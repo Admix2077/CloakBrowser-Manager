@@ -6,8 +6,7 @@ mkdir -p /data/profiles
 
 # Kill stale processes from previous container runs
 pkill -f 'Xvnc :[0-9]' 2>/dev/null || true
-pkill -f 'cloakbrowser.*chrome' 2>/dev/null || true
-pkill -f 'chromium.*fingerprint' 2>/dev/null || true
+pkill -f '\.cache/invisible-playwright/.*/firefox' 2>/dev/null || true
 pkill -f xclip 2>/dev/null || true
 
 # Clean browser lock files left on the persistent volume

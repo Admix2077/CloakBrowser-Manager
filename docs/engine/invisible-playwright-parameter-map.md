@@ -28,7 +28,7 @@ context = await runner.__aenter__()
 | `gpu_vendor` / `gpu_renderer` | `pin["gpu.vendor"]` / `pin["gpu.renderer"]` | 仅非空时传；建议与 `gpu.class_tier` 一起使用，否则可能破坏采样一致性。 |
 | `hardware_concurrency` | `pin["hardware.concurrency"]` | 非空时传。 |
 | `color_scheme` | `pin["dark_theme"]` | `dark` -> `True`，`light` -> `False`，`no-preference` 不 pin。 |
-| `launch_args` | `extra_args` | 作为 Firefox extra args 传入；不再解释为 Chromium flags。 |
+| `launch_args` | `extra_args` | 仅保留 Firefox 参数；启动前会过滤 Chromium/CDP/profile 覆盖类参数，例如 `--remote-debugging-port`、`--fingerprint-*`、`--disable-features`、`--use-angle`、`--load-extension`、`--profile` 和 `--headless`。 |
 | `headless` | 暂不直用 | 第一阶段为了 noVNC 网页操控，强制 headed on Xvnc；UI 显示为暂不支持隐藏运行。 |
 | `humanize` | `humanize` | 直传布尔值。 |
 | `human_preset` | 无直接等价 | 第一阶段忽略 preset；后续可扩展为 `humanize=True` 或秒数上限。 |
