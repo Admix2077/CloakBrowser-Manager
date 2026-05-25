@@ -533,8 +533,8 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
         {/* Launch Args */}
         <section>
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Launch Args</h3>
-          <p className="text-xs text-gray-500 mb-2">Custom Chromium flags passed at launch (e.g. --load-extension, --disable-features)</p>
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Firefox Launch Args</h3>
+          <p className="text-xs text-gray-500 mb-2">Custom Firefox arguments passed to invisible_playwright at launch.</p>
           {(form.launch_args ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.launch_args ?? []).map((arg, idx) => (
@@ -560,7 +560,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               value={launchArgInput}
               onChange={(e) => setLaunchArgInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLaunchArg(); } }}
-              placeholder="--load-extension=/data/extensions/ublock"
+              placeholder="--private-window"
             />
             <button type="button" onClick={addLaunchArg} className="btn-secondary text-xs">
               Add

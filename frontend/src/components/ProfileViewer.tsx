@@ -11,6 +11,8 @@ interface ProfileViewerProps {
 
 // X11 keysym for V key (Ctrl is already held in VNC by the time we intercept)
 const XK_v = 0x0076;
+const CDP_UNAVAILABLE_LABEL = "CDP unavailable for invisible_playwright Firefox profiles";
+const CDP_UNAVAILABLE_TITLE = "CDP is not available for invisible_playwright Firefox profiles";
 
 export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -160,8 +162,8 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
     };
   }, [clipboardSync, connected]);
 
-  // VNC→Host polling: Chrome doesn't write to X11 clipboard under KasmVNC,
-  // so type 180 events won't fire for Chrome copies. Poll via Playwright CDP.
+  // VNC→Host polling: browser copies do not always reach X11 clipboard under
+  // KasmVNC. Poll the backend's Playwright-context clipboard bridge.
   useEffect(() => {
     if (!clipboardSync || !connected) return;
 
@@ -250,21 +252,27 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
           </span>
         </div>
         <div className="flex items-center gap-1">
-          {cdpUrl && (
-            <button
-              onClick={() => {
+          <button
+            onClick={() => {
+              if (cdpUrl) {
                 const base = `${window.location.protocol}//${window.location.host}${cdpUrl}`;
                 navigator.clipboard?.writeText(base).then(() => {
                   setCdpCopied(true);
                   setTimeout(() => setCdpCopied(false), 2000);
                 }).catch((err) => console.warn("[cdp] copy failed:", err));
-              }}
-              className={`p-1 ${cdpCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"}`}
-              title={cdpCopied ? "Copied!" : "Copy CDP endpoint URL"}
-            >
-              <Code2 className="h-3.5 w-3.5" />
-            </button>
-          )}
+              }
+            }}
+            className={`p-1 ${
+              cdpUrl
+                ? cdpCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+                : "text-gray-700 cursor-not-allowed"
+            }`}
+            title={cdpUrl ? cdpCopied ? "Copied!" : "Copy CDP endpoint URL" : CDP_UNAVAILABLE_TITLE}
+            aria-label={cdpUrl ? cdpCopied ? "CDP endpoint copied" : "Copy CDP endpoint URL" : CDP_UNAVAILABLE_LABEL}
+            disabled={!cdpUrl}
+          >
+            <Code2 className="h-3.5 w-3.5" />
+          </button>
           <button
             onClick={() => { console.log("[clipboard] toggle:", !clipboardSync); setClipboardSync(!clipboardSync); }}
             className={`p-1 ${clipboardSync ? "text-accent" : "text-gray-500 hover:text-gray-300"}`}
