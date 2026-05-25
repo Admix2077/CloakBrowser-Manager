@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
-from starlette.websockets import WebSocketDisconnect
 
 from backend import main
 from backend.browser_manager import RunningProfile
@@ -235,7 +234,7 @@ def test_launch_failure_500(app_client: TestClient):
     assert resp.json()["detail"] == "Failed to launch browser"
 
 
-def test_launch_success_response_invisible_playwright_no_cdp(app_client: TestClient):
+def test_launch_success_response_exposes_automation_url(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "LaunchOk"})
     pid = create.json()["id"]
     running = RunningProfile(
@@ -255,7 +254,6 @@ def test_launch_success_response_invisible_playwright_no_cdp(app_client: TestCli
         "status": "running",
         "vnc_ws_port": 6101,
         "display": ":101",
-        "cdp_url": None,
         "automation_url": f"/api/profiles/{pid}/automation",
     }
 
@@ -431,16 +429,6 @@ def test_profile_response_has_status_field(app_client: TestClient):
         assert profile["status"] in ("running", "stopped")
 
 
-def test_profile_response_has_cdp_url_field(app_client: TestClient):
-    """Stopped profiles should have cdp_url=null."""
-    app_client.post("/api/profiles", json={"name": "CdpShape"})
-    resp = app_client.get("/api/profiles")
-    for profile in resp.json():
-        assert "cdp_url" in profile
-        if profile["status"] == "stopped":
-            assert profile["cdp_url"] is None
-
-
 def test_profile_response_has_automation_url_field(app_client: TestClient):
     """Stopped profiles should have automation_url=null."""
     app_client.post("/api/profiles", json={"name": "AutomationShape"})
@@ -451,19 +439,22 @@ def test_profile_response_has_automation_url_field(app_client: TestClient):
             assert profile["automation_url"] is None
 
 
-def test_status_stopped_has_cdp_url_null(app_client: TestClient):
-    create = app_client.post("/api/profiles", json={"name": "CdpStatus"})
+def test_profile_responses_do_not_expose_cdp_url(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "NoCdpSurface"})
     pid = create.json()["id"]
-    resp = app_client.get(f"/api/profiles/{pid}/status")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["cdp_url"] is None
-    assert data["automation_url"] is None
+
+    list_data = app_client.get("/api/profiles").json()
+    profile_data = app_client.get(f"/api/profiles/{pid}").json()
+    status_data = app_client.get(f"/api/profiles/{pid}/status").json()
+
+    assert all("cdp_url" not in profile for profile in list_data)
+    assert "cdp_url" not in profile_data
+    assert "cdp_url" not in status_data
+    assert status_data["automation_url"] is None
 
 
-def test_running_profile_has_no_cdp_url(app_client: TestClient):
-    """Running invisible_playwright profiles keep noVNC, but do not expose CDP."""
-    create = app_client.post("/api/profiles", json={"name": "CdpRunning"})
+def test_running_profile_exposes_automation_url_only(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationRunning"})
     pid = create.json()["id"]
 
     mock_running = MagicMock(spec=RunningProfile)
@@ -477,7 +468,7 @@ def test_running_profile_has_no_cdp_url(app_client: TestClient):
     data = resp.json()
     assert data["status"] == "running"
     assert data["vnc_ws_port"] == 6100
-    assert data["cdp_url"] is None
+    assert "cdp_url" not in data
     assert data["automation_url"] == f"/api/profiles/{pid}/automation"
 
     # Cleanup
@@ -713,19 +704,6 @@ def test_automation_unknown_page_id_returns_404_before_listing(app_client: TestC
     main.browser_mgr.running.pop(pid, None)
 
 
-# ── CDP Proxy ───────────────────────────────────────────────────────────────
-
-
-def test_cdp_json_version_not_running(app_client: TestClient):
-    resp = app_client.get("/api/profiles/nonexistent/cdp/json/version")
-    assert resp.status_code == 404
-
-
-def test_cdp_json_list_not_running(app_client: TestClient):
-    resp = app_client.get("/api/profiles/nonexistent/cdp/json/list")
-    assert resp.status_code == 404
-
-
 def _mock_running_profile(pid: str) -> MagicMock:
     """Create a mock RunningProfile and register it in browser_mgr."""
     mock = MagicMock(spec=RunningProfile)
@@ -743,48 +721,14 @@ def _mock_running_profile(pid: str) -> MagicMock:
     "/cdp/json/list",
     "/cdp/json",
 ])
-def test_cdp_http_running_returns_501(app_client: TestClient, path: str):
-    """Firefox invisible_playwright profiles do not provide Chromium CDP."""
-    create = app_client.post("/api/profiles", json={"name": "CdpUnavailable"})
+def test_cdp_http_routes_are_not_product_api(app_client: TestClient, path: str):
+    create = app_client.post("/api/profiles", json={"name": "NoCdpApi"})
     pid = create.json()["id"]
     _mock_running_profile(pid)
 
     resp = app_client.get(f"/api/profiles/{pid}{path}")
 
-    assert resp.status_code == 501
-    assert "CDP is not available" in resp.json()["detail"]
-    main.browser_mgr.running.pop(pid, None)
-
-
-def test_cdp_ws_running_closes_as_unavailable(app_client: TestClient):
-    create = app_client.post("/api/profiles", json={"name": "CdpWsUnavailable"})
-    pid = create.json()["id"]
-    _mock_running_profile(pid)
-
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with app_client.websocket_connect(
-            f"/api/profiles/{pid}/cdp",
-            headers={"origin": "http://testserver"},
-        ) as ws:
-            ws.receive_text()
-
-    assert exc_info.value.code == 4006
-    main.browser_mgr.running.pop(pid, None)
-
-
-def test_cdp_page_ws_running_closes_as_unavailable(app_client: TestClient):
-    create = app_client.post("/api/profiles", json={"name": "CdpPageUnavailable"})
-    pid = create.json()["id"]
-    _mock_running_profile(pid)
-
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with app_client.websocket_connect(
-            f"/api/profiles/{pid}/cdp/devtools/page/abc",
-            headers={"origin": "http://testserver"},
-        ) as ws:
-            ws.receive_text()
-
-    assert exc_info.value.code == 4006
+    assert resp.status_code == 404
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -800,21 +744,6 @@ def test_vnc_ws_rejects_cross_origin(app_client: TestClient):
     with pytest.raises(Exception):
         with app_client.websocket_connect(
             f"/api/profiles/{pid}/vnc",
-            headers={"origin": "http://evil.com"},
-        ):
-            pass
-    main.browser_mgr.running.pop(pid, None)
-
-
-def test_cdp_ws_rejects_cross_origin(app_client: TestClient):
-    """CDP WebSocket should reject cross-origin browser connections."""
-    create = app_client.post("/api/profiles", json={"name": "OriginCdp"})
-    pid = create.json()["id"]
-    _mock_running_profile(pid)
-
-    with pytest.raises(Exception):
-        with app_client.websocket_connect(
-            f"/api/profiles/{pid}/cdp",
             headers={"origin": "http://evil.com"},
         ):
             pass

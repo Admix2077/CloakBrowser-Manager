@@ -1,134 +1,61 @@
-<p align="center">
-<img src="https://i.imgur.com/cqkp6fG.png" width="500" alt="CloakBrowser">
-</p>
+# Invisible Browser Manager
 
-<h3 align="center">CloakBrowser Manager with invisible_playwright</h3>
+一个可视化指纹浏览器管理面板。后端使用 `invisible_playwright` patched Firefox；每个 profile 都是独立持久化浏览器上下文，支持 noVNC 网页操控和 Automation REST API。
 
-<p align="center">
-创建、管理和启动隔离的指纹浏览器 profile。<br>
-本分支保留 CloakBrowser Manager 管理面板和 noVNC 网页操控，后端浏览器内核切换为 invisible_playwright patched Firefox。
-</p>
+## 直接运行
 
-<p align="center">
-<a href="https://github.com/CloakHQ/CloakBrowser"><img src="https://img.shields.io/github/stars/cloakhq/cloakbrowser?label=CloakBrowser" alt="Stars"></a>
-<a href="https://hub.docker.com/r/cloakhq/cloakbrowser-manager"><img src="https://img.shields.io/docker/pulls/cloakhq/cloakbrowser-manager?label=docker&logo=docker&logoColor=white" alt="Docker Pulls"></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License"></a>
-</p>
-
----
-
-<p align="center">
-<img src="https://i.imgur.com/twdX81Q.png" width="800" alt="CloakBrowser Manager — Browser View">
-<br>
-<img src="https://i.imgur.com/XFYn1qY.png" width="800" alt="CloakBrowser Manager — Profile Settings">
-</p>
-
-每个 profile 都是一个隔离的 invisible_playwright Firefox 持久化上下文，拥有独立 fingerprint seed、代理、cookies 和 session 数据。Profiles 会跨重启持久化，服务运行在一个 Docker 容器中。
+本镜像当前只支持 `linux/amd64`：
 
 ```bash
-docker build -t cloakbrowser-invisible-manager .
-docker run -p 8080:8080 -v cloakprofiles:/data cloakbrowser-invisible-manager
+cd /home/jeff/code/cloakbrowser-invisible-manager
+docker build --platform linux/amd64 -t invisible-browser-manager .
+docker run --rm -p 127.0.0.1:8080:8080 -v invisible-browser-profiles:/data invisible-browser-manager
 ```
 
-Or build from source:
+打开：
+
+```text
+http://localhost:8080
+```
+
+如需登录保护：
 
 ```bash
-git clone https://github.com/CloakHQ/CloakBrowser-Manager.git cloakbrowser-invisible-manager
-cd cloakbrowser-invisible-manager
-docker compose up --build
+docker run --rm \
+  -p 127.0.0.1:8080:8080 \
+  -v invisible-browser-profiles:/data \
+  -e AUTH_TOKEN=your-secret-token \
+  invisible-browser-manager
 ```
 
-Open [http://localhost:8080](http://localhost:8080) in your browser. Create a profile. Click Launch. Done.
-
-> **迁移阶段说明**：当前分支保留 profile 管理、启动/停止和 noVNC 网页操控。`invisible_playwright` Firefox 不暴露 Chromium CDP，因此 `/api/profiles/<profile-id>/cdp*` 仍返回 `501 Not Implemented`；外部脚本请使用新的 Automation REST API 控制运行中的 profile。
-
-## Why Not Just Use a VPN?
-
-A VPN only changes your IP. Incognito only clears cookies. Chrome profiles share the same hardware fingerprint underneath. Platforms use 50+ signals to link your accounts — canvas, WebGL, audio, GPU, fonts, screen size, timezone.
-
-每个 profile 会基于独立 seed 生成不同的设备身份。对网站来说，每个 profile 都像一台不同的电脑。
-
-| Solution | What it changes | Accounts linked? |
-|----------|----------------|-----------------|
-| VPN | IP address only | Yes — same fingerprint |
-| Incognito | Clears cookies | Yes — same fingerprint |
-| Chrome profiles | Separate bookmarks/cookies | Yes — same hardware fingerprint |
-| **invisible_playwright profile** | **Everything — full device identity per profile** | **No** |
-
-## Features
-
-- **Profile management** — create, edit, delete browser profiles with unique fingerprints
-- **Per-profile settings** — fingerprint seed, proxy, timezone, locale, user agent, screen size, platform
-- **One-click launch/stop** — each profile runs as an isolated invisible_playwright Firefox context
-- **Session persistence** — cookies, localStorage, and cache survive browser restarts
-- **In-browser viewing** — interact with launched browsers via noVNC, directly in the web GUI
-- **Automation REST API** — control running invisible_playwright profiles without Chromium CDP
-- **Optional authentication** — protect the web UI and API with a single token, or run wide open locally
-- **Powered by invisible_playwright** — deterministic stealth profiles on patched Firefox
-
-## Stack
-
-- **Backend**: FastAPI (Python)
-- **Frontend**: React + Tailwind CSS
-- **Browser viewer**: noVNC (WebSocket-based VNC client)
-- **Database**: SQLite
-- **Browser engine**: [invisible_playwright](https://github.com/feder-cr/invisible_playwright) (patched Firefox)
-
-## Development
-
-### Backend
+默认命令只绑定 `127.0.0.1`，避免无认证时暴露到局域网。远程测试建议用 SSH tunnel：
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload --port 8080
+ssh -L 8080:127.0.0.1:8080 your-server
 ```
 
-### Frontend
+## UI 验收路径
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Docker
-
-```bash
-docker compose up --build
-```
-
-## Requirements
-
-- Docker (20.10+)
-- ~2 GB disk (image + binary)
-- ~512 MB RAM per running profile
-
-## Updating
-
-重新构建本地镜像并重启：
-
-```bash
-docker build -t cloakbrowser-invisible-manager .
-docker stop <container-id>
-docker run -p 8080:8080 -v cloakprofiles:/data cloakbrowser-invisible-manager
-```
-
-Your profiles and session data are stored in the `cloakprofiles` volume and persist across updates.
+1. 打开 `http://localhost:8080`
+2. 点击 `New Profile`
+3. 填写 profile name，按需配置代理、时区、语言、屏幕尺寸、GPU、标签和启动参数
+4. 点击 `Create`
+5. 点击 `Launch`
+6. 右侧 viewer 显示 `Connected` 后即可在网页中操作 Firefox
+7. 点击 viewer 工具栏的 code 图标复制 Automation API endpoint
+8. 点击顶部 `Stop` 停止当前 profile
 
 ## Automation API
 
-本分支不伪装 Chromium CDP。`invisible_playwright` 使用 patched Firefox，因此以下 CDP 接口会返回 `501 Not Implemented`：
+运行中的 profile 会返回：
 
-```text
-GET /api/profiles/<profile-id>/cdp
-GET /api/profiles/<profile-id>/cdp/json/version
-GET /api/profiles/<profile-id>/cdp/json/list
+```json
+{
+  "automation_url": "/api/profiles/<profile-id>/automation"
+}
 ```
 
-运行中的 profile 会返回 `cdp_url: null` 和 `automation_url: /api/profiles/<profile-id>/automation`。Manager toolbar 的 code 图标会复制这个 Automation API endpoint。该 REST API 操作同一个 Playwright `BrowserContext`，所以 noVNC 画面和外部 REST 控制看到的是同一浏览器会话。
-
-Available endpoints:
+可用接口：
 
 ```text
 GET    /api/profiles/{profile_id}/automation
@@ -140,9 +67,9 @@ POST   /api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot
 DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}
 ```
 
-`page_ref` can be a page index like `0`, or the stable `page_id` returned by `/pages`. Scripts should prefer `page_id` when multiple pages may open or close. For a fresh profile, create a new page first instead of automating Firefox's built-in `about:home` page.
+`page_ref` 可以是页面 index，例如 `0`，也可以是 `/pages` 返回的稳定 `page_id`。自动化脚本建议先创建新页面，再使用 `page_id` 控制，避免 Firefox 内置页面限制。
 
-Example:
+最小示例：
 
 ```bash
 PROFILE_ID=<running-profile-id>
@@ -168,57 +95,72 @@ curl -X POST "http://localhost:8080/api/profiles/$PROFILE_ID/automation/pages/$P
   --output screenshot.png
 ```
 
-When `AUTH_TOKEN` is enabled, add `-H "Authorization: Bearer <token>"` to API calls. Treat `evaluate` as privileged: it runs JavaScript in the profile page and should only be exposed on trusted networks or behind authentication.
-
-## Remote Access
-
-The container binds to localhost only. To access from a remote server:
+开启 `AUTH_TOKEN` 后，API 请求加：
 
 ```bash
-ssh -L 8080:localhost:8080 your-server
+-H "Authorization: Bearer <token>"
 ```
 
-Then open `http://localhost:8080`.
+`evaluate` 会在页面中执行 JavaScript，只应在可信网络或认证保护下使用。
 
-## Authentication
-
-By default, there is no authentication (ideal for local use). To protect the web UI and API when hosting on a network, set the `AUTH_TOKEN` environment variable:
+## Compose
 
 ```bash
-docker run -p 8080:8080 -v cloakprofiles:/data -e AUTH_TOKEN=your-secret-token cloakbrowser-invisible-manager
+docker compose up --build
 ```
 
-Or in `docker-compose.yml`:
+Compose 默认绑定：
 
-```yaml
-environment:
-  - AUTH_TOKEN=your-secret-token
+```text
+127.0.0.1:8080
 ```
 
-When `AUTH_TOKEN` is set:
+数据目录：
 
-- The web UI shows a login page. Enter the token to unlock.
-- API consumers pass the token via `Authorization: Bearer <token>` header.
-- VNC WebSocket connections are authenticated via the login cookie.
-- The `/api/status` endpoint remains unauthenticated (for Docker healthcheck).
+```text
+~/.invisible-browser-manager
+```
 
-> **Note**: The auth token is transmitted in cleartext over HTTP. If you expose the Manager to the internet, put it behind a reverse proxy with HTTPS (Caddy, nginx, Traefik).
+## 本地开发
+
+后端：
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r backend/requirements-dev.txt
+uvicorn backend.main:app --reload --port 8080
+```
+
+前端：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+测试：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests -q
+cd frontend && npm test
+cd frontend && npm run build
+```
+
+## 运行依赖
+
+- Docker 20.10+
+- `linux/amd64`
+- 约 2 GB 磁盘空间
+- 每个运行中的 profile 建议预留 512 MB 以上内存
 
 ## License
 
-- **This application** (GUI source code) — MIT. See [LICENSE](LICENSE).
-- **invisible_playwright** — MIT. The Docker image pre-downloads its patched Firefox binary with `python -m invisible_playwright fetch`.
+本应用源码使用 MIT License。浏览器内核来自 `invisible_playwright`，Docker 构建时通过：
 
-本分支不再下载或运行 CloakBrowser Chromium binary。旧的 `BINARY-LICENSE.md` 仅用于上游历史背景，不代表当前运行依赖。
+```bash
+python -m invisible_playwright fetch
+```
 
-## Contributing
-
-Contributions are welcome. Please [open an issue](https://github.com/CloakHQ/CloakBrowser-Manager/issues) first to discuss what you'd like to change.
-
-## Links
-
-- **invisible_playwright** — [github.com/feder-cr/invisible_playwright](https://github.com/feder-cr/invisible_playwright)
-- **Upstream Manager** — [github.com/CloakHQ/CloakBrowser-Manager](https://github.com/CloakHQ/CloakBrowser-Manager)
-- **Website** — [cloakbrowser.dev](https://cloakbrowser.dev)
-- **Bug reports** — [GitHub Issues](https://github.com/CloakHQ/CloakBrowser-Manager/issues)
-- **Contact** — cloakhq@pm.me
+下载 patched Firefox。

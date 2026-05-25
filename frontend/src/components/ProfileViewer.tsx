@@ -13,7 +13,7 @@ interface ProfileViewerProps {
 const XK_v = 0x0076;
 const AUTOMATION_UNAVAILABLE_LABEL = "Automation API unavailable until profile is running";
 const AUTOMATION_UNAVAILABLE_TITLE =
-  "Chromium CDP is not available for invisible_playwright Firefox profiles; use Automation API instead.";
+  "Launch the profile to expose its Automation API endpoint.";
 
 export function ProfileViewer({ profileId, automationUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);

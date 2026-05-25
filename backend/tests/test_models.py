@@ -146,19 +146,6 @@ def test_clipboard_request_at_limit():
 # ── LaunchResponse ──────────────────────────────────────────────────────────
 
 
-def test_launch_response_with_cdp_url():
-    r = LaunchResponse(
-        profile_id="abc", vnc_ws_port=6100, display=":100",
-        cdp_url="/api/profiles/abc/cdp",
-    )
-    assert r.cdp_url == "/api/profiles/abc/cdp"
-
-
-def test_launch_response_cdp_url_default_none():
-    r = LaunchResponse(profile_id="abc", vnc_ws_port=6100, display=":100")
-    assert r.cdp_url is None
-
-
 def test_launch_response_automation_url():
     r = LaunchResponse(
         profile_id="abc", vnc_ws_port=6100, display=":100",
@@ -170,19 +157,6 @@ def test_launch_response_automation_url():
 # ── ProfileStatusResponse ──────────────────────────────────────────────────
 
 
-def test_profile_status_response_cdp_url():
-    r = ProfileStatusResponse(
-        status="running", vnc_ws_port=6100, display=":100",
-        cdp_url="/api/profiles/abc/cdp",
-    )
-    assert r.cdp_url == "/api/profiles/abc/cdp"
-
-
-def test_profile_status_response_cdp_url_stopped():
-    r = ProfileStatusResponse(status="stopped")
-    assert r.cdp_url is None
-
-
 def test_profile_status_response_automation_url():
     r = ProfileStatusResponse(
         status="running", vnc_ws_port=6100, display=":100",
@@ -192,25 +166,6 @@ def test_profile_status_response_automation_url():
 
 
 # ── ProfileResponse ────────────────────────────────────────────────────────
-
-
-def test_profile_response_cdp_url():
-    r = ProfileResponse(
-        id="abc", name="Test", fingerprint_seed=12345,
-        user_data_dir="/data/profiles/abc",
-        created_at="2026-01-01T00:00:00", updated_at="2026-01-01T00:00:00",
-        status="running", cdp_url="/api/profiles/abc/cdp",
-    )
-    assert r.cdp_url == "/api/profiles/abc/cdp"
-
-
-def test_profile_response_cdp_url_default_none():
-    r = ProfileResponse(
-        id="abc", name="Test", fingerprint_seed=12345,
-        user_data_dir="/data/profiles/abc",
-        created_at="2026-01-01T00:00:00", updated_at="2026-01-01T00:00:00",
-    )
-    assert r.cdp_url is None
 
 
 def test_profile_response_automation_url():

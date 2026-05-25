@@ -32,7 +32,7 @@ const profile: Profile = {
   tags: [],
   status: "stopped",
   vnc_ws_port: null,
-  cdp_url: null,
+  automation_url: null,
 };
 
 describe("ProfileList invisible_playwright identity display", () => {

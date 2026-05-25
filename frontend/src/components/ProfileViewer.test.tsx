@@ -48,7 +48,7 @@ describe("ProfileViewer Automation API toolbar action", () => {
 
     expect(button.disabled).toBe(true);
     expect(button.title).toBe(
-      "Chromium CDP is not available for invisible_playwright Firefox profiles; use Automation API instead.",
+      "Launch the profile to expose its Automation API endpoint.",
     );
   });
 

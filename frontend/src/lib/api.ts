@@ -1,5 +1,5 @@
 /**
- * API client for CloakBrowser Manager backend.
+ * API client for Invisible Browser Manager backend.
  */
 
 export interface Profile {
@@ -31,7 +31,6 @@ export interface Profile {
   tags: { tag: string; color: string | null }[];
   status: "running" | "stopped";
   vnc_ws_port: number | null;
-  cdp_url: string | null;
   automation_url: string | null;
 }
 
@@ -65,7 +64,6 @@ export interface LaunchResult {
   status: string;
   vnc_ws_port: number;
   display: string;
-  cdp_url: string | null;
   automation_url: string | null;
 }
 

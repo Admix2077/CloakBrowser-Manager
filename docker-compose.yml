@@ -4,6 +4,6 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - ~/.cloakbrowser-manager:/data
+      - ~/.invisible-browser-manager:/data
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN:-}

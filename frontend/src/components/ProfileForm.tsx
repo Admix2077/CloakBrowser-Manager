@@ -492,7 +492,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         <section>
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Firefox Launch Args</h3>
           <p className="text-xs text-gray-500 mb-2">
-            Custom Firefox arguments passed to invisible_playwright at launch. Chromium/CDP/profile flags are ignored.
+            Custom Firefox arguments passed to invisible_playwright at launch. Only Firefox-compatible launch arguments are applied.
           </p>
           {(form.launch_args ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">

@@ -32,7 +32,7 @@ const humanizedProfile: Profile = {
   tags: [],
   status: "stopped",
   vnc_ws_port: null,
-  cdp_url: null,
+  automation_url: null,
 };
 
 describe("ProfileForm launch arguments", () => {
@@ -47,7 +47,7 @@ describe("ProfileForm launch arguments", () => {
 
     expect(screen.getByText("Firefox Launch Args")).toBeTruthy();
     expect(screen.getByText(/Custom Firefox arguments passed to invisible_playwright/)).toBeTruthy();
-    expect(screen.getByText(/Chromium\/CDP\/profile flags are ignored/)).toBeTruthy();
+    expect(screen.getByText(/Only Firefox-compatible launch arguments are applied/)).toBeTruthy();
     expect(screen.getByPlaceholderText("--private-window")).toBeTruthy();
   });
 });

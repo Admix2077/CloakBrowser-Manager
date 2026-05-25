@@ -15,7 +15,7 @@ from invisible_playwright.async_api import InvisiblePlaywright
 
 from .vnc_manager import VNCManager
 
-logger = logging.getLogger("cloakbrowser.manager.browser")
+logger = logging.getLogger("invisible_browser.manager.browser")
 
 INVISIBLE_FIREFOX_PROCESS_PATTERN = r"\.cache/invisible-playwright/.*/firefox"
 
@@ -108,7 +108,7 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     return pin
 
 
-_CHROMIUM_ONLY_ARG_PREFIXES = (
+_BLOCKED_FIREFOX_ARG_PREFIXES = (
     "--remote-debugging-port",
     "--remote-debugging-address",
     "--remote-allow-origins",
@@ -126,13 +126,13 @@ _CHROMIUM_ONLY_ARG_PREFIXES = (
     "-P",
 )
 
-_CHROMIUM_ONLY_ARG_EXACT = (
+_BLOCKED_FIREFOX_ARG_EXACT = (
     "--disable-infobars",
     "--test-type",
     "--headless",
 )
 
-_CHROMIUM_ONLY_ARGS_WITH_VALUE = (
+_BLOCKED_FIREFOX_ARGS_WITH_VALUE = (
     "--remote-debugging-port",
     "--remote-debugging-address",
     "--remote-allow-origins",
@@ -146,7 +146,7 @@ _CHROMIUM_ONLY_ARGS_WITH_VALUE = (
 
 
 def _filter_firefox_launch_args(raw_args: list[str] | None) -> list[str]:
-    """Drop Chromium/CDP/profile flags that break invisible_playwright Firefox."""
+    """Drop launch flags that conflict with managed invisible_playwright Firefox."""
     if not raw_args:
         return []
 
@@ -157,20 +157,20 @@ def _filter_firefox_launch_args(raw_args: list[str] | None) -> list[str]:
             skip_next = False
             continue
 
-        if arg in _CHROMIUM_ONLY_ARG_EXACT:
+        if arg in _BLOCKED_FIREFOX_ARG_EXACT:
             continue
 
         blocked_prefix = next(
             (
                 prefix
-                for prefix in _CHROMIUM_ONLY_ARG_PREFIXES
+                for prefix in _BLOCKED_FIREFOX_ARG_PREFIXES
                 if arg == prefix or arg.startswith(f"{prefix}=")
                 or (prefix == "--fingerprint" and arg.startswith("--fingerprint-"))
             ),
             None,
         )
         if blocked_prefix:
-            if arg == blocked_prefix and blocked_prefix in _CHROMIUM_ONLY_ARGS_WITH_VALUE:
+            if arg == blocked_prefix and blocked_prefix in _BLOCKED_FIREFOX_ARGS_WITH_VALUE:
                 skip_next = True
             continue
 
@@ -369,14 +369,12 @@ class BrowserManager:
                 "status": "running",
                 "vnc_ws_port": running.ws_port,
                 "display": f":{running.display}",
-                "cdp_url": None,
                 "automation_url": f"/api/profiles/{profile_id}/automation",
             }
         return {
             "status": "stopped",
             "vnc_ws_port": None,
             "display": None,
-            "cdp_url": None,
             "automation_url": None,
         }
 

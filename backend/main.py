@@ -1,4 +1,4 @@
-"""CloakBrowser Manager — FastAPI application.
+"""Invisible Browser Manager — FastAPI application.
 
 Serves the React dashboard (static files) and provides a REST API
 for browser profile management with live VNC viewing.
@@ -46,7 +46,7 @@ from .models import (
     TagResponse,
 )
 
-logger = logging.getLogger("cloakbrowser.manager")
+logger = logging.getLogger("invisible_browser.manager")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logging.getLogger("websockets").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -303,7 +303,7 @@ def _rfb_msg_length(data: bytes, offset: int) -> int | None:
 
 def _rewrite_set_encodings(data: bytes, offset: int, msg_len: int) -> bytes:
     """Keep only whitelisted encodings in a SetEncodings message."""
-    _log = logging.getLogger("cloakbrowser.manager")
+    _log = logging.getLogger("invisible_browser.manager")
     num_enc = struct.unpack_from(">H", data, offset + 2)[0]
     kept = []
     stripped = []
@@ -344,7 +344,7 @@ def _filter_rfb_client_messages(data: bytes) -> bytes:
     Rewrites PointerEvents from 6-byte standard to 11-byte KasmVNC format
     and strips unsupported pseudo-encodings from SetEncodings.
     """
-    _log = logging.getLogger("cloakbrowser.manager")
+    _log = logging.getLogger("invisible_browser.manager")
     result = bytearray()
     offset = 0
     msg_idx = 0
@@ -385,7 +385,7 @@ async def lifespan(app: FastAPI):
     db.init_db()
     await browser_mgr.cleanup_stale()
     browser_mgr._auto_launch_task = asyncio.create_task(browser_mgr.auto_launch_all())
-    logger.info("CloakBrowser Manager started")
+    logger.info("Invisible Browser Manager started")
     yield
     logger.info("Shutting down — stopping all browsers...")
     if browser_mgr._auto_launch_task and not browser_mgr._auto_launch_task.done():
@@ -394,7 +394,7 @@ async def lifespan(app: FastAPI):
     await browser_mgr.cleanup_all()
 
 
-app = FastAPI(title="CloakBrowser Manager", lifespan=lifespan)
+app = FastAPI(title="Invisible Browser Manager", lifespan=lifespan)
 app.add_middleware(AuthMiddleware)
 
 
@@ -451,7 +451,6 @@ async def list_profiles():
         status = browser_mgr.get_status(p["id"])
         p["status"] = status["status"]
         p["vnc_ws_port"] = status["vnc_ws_port"]
-        p["cdp_url"] = status["cdp_url"]
         p["automation_url"] = status["automation_url"]
         p["tags"] = [TagResponse(**t) for t in p.get("tags", [])]
         result.append(ProfileResponse(**p))
@@ -470,7 +469,6 @@ async def create_profile(req: ProfileCreate):
     status = browser_mgr.get_status(profile["id"])
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
-    profile["cdp_url"] = status["cdp_url"]
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
@@ -484,7 +482,6 @@ async def get_profile(profile_id: str):
     status = browser_mgr.get_status(profile_id)
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
-    profile["cdp_url"] = status["cdp_url"]
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
@@ -503,7 +500,6 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
     status = browser_mgr.get_status(profile_id)
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
-    profile["cdp_url"] = status["cdp_url"]
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
@@ -555,7 +551,6 @@ async def launch_profile(profile_id: str):
         status="running",
         vnc_ws_port=running.ws_port,
         display=f":{running.display}",
-        cdp_url=None,
         automation_url=f"/api/profiles/{profile_id}/automation",
     )
 
@@ -842,9 +837,9 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
 
 
 # ── Automation API ───────────────────────────────────────────────────────────
-# Replaces Chromium CDP for invisible_playwright profiles. These routes operate
-# on the Playwright BrowserContext already owned by the running profile, so the
-# noVNC viewer and external API control the same browser session.
+# These routes operate on the Playwright BrowserContext already owned by the
+# running profile, so the noVNC viewer and external API control the same browser
+# session.
 
 
 def _automation_running(profile_id: str):
@@ -1003,75 +998,6 @@ async def automation_close_page(profile_id: str, page_ref: str):
         logger.warning("Automation page close failed for %s page %d: %s", profile_id, page_index, exc)
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True}
-
-
-# ── CDP WebSocket Proxy ──────────────────────────────────────────────────────
-# invisible_playwright uses Firefox and does not expose Chromium CDP.
-
-_CDP_UNAVAILABLE_DETAIL = (
-    "CDP is not available for invisible_playwright Firefox profiles"
-)
-
-
-@app.get("/api/profiles/{profile_id}/cdp")
-async def cdp_info(profile_id: str):
-    """Return a clear 501 instead of pretending Firefox exposes Chromium CDP."""
-    running = browser_mgr.running.get(profile_id)
-    if not running:
-        raise HTTPException(status_code=404, detail="Profile not running")
-    raise HTTPException(status_code=501, detail=_CDP_UNAVAILABLE_DETAIL)
-
-
-@app.get("/api/profiles/{profile_id}/cdp/json/version/")
-@app.get("/api/profiles/{profile_id}/cdp/json/version")
-async def cdp_json_version(profile_id: str):
-    """CDP is a Chromium interface; invisible_playwright profiles are Firefox."""
-    running = browser_mgr.running.get(profile_id)
-    if not running:
-        raise HTTPException(status_code=404, detail="Profile not running")
-    raise HTTPException(status_code=501, detail=_CDP_UNAVAILABLE_DETAIL)
-
-
-@app.get("/api/profiles/{profile_id}/cdp/json/list/")
-@app.get("/api/profiles/{profile_id}/cdp/json/list")
-@app.get("/api/profiles/{profile_id}/cdp/json/")
-@app.get("/api/profiles/{profile_id}/cdp/json")
-async def cdp_json_list(profile_id: str):
-    """CDP is a Chromium interface; invisible_playwright profiles are Firefox."""
-    running = browser_mgr.running.get(profile_id)
-    if not running:
-        raise HTTPException(status_code=404, detail="Profile not running")
-    raise HTTPException(status_code=501, detail=_CDP_UNAVAILABLE_DETAIL)
-
-
-@app.websocket("/api/profiles/{profile_id}/cdp")
-async def cdp_proxy(websocket: WebSocket, profile_id: str):
-    """Reject CDP WebSocket connections for invisible_playwright Firefox."""
-    if not await _check_websocket_origin(websocket):
-        return
-
-    running = browser_mgr.running.get(profile_id)
-    if not running:
-        await websocket.close(code=4004, reason="Profile not running")
-        return
-
-    await websocket.accept()
-    await websocket.close(code=4006, reason=_CDP_UNAVAILABLE_DETAIL)
-
-
-@app.websocket("/api/profiles/{profile_id}/cdp/devtools/{path:path}")
-async def cdp_page_proxy(websocket: WebSocket, profile_id: str, path: str):
-    """Reject page-specific CDP WebSocket connections for Firefox profiles."""
-    if not await _check_websocket_origin(websocket):
-        return
-
-    running = browser_mgr.running.get(profile_id)
-    if not running:
-        await websocket.close(code=4004, reason="Profile not running")
-        return
-
-    await websocket.accept()
-    await websocket.close(code=4006, reason=_CDP_UNAVAILABLE_DETAIL)
 
 
 # ── Static Frontend ───────────────────────────────────────────────────────────

@@ -100,7 +100,6 @@ def test_get_status_stopped():
         "status": "stopped",
         "vnc_ws_port": None,
         "display": None,
-        "cdp_url": None,
         "automation_url": None,
     }
 
@@ -121,6 +120,5 @@ def test_get_status_running():
         "status": "running",
         "vnc_ws_port": 6100,
         "display": ":100",
-        "cdp_url": None,
         "automation_url": "/api/profiles/abc/automation",
     }
