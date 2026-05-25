@@ -26,6 +26,7 @@ const mockApi = api as {
 const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
 const mockCheckHealth = vi.fn();
 const mockLaunchProfiles = vi.fn();
+const mockStopProfiles = vi.fn();
 
 function profile(overrides: Partial<Profile>): Profile {
   return {
@@ -92,6 +93,8 @@ beforeEach(() => {
   mockCheckHealth.mockResolvedValue(undefined);
   mockLaunchProfiles.mockReset();
   mockLaunchProfiles.mockResolvedValue(undefined);
+  mockStopProfiles.mockReset();
+  mockStopProfiles.mockResolvedValue(undefined);
   mockUseProfiles.mockReturnValue({
     profiles: [
       profile({ id: "beta", name: "Beta Broken" }),
@@ -110,6 +113,7 @@ beforeEach(() => {
     stop: vi.fn(),
     checkHealth: mockCheckHealth,
     launchProfiles: mockLaunchProfiles,
+    stopProfiles: mockStopProfiles,
   });
 });
 
@@ -202,6 +206,46 @@ describe("App operations console", () => {
       expect(mockLaunchProfiles).toHaveBeenCalledWith(["beta", "alpha"]);
     });
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("runs a bulk stop for the currently selected running profiles", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [
+        profile({ id: "running", name: "Running Profile", status: "running" }),
+        profile({ id: "stopped", name: "Stopped Profile", status: "stopped" }),
+      ],
+      healthByProfileId: {
+        running: health("running", {
+          status: "good",
+          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
+        }),
+        stopped: health("stopped", { status: "good" }),
+      },
+      loading: false,
+      error: null,
+      create: vi.fn(),
+      update: vi.fn(),
+      remove: vi.fn(),
+      launch: vi.fn(),
+      stop: vi.fn(),
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText("Select Running Profile"));
+    fireEvent.click(screen.getByLabelText("Select Stopped Profile"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop selected" }));
+
+    await waitFor(() => {
+      expect(mockStopProfiles).toHaveBeenCalledWith(["running"]);
+    });
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

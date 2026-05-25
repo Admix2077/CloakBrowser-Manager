@@ -268,6 +268,64 @@ describe("useProfiles", () => {
     });
   });
 
+  it("stops selected running profiles once, refreshes once, and reports partial failures", async () => {
+    const runningProfile = { ...fakeProfile, id: "run-123", name: "Running", status: "running" as const };
+    const failingProfile = { ...fakeProfile, id: "fail-123", name: "Failing", status: "running" as const };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, runningProfile, failingProfile]);
+    mockApi.stopProfile.mockImplementation((id: string) => {
+      if (id === "run-123") return Promise.resolve({ ok: true });
+      return Promise.reject(new Error("Profile is not running"));
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+    mockApi.getProfileHealth.mockClear();
+
+    let stopResult;
+    await act(async () => {
+      stopResult = await result.current.stopProfiles(["abc-123", "run-123", "run-123", "fail-123"]);
+    });
+
+    expect(mockApi.stopProfile).toHaveBeenCalledTimes(2);
+    expect(mockApi.stopProfile).toHaveBeenCalledWith("run-123");
+    expect(mockApi.stopProfile).toHaveBeenCalledWith("fail-123");
+    expect(mockApi.listProfiles).toHaveBeenCalledTimes(1);
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("run-123");
+    expect(stopResult).toMatchObject({
+      requestedCount: 3,
+      stoppableCount: 2,
+      stoppedCount: 1,
+      skippedStoppedCount: 1,
+      failedCount: 1,
+    });
+    expect(result.current.error).toBe("Failed to stop 1 profile(s): Profile is not running");
+  });
+
+  it("skips stopped profiles during bulk stop", async () => {
+    const runningProfile = { ...fakeProfile, id: "running-123", name: "Running", status: "running" as const };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, runningProfile]);
+    mockApi.stopProfile.mockResolvedValue({ ok: true });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let stopResult;
+    await act(async () => {
+      stopResult = await result.current.stopProfiles(["abc-123", "running-123"]);
+    });
+
+    expect(mockApi.stopProfile).toHaveBeenCalledTimes(1);
+    expect(mockApi.stopProfile).toHaveBeenCalledWith("running-123");
+    expect(stopResult).toMatchObject({
+      requestedCount: 2,
+      stoppableCount: 1,
+      stoppedCount: 1,
+      skippedStoppedCount: 1,
+      failedCount: 0,
+    });
+  });
+
   it("runs active health checks and writes successful results into the health cache", async () => {
     const checkedHealth = {
       ...fakeHealth,

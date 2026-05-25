@@ -1234,3 +1234,92 @@ git diff --check
 - 批量 stop / set tags / delete 未接入。
 - 批量 delete 仍需单独确认闭环。
 - `保留创建/编辑 profile 能力`、`保留 VNC viewer 能力`、空态拆分、窄屏 card list 仍待 03 后续小闭环复核。
+
+## 21. 2026-05-26 批量 stop 小闭环
+
+本轮继续推进 03 Profile 运营台，完成 `接入批量 stop`。
+
+实现范围：
+
+- `frontend/src/hooks/useProfiles.ts`
+  - 新增 `stopProfiles(ids)`。
+  - 去重、过滤空 id。
+  - 只停止当前 profile 列表中 `status === "running"` 的 profiles。
+  - stopped profiles 跳过，计入 `skippedStoppedCount`，不作为错误。
+  - 最多 2 并发，复用现有 `api.stopProfile(id)`，不新增后端 bulk API。
+  - 批量完成后统一 `refresh()` 一次，成功项再 `refreshHealth(successfulIds)`。
+  - 部分失败不阻断其他 profile。
+  - 失败提示带后端错误摘要，并通过 `redactUrlCredentials()` 统一防御性脱敏。
+- `frontend/src/components/BulkActionBar.tsx`
+  - `Stop selected` 从 disabled shell 改为真实按钮。
+  - 仅在存在 running 选中项时启用。
+  - loading 状态显示 `Stopping...`。
+  - `Tag selected`、`Delete selected` 继续 disabled。
+- `frontend/src/components/ProfileTable.tsx`
+  - bulk stop 只传 selected running profile ids。
+- `frontend/src/App.tsx`
+  - 接入 `bulkStopping` 状态和 `handleStopSelectedProfiles()`。
+  - 不改变单 profile launch / stop / VNC viewer 流。
+
+子 agent 审计结论：
+
+- bulk stop 必须 running-only，因为后端 stop API 对非 running profile 返回 404。
+- stopped profile 应跳过，不应作为失败。
+- stop 后应刷新列表，并刷新成功 stopped profile 的 health，避免 runtime health 残留。
+- 选择不应主动清空；All 视图保留选择，过滤视图由既有 effect 自动剪掉不可见项。
+- 本机缺 `Xvnc` 时不能声称完成真实 VNC teardown 浏览器联调，只能用模拟 running 环境验证前端流。
+
+测试与验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 40 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 75 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- 当前本机缺 `Xvnc`，不能通过真实 launch 构造 running profile。
+- 使用临时 QA 后端 8081 monkeypatch `browser_mgr.running` 和 `browser_mgr.stop()`，只验证前端 running-only stop 流和 API 成功路径。
+- 5174 静态代理服务用于访问当前 build 的前端并代理 `/api` 到 8081。
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-bulk-stop-qa-data`，2 个 profiles：
+  - `Bulk Stop QA Running` 初始 `running`。
+  - `Bulk Stop QA Stopped` 初始 `stopped`。
+- 桌面 `1440x900`：
+  - 选中 running + stopped 后显示 `2 selected`、`1 running`、`1 stopped`。
+  - `Stop selected` 可点击。
+  - 点击后 `/api/status` 返回 `running_count: 0`。
+  - 表格中 running profile 变为 `stopped`。
+  - toolbar 保留 `2 selected`，显示 `0 running`、`2 stopped`，`Stop selected` 变 disabled。
+  - 清空 console 后当前流程无相关前端 console error。
+- 移动 `390x844`：
+  - 停止后 `2 selected`、`0 running` 可见。
+  - `body.scrollWidth === window.innerWidth === 390`。
+
+截图：
+
+- `/tmp/cloak-bulk-stop-selected-desktop.png`
+- `/tmp/cloak-bulk-stop-after-desktop.png`
+- `/tmp/cloak-bulk-stop-after-mobile.png`
+
+运行时限制：
+
+- 未覆盖真实 XvNC / KasmVNC teardown、真实 noVNC websocket 断开、真实 VNC 进程退出。
+- 完整运行时联调需要在安装 `Xvnc` 或 Docker/KasmVNC 环境补验。
+
+仍未做：
+
+- 批量 set tags / delete 未接入。
+- 批量 delete 仍需单独确认闭环。
+- `保留创建/编辑 profile 能力`、`保留 VNC viewer 能力`、空态拆分、窄屏 card list 仍待 03 后续小闭环复核。

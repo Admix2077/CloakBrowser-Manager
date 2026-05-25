@@ -161,6 +161,7 @@ describe("ProfileTable", () => {
   it("shows a bulk action bar with selected profile health and runtime summary", () => {
     const onCheckHealth = vi.fn();
     const onLaunchSelected = vi.fn();
+    const onStopSelected = vi.fn();
 
     render(
       <ProfileTable
@@ -171,6 +172,7 @@ describe("ProfileTable", () => {
         onClearSelection={vi.fn()}
         onCheckSelectedHealth={onCheckHealth}
         onLaunchSelectedProfiles={onLaunchSelected}
+        onStopSelectedProfiles={onStopSelected}
       />,
     );
 
@@ -184,7 +186,9 @@ describe("ProfileTable", () => {
     expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
     expect(onLaunchSelected).toHaveBeenCalledWith(["error"]);
-    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Stop selected" }));
+    expect(onStopSelected).toHaveBeenCalledWith(["good"]);
     expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -203,6 +207,22 @@ describe("ProfileTable", () => {
 
     expect((screen.getByRole("button", { name: "Launching selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Launching...")).toBeTruthy();
+  });
+
+  it("disables the bulk stop button while stop is running", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        onStopSelectedProfiles={vi.fn()}
+        stoppingSelectedProfiles
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Stopping selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Stopping...")).toBeTruthy();
   });
 
   it("disables the bulk health check while checks are running", () => {

@@ -11,6 +11,8 @@ interface BulkActionBarProps {
   checkingHealth?: boolean;
   onLaunch?: () => Promise<void> | void;
   launching?: boolean;
+  onStop?: () => Promise<void> | void;
+  stopping?: boolean;
 }
 
 export function BulkActionBar({
@@ -22,6 +24,8 @@ export function BulkActionBar({
   checkingHealth = false,
   onLaunch,
   launching = false,
+  onStop,
+  stopping = false,
 }: BulkActionBarProps) {
   if (selectedCount === 0) return null;
 
@@ -63,7 +67,16 @@ export function BulkActionBar({
           <Play className="h-3.5 w-3.5" />
           <span>{launching ? "Launching..." : "Launch selected"}</span>
         </button>
-        <DisabledAction icon={<Square className="h-3.5 w-3.5" />} label="Stop selected" />
+        <button
+          type="button"
+          disabled={!onStop || stopping || runningCount === 0}
+          aria-label={stopping ? "Stopping selected" : "Stop selected"}
+          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1 font-medium text-blue-700 shadow-hairline transition-colors hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => void onStop?.()}
+        >
+          <Square className="h-3.5 w-3.5" />
+          <span>{stopping ? "Stopping..." : "Stop selected"}</span>
+        </button>
         <DisabledAction icon={<Tags className="h-3.5 w-3.5" />} label="Tag selected" />
         <DisabledAction icon={<Trash2 className="h-3.5 w-3.5" />} label="Delete selected" danger />
         {onClearSelection && (

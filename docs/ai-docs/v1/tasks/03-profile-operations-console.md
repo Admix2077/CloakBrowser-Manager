@@ -62,7 +62,7 @@
 - [x] 新增多选状态。
 - [x] 新增 `BulkActionBar`。
 - [x] 接入批量 launch。
-- [ ] 接入批量 stop。
+- [x] 接入批量 stop。
 - [x] 接入批量 health check。
 - [ ] 接入批量 set tags。
 - [ ] 接入批量 delete，必须有确认。
@@ -811,3 +811,84 @@ git diff --check
 - 本小闭环不新增后端 bulk launch API。
 - 本小闭环不接入批量 stop / set tags / delete。
 - 批量 delete 仍必须单独确认闭环；批量 stop 需要下一轮定义 running-only、部分失败和选择保留语义。
+
+## 2026-05-26 批量 stop 小闭环
+
+背景：
+
+- `BulkActionBar` 已经接入批量 health check 和批量 launch，本小闭环继续接入批量 stop。
+- 不新增后端 bulk API，前端复用现有单 profile `/api/profiles/{id}/stop`。
+- 后端对非 running profile 的 stop 返回 404 `Profile is not running`，所以前端批量 stop 必须只作用当前选中且 `status === "running"` 的 profiles；stopped profiles 跳过，不作为错误。
+
+已完成：
+
+- [x] `frontend/src/hooks/useProfiles.ts` 新增 `stopProfiles(ids)`：
+  - 去重、过滤空 id。
+  - 基于当前 profile 列表只 stop running profiles。
+  - stopped profiles 计入 `skippedStoppedCount`，不打 API。
+  - 最多 2 并发，避免批量 teardown 过度冲击运行时。
+  - 每个 profile 复用现有 `api.stopProfile(id)`。
+  - 批量完成后统一 `refresh()` 一次，成功项再刷新 health。
+  - 部分失败不阻断其他 profile。
+  - 失败提示包含去重后的后端错误摘要，并通过 `redactUrlCredentials()` 统一防御性脱敏。
+- [x] `BulkActionBar` 的 `Stop selected` 变为真实动作：
+  - 仅在有 running 选中项时启用。
+  - 执行中显示 `Stopping...` 并禁用按钮。
+  - `Tag selected`、`Delete selected` 仍保持 disabled。
+- [x] `ProfileTable` 只把 selected 中 running profiles 传给 stop handler。
+- [x] `AppContent` 接入 `bulkStopping` 状态，不改变单 profile launch / stop / VNC viewer 流。
+- [x] 操作后不主动清空选择；在 All 视图下保留选择，方便继续 tag/delete/health check；在过滤视图中仍由既有筛选清理 effect 剪掉不可见选择。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 40 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 75 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 当前本机缺 `Xvnc`，不能通过真实 launch 构造 running profile。
+- 本轮使用临时 QA 后端在 8081 端口 monkeypatch `browser_mgr.running` 和 `browser_mgr.stop()`，只模拟 running profile 与 stop API 成功；前端通过 5174 静态代理访问该 QA 后端。
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-bulk-stop-qa-data`，共 2 个 profiles：
+  - `Bulk Stop QA Running`，初始 `status=running`，`vnc_ws_port=6100`。
+  - `Bulk Stop QA Stopped`，初始 `status=stopped`。
+- 桌面 `1440x900`：
+  - 选中 running + stopped 后显示 `2 selected`、`1 running`、`1 stopped`。
+  - `Stop selected` 可点击，`Tag selected` / `Delete selected` 仍 disabled。
+  - 点击后 API status 变为 `running_count: 0`。
+  - 表格中 `Bulk Stop QA Running` 从 `running` 变为 `stopped`。
+  - toolbar 保留 `2 selected`，显示 `0 running`、`2 stopped`，`Stop selected` 变 disabled。
+  - 清空 console 后重跑当前流程，无相关前端 console error。
+- 移动 `390x844`：
+  - 停止后状态可见。
+  - `body.scrollWidth === window.innerWidth === 390`，页面本体不横向撑破。
+
+截图：
+
+- `/tmp/cloak-bulk-stop-selected-desktop.png`
+- `/tmp/cloak-bulk-stop-after-desktop.png`
+- `/tmp/cloak-bulk-stop-after-mobile.png`
+
+运行时限制：
+
+- 本轮浏览器验证没有覆盖真实 XvNC / KasmVNC teardown、真实 noVNC websocket 断开、真实 `browser_mgr.running` 清理后的 VNC 进程退出。
+- 真实运行时 stop 语义仍由后端测试覆盖；完整端到端需要在安装 `Xvnc` 或 Docker/KasmVNC 环境补验。
+
+范围说明：
+
+- 本小闭环不新增后端 bulk stop API。
+- 本小闭环不接入批量 set tags / delete。
+- 批量 delete 仍必须单独确认闭环。

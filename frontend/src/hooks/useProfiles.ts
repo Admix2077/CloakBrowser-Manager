@@ -9,12 +9,21 @@ import { redactUrlCredentials } from "../lib/profileDisplay";
 
 const HEALTH_CHECK_CONCURRENCY = 6;
 const BULK_LAUNCH_CONCURRENCY = 2;
+const BULK_STOP_CONCURRENCY = 2;
 
 export interface BulkLaunchResult {
   requestedCount: number;
   launchableCount: number;
   launchedCount: number;
   skippedRunningCount: number;
+  failedCount: number;
+}
+
+export interface BulkStopResult {
+  requestedCount: number;
+  stoppableCount: number;
+  stoppedCount: number;
+  skippedStoppedCount: number;
   failedCount: number;
 }
 
@@ -267,6 +276,69 @@ export function useProfiles() {
     [refresh, refreshHealth],
   );
 
+  const stopProfiles = useCallback(
+    async (profileIds: string[]): Promise<BulkStopResult> => {
+      const ids = [...new Set(profileIds.filter(Boolean))];
+      const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+      const stoppableIds = ids.filter((id) => profileById.get(id)?.status === "running");
+      const skippedStoppedCount = ids.filter((id) => profileById.get(id)?.status === "stopped").length;
+      const successfulIds: string[] = [];
+      const failureMessages: string[] = [];
+      let failedCount = 0;
+      let cursor = 0;
+
+      const result: BulkStopResult = {
+        requestedCount: ids.length,
+        stoppableCount: stoppableIds.length,
+        stoppedCount: 0,
+        skippedStoppedCount,
+        failedCount: 0,
+      };
+
+      if (stoppableIds.length === 0) {
+        setOperationError(null);
+        return result;
+      }
+
+      const workerCount = Math.min(BULK_STOP_CONCURRENCY, stoppableIds.length);
+      await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+          while (cursor < stoppableIds.length) {
+            const id = stoppableIds[cursor];
+            cursor += 1;
+            if (!id) continue;
+            try {
+              await api.stopProfile(id);
+              successfulIds.push(id);
+            } catch (err) {
+              failedCount += 1;
+              failureMessages.push(err instanceof Error ? err.message : "Failed to stop profile");
+            }
+          }
+        }),
+      );
+
+      await refresh();
+      if (successfulIds.length > 0) {
+        await refreshHealth(successfulIds);
+      }
+
+      result.stoppedCount = successfulIds.length;
+      result.failedCount = failedCount;
+
+      if (failedCount > 0) {
+        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
+        setOperationError(`Failed to stop ${failedCount} profile(s)${reasonSummary}`);
+      } else {
+        setOperationError(null);
+      }
+
+      return result;
+    },
+    [profiles, refresh, refreshHealth],
+  );
+
   return {
     profiles,
     healthByProfileId,
@@ -281,5 +353,6 @@ export function useProfiles() {
     launch,
     launchProfiles,
     stop,
+    stopProfiles,
   };
 }
