@@ -1,0 +1,413 @@
+# Codex Session 记忆文档
+
+日期：2026-05-25
+
+用途：为后续新开的 Codex session 保留当前上下文，避免丢失关键事实、设计决策和验证状态。
+
+## 1. 仓库与运行状态
+
+仓库路径：
+
+```text
+/home/jeff/code/cloakbrowser-invisible-manager
+```
+
+当前分支：
+
+```text
+feature/invisible-playwright-engine
+```
+
+当前最新关键提交：
+
+```text
+aa84726 fix: sync geoip language timezone fingerprints
+```
+
+当前本地服务曾部署到：
+
+```text
+http://100.104.13.11:8080/
+```
+
+Docker 容器名：
+
+```text
+invisible-browser-manager-live
+```
+
+Docker 镜像：
+
+```text
+invisible-browser-manager:latest
+```
+
+最近验证时服务状态：
+
+- `/api/status` 可访问。
+- 当前 profile 总数为 1。
+- profile 名称/标识为 `1`。
+- profile 运行中。
+
+## 2. 已完成的重要改造
+
+本轮之前已经完成并验证的核心能力：
+
+- 将 CloakBrowser Manager 后端浏览器内核替换为 `invisible_playwright` / Firefox。
+- 保留 manager 面板、profile 管理和 VNC Viewer。
+- 增加自有 Automation REST API，用于替代原 CDP 思路。
+- 修复强杀容器后 Firefox session restore 导致 profile 启动超时的问题。
+- 修复 BrowserScan 出现的：
+  - `Different time zones`
+  - `Language mismatch`
+- 增加 GeoIP 多 provider fallback：
+  - `ip-api.com`
+  - `ipapi.co`
+  - `ipwho.is`
+- 增加 `last_geoip_*` 字段，保存最近自动解析结果：
+  - `last_geoip_ip`
+  - `last_geoip_country_code`
+  - `last_geoip_timezone`
+  - `last_geoip_locale`
+  - `last_geoip_source`
+  - `last_geoip_resolved_at`
+- 明确字段语义：
+  - `timezone` / `locale` 是手动覆盖字段。
+  - `last_geoip_*` 是自动检测结果。
+  - 自动检测不覆盖手动字段，避免换代理/换国家后被旧值锁死。
+
+## 3. BrowserScan 验证结论
+
+曾使用 profile `1` 打开 BrowserScan 验证。
+
+修复前异常：
+
+- `Different time zones`
+- `Language mismatch`
+- 页面中 `Languages` 和 `Accept-Language header` 不一致。
+
+修复后结果：
+
+- `Browser fingerprint authenticity: 100%`
+- BrowserScan 文本里未找到：
+  - `Language mismatch`
+  - `Different time`
+- 当时落库结果：
+  - IP: `23.144.4.92`
+  - Country: `US`
+  - Timezone: `America/Los_Angeles`
+  - Locale: `en-US`
+  - Source: `ip-api`
+
+关键技术处理：
+
+- Firefox / invisible_playwright 场景下，直接覆盖请求 header 不一定可靠。
+- 最终采用“让 JS 暴露语言和 Firefox 实际 Accept-Language 对齐”的方案。
+- `_browser_init_script("en-US")` 会将：
+  - `navigator.language`
+  - `navigator.languages`
+  - `Intl` 相关 locale 表现
+  与启动 locale 对齐。
+
+## 4. 当前内核和自动化边界
+
+当前内核是：
+
+```text
+Firefox through invisible_playwright
+```
+
+当前不是 Chromium CDP 产品形态。
+
+不能把后续功能设计成必须依赖 Chromium CDP。自动化入口应继续基于项目已有 Automation REST API。
+
+现有 Automation API 已覆盖：
+
+- 获取运行中 profile 自动化信息。
+- 页面列表。
+- 页面跳转。
+- 页面 evaluate。
+- screenshot。
+- clipboard get/set。
+
+后续如果设计脚本/RPA，应优先封装现有 REST API，而不是假设 CDP 可用。
+
+## 5. 当前后端关键文件
+
+```text
+backend/browser_manager.py
+backend/geoip.py
+backend/database.py
+backend/main.py
+backend/models.py
+backend/tests/test_browser_manager.py
+backend/tests/test_geoip.py
+backend/tests/test_api.py
+backend/tests/test_database.py
+```
+
+重点事实：
+
+- `backend/browser_manager.py`
+  - `_build_invisible_kwargs()` 映射 manager profile 到 `InvisiblePlaywright` 参数。
+  - `_build_invisible_pin()` 映射 screen、GPU、hardware concurrency、color scheme。
+  - `_filter_firefox_launch_args()` 会过滤不适合 Firefox/invisible_playwright 的危险参数。
+  - `_browser_init_script()` 注入语言和剪贴板辅助脚本。
+  - `BrowserManager.launch()` 会先校验 proxy，再分配 VNC，再解析 GeoIP，再启动 Firefox。
+- `backend/geoip.py`
+  - `resolve_network_geo()` 做多 provider fallback。
+  - `resolve_profile_network_fingerprint()` 基于 `geoip=true` 自动补 timezone/locale。
+  - 自动结果通过 `_geoip_result` 传回 launch 流程。
+- `backend/database.py`
+  - `update_profile_geoip_result()` 写入 `last_geoip_*`。
+- `backend/main.py`
+  - launch 成功后调用 `db.update_profile_geoip_result()`。
+
+## 6. 当前前端关键文件
+
+```text
+frontend/src/App.tsx
+frontend/src/components/ProfileList.tsx
+frontend/src/components/ProfileForm.tsx
+frontend/src/components/ProfileViewer.tsx
+frontend/src/components/LaunchButton.tsx
+frontend/src/components/StatusIndicator.tsx
+frontend/src/hooks/useProfiles.ts
+frontend/src/lib/api.ts
+frontend/src/styles/globals.css
+```
+
+当前 UI 判断：
+
+- `App.tsx` 是左侧 sidebar + 顶部 bar + 右侧内容的三段式结构。
+- `ProfileList.tsx` 只做名称搜索和简单状态显示。
+- `ProfileForm.tsx` 是长表单，分组包括 Basic、Network、Hardware、Behavior、Tags、Launch Args、Notes。
+- `ProfileViewer.tsx` 是 VNC 画面加简单工具条。
+- 当前体验更像开发者配置面板，不像多账号运营台。
+
+## 7. 用户最新产品偏好
+
+用户明确希望：
+
+- 参考市面成熟指纹浏览器产品能力。
+- 不只是修当前美国 IP / en-US 的问题，要考虑未来不同国家、不同代理、不同语言场景。
+- 当前前端 UI 有点 low，需要用 frontend design skill / UI Pro Max 的思路升级。
+- 优先方向是“健康 + 运营台”。
+- 第一版深度是“可视化 + 轻检测”。
+- 需要落盘计划和上下文记忆，便于开启新的 Codex session。
+
+## 8. 已做过的头脑风暴结论
+
+六顶帽子简要结论：
+
+- 白帽：当前已有 profile、proxy、timezone、locale、geoip、screen、GPU、humanize、launch_args、VNC、Automation API、tags、last_geoip_*。
+- 红帽：用户真正想看的是“这个账号现在能不能安全继续操作”，不是一堆底层字段。
+- 黑帽：批量启动容易打满资源；自动同步不能只适配美国；Firefox 参数不能照搬 Chromium；VNC 手工操作和自动化操作可能冲突。
+- 黄帽：现有架构已经有 profile 数据、持久目录、VNC、Automation API 和 GeoIP 基础，适合做运营台。
+- 绿帽：可做健康状态、轻检测、环境条、批量动作、profile summary、模板、代理管理、检测历史、自动化控制台。
+- 蓝帽：V1 先做健康运营台和轻检测，V1.5 做模板/代理管理/检测历史，V2 做团队/RPA/同步器。
+
+## 9. 竞品调研摘要
+
+成熟产品共性：
+
+- AdsPower：
+  - 批量创建。
+  - Proxy List 检测和筛选。
+  - 动态 IP 自动匹配 timezone/location。
+  - Synchronizer。
+  - RPA。
+  - Team / Members。
+  - Action Logs。
+- GoLogin：
+  - folders。
+  - bulk actions。
+  - cookie import/export。
+  - team sharing。
+  - cloud launch、API、automation。
+- Multilogin：
+  - profile template。
+  - proxy template。
+  - team roles。
+  - CLI/API/script runner。
+  - profile import/export。
+- Dolphin Anty：
+  - profile sorting/search。
+  - mass actions。
+  - tags/status/notes/folders。
+  - synchronizer。
+  - scenarios。
+  - teamwork。
+  - API。
+- Octo Browser：
+  - bulk profile creation。
+  - profile/proxy/tag/cookie/startup switches。
+  - API。
+  - team settings。
+  - action log。
+- MoreLogin：
+  - profile list。
+  - quick edit。
+  - bulk operations。
+  - proxy detection。
+  - Local API。
+
+内化结论：
+
+- V1 做 profile 健康运营台、轻检测、批量动作、筛选、视觉升级。
+- V1.5 做 proxy manager、profile template、检测历史、批量导入导出、API 控制台。
+- V2 做 RPA、同步器、团队权限、审计中心、cookie robot、短生命周期 automation profile。
+
+## 10. 推荐下一步执行计划
+
+下一次 session 可以从这个顺序开始：
+
+1. 阅读本文档和同目录计划文档：
+   - `docs/ai-docs/v1/2026-05-25-session-memory.md`
+   - `docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md`
+2. 检查工作区：
+   - `git status --short`
+3. 跑现有测试作为基线：
+   - `. .venv/bin/activate && python -m pytest backend/tests -q`
+   - `cd frontend && npm test -- --run`
+   - `cd frontend && npm run build`
+4. 后端先实现：
+   - `POST /api/profiles/{id}/health/check`
+   - `POST /api/profiles/bulk`
+5. 前端再实现：
+   - Profile table/list 运营台。
+   - HealthBadge。
+   - FilterBar。
+   - BulkActionBar。
+   - ProfileSummaryPanel。
+   - Viewer 环境条。
+6. 最后做 UI polish 和浏览器验收。
+
+## 11. 验证命令记录
+
+之前已通过的验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests -q
+```
+
+结果：
+
+```text
+205 passed
+```
+
+```bash
+cd frontend && npm test -- --run
+```
+
+结果：
+
+```text
+22 passed
+```
+
+```bash
+cd frontend && npm run build
+```
+
+结果：
+
+```text
+build passed
+```
+
+Docker 构建和部署之前已通过：
+
+```bash
+docker build --network=host --platform linux/amd64 -t invisible-browser-manager:latest .
+docker rm -f invisible-browser-manager-live
+docker run -d --name invisible-browser-manager-live -p 100.104.13.11:8080:8080 -v invisible-browser-profiles:/data invisible-browser-manager:latest
+```
+
+## 12. GitHub 状态
+
+用户之前希望创建 GitHub private repo 并 push。
+
+阻塞点：
+
+```text
+gh auth token invalid
+```
+
+当时 `gh auth status` 显示账号 `Admix2077` 的 token 无效，需要用户重新执行：
+
+```bash
+gh auth login -h github.com
+```
+
+认证恢复后，可以继续创建 private repo 并 push。
+
+## 13. 注意事项
+
+- 不要把 `timezone` / `locale` 自动改写为 GeoIP 结果。
+- 不要把当前项目重新设计成 Chromium CDP 架构。
+- 不要在 V1 承诺“完整反检测评分”。
+- 不要把第三方检测站抓取作为 V1 必需能力。
+- UI 不要做营销页、hero、夸张渐变或游戏 HUD。
+- 批量启动必须限制并发。
+- 敏感 proxy 认证信息在 UI 中要遮蔽。
+- 删除 profile 必须有确认。
+- 后续涉及健康/代理/启动失败的改动应优先补测试。
+
+## 14. 2026-05-25 新增文档树
+
+用户补充要求：文档组织方式参考“需求文档 -> 概要设计 -> 详细设计 -> 模块任务 -> 总进度”的结构，但所有文件必须留在：
+
+```text
+/home/jeff/code/cloakbrowser-invisible-manager/docs/ai-docs/v1
+```
+
+已新增或更新：
+
+- `2026-05-25-fingerprint-health-ops-plan.md`：主控总文档，作为后续 `/goal` 入口。
+- `proposal.md`：需求文档。
+- `high-level-design.md`：概要设计。
+- `detailed-design.md`：详细设计。
+- `goal-prompt.md`：新 session 可直接使用的 goal 说明。
+- `tasks/progress.md`：模块总进度。
+- `tasks/01-contract-and-boundaries.md`
+- `tasks/02-health-engine.md`
+- `tasks/03-profile-operations-console.md`
+- `tasks/04-proxy-manager.md`
+- `tasks/05-session-broker-project-mileage.md`
+- `tasks/06-vnc-remote-workspace.md`
+- `tasks/07-automation-api-script-runner.md`
+- `tasks/08-cookie-profile-import-export.md`
+- `tasks/09-templates-bulk-ops.md`
+- `tasks/10-audit-security-rbac.md`
+- `tasks/11-ui-visual-system.md`
+- `tasks/12-deployment-observability.md`
+- `tasks/13-regression-release.md`
+
+核心新增方向：
+
+- 终极目标不是只做第一版健康台，而是把 CloakBrowser 做成成熟指纹浏览器运行时平台。
+- Project Mileage 的 `/app/remote-workspace`、`/app/remote-workspace/[id]/vnc`、`/ops/remote-monitor` 是未来集成入口。
+- 当前 Project Mileage 远程相关页面仍是安全占位；必须等 Payload contract 确认会话、VNC token、钱包扣费、权限和审计后再解除占位。
+- CloakBrowser 负责 runtime，Payload 负责授权/扣费/审计，App 负责用户和运营界面。
+
+## 15. 2026-05-25 01 契约边界闭环
+
+已完成 `tasks/01-contract-and-boundaries.md` 的契约边界与事实源闭环，并在 `tasks/progress.md` 勾选 01。
+
+本轮结论：
+
+- 01 只冻结契约边界和 `/api/runtime/*` 草案，不进入 Project Mileage 跨仓实现。
+- Project Mileage 远程工作台、VNC 页面和运营远程监控仍保持安全占位。
+- Payload 仍是用户身份、角色权限、账号/订单、钱包扣费、remote session 业务状态和业务审计事实源。
+- CloakBrowser 仍是 profile、browser runtime、VNC runtime、Automation REST API、GeoIP、proxy 和 health 事实源。
+- App 只能通过 Payload 安全 DTO 展示远程工作台和运营监控，不能直接调用 CloakBrowser runtime service API。
+- CloakBrowser 当前已有单机 runtime 底座：profile CRUD、launch/stop/status、KasmVNC/noVNC WebSocket、Automation REST API 和 launch 时 GeoIP `last_geoip_*` 记录。
+- CloakBrowser 当前没有 CDP 产品 API，没有多用户 RBAC，没有 runtime session broker，runtime 状态仍主要在内存 `BrowserManager.running` 中。
+
+后续推荐：
+
+1. 继续 02 指纹健康引擎，优先后端测试驱动。
+2. 05 Session Broker 之前不要解除 Project Mileage 远程占位。
+3. `/api/runtime/*`、viewer token、runtime session 表、service token 和审计落库必须在 05/10 模块按测试实现，不要把 01 草案当作已实现能力。
