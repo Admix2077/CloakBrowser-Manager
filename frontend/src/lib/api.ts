@@ -20,6 +20,12 @@ export interface Profile {
   human_preset: string;
   headless: boolean;
   geoip: boolean;
+  last_geoip_ip: string | null;
+  last_geoip_country_code: string | null;
+  last_geoip_timezone: string | null;
+  last_geoip_locale: string | null;
+  last_geoip_source: string | null;
+  last_geoip_resolved_at: string | null;
   clipboard_sync: boolean;
   auto_launch: boolean;
   color_scheme: string | null;

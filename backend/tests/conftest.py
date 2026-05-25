@@ -28,6 +28,7 @@ class _MockInvisiblePlaywright:
         self.context = MagicMock()
         self.context.pages = []
         self.context.add_init_script = AsyncMock()
+        self.context.set_extra_http_headers = AsyncMock()
         self.context.close = AsyncMock()
         self.context.on = MagicMock()
         self.__class__.instances.append(self)

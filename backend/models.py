@@ -23,7 +23,7 @@ class ProfileCreate(BaseModel):
     humanize: bool = False
     human_preset: Literal["default", "careful"] = "default"
     headless: bool = False
-    geoip: bool = False
+    geoip: bool = True
     clipboard_sync: bool = True
     auto_launch: bool = False
     color_scheme: Literal["light", "dark", "no-preference"] | None = None
@@ -87,6 +87,12 @@ class ProfileResponse(BaseModel):
     geoip: bool = False
     clipboard_sync: bool = True
     auto_launch: bool = False
+    last_geoip_ip: str | None = None
+    last_geoip_country_code: str | None = None
+    last_geoip_timezone: str | None = None
+    last_geoip_locale: str | None = None
+    last_geoip_source: str | None = None
+    last_geoip_resolved_at: str | None = None
 
     @field_validator("clipboard_sync", mode="before")
     @classmethod

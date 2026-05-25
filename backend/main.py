@@ -546,6 +546,8 @@ async def launch_profile(profile_id: str):
         logger.error("Failed to launch profile %s: %s", profile_id, exc)
         raise HTTPException(status_code=500, detail="Failed to launch browser")
 
+    db.update_profile_geoip_result(profile_id, getattr(running, "resolved_geoip", None))
+
     return LaunchResponse(
         profile_id=profile_id,
         status="running",
@@ -874,6 +876,16 @@ async def _automation_page_summary(running, index: int, page) -> AutomationPageR
     )
 
 
+async def _automation_apply_page_headers(running, page) -> None:
+    accept_language = getattr(running, "accept_language", None)
+    if not accept_language:
+        return
+    try:
+        await page.set_extra_http_headers({"Accept-Language": accept_language})
+    except AttributeError:
+        return
+
+
 def _automation_get_page(profile_id: str, page_ref: str):
     running = _automation_running(profile_id)
     if not hasattr(running, "automation_page_ids"):
@@ -930,6 +942,7 @@ async def automation_create_page(profile_id: str):
     running = _automation_running(profile_id)
     try:
         page = await running.context.new_page()
+        await _automation_apply_page_headers(running, page)
     except Exception as exc:
         logger.warning("Automation new_page failed for %s: %s", profile_id, exc)
         raise HTTPException(status_code=400, detail=str(exc))
@@ -949,6 +962,7 @@ async def automation_create_page(profile_id: str):
 async def automation_goto(profile_id: str, page_ref: str, body: AutomationGotoRequest):
     running, page, page_index = _automation_get_page(profile_id, page_ref)
     try:
+        await _automation_apply_page_headers(running, page)
         await page.goto(body.url, wait_until=body.wait_until, timeout=body.timeout_ms)
     except Exception as exc:
         logger.warning("Automation goto failed for %s page %d: %s", profile_id, page_index, exc)

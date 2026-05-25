@@ -2,6 +2,10 @@
 
 一个可视化指纹浏览器管理面板。后端使用 `invisible_playwright` patched Firefox；每个 profile 都是独立持久化浏览器上下文，支持 noVNC 网页操控和 Automation REST API。
 
+启动 profile 时，如果 `timezone` 或 `locale` 留空，后端会根据当前出口 IP 自动解析并补齐。配置了代理时，GeoIP 查询会通过代理发出；未配置代理时，查询使用 manager 容器自己的出口 IP。手动填写的 `timezone` / `locale` 始终优先，不会被自动检测覆盖。
+
+GeoIP 解析按 `ip-api.com`、`ipapi.co`、`ipwho.is` 顺序 fallback。每次成功解析都会写入 profile 的 `last_geoip_*` 字段，包括出口 IP、国家代码、时区、语言、来源服务和解析时间；`timezone` / `locale` 字段仍只表示手动覆盖配置。
+
 ## 直接运行
 
 本镜像当前只支持 `linux/amd64`：
@@ -46,6 +50,8 @@ ssh -L 8080:127.0.0.1:8080 your-server
 8. 点击顶部 `Stop` 停止当前 profile
 
 ## Automation API
+
+当前产品不对外暴露 Chromium CDP WebSocket。自动化入口是 manager 提供的 REST API；如果旧脚本依赖 `puppeteer.connect()` 或 `chromium.connectOverCDP()`，需要改造成 REST API 调用，或在产品层保留单独的 Chromium/CDP 引擎。
 
 运行中的 profile 会返回：
 

@@ -48,10 +48,16 @@ def init_db():
                 humanize BOOLEAN DEFAULT 0,
                 human_preset TEXT DEFAULT 'default',
                 headless BOOLEAN DEFAULT 0,
-                geoip BOOLEAN DEFAULT 0,
+                geoip BOOLEAN DEFAULT 1,
                 clipboard_sync BOOLEAN DEFAULT 1,
                 auto_launch BOOLEAN DEFAULT 0,
                 color_scheme TEXT,
+                last_geoip_ip TEXT,
+                last_geoip_country_code TEXT,
+                last_geoip_timezone TEXT,
+                last_geoip_locale TEXT,
+                last_geoip_source TEXT,
+                last_geoip_resolved_at TEXT,
                 notes TEXT,
                 user_data_dir TEXT NOT NULL,
                 created_at TEXT NOT NULL,
@@ -78,6 +84,27 @@ def init_db():
         if "auto_launch" not in cols:
             conn.execute("ALTER TABLE profiles ADD COLUMN auto_launch BOOLEAN DEFAULT 0")
             conn.commit()
+        for col in (
+            "last_geoip_ip",
+            "last_geoip_country_code",
+            "last_geoip_timezone",
+            "last_geoip_locale",
+            "last_geoip_source",
+            "last_geoip_resolved_at",
+        ):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE profiles ADD COLUMN {col} TEXT")
+                conn.commit()
+        conn.execute(
+            """
+            UPDATE profiles
+            SET geoip = 1
+            WHERE (geoip IS NULL OR geoip = 0)
+              AND timezone IS NULL
+              AND locale IS NULL
+            """
+        )
+        conn.commit()
 
 
 def _now() -> str:
@@ -119,7 +146,7 @@ def create_profile(
                 fields.get("humanize", False),
                 fields.get("human_preset", "default"),
                 fields.get("headless", False),
-                fields.get("geoip", False),
+                fields.get("geoip", True),
                 fields.get("clipboard_sync", True),
                 fields.get("auto_launch", False),
                 fields.get("color_scheme"),
@@ -214,6 +241,39 @@ def update_profile(profile_id: str, **fields: Any) -> dict[str, Any] | None:
                 )
             conn.commit()
 
+    return get_profile(profile_id)
+
+
+def update_profile_geoip_result(
+    profile_id: str,
+    result: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not result:
+        return get_profile(profile_id)
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            UPDATE profiles
+            SET last_geoip_ip = ?,
+                last_geoip_country_code = ?,
+                last_geoip_timezone = ?,
+                last_geoip_locale = ?,
+                last_geoip_source = ?,
+                last_geoip_resolved_at = ?
+            WHERE id = ?
+            """,
+            (
+                result.get("ip"),
+                result.get("country_code"),
+                result.get("timezone"),
+                result.get("locale"),
+                result.get("source"),
+                _now(),
+                profile_id,
+            ),
+        )
+        conn.commit()
     return get_profile(profile_id)
 
 

@@ -4,4 +4,4 @@ pydantic>=2.0
 cloakbrowser[geoip]>=0.3.31
 invisible-playwright @ git+https://github.com/feder-cr/invisible_playwright.git@3d8ba0b82c51854aa5fe1fe35240553294be02f8
 websockets>=14.0
-httpx>=0.27.0
+httpx[socks]>=0.27.0

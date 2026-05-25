@@ -206,6 +206,82 @@ def test_build_invisible_kwargs_omits_empty_optional_values(tmp_path: Path):
     assert kwargs["extra_args"] == []
 
 
+def test_accept_language_header_includes_base_language():
+    assert bm._accept_language_header("en-US") == "en-US,en;q=0.9"
+    assert bm._accept_language_header("zh_CN") == "zh-CN,zh;q=0.9"
+    assert bm._accept_language_header("ja") == "ja"
+
+
+def test_browser_init_script_aligns_navigator_languages():
+    script = bm._browser_init_script("en-US")
+
+    assert '"en-US"' in script
+    assert "Navigator.prototype" in script
+    assert "languages" in script
+    assert "__clipboardText" in script
+
+
+def test_clean_firefox_startup_state_removes_session_restore_without_lock(tmp_path: Path):
+    profile_dir = tmp_path / "profile"
+    session_dir = profile_dir / "sessionstore-backups"
+    session_dir.mkdir(parents=True)
+    (session_dir / "previous.jsonlz4").write_text("stale session")
+    (session_dir / "recovery.jsonlz4").write_text("stale session")
+    (profile_dir / "cookies.sqlite").write_text("site data")
+
+    bm._clean_firefox_startup_state(profile_dir)
+
+    assert not (session_dir / "previous.jsonlz4").exists()
+    assert not (session_dir / "recovery.jsonlz4").exists()
+    assert (profile_dir / "cookies.sqlite").read_text() == "site data"
+
+
+@pytest.mark.asyncio
+async def test_launch_resolves_missing_timezone_and_locale_before_invisible_launch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+):
+    async def fake_resolve(profile: dict):
+        resolved = dict(profile)
+        resolved["timezone"] = "America/Los_Angeles"
+        resolved["locale"] = "en-US"
+        return resolved
+
+    monkeypatch.setattr(bm, "resolve_profile_network_fingerprint", fake_resolve)
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    await mgr.launch({
+        "id": "profile-geoip",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": 1366,
+        "screen_height": 768,
+        "proxy": None,
+        "timezone": None,
+        "locale": None,
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+
+    launch = mock_invisible_playwright.instances[0]
+    assert launch.kwargs["timezone"] == "America/Los_Angeles"
+    assert launch.kwargs["locale"] == "en-US"
+    launch.context.set_extra_http_headers.assert_awaited_once_with({
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+
+    await mgr.stop("profile-geoip")
+
+
 def test_build_invisible_kwargs_filters_chromium_only_launch_args(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,
@@ -248,6 +324,11 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     user_data_dir.mkdir()
     for lock_file in ("SingletonLock", "SingletonCookie", "SingletonSocket", ".parentlock", "lock"):
         (user_data_dir / lock_file).write_text("stale")
+    session_dir = user_data_dir / "sessionstore-backups"
+    session_dir.mkdir()
+    (user_data_dir / "sessionCheckpoints.json").write_text("{}")
+    (session_dir / "recovery.jsonlz4").write_text("stale session")
+    (session_dir / "previous.jsonlz4").write_text("stale session")
     monkeypatch.setenv("DISPLAY", ":77")
 
     running = await mgr.launch({
@@ -285,9 +366,15 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     assert not (user_data_dir / "SingletonLock").exists()
     assert not (user_data_dir / ".parentlock").exists()
     assert not (user_data_dir / "lock").exists()
+    assert not (user_data_dir / "sessionCheckpoints.json").exists()
+    assert not (session_dir / "recovery.jsonlz4").exists()
+    assert not (session_dir / "previous.jsonlz4").exists()
 
     mgr.vnc.start_vnc.assert_awaited_once_with(100, 6100, width=1366, height=768)
     launch.context.add_init_script.assert_awaited_once()
+    launch.context.set_extra_http_headers.assert_awaited_once_with({
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    })
     launch.context.on.assert_called_once()
 
     await mgr.stop("profile-1")

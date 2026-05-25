@@ -63,7 +63,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
     humanize: false,
     human_preset: "default",
     headless: false,
-    geoip: false,
+    geoip: true,
     clipboard_sync: true,
     auto_launch: false,
     launch_args: [],

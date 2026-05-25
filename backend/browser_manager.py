@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import subprocess
@@ -13,6 +14,7 @@ from urllib.parse import unquote, urlparse
 
 from invisible_playwright.async_api import InvisiblePlaywright
 
+from .geoip import resolve_profile_network_fingerprint
 from .vnc_manager import VNCManager
 
 logger = logging.getLogger("invisible_browser.manager.browser")
@@ -194,6 +196,75 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _accept_language_header(locale: str | None) -> str:
+    lang = (locale or "en-US").replace("_", "-")
+    base = lang.split("-")[0]
+    if base == lang:
+        return lang
+    return f"{lang},{base};q=0.9"
+
+
+def _browser_init_script(locale: str | None) -> str:
+    lang = (locale or "en-US").replace("_", "-")
+    language_json = json.dumps(lang)
+    languages_json = json.dumps([lang])
+    return f"""
+        (() => {{
+            const __managerLanguage = {language_json};
+            const __managerLanguages = {languages_json};
+            try {{
+                Object.defineProperty(Navigator.prototype, 'language', {{
+                    get: () => __managerLanguage,
+                    configurable: true
+                }});
+                Object.defineProperty(Navigator.prototype, 'languages', {{
+                    get: () => __managerLanguages.slice(),
+                    configurable: true
+                }});
+            }} catch (e) {{}}
+
+            window.__clipboardText = '';
+            document.addEventListener('copy', () => {{
+                const sel = window.getSelection();
+                if (sel) window.__clipboardText = sel.toString();
+            }});
+            document.addEventListener('keydown', (e) => {{
+                if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.altKey && !e.shiftKey) {{
+                    const sel = window.getSelection();
+                    if (sel && sel.toString()) window.__clipboardText = sel.toString();
+                }}
+            }});
+        }})();
+    """
+
+
+_FIREFOX_LOCK_FILES = (
+    "SingletonLock",
+    "SingletonCookie",
+    "SingletonSocket",
+    ".parentlock",
+    "lock",
+)
+
+_FIREFOX_SESSION_RESTORE_FILES = (
+    "sessionstore.jsonlz4",
+    "sessionCheckpoints.json",
+    "sessionstore-backups/recovery.jsonlz4",
+    "sessionstore-backups/recovery.baklz4",
+    "sessionstore-backups/previous.jsonlz4",
+)
+
+
+def _clean_firefox_startup_state(user_data_dir: Path) -> None:
+    """Clean locks and tab session restore without touching site data."""
+    for lock_file in _FIREFOX_LOCK_FILES:
+        lock_path = user_data_dir / lock_file
+        lock_path.unlink(missing_ok=True)
+
+    for restore_file in _FIREFOX_SESSION_RESTORE_FILES:
+        (user_data_dir / restore_file).unlink(missing_ok=True)
+
+
 @dataclass
 class RunningProfile:
     profile_id: str
@@ -202,6 +273,8 @@ class RunningProfile:
     ws_port: int
     engine: str
     runner: Any | None = None
+    accept_language: str | None = None
+    resolved_geoip: dict[str, Any] | None = None
     automation_page_ids: dict[int, str] = field(default_factory=dict)
 
 
@@ -217,6 +290,9 @@ class BrowserManager:
     async def launch(self, profile: dict[str, Any]) -> RunningProfile:
         """Launch a browser instance for the given profile."""
         profile_id = profile["id"]
+        raw_proxy = profile.get("proxy")
+        if raw_proxy:
+            _validate_proxy(_normalize_proxy(raw_proxy))
 
         async with self._lock:
             if profile_id in self.running or profile_id in self._launching:
@@ -225,17 +301,8 @@ class BrowserManager:
 
         display, ws_port = await self.vnc.allocate()
 
-        # Clean stale browser lock files from existing profile directories.
         user_data_dir = Path(profile["user_data_dir"])
-        for lock_file in (
-            "SingletonLock",
-            "SingletonCookie",
-            "SingletonSocket",
-            ".parentlock",
-            "lock",
-        ):
-            lock_path = user_data_dir / lock_file
-            lock_path.unlink(missing_ok=True)
+        _clean_firefox_startup_state(user_data_dir)
 
         runner: InvisiblePlaywright | None = None
         try:
@@ -247,7 +314,8 @@ class BrowserManager:
                 height=profile.get("screen_height", 1080),
             )
 
-            kwargs = _build_invisible_kwargs(profile)
+            resolved_profile = await resolve_profile_network_fingerprint(profile)
+            kwargs = _build_invisible_kwargs(resolved_profile)
             runner = InvisiblePlaywright(**kwargs)
 
             # invisible_playwright builds its env from os.environ in __aenter__.
@@ -264,28 +332,17 @@ class BrowserManager:
                     else:
                         os.environ["DISPLAY"] = old_display
 
-            # Inject clipboard listener: captures copied text on every page
-            # so the GET /clipboard endpoint can read it via page.evaluate()
-            _clipboard_init_js = """
-                window.__clipboardText = '';
-                document.addEventListener('copy', () => {
-                    const sel = window.getSelection();
-                    if (sel) window.__clipboardText = sel.toString();
-                });
-                document.addEventListener('keydown', (e) => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'c' && !e.altKey && !e.shiftKey) {
-                        const sel = window.getSelection();
-                        if (sel && sel.toString()) window.__clipboardText = sel.toString();
-                    }
-                });
-            """
-            await context.add_init_script(_clipboard_init_js)
+            accept_language = _accept_language_header(kwargs.get("locale"))
+            await context.set_extra_http_headers({"Accept-Language": accept_language})
+
+            init_js = _browser_init_script(kwargs.get("locale"))
+            await context.add_init_script(init_js)
             # Also inject into already-open pages (about:blank created before init_script)
             for p in context.pages:
                 try:
-                    await p.evaluate(_clipboard_init_js)
+                    await p.evaluate(init_js)
                 except Exception as exc:
-                    logger.debug("Clipboard init failed on existing page: %s", exc)
+                    logger.debug("Browser init failed on existing page: %s", exc)
 
             running = RunningProfile(
                 profile_id=profile_id,
@@ -294,6 +351,8 @@ class BrowserManager:
                 ws_port=ws_port,
                 engine="invisible_playwright",
                 runner=runner,
+                accept_language=accept_language,
+                resolved_geoip=resolved_profile.get("_geoip_result"),
             )
 
             # Auto-cleanup if browser crashes or user closes Firefox via VNC

@@ -258,6 +258,39 @@ def test_launch_success_response_exposes_automation_url(app_client: TestClient):
     }
 
 
+def test_launch_persists_resolved_geoip_result(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "LaunchGeoIP"})
+    pid = create.json()["id"]
+    running = RunningProfile(
+        profile_id=pid,
+        context=MagicMock(),
+        display=101,
+        ws_port=6101,
+        engine="invisible_playwright",
+        resolved_geoip={
+            "ip": "23.144.4.92",
+            "country_code": "US",
+            "timezone": "America/Los_Angeles",
+            "locale": "en-US",
+            "source": "ipapi.co",
+        },
+    )
+
+    with patch.object(main.browser_mgr, "launch", new=AsyncMock(return_value=running)):
+        resp = app_client.post(f"/api/profiles/{pid}/launch")
+
+    assert resp.status_code == 200
+    profile = app_client.get(f"/api/profiles/{pid}").json()
+    assert profile["timezone"] is None
+    assert profile["locale"] is None
+    assert profile["last_geoip_ip"] == "23.144.4.92"
+    assert profile["last_geoip_country_code"] == "US"
+    assert profile["last_geoip_timezone"] == "America/Los_Angeles"
+    assert profile["last_geoip_locale"] == "en-US"
+    assert profile["last_geoip_source"] == "ipapi.co"
+    assert profile["last_geoip_resolved_at"] is not None
+
+
 def test_stop_not_running(app_client: TestClient):
     resp = app_client.post("/api/profiles/nonexistent/stop")
     assert resp.status_code == 404
@@ -489,6 +522,7 @@ def _automation_running_profile(pid: str, pages: list[MagicMock] | None = None) 
     running.ws_port = 6100
     running.engine = "invisible_playwright"
     running.context = context
+    running.accept_language = "en-US,en;q=0.9"
     main.browser_mgr.running[pid] = running
     return running
 
@@ -498,6 +532,7 @@ def _automation_page(url: str = "about:blank", title: str = "Blank") -> MagicMoc
     page.url = url
     page.title = AsyncMock(return_value=title)
     page.goto = AsyncMock()
+    page.set_extra_http_headers = AsyncMock()
     page.evaluate = AsyncMock()
     page.screenshot = AsyncMock(return_value=b"png-bytes")
     page.close = AsyncMock()
@@ -588,6 +623,9 @@ def test_automation_goto_navigates_page(app_client: TestClient):
     )
 
     assert resp.status_code == 200
+    page.set_extra_http_headers.assert_awaited_once_with({
+        "Accept-Language": "en-US,en;q=0.9",
+    })
     page.goto.assert_awaited_once_with(
         "https://example.com/",
         wait_until="domcontentloaded",

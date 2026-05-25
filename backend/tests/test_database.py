@@ -102,15 +102,59 @@ def test_create_profile_defaults(tmp_db: Path):
     assert p["screen_height"] == 1080
     assert p["humanize"] == 0
     assert p["headless"] == 0
-    assert p["geoip"] == 0
+    assert p["geoip"] == 1
     assert p["human_preset"] == "default"
     assert p["launch_args"] == []
     assert p["auto_launch"] == 0
+    assert p["last_geoip_ip"] is None
+    assert p["last_geoip_timezone"] is None
+    assert p["last_geoip_locale"] is None
+
+
+def test_init_db_enables_geoip_for_legacy_blank_profiles(tmp_db: Path):
+    p = db.create_profile("Legacy")
+    with db.get_db() as conn:
+        conn.execute(
+            "UPDATE profiles SET geoip = 0, timezone = NULL, locale = NULL WHERE id = ?",
+            (p["id"],),
+        )
+        conn.commit()
+
+    db.init_db()
+    profiles = db.list_profiles()
+
+    assert profiles
+    assert profiles[0]["geoip"] == 1
 
 
 def test_create_profile_with_auto_launch(tmp_db: Path):
     p = db.create_profile("Auto", auto_launch=True)
     assert p["auto_launch"] == 1
+
+
+def test_update_profile_geoip_result_writes_last_resolved_values(tmp_db: Path):
+    p = db.create_profile("GeoIP")
+
+    updated = db.update_profile_geoip_result(
+        p["id"],
+        {
+            "ip": "23.144.4.92",
+            "country_code": "US",
+            "timezone": "America/Los_Angeles",
+            "locale": "en-US",
+            "source": "ipapi.co",
+        },
+    )
+
+    assert updated is not None
+    assert updated["timezone"] is None
+    assert updated["locale"] is None
+    assert updated["last_geoip_ip"] == "23.144.4.92"
+    assert updated["last_geoip_country_code"] == "US"
+    assert updated["last_geoip_timezone"] == "America/Los_Angeles"
+    assert updated["last_geoip_locale"] == "en-US"
+    assert updated["last_geoip_source"] == "ipapi.co"
+    assert updated["last_geoip_resolved_at"] is not None
 
 
 def test_create_profile_with_launch_args(tmp_db: Path):
