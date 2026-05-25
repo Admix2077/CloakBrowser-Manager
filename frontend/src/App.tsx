@@ -245,7 +245,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             <ProfileViewer
               key={selected.id}
               profileId={selected.id}
-              cdpUrl={selected.cdp_url}
+              automationUrl={selected.automation_url}
               clipboardSync={selected.clipboard_sync}
               onDisconnect={handleVncDisconnect}
             />

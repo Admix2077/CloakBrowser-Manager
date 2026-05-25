@@ -31,43 +31,50 @@ beforeEach(() => {
   });
 });
 
-describe("ProfileViewer CDP toolbar action", () => {
-  it("keeps the CDP action visible but disabled when invisible_playwright has no CDP URL", () => {
+describe("ProfileViewer Automation API toolbar action", () => {
+  it("keeps the automation action visible but disabled when a running profile has no Automation API URL", () => {
     render(
       <ProfileViewer
         profileId="profile-1"
-        cdpUrl={null}
+        automationUrl={null}
         clipboardSync={false}
         onDisconnect={vi.fn()}
       />,
     );
 
     const button = screen.getByRole("button", {
-      name: "CDP unavailable for invisible_playwright Firefox profiles",
+      name: "Automation API unavailable until profile is running",
     }) as HTMLButtonElement;
 
     expect(button.disabled).toBe(true);
-    expect(button.title).toBe("CDP is not available for invisible_playwright Firefox profiles");
+    expect(button.title).toBe(
+      "Chromium CDP is not available for invisible_playwright Firefox profiles; use Automation API instead.",
+    );
   });
 
-  it("copies the CDP endpoint when a future backend exposes one", async () => {
+  it("copies the Automation API endpoint when the backend exposes one", async () => {
     const writeText = vi.mocked(navigator.clipboard.writeText);
 
     render(
       <ProfileViewer
         profileId="profile-1"
-        cdpUrl="/api/profiles/profile-1/cdp"
+        automationUrl="/api/profiles/profile-1/automation"
         clipboardSync={false}
         onDisconnect={vi.fn()}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy CDP endpoint URL" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy Automation API endpoint URL" }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
-        `${window.location.protocol}//${window.location.host}/api/profiles/profile-1/cdp`,
+        `${window.location.protocol}//${window.location.host}/api/profiles/profile-1/automation`,
       );
     });
+
+    await screen.findByRole("button", { name: "Automation API endpoint copied" });
+    expect(
+      screen.getByRole("button", { name: "Automation API endpoint copied" }).getAttribute("title"),
+    ).toBe("Automation API endpoint copied");
   });
 });

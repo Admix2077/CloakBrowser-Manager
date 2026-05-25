@@ -4,24 +4,25 @@ import { api } from "../lib/api";
 
 interface ProfileViewerProps {
   profileId: string;
-  cdpUrl: string | null;
+  automationUrl: string | null;
   clipboardSync: boolean;
   onDisconnect: () => void;
 }
 
 // X11 keysym for V key (Ctrl is already held in VNC by the time we intercept)
 const XK_v = 0x0076;
-const CDP_UNAVAILABLE_LABEL = "CDP unavailable for invisible_playwright Firefox profiles";
-const CDP_UNAVAILABLE_TITLE = "CDP is not available for invisible_playwright Firefox profiles";
+const AUTOMATION_UNAVAILABLE_LABEL = "Automation API unavailable until profile is running";
+const AUTOMATION_UNAVAILABLE_TITLE =
+  "Chromium CDP is not available for invisible_playwright Firefox profiles; use Automation API instead.";
 
-export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
+export function ProfileViewer({ profileId, automationUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<any>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [clipboardSync, setClipboardSync] = useState(initialClipboardSync);
-  const [cdpCopied, setCdpCopied] = useState(false);
+  const [automationCopied, setAutomationCopied] = useState(false);
 
   useEffect(() => {
     let rfb: any = null;
@@ -254,22 +255,30 @@ export function ProfileViewer({ profileId, cdpUrl, clipboardSync: initialClipboa
         <div className="flex items-center gap-1">
           <button
             onClick={() => {
-              if (cdpUrl) {
-                const base = `${window.location.protocol}//${window.location.host}${cdpUrl}`;
+              if (automationUrl) {
+                const base = `${window.location.protocol}//${window.location.host}${automationUrl}`;
                 navigator.clipboard?.writeText(base).then(() => {
-                  setCdpCopied(true);
-                  setTimeout(() => setCdpCopied(false), 2000);
-                }).catch((err) => console.warn("[cdp] copy failed:", err));
+                  setAutomationCopied(true);
+                  setTimeout(() => setAutomationCopied(false), 2000);
+                }).catch((err) => console.warn("[automation] copy failed:", err));
               }
             }}
             className={`p-1 ${
-              cdpUrl
-                ? cdpCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
+              automationUrl
+                ? automationCopied ? "text-emerald-400" : "text-gray-500 hover:text-gray-300"
                 : "text-gray-700 cursor-not-allowed"
             }`}
-            title={cdpUrl ? cdpCopied ? "Copied!" : "Copy CDP endpoint URL" : CDP_UNAVAILABLE_TITLE}
-            aria-label={cdpUrl ? cdpCopied ? "CDP endpoint copied" : "Copy CDP endpoint URL" : CDP_UNAVAILABLE_LABEL}
-            disabled={!cdpUrl}
+            title={
+              automationUrl
+                ? automationCopied ? "Automation API endpoint copied" : "Copy Automation API endpoint URL"
+                : AUTOMATION_UNAVAILABLE_TITLE
+            }
+            aria-label={
+              automationUrl
+                ? automationCopied ? "Automation API endpoint copied" : "Copy Automation API endpoint URL"
+                : AUTOMATION_UNAVAILABLE_LABEL
+            }
+            disabled={!automationUrl}
           >
             <Code2 className="h-3.5 w-3.5" />
           </button>
