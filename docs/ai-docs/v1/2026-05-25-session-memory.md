@@ -1323,3 +1323,106 @@ git diff --check
 - 批量 set tags / delete 未接入。
 - 批量 delete 仍需单独确认闭环。
 - `保留创建/编辑 profile 能力`、`保留 VNC viewer 能力`、空态拆分、窄屏 card list 仍待 03 后续小闭环复核。
+
+## 22. 2026-05-26 Profile 运营台控件质感 UI polish 小闭环
+
+本轮按 Jeff 最新反馈暂停继续堆功能，聚焦 Profile 运营台 UI polish，重点修复 checkbox、bulk action、table row、toolbar、inspector 的低质感问题。
+
+设计判断：
+
+- 当前运营台信息架构方向正确：左侧 rail 做 quick views / shortcuts，主区表格承担数百 profile 的核心管理，右侧 inspector 做快速判断。
+- 当前 low 的主要原因是控件细节：
+  - checkbox 依赖浏览器默认视觉，半选态和 focus 不够精致。
+  - bulk toolbar 过蓝且按钮同权，容易像半成品提示条。
+  - row selected / previewed 只靠背景色，不够清晰。
+  - toolbar filter / inspector 的边框、ring、shadow、section hierarchy 偏普通。
+- 参考 `/home/jeff/code/reference-repos/saas_kit` 时只吸收 B2B SaaS data table 的视觉规律，没有迁入 auth/db/payment/schema。
+
+实现范围：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - `SelectionCheckbox` 改为真实 input + 自定义视觉层。
+  - 增加 checked / indeterminate 图标态，半选使用 `aria-checked="mixed"`。
+  - row selected / previewed 增加左侧状态线，降低背景色噪声。
+  - table header 继续 sticky，保留 `selectedCount > 0 ? top-11 : top-0`。
+- `frontend/src/components/BulkActionBar.tsx`
+  - toolbar 改为 neutral white contextual surface。
+  - `Check health` 保持主按钮和真实可用。
+  - `Launch selected` / `Stop selected` 保留已完成真实动作。
+  - `Tag selected` / `Delete selected` 继续 disabled。
+  - 所有 bulk 按钮 `whitespace-nowrap`，避免窄表格中折行。
+- `frontend/src/components/ProfileFilters.tsx`
+  - 搜索框和 filter select 增加 compact ring / hover / focus polish。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、section icon、row hierarchy、Open profile action 降噪。
+- `frontend/src/App.tsx`
+  - filter section、table shell、summary tiles 使用更细的 ring / hairline shadow。
+- `frontend/src/components/ProfileTable.test.tsx`
+  - 补 header checkbox 半选态断言。
+  - 补 checkbox input focusable / disabled 语义断言。
+
+保持不变：
+
+- 主表 `min-w-[840px]` 和 table 自身横向滚动。
+- 桌面 `Actions` 列可见。
+- 移动端 body 不横向撑破。
+- 主表超过 120 条固定 64px 行高虚拟滚动。
+- 左侧超过 80 条固定 112px item 虚拟滚动。
+- `Check health` / bulk launch / bulk stop 真实动作语义。
+- `Tag selected` / `Delete selected` disabled。
+- proxy 脱敏。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 17 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 77 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- QA 数据目录：`/tmp/cloakbrowser-manager-ui-polish-data`，240 个 profiles。
+- 后端 QA：`http://127.0.0.1:8082`。
+- 静态前端代理：`http://127.0.0.1:5175/`。
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 首屏可见 operations rail、summary tiles、toolbar、dense table、inspector。
+  - `Actions` 列可见。
+  - bulk selected 状态下 checkbox、toolbar、Tag/Delete disabled、Check health enabled 正常。
+  - 点击 `Check health` 后 `Last checked` 更新时间。
+  - 主表滚动到中段后表格区域不再包含顶部 profile，窗口内约 26 个 Open 按钮，虚拟滚动保持。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表 `scrollWidth=840`、`clientWidth=352`，自身横向滚动可用。
+  - 横向滚到右侧后 `Actions` / `Open` 可见。
+  - sidebar overlay 打开后 body 仍不横向撑破。
+- console 清空后无相关前端错误。
+
+截图：
+
+- `/tmp/cloak-profile-polish-desktop.png`
+- `/tmp/cloak-profile-polish-bulk-selected.png`
+- `/tmp/cloak-profile-polish-bulk-checked.png`
+- `/tmp/cloak-profile-polish-mobile.png`
+- `/tmp/cloak-profile-polish-mobile-table-actions.png`
+- `/tmp/cloak-profile-polish-mobile-sidebar.png`
+- `/tmp/cloak-profile-polish-virtual-scroll.png`
+
+仍未做：
+
+- 批量 set tags / delete 未接入。
+- 服务端分页未做；当前仍用固定行高虚拟滚动覆盖数百 profile。
+- 窄屏 card list、空态细分、Profile/VNC 连续运营抽屉形态未进入本闭环。

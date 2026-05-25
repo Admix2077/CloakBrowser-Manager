@@ -23,7 +23,7 @@ export function ProfileFilters({
   const showVisibleLabels = layout === "toolbar";
 
   return (
-    <div className={layout === "toolbar" ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}>
+    <div className={layout === "toolbar" ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}>
       <div className={layout === "toolbar" ? "col-span-2 xl:col-span-1" : ""}>
         <FilterLabel htmlFor={filterId(labelled("Search profiles"))} visible={showVisibleLabels}>
           {showVisibleLabels ? "Search" : labelled("Search profiles")}
@@ -37,7 +37,7 @@ export function ProfileFilters({
             placeholder="Search profiles..."
             value={value.search}
             onChange={(event) => update("search", event.target.value)}
-            className="input pl-8 py-1.5 text-xs"
+            className="input h-9 border-slate-200 bg-white/95 pl-8 text-xs shadow-[0_1px_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] hover:border-slate-300"
           />
         </div>
       </div>
@@ -142,7 +142,7 @@ function FilterSelect({ label, visibleLabel, showVisibleLabel, value, options, o
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full rounded-lg border border-border bg-surface-1 px-2.5 text-xs font-medium text-slate-700 shadow-hairline outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15"
+        className="h-9 w-full rounded-md border border-slate-200 bg-white/95 px-2.5 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] outline-none transition-colors hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
       >
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>

@@ -148,6 +148,9 @@ describe("ProfileTable", () => {
       />,
     );
 
+    const headerCheckbox = screen.getByLabelText("Select all visible profiles") as HTMLInputElement;
+    expect(headerCheckbox.indeterminate).toBe(true);
+    expect(headerCheckbox.getAttribute("aria-checked")).toBe("mixed");
     expect((screen.getByLabelText("Select Good US") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText("Select Broken Proxy") as HTMLInputElement).checked).toBe(false);
 
@@ -156,6 +159,37 @@ describe("ProfileTable", () => {
 
     fireEvent.click(screen.getByLabelText("Select all visible profiles"));
     expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
+  });
+
+  it("keeps checkbox inputs focusable when selection handlers are available", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+        onToggleVisibleSelection={vi.fn()}
+      />,
+    );
+
+    const rowCheckbox = screen.getByLabelText("Select Good US") as HTMLInputElement;
+    rowCheckbox.focus();
+    expect(document.activeElement).toBe(rowCheckbox);
+  });
+
+  it("disables checkbox inputs when no selection handler is available", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+      />,
+    );
+
+    expect((screen.getByLabelText("Select Good US") as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Select all visible profiles") as HTMLInputElement).disabled).toBe(true);
   });
 
   it("shows a bulk action bar with selected profile health and runtime summary", () => {

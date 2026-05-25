@@ -1,4 +1,4 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check, Minus } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
@@ -103,7 +103,7 @@ export function ProfileTable({
       ref={scrollRef}
       role="region"
       aria-label="Profile operations table"
-      className="h-full overflow-auto bg-surface-1"
+      className="h-full overflow-auto bg-white"
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
       <div className="min-w-[840px]">
@@ -140,9 +140,9 @@ export function ProfileTable({
             <col style={{ width: 64 }} />
             <col style={{ width: 80 }} />
           </colgroup>
-          <thead className={`sticky z-10 bg-surface-1/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
-            <tr className="text-slate-500">
-              <th aria-label="Select" className="w-9 border-b border-border bg-surface-2 px-2 py-2 font-semibold">
+          <thead className={`sticky z-10 bg-white/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
+            <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.26)]">
+              <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/90 px-2 py-2 font-semibold">
                 <SelectionCheckbox
                   label="Select all visible profiles"
                   checked={allVisibleSelected}
@@ -225,7 +225,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="truncate border-b border-border bg-surface-2 px-2 py-2.5 font-semibold uppercase tracking-[0.08em] text-slate-500">
+    <th className="truncate border-b border-slate-200 bg-slate-50/90 px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-500">
       {children}
     </th>
   );
@@ -253,15 +253,36 @@ function SelectionCheckbox({
   }, [indeterminate]);
 
   return (
-    <input
-      ref={ref}
-      type="checkbox"
-      aria-label={label}
-      checked={checked}
-      disabled={disabled}
-      onChange={onChange}
-      className="h-4 w-4 rounded border-border bg-surface-1 text-accent focus:ring-2 focus:ring-accent/20"
-    />
+    <label
+      className={`group/checkbox relative inline-flex h-5 w-5 items-center justify-center align-middle ${
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      }`}
+    >
+      <input
+        ref={ref}
+        type="checkbox"
+        aria-label={label}
+        aria-checked={indeterminate ? "mixed" : checked}
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="peer sr-only"
+      />
+      <span
+        aria-hidden="true"
+        className={`flex h-4 w-4 items-center justify-center rounded-[5px] border shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-white ${
+          checked || indeterminate
+            ? "border-blue-600 bg-blue-600 text-white"
+            : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-300 group-hover/checkbox:bg-blue-50"
+        }`}
+      >
+        {indeterminate ? (
+          <Minus className="h-3 w-3 stroke-[3]" />
+        ) : checked ? (
+          <Check className="h-3 w-3 stroke-[3]" />
+        ) : null}
+      </span>
+    </label>
   );
 }
 
@@ -294,16 +315,20 @@ function ProfileTableRow({
 
   return (
     <tr
-      className={`group border-b border-border transition-colors ${
+      className={`group border-b border-border transition-colors duration-150 ${
         selected
-          ? "bg-blue-50/80 hover:bg-blue-50"
+          ? "bg-blue-50/60 hover:bg-blue-50/80"
           : previewed
-            ? "bg-slate-50 hover:bg-slate-100"
-            : "hover:bg-slate-50"
+            ? "bg-slate-50/90 hover:bg-slate-100/80"
+            : "hover:bg-slate-50/80"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
     >
-      <td className="border-b border-border px-2 py-2">
+      <td
+        className={`border-b border-border border-l-2 px-2 py-2 ${
+          selected ? "border-l-blue-500" : previewed ? "border-l-slate-400" : "border-l-transparent"
+        }`}
+      >
         <SelectionCheckbox
           label={`Select ${profile.name}`}
           checked={selected}
@@ -314,7 +339,7 @@ function ProfileTableRow({
       <td className="border-b border-border px-2 py-2">
         <button
           type="button"
-          className="block max-w-[180px] truncate rounded-sm text-left text-sm font-semibold text-slate-950 underline-offset-2 hover:text-blue-700 hover:underline focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className="block max-w-[180px] truncate rounded-md text-left text-sm font-semibold text-slate-950 transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           title={profile.name}
           aria-label={`Preview ${profile.name}`}
           onClick={() => onPreview?.(profile.id)}
@@ -362,7 +387,7 @@ function ProfileTableRow({
       <td className="border-b border-border px-2 py-2">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >

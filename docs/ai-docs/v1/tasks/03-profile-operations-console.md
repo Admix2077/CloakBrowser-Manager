@@ -892,3 +892,124 @@ git diff --check
 - 本小闭环不新增后端 bulk stop API。
 - 本小闭环不接入批量 set tags / delete。
 - 批量 delete 仍必须单独确认闭环。
+
+## 2026-05-26 Profile 运营台控件质感 UI polish 小闭环
+
+背景：
+
+- Jeff 反馈当前界面质感和细节还不够，复选框等控件显得 low。
+- 本轮继续使用 `ui-ux-pro-max` / frontend design 方向做高质感 polish，但不破坏既有真实功能、测试、性能语义和虚拟滚动。
+- 参考 `/home/jeff/code/reference-repos/saas_kit` 的 B2B SaaS app shell / data table 视觉规律，只吸收低噪声 surface、ring、shadow、table row 和 checkbox 处理方式；没有复制其业务/auth/db/payment/schema。
+
+设计判断：
+
+- 当前 low 的主要原因不是信息架构，而是控件细节：
+  - 原生 checkbox 视觉不稳定，indeterminate 态质感弱。
+  - bulk toolbar 过蓝，所有按钮同权，状态层级抢表格主体注意力。
+  - table row 只靠大面积背景色表达 selected / previewed，缺少精细状态线。
+  - toolbar filter 与 inspector surface 细节偏普通，边框和阴影层级不够。
+- 本轮视觉方向保持数据密集 B2B 运营台：
+  - 白底 + slate/blue 主体系。
+  - subtle ring / hairline shadow。
+  - amber/red 只用于风险与高风险语义。
+  - 不引入炫技动效，不做 marketing dashboard。
+
+已完成：
+
+- [x] `SelectionCheckbox` 改为自定义视觉层 + 真实 `input[type=checkbox]`：
+  - 保留 `aria-label`、`checked`、`disabled`、indeterminate。
+  - 半选态增加 `aria-checked="mixed"`。
+  - checked / mixed 使用稳定蓝色填充和 lucide `Check` / `Minus`。
+  - focus-visible ring 保留键盘可见状态。
+- [x] `BulkActionBar` 质感升级：
+  - 从整条强蓝提示改为 neutral contextual toolbar。
+  - `selected count`、runtime/issue summary pill 降低噪声。
+  - `Check health` 保持真实可用并作为主动作。
+  - `Launch selected` / `Stop selected` 仍按 selected 中 stopped/running profiles 启用。
+  - `Tag selected`、`Delete selected` 保持 disabled。
+  - 按钮 `whitespace-nowrap`，避免桌面窄表格下文字折行。
+- [x] `ProfileTable` row polish：
+  - selected row 加左侧 blue indicator。
+  - previewed row 加较弱 slate indicator。
+  - hover / selected 背景降低饱和度，减少和 health badge 抢层级。
+  - 表头改为低噪声 sticky header，不改变 `top-11/top-0` 语义。
+- [x] `ProfileFilters` toolbar polish：
+  - 搜索框更强主控感。
+  - filter select 使用 compact border/ring/hover/focus 状态。
+- [x] `ProfileSummaryPanel` inspector polish：
+  - header surface 更轻。
+  - `Open profile` 从强 primary 改为 secondary action，避免压过 health/runtime 信息。
+  - section icon 增加小型 icon container，row 信息层级更清晰。
+- [x] 测试补充：
+  - header checkbox 半选 `indeterminate` 和 `aria-checked="mixed"`。
+  - 有 selection handler 时 checkbox input 可聚焦。
+  - 无 selection handler 时 checkbox input disabled。
+
+保持不变的语义：
+
+- 主表 `min-w-[840px]` 与自身横向滚动保留。
+- 移动端 body 不横向撑破。
+- `Actions` 列在桌面可见，移动端可通过表格横向滚动访问。
+- `Check health` 真实可用。
+- `Launch selected` / `Stop selected` 已完成的真实批量动作保留。
+- `Tag selected` / `Delete selected` 继续 disabled。
+- 主表超过 120 条仍用固定 64px 行高虚拟滚动。
+- 左侧列表超过 80 条仍用固定 112px item 虚拟滚动。
+- proxy visible text / title 仍不暴露凭据。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 17 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 77 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用临时 QA 数据目录 `/tmp/cloakbrowser-manager-ui-polish-data`，共 240 个 profiles。
+- 后端 QA 端口：`http://127.0.0.1:8082`。
+- 静态前端代理端口：`http://127.0.0.1:5175/`。
+- 使用 `agent-browser`，环境变量 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 首屏显示 operations rail、summary tiles、toolbar、主表和 inspector。
+  - `Actions` 列直接可见。
+  - 选中首行后 `Bulk profile actions` 可见，checkbox checked/mixed 视觉稳定。
+  - `Check health` 可点击，`Tag selected` / `Delete selected` disabled。
+  - 点击 `Check health` 后首行 `Last checked` 更新时间，选择仍保留。
+  - 主表滚动到中段后只渲染窗口内约 26 个 Open 按钮，表格区域不包含顶部行，虚拟滚动语义保持。
+- 移动 `390x844`：
+  - 初始 sidebar 收起。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 主表自身横向滚动，`table.scrollWidth=840`、`table.clientWidth=352`。
+  - 横向滚到右侧后 `Actions` / `Open` 可见。
+  - 打开 sidebar 后为 overlay，body 仍不横向撑破。
+- 清空 console 后无相关前端 console error。
+
+截图：
+
+- `/tmp/cloak-profile-polish-desktop.png`
+- `/tmp/cloak-profile-polish-bulk-selected.png`
+- `/tmp/cloak-profile-polish-bulk-checked.png`
+- `/tmp/cloak-profile-polish-mobile.png`
+- `/tmp/cloak-profile-polish-mobile-table-actions.png`
+- `/tmp/cloak-profile-polish-mobile-sidebar.png`
+- `/tmp/cloak-profile-polish-virtual-scroll.png`
+
+范围说明：
+
+- 本小闭环不接入批量 set tags / delete。
+- 本小闭环不做服务端分页。
+- 本小闭环不把 Profile 详情/VNC viewer 改成抽屉式连续运营形态。
+- 本小闭环不做窄屏 card list；移动端继续采用 table 自身横向滚动。
