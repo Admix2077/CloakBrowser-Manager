@@ -17,6 +17,7 @@ frontend/dist/
 
 # Deploy
 deploy.sh
+_research/upstream/
 
 # Claude Code
 .claude/
