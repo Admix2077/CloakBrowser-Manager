@@ -22,7 +22,7 @@ export function ProfileSummaryPanel({
       <aside
         role="complementary"
         aria-label="Profile summary"
-        className="h-full rounded-lg border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+        className="h-full rounded-lg border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500 shadow-hairline ring-1 ring-slate-900/[0.02]"
       >
         <h2 className="text-sm font-semibold text-slate-950">Profile summary</h2>
         <p className="mt-2 text-xs">Select a profile in the table to inspect runtime, health, and fingerprint context.</p>
@@ -45,14 +45,14 @@ export function ProfileSummaryPanel({
     <aside
       role="complementary"
       aria-label="Profile summary"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)] ring-1 ring-slate-900/[0.02]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.05)] ring-1 ring-slate-900/[0.02]"
     >
-      <div className="border-b border-slate-200 bg-white p-4">
+      <div className="border-b border-slate-200 bg-slate-50/70 p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
             Previewing
           </span>
-          <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
+          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-hairline">
             Inspector
           </span>
         </div>
@@ -67,7 +67,7 @@ export function ProfileSummaryPanel({
         </div>
         <button
           type="button"
-          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           onClick={() => onOpenProfile(profile.id)}
           aria-label={`Open ${profile.name}`}
         >
@@ -140,7 +140,7 @@ function SummarySection({
   return (
     <section className="p-4">
       <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded text-slate-400">
+        <span className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400">
           {icon}
         </span>
         {title}
@@ -164,7 +164,7 @@ function SummaryRow({
   title?: string;
 }) {
   return (
-    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-2 rounded-md px-1 py-0.5 text-xs">
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-2 rounded-md px-1 py-0.5 text-xs hover:bg-slate-50">
       <span className="text-slate-500">{label}</span>
       <span
         className={`truncate text-right font-medium text-slate-700 ${mono ? "font-mono text-[11px]" : ""}`}

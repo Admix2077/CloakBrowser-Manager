@@ -1701,3 +1701,98 @@ git diff --check
 - `/tmp/cloak-bulk-delete-virtual-scroll.png`
 - `/tmp/cloak-bulk-delete-mobile.png`
 - `/tmp/cloak-bulk-delete-mobile-actions.png`
+
+## 26. 2026-05-26 Profile 运营台高质感控件 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前 UI 质感和细节不足，尤其 checkbox 等控件显得 low。
+- 本轮继续暂停堆功能，使用 `ui-ux-pro-max` / frontend design 方向做 Profile 运营台最小 UI polish。
+- 参考 `/home/jeff/code/reference-repos/saas_kit` 的 B2B SaaS app shell / data table 质感，只借鉴低噪声控件、command bar、table row 和 inspector 层级；未复制整仓，未迁入 auth/db/payment/schema。
+
+本轮实现：
+
+- `frontend/src/styles/globals.css`
+  - 收敛 `.btn`、`.input`、`.label` 的圆角、边框、阴影、hover/focus 和 disabled 状态。
+  - 新增 `.form-section`、`.section-title`、`.choice-card`、`.choice-checkbox`、`.token-chip`、`.icon-action`。
+- `frontend/src/components/ProfileForm.tsx`
+  - 创建/编辑页升级为更专业的配置表单 section。
+  - 核心字段补 `id/htmlFor`，行为 checkbox 改为 choice card，tag swatch / removable chip / launch arg action 补可访问名称。
+  - 保留真实 create/update/delete/cancel 语义。
+- `frontend/src/components/BulkActionBar.tsx`
+  - bulk toolbar 继续降噪为 compact command bar。
+  - 保留 `Check health` 主动作、tag form、delete confirm、running/stopped 过滤语义。
+- `frontend/src/components/ProfileTable.tsx`
+  - checkbox、selected row、preview row、hover、Open action 视觉细节 polish。
+  - 保留 `min-w-[840px]`、table region 横向滚动、固定 64px 行高和 120 条阈值虚拟滚动。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、section icon 和字段 hover 降噪。
+- `frontend/src/App.tsx`
+  - 移动端顶部 `New Profile` 主按钮保持单行和稳定高度。
+- 任务文档：
+  - `docs/ai-docs/v1/tasks/03-profile-operations-console.md` 追加本轮记录。
+  - `保留创建/编辑 profile 能力` 已按测试和浏览器证据标为完成。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileForm.test.tsx
+# 2 passed, 20 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileForm.test.tsx src/App.test.tsx
+# 4 passed, 45 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 101 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器证据：
+
+- QA 地址：`http://127.0.0.1:8092/`。
+- QA 数据目录：`/tmp/cloakbrowser-ui-polish-qa-data`。
+- 数据规模约 184 profiles，用于验证数百 profile 虚拟滚动。
+- 桌面 `1440x900`：
+  - table Actions 可见。
+  - bulk `Check health` 真实调用。
+  - bulk tag `polish-v2` 真实写入并出现在 filter / row tags。
+  - 主表滚动到 `Polish QA Profile 139+`，早期 rows 离开 DOM，虚拟滚动仍生效。
+  - create -> edit -> rename 流程可用。
+- 移动 `390x844`：
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - table region `clientWidth=352`、`scrollWidth=846`，横向滚动到右侧后 Actions / Open 可见。
+  - sidebar overlay 不撑破 body。
+  - 顶部 `New Profile` 主按钮保持单行。
+- `agent-browser errors --clear` 无相关应用错误。
+
+截图：
+
+- `/tmp/cloak-ui-polish-v2-desktop.png`
+- `/tmp/cloak-ui-polish-v2-bulk-selected.png`
+- `/tmp/cloak-ui-polish-v2-bulk-tag-form.png`
+- `/tmp/cloak-ui-polish-v2-bulk-tag-applied.png`
+- `/tmp/cloak-ui-polish-v2-health-check.png`
+- `/tmp/cloak-ui-polish-v2-virtual-scroll.png`
+- `/tmp/cloak-ui-polish-v2-create-form.png`
+- `/tmp/cloak-ui-polish-v2-edit-form-after-create.png`
+- `/tmp/cloak-ui-polish-v2-create-submit-edit.png`
+- `/tmp/cloak-ui-polish-v2-mobile-nowrap.png`
+- `/tmp/cloak-ui-polish-v2-mobile-actions-nowrap.png`
+- `/tmp/cloak-ui-polish-v2-mobile-sidebar-nowrap.png`
+
+仍未做：
+
+- VNC viewer 能力复核。
+- 空态拆分。
+- 窄屏 card list。
+- 服务端分页。
+
+03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

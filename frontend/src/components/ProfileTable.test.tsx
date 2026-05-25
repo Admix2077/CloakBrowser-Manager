@@ -242,6 +242,7 @@ describe("ProfileTable", () => {
       />,
     );
 
+    expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("false");
     expect(screen.getByText("2 selected")).toBeTruthy();
     expect(screen.getByText("1 running")).toBeTruthy();
     expect(screen.getByText("1 stopped")).toBeTruthy();
@@ -411,6 +412,7 @@ describe("ProfileTable", () => {
       />,
     );
 
+    expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("true");
     expect((screen.getByRole("button", { name: "Checking health" }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText("Checking...")).toBeTruthy();
   });

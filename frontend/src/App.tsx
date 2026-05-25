@@ -383,7 +383,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             <button
               type="button"
               onClick={handleNew}
-              className="btn-primary inline-flex items-center gap-1.5"
+              className="btn-primary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
             >
               <Plus className="h-3.5 w-3.5" />
               New Profile

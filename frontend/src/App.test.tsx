@@ -24,6 +24,11 @@ const mockApi = api as {
 };
 
 const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
+const mockCreate = vi.fn();
+const mockUpdate = vi.fn();
+const mockRemove = vi.fn();
+const mockLaunch = vi.fn();
+const mockStop = vi.fn();
 const mockCheckHealth = vi.fn();
 const mockLaunchProfiles = vi.fn();
 const mockStopProfiles = vi.fn();
@@ -91,6 +96,16 @@ beforeEach(() => {
   });
   mockApi.authStatus.mockResolvedValue({ auth_required: false, authenticated: true });
   mockApi.logout.mockResolvedValue({ ok: true });
+  mockCreate.mockReset();
+  mockCreate.mockResolvedValue(profile({ id: "created", name: "Created Profile" }));
+  mockUpdate.mockReset();
+  mockUpdate.mockResolvedValue(undefined);
+  mockRemove.mockReset();
+  mockRemove.mockResolvedValue(undefined);
+  mockLaunch.mockReset();
+  mockLaunch.mockResolvedValue(undefined);
+  mockStop.mockReset();
+  mockStop.mockResolvedValue(undefined);
   mockCheckHealth.mockReset();
   mockCheckHealth.mockResolvedValue(undefined);
   mockLaunchProfiles.mockReset();
@@ -119,11 +134,11 @@ beforeEach(() => {
     },
     loading: false,
     error: null,
-    create: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
-    launch: vi.fn(),
-    stop: vi.fn(),
+    create: mockCreate,
+    update: mockUpdate,
+    remove: mockRemove,
+    launch: mockLaunch,
+    stop: mockStop,
     checkHealth: mockCheckHealth,
     launchProfiles: mockLaunchProfiles,
     stopProfiles: mockStopProfiles,
@@ -140,6 +155,56 @@ function tableProfileNames(): string[] {
 }
 
 describe("App operations console", () => {
+  it("keeps profile creation reachable from the operations console", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getAllByRole("button", { name: "New Profile" })[0]);
+
+    expect(await screen.findByRole("heading", { name: "New Profile" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Profile Name"), { target: { value: "Created From Console" } });
+    fireEvent.change(screen.getByLabelText("Proxy"), { target: { value: "http://proxy.example:8080" } });
+    fireEvent.change(screen.getByLabelText("Timezone"), { target: { value: "America/New_York" } });
+    fireEvent.change(screen.getByLabelText("Locale"), { target: { value: "en-US" } });
+    fireEvent.change(screen.getByPlaceholderText("Optional notes about this profile..."), {
+      target: { value: "Created from operations console" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => {
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+        name: "Created From Console",
+        proxy: "http://proxy.example:8080",
+        timezone: "America/New_York",
+        locale: "en-US",
+        notes: "Created from operations console",
+      }));
+    });
+  });
+
+  it("keeps stopped profile editing reachable from the operations table", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Open Alpha Good" }));
+
+    expect(await screen.findByRole("heading", { name: "Edit Profile" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Profile Name"), { target: { value: "Alpha Edited" } });
+    fireEvent.change(screen.getByLabelText("Timezone"), { target: { value: "America/Los_Angeles" } });
+    fireEvent.change(screen.getByPlaceholderText("Optional notes about this profile..."), {
+      target: { value: "Edited from operations console" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith("alpha", expect.objectContaining({
+        name: "Alpha Edited",
+        timezone: "America/Los_Angeles",
+        notes: "Edited from operations console",
+      }));
+    });
+  });
+
   it("shares sidebar filters with the main profile table", async () => {
     render(<App />);
 

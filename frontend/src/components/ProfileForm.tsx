@@ -172,10 +172,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-3xl p-4 sm:p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold text-slate-950">
+    <form onSubmit={handleSubmit} className="mx-auto max-w-4xl p-4 sm:p-6">
+      <div className="mb-5 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-hairline ring-1 ring-slate-900/[0.02] sm:flex sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="truncate text-lg font-semibold text-slate-950">
             {isEdit ? "Edit Profile" : "New Profile"}
           </h2>
           {isEdit && onDelete && (
@@ -190,7 +190,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2 sm:mt-0">
           <button type="button" onClick={onCancel} className="btn-secondary">
             Cancel
           </button>
@@ -201,14 +201,15 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Basic */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Basic</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="label">Profile Name</label>
+        <section className="form-section">
+          <h3 className="section-title">Basic</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="profile-name">Profile Name</label>
               <input
+                id="profile-name"
                 className="input"
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
@@ -217,9 +218,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
             </div>
             <div>
-              <label className="label">Fingerprint Seed</label>
+              <label className="label" htmlFor="profile-fingerprint-seed">Fingerprint Seed</label>
               <div className="flex gap-2">
                 <input
+                  id="profile-fingerprint-seed"
                   className="input flex-1 no-spin"
                   type="number"
                   value={form.fingerprint_seed ?? ""}
@@ -263,22 +265,24 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         </section>
 
         {/* Network */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Network</h3>
+        <section className="form-section">
+          <h3 className="section-title">Network</h3>
           <div className="space-y-3">
             <div>
-              <label className="label">Proxy</label>
+              <label className="label" htmlFor="profile-proxy">Proxy</label>
               <input
+                id="profile-proxy"
                 className="input"
                 value={form.proxy ?? ""}
                 onChange={(e) => set("proxy", e.target.value || null)}
                 placeholder="http://user:pass@host:port"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="label">Timezone</label>
+                <label className="label" htmlFor="profile-timezone">Timezone</label>
                 <input
+                  id="profile-timezone"
                   className="input"
                   value={form.timezone ?? ""}
                   onChange={(e) => set("timezone", e.target.value || null)}
@@ -286,8 +290,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                 />
               </div>
               <div>
-                <label className="label">Locale</label>
+                <label className="label" htmlFor="profile-locale">Locale</label>
                 <input
+                  id="profile-locale"
                   className="input"
                   value={form.locale ?? ""}
                   onChange={(e) => set("locale", e.target.value || null)}
@@ -299,12 +304,13 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         </section>
 
         {/* Hardware */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Hardware</h3>
+        <section className="form-section">
+          <h3 className="section-title">Hardware</h3>
           <div className="space-y-3">
             <div>
-              <label className="label">Screen Resolution</label>
+              <label className="label" htmlFor="profile-screen-resolution">Screen Resolution</label>
               <select
+                id="profile-screen-resolution"
                 className="input"
                 value={currentResolution}
                 onChange={(e) => {
@@ -322,10 +328,11 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               </select>
             </div>
             {currentResolution === "custom" && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="label">Width</label>
+                  <label className="label" htmlFor="profile-screen-width">Width</label>
                   <input
+                    id="profile-screen-width"
                     className="input"
                     type="number"
                     value={form.screen_width ?? 1920}
@@ -333,8 +340,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                   />
                 </div>
                 <div>
-                  <label className="label">Height</label>
+                  <label className="label" htmlFor="profile-screen-height">Height</label>
                   <input
+                    id="profile-screen-height"
                     className="input"
                     type="number"
                     value={form.screen_height ?? 1080}
@@ -344,8 +352,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               </div>
             )}
             <div>
-              <label className="label">Hardware Concurrency</label>
+              <label className="label" htmlFor="profile-hardware-concurrency">Hardware Concurrency</label>
               <input
+                id="profile-hardware-concurrency"
                 className="input"
                 type="number"
                 value={form.hardware_concurrency ?? ""}
@@ -354,8 +363,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
             </div>
             <div>
-              <label className="label">GPU Preset</label>
+              <label className="label" htmlFor="profile-gpu-preset">GPU Preset</label>
               <select
+                id="profile-gpu-preset"
                 className="input"
                 value=""
                 onChange={(e) => {
@@ -369,8 +379,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               </select>
             </div>
             <div>
-              <label className="label">GPU Vendor</label>
+              <label className="label" htmlFor="profile-gpu-vendor">GPU Vendor</label>
               <input
+                id="profile-gpu-vendor"
                 className="input"
                 value={form.gpu_vendor ?? ""}
                 onChange={(e) => set("gpu_vendor", e.target.value || null)}
@@ -378,8 +389,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               />
             </div>
             <div>
-              <label className="label">GPU Renderer</label>
+              <label className="label" htmlFor="profile-gpu-renderer">GPU Renderer</label>
               <input
+                id="profile-gpu-renderer"
                 className="input"
                 value={form.gpu_renderer ?? ""}
                 onChange={(e) => set("gpu_renderer", e.target.value || null)}
@@ -390,39 +402,40 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         </section>
 
         {/* Behavior */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Behavior</h3>
+        <section className="form-section">
+          <h3 className="section-title">Behavior</h3>
           <div className="space-y-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <label className="choice-card">
               <input
                 type="checkbox"
                 checked={form.humanize ?? false}
                 onChange={(e) => set("humanize", e.target.checked)}
-                className="rounded border-border bg-surface-1 text-accent"
+                className="choice-checkbox"
               />
-              Human-like mouse, keyboard, and scroll behavior
+              <span className="leading-5">Human-like mouse, keyboard, and scroll behavior</span>
             </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <label className="choice-card">
               <input
                 type="checkbox"
                 checked={form.clipboard_sync ?? true}
                 onChange={(e) => set("clipboard_sync", e.target.checked)}
-                className="rounded border-border bg-surface-1 text-accent"
+                className="choice-checkbox"
               />
-              Enable clipboard sync by default in VNC viewer
+              <span className="leading-5">Enable clipboard sync by default in VNC viewer</span>
             </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <label className="choice-card">
               <input
                 type="checkbox"
                 checked={form.auto_launch ?? false}
                 onChange={(e) => set("auto_launch", e.target.checked)}
-                className="rounded border-border bg-surface-1 text-accent"
+                className="choice-checkbox"
               />
-              Launch automatically when container starts
+              <span className="leading-5">Launch automatically when container starts</span>
             </label>
             <div>
-              <label className="label">Color Scheme</label>
+              <label className="label" htmlFor="profile-color-scheme">Color Scheme</label>
               <select
+                id="profile-color-scheme"
                 className="input"
                 value={form.color_scheme ?? ""}
                 onChange={(e) => set("color_scheme", e.target.value || null)}
@@ -437,21 +450,22 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         </section>
 
         {/* Tags */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Tags</h3>
+        <section className="form-section">
+          <h3 className="section-title">Tags</h3>
           {(form.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.tags ?? []).map((t) => (
                 <span
                   key={t.tag}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-surface-2 text-slate-700"
+                  className="token-chip"
                   style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
                 >
                   {t.tag}
                   <button
                     type="button"
                     onClick={() => removeTag(t.tag)}
-                    className="hover:opacity-70"
+                    className="icon-action"
+                    aria-label={`Remove tag ${t.tag}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -459,38 +473,41 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               ))}
             </div>
           )}
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex gap-1">
               {TAG_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
                   onClick={() => setTagColor(c)}
-                  className="w-4 h-4 rounded-full border-2 transition-transform"
+                  className="h-5 w-5 rounded-full border-2 shadow-hairline transition-colors focus:outline-none focus:ring-2 focus:ring-accent/20"
                   style={{
                     backgroundColor: c,
-                    borderColor: tagColor === c ? "#0f172a" : "transparent",
-                    transform: tagColor === c ? "scale(1.2)" : undefined,
+                    borderColor: tagColor === c ? "#0f172a" : "rgba(255,255,255,0.9)",
                   }}
+                  aria-label={`Use tag color ${c}`}
+                  aria-pressed={tagColor === c}
                 />
               ))}
             </div>
             <input
+              id="profile-tag-input"
+              aria-label="Tag name"
               className="input flex-1"
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
               placeholder="Add tag..."
             />
-            <button type="button" onClick={addTag} className="btn-secondary text-xs">
+            <button type="button" onClick={addTag} className="btn-secondary text-xs" aria-label="Add tag">
               Add
             </button>
           </div>
         </section>
 
         {/* Launch Args */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Firefox Launch Args</h3>
+        <section className="form-section">
+          <h3 className="section-title">Firefox Launch Args</h3>
           <p className="text-xs text-slate-500 mb-2">
             Custom Firefox arguments passed to invisible_playwright at launch. Only Firefox-compatible launch arguments are applied.
           </p>
@@ -499,13 +516,14 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               {(form.launch_args ?? []).map((arg, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-surface-2 text-slate-700 font-mono"
+                  className="token-chip font-mono"
                 >
                   {arg}
                   <button
                     type="button"
                     onClick={() => removeLaunchArg(idx)}
-                    className="hover:opacity-70"
+                    className="icon-action"
+                    aria-label={`Remove launch argument ${arg}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -515,22 +533,26 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
           )}
           <div className="flex gap-2">
             <input
+              id="profile-launch-arg-input"
+              aria-label="Firefox launch argument"
               className="input flex-1 font-mono"
               value={launchArgInput}
               onChange={(e) => setLaunchArgInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLaunchArg(); } }}
               placeholder="--private-window"
             />
-            <button type="button" onClick={addLaunchArg} className="btn-secondary text-xs">
+            <button type="button" onClick={addLaunchArg} className="btn-secondary text-xs" aria-label="Add launch argument">
               Add
             </button>
           </div>
         </section>
 
         {/* Notes */}
-        <section>
-          <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-3">Notes</h3>
+        <section className="form-section">
+          <h3 className="section-title">Notes</h3>
+          <label className="sr-only" htmlFor="profile-notes">Notes</label>
           <textarea
+            id="profile-notes"
             className="input min-h-[80px] resize-y"
             value={form.notes ?? ""}
             onChange={(e) => set("notes", e.target.value || null)}

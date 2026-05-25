@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileForm } from "./ProfileForm";
 import type { Profile } from "../lib/api";
@@ -78,5 +78,73 @@ describe("ProfileForm invisible_playwright phase-one fields", () => {
 
     expect(screen.getByText("Human-like mouse, keyboard, and scroll behavior")).toBeTruthy();
     expect(screen.queryByLabelText("Human Preset")).toBeNull();
+  });
+});
+
+describe("ProfileForm accessibility and control polish", () => {
+  it("associates core labels with their form controls", () => {
+    render(
+      <ProfileForm
+        profile={null}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Profile Name")).toBeTruthy();
+    expect(screen.getByLabelText("Fingerprint Seed")).toBeTruthy();
+    expect(screen.getByLabelText("Proxy")).toBeTruthy();
+    expect(screen.getByLabelText("Timezone")).toBeTruthy();
+    expect(screen.getByLabelText("Locale")).toBeTruthy();
+    expect(screen.getByLabelText("Screen Resolution")).toBeTruthy();
+    expect(screen.getByLabelText("Hardware Concurrency")).toBeTruthy();
+    expect(screen.getByLabelText("GPU Preset")).toBeTruthy();
+    expect(screen.getByLabelText("GPU Vendor")).toBeTruthy();
+    expect(screen.getByLabelText("GPU Renderer")).toBeTruthy();
+    expect(screen.getByLabelText("Color Scheme")).toBeTruthy();
+    expect(screen.getByLabelText("Notes")).toBeTruthy();
+  });
+
+  it("keeps behavior checkboxes accessible and interactive", () => {
+    render(
+      <ProfileForm
+        profile={null}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const humanize = screen.getByLabelText("Human-like mouse, keyboard, and scroll behavior") as HTMLInputElement;
+    const clipboard = screen.getByLabelText("Enable clipboard sync by default in VNC viewer") as HTMLInputElement;
+    const autoLaunch = screen.getByLabelText("Launch automatically when container starts") as HTMLInputElement;
+
+    expect(humanize.checked).toBe(false);
+    expect(clipboard.checked).toBe(true);
+    expect(autoLaunch.checked).toBe(false);
+
+    fireEvent.click(humanize);
+    fireEvent.click(clipboard);
+    fireEvent.click(autoLaunch);
+
+    expect(humanize.checked).toBe(true);
+    expect(clipboard.checked).toBe(false);
+    expect(autoLaunch.checked).toBe(true);
+  });
+
+  it("labels tag color swatches and removable chips", () => {
+    render(
+      <ProfileForm
+        profile={humanizedProfile}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Use tag color #6366f1")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Tag name"), { target: { value: "ops" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add tag" }));
+
+    expect(screen.getByRole("button", { name: "Remove tag ops" })).toBeTruthy();
   });
 });
