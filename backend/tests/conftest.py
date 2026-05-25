@@ -10,21 +10,43 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 # ---------------------------------------------------------------------------
-# Mock cloakbrowser BEFORE any backend module is imported.
-# browser_manager.py does `from cloakbrowser import launch_persistent_context_async`
-# at module level, and main.py imports BrowserManager which triggers it.
-# main.py:381 also does `from cloakbrowser.config import CHROMIUM_VERSION`.
+# Mock invisible_playwright BEFORE any backend module is imported.
+# browser_manager.py imports InvisiblePlaywright at module level, and tests
+# assert how Manager maps profile fields into that launcher.
 # ---------------------------------------------------------------------------
 
-_mock_cloakbrowser = types.ModuleType("cloakbrowser")
-_mock_cloakbrowser.launch_persistent_context_async = AsyncMock()  # type: ignore[attr-defined]
 
-_mock_config = types.ModuleType("cloakbrowser.config")
-_mock_config.CHROMIUM_VERSION = "0.0.0-test"  # type: ignore[attr-defined]
+class _MockInvisiblePlaywright:
+    """Async context manager test double for invisible_playwright."""
 
-sys.modules.setdefault("cloakbrowser", _mock_cloakbrowser)
-sys.modules.setdefault("cloakbrowser.config", _mock_config)
+    instances: list["_MockInvisiblePlaywright"] = []
 
+    def __init__(self, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.closed = False
+        self.context = MagicMock()
+        self.context.pages = []
+        self.context.add_init_script = AsyncMock()
+        self.context.close = AsyncMock()
+        self.context.on = MagicMock()
+        self.__class__.instances.append(self)
+
+    async def __aenter__(self):
+        return self.context
+
+    async def __aexit__(self, *exc):
+        self.closed = True
+        await self.context.close()
+
+
+_mock_invisible = types.ModuleType("invisible_playwright")
+_mock_invisible_async = types.ModuleType("invisible_playwright.async_api")
+_mock_invisible_async.InvisiblePlaywright = _MockInvisiblePlaywright  # type: ignore[attr-defined]
+_mock_invisible.InvisiblePlaywright = _MockInvisiblePlaywright  # type: ignore[attr-defined]
+
+sys.modules.setdefault("invisible_playwright", _mock_invisible)
+sys.modules.setdefault("invisible_playwright.async_api", _mock_invisible_async)
 
 from backend import database as db  # noqa: E402
 
@@ -37,6 +59,14 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(db, "DATA_DIR", tmp_path)
     db.init_db()
     return tmp_path
+
+
+@pytest.fixture()
+def mock_invisible_playwright():
+    """Expose the invisible_playwright test double and reset captured launches."""
+    _MockInvisiblePlaywright.instances.clear()
+    yield _MockInvisiblePlaywright
+    _MockInvisiblePlaywright.instances.clear()
 
 
 @pytest.fixture()

@@ -17,7 +17,6 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.parse import urlparse
 
-import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -543,7 +542,7 @@ async def launch_profile(profile_id: str):
         status="running",
         vnc_ws_port=running.ws_port,
         display=f":{running.display}",
-        cdp_url=f"/api/profiles/{profile_id}/cdp",
+        cdp_url=None,
     )
 
 
@@ -569,12 +568,10 @@ async def get_profile_status(profile_id: str):
 
 @app.get("/api/status", response_model=StatusResponse)
 async def get_system_status():
-    from cloakbrowser.config import CHROMIUM_VERSION
-
     profiles = db.list_profiles()
     return StatusResponse(
         running_count=len(browser_mgr.running),
-        binary_version=CHROMIUM_VERSION,
+        binary_version="invisible-playwright",
         profiles_total=len(profiles),
     )
 
@@ -838,142 +835,47 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
 
 
 # ── CDP WebSocket Proxy ──────────────────────────────────────────────────────
-# Simple bidirectional passthrough — CDP is standard JSON over WebSocket,
-# no protocol translation needed (unlike VNC which requires RFB filtering).
+# invisible_playwright uses Firefox and does not expose Chromium CDP.
+
+_CDP_UNAVAILABLE_DETAIL = (
+    "CDP is not available for invisible_playwright Firefox profiles"
+)
 
 
 @app.get("/api/profiles/{profile_id}/cdp")
 async def cdp_info(profile_id: str):
-    """Return CDP connection info. Prevents SPA catch-all from serving index.html."""
+    """Return a clear 501 instead of pretending Firefox exposes Chromium CDP."""
     running = browser_mgr.running.get(profile_id)
     if not running:
         raise HTTPException(status_code=404, detail="Profile not running")
-    return {
-        "cdp_url": f"/api/profiles/{profile_id}/cdp",
-        "usage": "playwright.chromium.connect_over_cdp('http://<host>/api/profiles/"
-        + profile_id + "/cdp')",
-    }
+    raise HTTPException(status_code=501, detail=_CDP_UNAVAILABLE_DETAIL)
 
 
 @app.get("/api/profiles/{profile_id}/cdp/json/version/")
 @app.get("/api/profiles/{profile_id}/cdp/json/version")
-async def cdp_json_version(profile_id: str, request: Request):
-    """Proxy Chrome's /json/version, rewriting WS URLs to go through our proxy."""
+async def cdp_json_version(profile_id: str):
+    """CDP is a Chromium interface; invisible_playwright profiles are Firefox."""
     running = browser_mgr.running.get(profile_id)
     if not running:
         raise HTTPException(status_code=404, detail="Profile not running")
-
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"http://127.0.0.1:{running.cdp_port}/json/version", timeout=5
-            )
-            data = resp.json()
-    except Exception as exc:
-        logger.error("CDP proxy: failed to reach Chrome CDP for %s: %s", profile_id, exc)
-        raise HTTPException(status_code=502, detail="CDP endpoint unreachable")
-
-    # Rewrite webSocketDebuggerUrl to point through our proxy
-    host = request.headers.get("host", "localhost:8080")
-    ws_scheme = "wss" if _is_https(request) else "ws"
-    data["webSocketDebuggerUrl"] = f"{ws_scheme}://{host}/api/profiles/{profile_id}/cdp"
-    return data
+    raise HTTPException(status_code=501, detail=_CDP_UNAVAILABLE_DETAIL)
 
 
 @app.get("/api/profiles/{profile_id}/cdp/json/list/")
 @app.get("/api/profiles/{profile_id}/cdp/json/list")
 @app.get("/api/profiles/{profile_id}/cdp/json/")
 @app.get("/api/profiles/{profile_id}/cdp/json")
-async def cdp_json_list(profile_id: str, request: Request):
-    """Proxy Chrome's /json/list, rewriting WS URLs."""
+async def cdp_json_list(profile_id: str):
+    """CDP is a Chromium interface; invisible_playwright profiles are Firefox."""
     running = browser_mgr.running.get(profile_id)
     if not running:
         raise HTTPException(status_code=404, detail="Profile not running")
-
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"http://127.0.0.1:{running.cdp_port}/json/list", timeout=5
-            )
-            data = resp.json()
-    except Exception as exc:
-        logger.error("CDP proxy: failed to reach Chrome CDP for %s: %s", profile_id, exc)
-        raise HTTPException(status_code=502, detail="CDP endpoint unreachable")
-
-    host = request.headers.get("host", "localhost:8080")
-    ws_scheme = "wss" if _is_https(request) else "ws"
-    for entry in data:
-        if "webSocketDebuggerUrl" in entry:
-            ws_path = entry["webSocketDebuggerUrl"].split("/devtools/")[-1]
-            entry["webSocketDebuggerUrl"] = (
-                f"{ws_scheme}://{host}/api/profiles/{profile_id}/cdp/devtools/{ws_path}"
-            )
-    return data
-
-
-async def _proxy_cdp_websocket(
-    websocket: WebSocket, target_url: str, label: str,
-) -> None:
-    """Bidirectional WebSocket proxy between a FastAPI client and a CDP target.
-
-    Used by both browser-level and page-level CDP proxy endpoints.
-    """
-    import websockets
-
-    try:
-        async with websockets.connect(
-            target_url, max_size=None, ping_interval=None, ping_timeout=None
-        ) as cdp_ws:
-            logger.info("%s: connected to %s", label, target_url)
-
-            async def client_to_cdp():
-                try:
-                    while True:
-                        msg = await websocket.receive()
-                        if msg.get("type") == "websocket.disconnect":
-                            break
-                        if "text" in msg and msg["text"]:
-                            await cdp_ws.send(msg["text"])
-                        elif "bytes" in msg and msg["bytes"]:
-                            await cdp_ws.send(msg["bytes"])
-                except WebSocketDisconnect:
-                    pass
-                except Exception as exc:
-                    logger.warning("%s [c->cdp]: %s: %s", label, type(exc).__name__, exc)
-
-            async def cdp_to_client():
-                try:
-                    async for msg in cdp_ws:
-                        if isinstance(msg, str):
-                            await websocket.send_text(msg)
-                        else:
-                            await websocket.send_bytes(msg)
-                except WebSocketDisconnect:
-                    pass
-                except Exception as exc:
-                    logger.warning("%s [cdp->c]: %s: %s", label, type(exc).__name__, exc)
-
-            c2d = asyncio.create_task(client_to_cdp(), name="c2d")
-            d2c = asyncio.create_task(cdp_to_client(), name="d2c")
-            done, pending = await asyncio.wait(
-                [c2d, d2c], return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-            logger.info("%s: disconnected", label)
-
-    except Exception as exc:
-        logger.error("%s error: %s", label, exc)
-    finally:
-        try:
-            await websocket.close()
-        except Exception as exc:
-            logger.debug("%s: websocket.close() failed: %s", label, exc)
+    raise HTTPException(status_code=501, detail=_CDP_UNAVAILABLE_DETAIL)
 
 
 @app.websocket("/api/profiles/{profile_id}/cdp")
 async def cdp_proxy(websocket: WebSocket, profile_id: str):
-    """Proxy WebSocket frames between external tools and Chrome's CDP."""
+    """Reject CDP WebSocket connections for invisible_playwright Firefox."""
     if not await _check_websocket_origin(websocket):
         return
 
@@ -983,25 +885,12 @@ async def cdp_proxy(websocket: WebSocket, profile_id: str):
         return
 
     await websocket.accept()
-
-    # Get browser-level CDP WebSocket URL from Chrome
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"http://127.0.0.1:{running.cdp_port}/json/version", timeout=5
-            )
-            ws_url = resp.json()["webSocketDebuggerUrl"]
-    except Exception as exc:
-        logger.error("CDP proxy: failed to get WS URL for %s: %s", profile_id, exc)
-        await websocket.close(code=4005, reason="CDP not available")
-        return
-
-    await _proxy_cdp_websocket(websocket, ws_url, f"CDP proxy [{profile_id}]")
+    await websocket.close(code=4006, reason=_CDP_UNAVAILABLE_DETAIL)
 
 
 @app.websocket("/api/profiles/{profile_id}/cdp/devtools/{path:path}")
 async def cdp_page_proxy(websocket: WebSocket, profile_id: str, path: str):
-    """Proxy page-specific CDP WebSocket connections (e.g. /devtools/page/GUID)."""
+    """Reject page-specific CDP WebSocket connections for Firefox profiles."""
     if not await _check_websocket_origin(websocket):
         return
 
@@ -1011,9 +900,7 @@ async def cdp_page_proxy(websocket: WebSocket, profile_id: str, path: str):
         return
 
     await websocket.accept()
-
-    target_url = f"ws://127.0.0.1:{running.cdp_port}/devtools/{path}"
-    await _proxy_cdp_websocket(websocket, target_url, f"CDP page proxy [{profile_id}]")
+    await websocket.close(code=4006, reason=_CDP_UNAVAILABLE_DETAIL)
 
 
 # ── Static Frontend ───────────────────────────────────────────────────────────

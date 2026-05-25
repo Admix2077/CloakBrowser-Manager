@@ -108,12 +108,12 @@ def test_get_status_running():
         context=MagicMock(),
         display=100,
         ws_port=6100,
-        cdp_port=5100,
+        engine="invisible_playwright",
     )
     status = mgr.get_status("abc")
     assert status == {
         "status": "running",
         "vnc_ws_port": 6100,
         "display": ":100",
-        "cdp_url": "/api/profiles/abc/cdp",
+        "cdp_url": None,
     }
