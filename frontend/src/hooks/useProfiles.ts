@@ -5,8 +5,18 @@ import {
   type ProfileCreateData,
   type ProfileHealthResponse,
 } from "../lib/api";
+import { redactUrlCredentials } from "../lib/profileDisplay";
 
 const HEALTH_CHECK_CONCURRENCY = 6;
+const BULK_LAUNCH_CONCURRENCY = 2;
+
+export interface BulkLaunchResult {
+  requestedCount: number;
+  launchableCount: number;
+  launchedCount: number;
+  skippedRunningCount: number;
+  failedCount: number;
+}
 
 export function useProfiles() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -14,7 +24,9 @@ export function useProfiles() {
     Record<string, ProfileHealthResponse | undefined>
   >({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
+  const error = operationError ?? fetchError;
 
   const refreshHealth = useCallback(
     async (profileIds: string[], options: { prune?: boolean } = {}) => {
@@ -83,9 +95,9 @@ export function useProfiles() {
     }
 
     if (failedCount > 0) {
-      setError(`Failed to check health for ${failedCount} profile(s)`);
+      setOperationError(`Failed to check health for ${failedCount} profile(s)`);
     } else {
-      setError(null);
+      setOperationError(null);
     }
   }, []);
 
@@ -93,10 +105,10 @@ export function useProfiles() {
     try {
       const data = await api.listProfiles();
       setProfiles(data);
-      setError(null);
+      setFetchError(null);
       return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch profiles");
+      setFetchError(err instanceof Error ? err.message : "Failed to fetch profiles");
     } finally {
       setLoading(false);
     }
@@ -121,9 +133,10 @@ export function useProfiles() {
         const profile = await api.createProfile(data);
         setProfiles((prev) => [profile, ...prev]);
         await refreshHealth([profile.id]);
+        setOperationError(null);
         return profile;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create profile");
+        setOperationError(err instanceof Error ? err.message : "Failed to create profile");
       }
     },
     [refreshHealth],
@@ -135,9 +148,10 @@ export function useProfiles() {
         const profile = await api.updateProfile(id, data);
         setProfiles((prev) => prev.map((p) => (p.id === id ? profile : p)));
         await refreshHealth([id]);
+        setOperationError(null);
         return profile;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update profile");
+        setOperationError(err instanceof Error ? err.message : "Failed to update profile");
       }
     },
     [refreshHealth],
@@ -153,8 +167,9 @@ export function useProfiles() {
           delete next[id];
           return next;
         });
+        setOperationError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to delete profile");
+        setOperationError(err instanceof Error ? err.message : "Failed to delete profile");
       }
     },
     [],
@@ -166,12 +181,76 @@ export function useProfiles() {
         const result = await api.launchProfile(id);
         await refresh();
         await refreshHealth([id]);
+        setOperationError(null);
         return result;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to launch profile");
+        setOperationError(err instanceof Error ? err.message : "Failed to launch profile");
       }
     },
     [refresh, refreshHealth],
+  );
+
+  const launchProfiles = useCallback(
+    async (profileIds: string[]): Promise<BulkLaunchResult> => {
+      const ids = [...new Set(profileIds.filter(Boolean))];
+      const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+      const launchableIds = ids.filter((id) => profileById.get(id)?.status === "stopped");
+      const skippedRunningCount = ids.filter((id) => profileById.get(id)?.status === "running").length;
+      const successfulIds: string[] = [];
+      const failureMessages: string[] = [];
+      let failedCount = 0;
+      let cursor = 0;
+
+      const result: BulkLaunchResult = {
+        requestedCount: ids.length,
+        launchableCount: launchableIds.length,
+        launchedCount: 0,
+        skippedRunningCount,
+        failedCount: 0,
+      };
+
+      if (launchableIds.length === 0) {
+        setOperationError(null);
+        return result;
+      }
+
+      const workerCount = Math.min(BULK_LAUNCH_CONCURRENCY, launchableIds.length);
+      await Promise.all(
+        Array.from({ length: workerCount }, async () => {
+          while (cursor < launchableIds.length) {
+            const id = launchableIds[cursor];
+            cursor += 1;
+            if (!id) continue;
+            try {
+              await api.launchProfile(id);
+              successfulIds.push(id);
+            } catch (err) {
+              failedCount += 1;
+              failureMessages.push(err instanceof Error ? err.message : "Failed to launch profile");
+            }
+          }
+        }),
+      );
+
+      await refresh();
+      if (successfulIds.length > 0) {
+        await refreshHealth(successfulIds);
+      }
+
+      result.launchedCount = successfulIds.length;
+      result.failedCount = failedCount;
+
+      if (failedCount > 0) {
+        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
+        setOperationError(`Failed to launch ${failedCount} profile(s)${reasonSummary}`);
+      } else {
+        setOperationError(null);
+      }
+
+      return result;
+    },
+    [profiles, refresh, refreshHealth],
   );
 
   const stop = useCallback(
@@ -180,8 +259,9 @@ export function useProfiles() {
         await api.stopProfile(id);
         await refresh();
         await refreshHealth([id]);
+        setOperationError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to stop profile");
+        setOperationError(err instanceof Error ? err.message : "Failed to stop profile");
       }
     },
     [refresh, refreshHealth],
@@ -199,6 +279,7 @@ export function useProfiles() {
     update,
     remove,
     launch,
+    launchProfiles,
     stop,
   };
 }

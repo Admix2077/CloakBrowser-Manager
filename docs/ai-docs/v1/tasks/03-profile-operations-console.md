@@ -61,7 +61,7 @@
 - [x] 主区 `ProfileTable` 大列表虚拟滚动。
 - [x] 新增多选状态。
 - [x] 新增 `BulkActionBar`。
-- [ ] 接入批量 launch。
+- [x] 接入批量 launch。
 - [ ] 接入批量 stop。
 - [x] 接入批量 health check。
 - [ ] 接入批量 set tags。
@@ -723,3 +723,91 @@ cd frontend && npm run build
 - 本小闭环没有接入批量 launch / stop / set tags / delete。
 - 本小闭环没有做服务端分页；当前固定行高虚拟滚动覆盖数百 profile 场景。
 - 下一步继续 03 时，建议做“保留创建/编辑 profile 能力”的运营台内连续体验复核，或进入批量 launch/stop 的资源并发设计。
+
+## 2026-05-26 批量 launch 小闭环
+
+背景：
+
+- `BulkActionBar` 已经接入批量 health check，本小闭环继续接入批量 launch。
+- 不新增后端 bulk API，前端复用现有单 profile `/api/profiles/{id}/launch`，避免扩大运行时契约面。
+- 批量 launch 只作用当前选中且 `status === "stopped"` 的 profiles；running profiles 跳过，不触发 409。
+
+已完成：
+
+- [x] `frontend/src/hooks/useProfiles.ts` 新增 `launchProfiles(ids)`：
+  - 去重、过滤空 id。
+  - 基于当前 profile 列表只启动 stopped profiles。
+  - 最多 2 并发，降低多实例启动时的运行时资源冲击。
+  - 每个 profile 复用现有 `api.launchProfile(id)`。
+  - 批量完成后统一 `refresh()` 一次，成功项再刷新 health。
+  - 部分失败不阻断其他 profile。
+  - 失败提示包含去重后的后端错误摘要，并通过 `redactUrlCredentials()` 防御性脱敏。
+  - 后台列表 refresh 成功不会清掉用户操作错误，避免失败 banner 只闪一下。
+- [x] `BulkActionBar` 的 `Launch selected` 变为真实动作：
+  - 仅在有 stopped 选中项时启用。
+  - 执行中显示 `Launching...` 并禁用按钮。
+  - `Stop selected`、`Tag selected`、`Delete selected` 仍保持 disabled。
+- [x] `ProfileTable` 只把 selected 中 stopped profiles 传给 launch handler。
+- [x] `AppContent` 接入 `bulkLaunching` 状态，不改变单 profile launch / stop / VNC viewer 流。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts
+# 1 passed, 14 passed
+
+cd frontend && npm test -- --run src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 3 passed, 36 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 71 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 临时 QA 数据库 `/tmp/cloakbrowser-manager-bulk-launch-qa-data`，共 2 个 stopped/headless/no-proxy profiles：
+  - `Bulk Launch QA A`
+  - `Bulk Launch QA B`
+- 后端 `http://127.0.0.1:8080`，Vite `http://127.0.0.1:5173/`。
+- 使用 `agent-browser`，环境变量 `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 桌面 `1440x900`：
+  - 选中两个 stopped profiles 后显示 `2 selected`、`0 running`、`2 stopped`。
+  - `Launch selected` 可点击。
+  - 点击后前端发起批量 launch，后端日志显示两个 profile 都尝试启动。
+  - 当前本机环境没有 `Xvnc`，后端返回 `500 {"detail":"Failed to launch browser"}`，profile 仍为 `stopped`。
+  - 前端显示 `Failed to launch 2 profile(s): Failed to launch browser`。
+  - 等待 3.5 秒后台轮询后，失败 banner 仍保持可见，没有被 `refresh()` 清掉。
+  - 清空 console 后重跑当前流程，无相关前端 console error。
+- 移动 `390x844`：
+  - 失败 banner 可见。
+  - `body.scrollWidth === window.innerWidth === 390`，页面本体不横向撑破。
+
+截图：
+
+- `/tmp/cloak-bulk-launch-error-persist-desktop.png`
+- `/tmp/cloak-bulk-launch-error-persist-mobile.png`
+- 早期定位截图：
+  - `/tmp/cloak-bulk-launch-before.png`
+  - `/tmp/cloak-bulk-launch-selected.png`
+  - `/tmp/cloak-bulk-launch-after-click.png`
+
+运行时限制：
+
+- 本机 `command -v Xvnc` 为空，仅有 `/usr/bin/firefox`。
+- 因此本轮无法在本机直接验证 profile 进入 `running` / VNC 可连状态。
+- Dockerfile 的生产镜像会安装 KasmVNC；真实 running 状态建议在容器环境或安装 `Xvnc` 的运行时环境补验。
+
+范围说明：
+
+- 本小闭环不新增后端 bulk launch API。
+- 本小闭环不接入批量 stop / set tags / delete。
+- 批量 delete 仍必须单独确认闭环；批量 stop 需要下一轮定义 running-only、部分失败和选择保留语义。

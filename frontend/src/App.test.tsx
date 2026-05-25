@@ -25,6 +25,7 @@ const mockApi = api as {
 
 const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
 const mockCheckHealth = vi.fn();
+const mockLaunchProfiles = vi.fn();
 
 function profile(overrides: Partial<Profile>): Profile {
   return {
@@ -89,6 +90,8 @@ beforeEach(() => {
   mockApi.logout.mockResolvedValue({ ok: true });
   mockCheckHealth.mockReset();
   mockCheckHealth.mockResolvedValue(undefined);
+  mockLaunchProfiles.mockReset();
+  mockLaunchProfiles.mockResolvedValue(undefined);
   mockUseProfiles.mockReturnValue({
     profiles: [
       profile({ id: "beta", name: "Beta Broken" }),
@@ -106,6 +109,7 @@ beforeEach(() => {
     launch: vi.fn(),
     stop: vi.fn(),
     checkHealth: mockCheckHealth,
+    launchProfiles: mockLaunchProfiles,
   });
 });
 
@@ -182,8 +186,23 @@ describe("App operations console", () => {
     await waitFor(() => {
       expect(mockCheckHealth).toHaveBeenCalledWith(["beta", "alpha"]);
     });
-    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("runs a bulk launch for the currently selected stopped profiles", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText("Select Beta Broken"));
+    fireEvent.click(screen.getByLabelText("Select Alpha Good"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
+
+    await waitFor(() => {
+      expect(mockLaunchProfiles).toHaveBeenCalledWith(["beta", "alpha"]);
+    });
+    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("uses sidebar quick views to drive the main operations table", async () => {

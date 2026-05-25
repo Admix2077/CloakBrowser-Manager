@@ -160,6 +160,7 @@ describe("ProfileTable", () => {
 
   it("shows a bulk action bar with selected profile health and runtime summary", () => {
     const onCheckHealth = vi.fn();
+    const onLaunchSelected = vi.fn();
 
     render(
       <ProfileTable
@@ -169,6 +170,7 @@ describe("ProfileTable", () => {
         selectedProfileIds={new Set(["good", "error"])}
         onClearSelection={vi.fn()}
         onCheckSelectedHealth={onCheckHealth}
+        onLaunchSelectedProfiles={onLaunchSelected}
       />,
     );
 
@@ -179,10 +181,28 @@ describe("ProfileTable", () => {
     expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Check health" }));
     expect(onCheckHealth).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
+    expect(onLaunchSelected).toHaveBeenCalledWith(["error"]);
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("disables the bulk launch button while launch is running", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["error"])}
+        onLaunchSelectedProfiles={vi.fn()}
+        launchingSelectedProfiles
+      />,
+    );
+
+    expect((screen.getByRole("button", { name: "Launching selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Launching...")).toBeTruthy();
   });
 
   it("disables the bulk health check while checks are running", () => {

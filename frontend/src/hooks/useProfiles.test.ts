@@ -186,6 +186,88 @@ describe("useProfiles", () => {
     expect(mockApi.getProfileHealth).toHaveBeenCalledWith("abc-123");
   });
 
+  it("launches selected profiles once, refreshes once, and reports partial failures", async () => {
+    const failingProfile = { ...fakeProfile, id: "fail-123", name: "Fail" };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, failingProfile]);
+    mockApi.launchProfile.mockImplementation((id: string) => {
+      if (id === "abc-123") {
+        return Promise.resolve({
+          profile_id: id,
+          status: "running",
+          vnc_ws_port: 6100,
+          display: ":100",
+          automation_url: `/api/profiles/${id}/automation`,
+        });
+      }
+      return Promise.reject(new Error("Launch failed"));
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.listProfiles.mockClear();
+    mockApi.getProfileHealth.mockClear();
+
+    await act(async () => {
+      await result.current.launchProfiles(["abc-123", "abc-123", "fail-123"]);
+    });
+
+    expect(mockApi.launchProfile).toHaveBeenCalledTimes(2);
+    expect(mockApi.launchProfile).toHaveBeenCalledWith("abc-123");
+    expect(mockApi.launchProfile).toHaveBeenCalledWith("fail-123");
+    expect(mockApi.listProfiles).toHaveBeenCalledTimes(1);
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("abc-123");
+    expect(result.current.error).toBe("Failed to launch 1 profile(s): Launch failed");
+  });
+
+  it("keeps bulk launch failures visible across background profile refreshes", async () => {
+    mockApi.launchProfile.mockRejectedValue(new Error("Failed to launch browser"));
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.launchProfiles(["abc-123"]);
+    });
+
+    expect(result.current.error).toBe("Failed to launch 1 profile(s): Failed to launch browser");
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.error).toBe("Failed to launch 1 profile(s): Failed to launch browser");
+  });
+
+  it("skips running profiles during bulk launch", async () => {
+    const runningProfile = { ...fakeProfile, id: "running-123", name: "Running", status: "running" as const };
+    mockApi.listProfiles.mockResolvedValue([fakeProfile, runningProfile]);
+    mockApi.launchProfile.mockResolvedValue({
+      profile_id: "abc-123",
+      status: "running",
+      vnc_ws_port: 6100,
+      display: ":100",
+      automation_url: "/api/profiles/abc-123/automation",
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let launchResult;
+    await act(async () => {
+      launchResult = await result.current.launchProfiles(["running-123", "abc-123"]);
+    });
+
+    expect(mockApi.launchProfile).toHaveBeenCalledTimes(1);
+    expect(mockApi.launchProfile).toHaveBeenCalledWith("abc-123");
+    expect(launchResult).toMatchObject({
+      requestedCount: 2,
+      launchableCount: 1,
+      launchedCount: 1,
+      skippedRunningCount: 1,
+      failedCount: 0,
+    });
+  });
+
   it("runs active health checks and writes successful results into the health cache", async () => {
     const checkedHealth = {
       ...fakeHealth,

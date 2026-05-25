@@ -9,6 +9,8 @@ interface BulkActionBarProps {
   onClearSelection?: () => void;
   onCheckHealth?: () => Promise<void> | void;
   checkingHealth?: boolean;
+  onLaunch?: () => Promise<void> | void;
+  launching?: boolean;
 }
 
 export function BulkActionBar({
@@ -18,6 +20,8 @@ export function BulkActionBar({
   onClearSelection,
   onCheckHealth,
   checkingHealth = false,
+  onLaunch,
+  launching = false,
 }: BulkActionBarProps) {
   if (selectedCount === 0) return null;
 
@@ -49,7 +53,16 @@ export function BulkActionBar({
           <HeartPulse className="h-3.5 w-3.5" />
           <span>{checkingHealth ? "Checking..." : "Check health"}</span>
         </button>
-        <DisabledAction icon={<Play className="h-3.5 w-3.5" />} label="Launch selected" />
+        <button
+          type="button"
+          disabled={!onLaunch || launching || stoppedCount === 0}
+          aria-label={launching ? "Launching selected" : "Launch selected"}
+          className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-white px-2 py-1 font-medium text-blue-700 shadow-hairline transition-colors hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => void onLaunch?.()}
+        >
+          <Play className="h-3.5 w-3.5" />
+          <span>{launching ? "Launching..." : "Launch selected"}</span>
+        </button>
         <DisabledAction icon={<Square className="h-3.5 w-3.5" />} label="Stop selected" />
         <DisabledAction icon={<Tags className="h-3.5 w-3.5" />} label="Tag selected" />
         <DisabledAction icon={<Trash2 className="h-3.5 w-3.5" />} label="Delete selected" danger />

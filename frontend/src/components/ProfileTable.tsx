@@ -24,6 +24,8 @@ interface ProfileTableProps {
   onPreviewProfile?: (id: string) => void;
   onCheckSelectedHealth?: (ids: string[]) => Promise<void> | void;
   checkingSelectedHealth?: boolean;
+  onLaunchSelectedProfiles?: (ids: string[]) => Promise<void> | void;
+  launchingSelectedProfiles?: boolean;
 }
 
 export function ProfileTable({
@@ -38,6 +40,8 @@ export function ProfileTable({
   onPreviewProfile,
   onCheckSelectedHealth,
   checkingSelectedHealth = false,
+  onLaunchSelectedProfiles,
+  launchingSelectedProfiles = false,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -107,6 +111,10 @@ export function ProfileTable({
             onClearSelection={onClearSelection}
             onCheckHealth={() => onCheckSelectedHealth?.(selectedProfiles.map((profile) => profile.id))}
             checkingHealth={checkingSelectedHealth}
+            onLaunch={() => onLaunchSelectedProfiles?.(
+              selectedProfiles.filter((profile) => profile.status === "stopped").map((profile) => profile.id),
+            )}
+            launching={launchingSelectedProfiles}
           />
         )}
         <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs">

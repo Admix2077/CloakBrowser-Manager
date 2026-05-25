@@ -111,6 +111,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     update,
     remove,
     launch,
+    launchProfiles,
     stop,
     checkHealth,
   } = useProfiles();
@@ -121,6 +122,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => new Set());
   const [previewProfileId, setPreviewProfileId] = useState<string | null>(null);
   const [bulkHealthChecking, setBulkHealthChecking] = useState(false);
+  const [bulkLaunching, setBulkLaunching] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -252,6 +254,16 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       setBulkHealthChecking(false);
     }
   }, [checkHealth]);
+
+  const handleLaunchSelectedProfiles = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setBulkLaunching(true);
+    try {
+      await launchProfiles(ids);
+    } finally {
+      setBulkLaunching(false);
+    }
+  }, [launchProfiles]);
 
   if (loading) {
     return (
@@ -393,6 +405,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     onPreviewProfile={setPreviewProfileId}
                     onCheckSelectedHealth={handleCheckSelectedHealth}
                     checkingSelectedHealth={bulkHealthChecking}
+                    onLaunchSelectedProfiles={handleLaunchSelectedProfiles}
+                    launchingSelectedProfiles={bulkLaunching}
                   />
                 </div>
                 <div className="min-h-[360px] min-w-0 lg:min-h-0">
