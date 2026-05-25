@@ -1,6 +1,12 @@
 import { Plus, Search, Monitor } from "lucide-react";
 import { useState } from "react";
-import type { Profile } from "../lib/api";
+import type { Profile, ProfileHealthResponse } from "../lib/api";
+import {
+  getHealthGeoipParts,
+  getHealthTone,
+  getHealthWarningSummary,
+} from "../lib/health";
+import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
 
 interface ProfileListProps {
@@ -8,9 +14,16 @@ interface ProfileListProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
+  healthByProfileId?: Record<string, ProfileHealthResponse | undefined>;
 }
 
-export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileListProps) {
+export function ProfileList({
+  profiles,
+  selectedId,
+  onSelect,
+  onNew,
+  healthByProfileId = {},
+}: ProfileListProps) {
   const [search, setSearch] = useState("");
 
   const filtered = profiles.filter((p) =>
@@ -53,38 +66,13 @@ export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileLi
           </div>
         )}
         {filtered.map((profile) => (
-          <button
+          <ProfileListItem
             key={profile.id}
-            onClick={() => onSelect(profile.id)}
-            className={`w-full text-left px-3 py-2.5 rounded-md mb-1 transition-colors ${
-              selectedId === profile.id
-                ? "bg-surface-3 border border-border-hover"
-                : "hover:bg-surface-2 border border-transparent"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <StatusIndicator status={profile.status} />
-              <span className="text-sm font-medium truncate">{profile.name}</span>
-            </div>
-            <div className="flex items-center gap-2 mt-1 ml-4">
-              {profile.proxy && (
-                <span className="text-xs text-gray-500">Proxy</span>
-              )}
-            </div>
-            {profile.tags.length > 0 && (
-              <div className="flex gap-1 mt-1.5 ml-4 flex-wrap">
-                {profile.tags.map((t) => (
-                  <span
-                    key={t.tag}
-                    className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-4 text-gray-400"
-                    style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
-                  >
-                    {t.tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </button>
+            profile={profile}
+            selected={selectedId === profile.id}
+            health={healthByProfileId[profile.id]}
+            onSelect={onSelect}
+          />
         ))}
       </div>
 
@@ -96,5 +84,73 @@ export function ProfileList({ profiles, selectedId, onSelect, onNew }: ProfileLi
         </button>
       </div>
     </div>
+  );
+}
+
+interface ProfileListItemProps {
+  profile: Profile;
+  selected: boolean;
+  health?: ProfileHealthResponse;
+  onSelect: (id: string) => void;
+}
+
+function ProfileListItem({ profile, selected, health, onSelect }: ProfileListItemProps) {
+  const warningSummary = getHealthWarningSummary(health);
+  const geoipParts = getHealthGeoipParts(health);
+  const healthTone = getHealthTone(health?.status);
+  const hasMeta = Boolean(profile.proxy || warningSummary || geoipParts.length);
+
+  return (
+    <button
+      onClick={() => onSelect(profile.id)}
+      className={`w-full text-left px-3 py-2.5 rounded-md mb-1 transition-colors ${
+        selected
+          ? "bg-surface-3 border border-border-hover"
+          : "hover:bg-surface-2 border border-transparent"
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <StatusIndicator status={profile.status} />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{profile.name}</span>
+        <span className="ml-auto shrink-0">
+          <HealthBadge health={health} compact />
+        </span>
+      </div>
+
+      {hasMeta && (
+        <div className="mt-1 ml-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {profile.proxy && (
+            <span className="text-xs text-gray-500">Proxy</span>
+          )}
+          {warningSummary && (
+            <span
+              className={`max-w-full truncate text-xs ${healthTone.summaryClassName}`}
+              title={warningSummary}
+            >
+              {warningSummary}
+            </span>
+          )}
+          {geoipParts.map((part) => (
+            <span key={part} className="text-xs text-gray-500">
+              {part}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {profile.tags.length > 0 && (
+        <div className="flex gap-1 mt-1.5 ml-4 flex-wrap">
+          {profile.tags.map((t) => (
+            <span
+              key={t.tag}
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-4 text-gray-400"
+              style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
+            >
+              {t.tag}
+            </span>
+          ))}
+        </div>
+      )}
+    </button>
   );
 }

@@ -11,6 +11,7 @@ vi.mock("../lib/api", () => ({
     deleteProfile: vi.fn(),
     launchProfile: vi.fn(),
     stopProfile: vi.fn(),
+    getProfileHealth: vi.fn(),
   },
 }));
 
@@ -23,6 +24,7 @@ const mockApi = api as {
   deleteProfile: ReturnType<typeof vi.fn>;
   launchProfile: ReturnType<typeof vi.fn>;
   stopProfile: ReturnType<typeof vi.fn>;
+  getProfileHealth: ReturnType<typeof vi.fn>;
 };
 
 const fakeProfile = {
@@ -55,8 +57,19 @@ const fakeProfile = {
   automation_url: null,
 };
 
+const fakeHealth = {
+  profile_id: "abc-123",
+  status: "good" as const,
+  geoip: null,
+  manual_overrides: { timezone: false, locale: false },
+  runtime: { status: "stopped", vnc_ws_port: null, automation_url: null },
+  warnings: [],
+  checked_at: "2026-05-25T01:00:00Z",
+};
+
 beforeEach(() => {
   mockApi.listProfiles.mockResolvedValue([fakeProfile]);
+  mockApi.getProfileHealth.mockResolvedValue(fakeHealth);
 });
 
 afterEach(() => {
@@ -75,6 +88,28 @@ describe("useProfiles", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.profiles).toEqual([fakeProfile]);
     expect(mockApi.listProfiles).toHaveBeenCalled();
+  });
+
+  it("loads cached health snapshots without blocking the profile list", async () => {
+    const { result } = renderHook(() => useProfiles());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await waitFor(() => {
+      expect(result.current.healthByProfileId["abc-123"]).toEqual(fakeHealth);
+    });
+
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("abc-123");
+  });
+
+  it("keeps profiles usable when a health request fails", async () => {
+    mockApi.getProfileHealth.mockRejectedValue(new Error("health failed"));
+
+    const { result } = renderHook(() => useProfiles());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.profiles).toEqual([fakeProfile]);
+    expect(result.current.error).toBe(null);
+    expect(result.current.healthByProfileId["abc-123"]).toBeUndefined();
   });
 
   it("create prepends to list", async () => {
@@ -125,5 +160,25 @@ describe("useProfiles", () => {
     const { result } = renderHook(() => useProfiles());
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe("Network error");
+  });
+
+  it("refreshes health after launching a profile", async () => {
+    mockApi.launchProfile.mockResolvedValue({
+      profile_id: "abc-123",
+      status: "running",
+      vnc_ws_port: 6100,
+      display: ":100",
+      automation_url: "/api/profiles/abc-123/automation",
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockApi.getProfileHealth.mockClear();
+
+    await act(async () => {
+      await result.current.launch("abc-123");
+    });
+
+    expect(mockApi.getProfileHealth).toHaveBeenCalledWith("abc-123");
   });
 });

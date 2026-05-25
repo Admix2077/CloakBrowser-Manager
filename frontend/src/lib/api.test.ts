@@ -93,6 +93,65 @@ describe("api.stopProfile", () => {
   });
 });
 
+// ── profile health ─────────────────────────────────────────────────────────
+
+describe("api.getProfileHealth", () => {
+  it("requests the cached health snapshot without a network check", async () => {
+    const health = {
+      profile_id: "1",
+      status: "warning",
+      geoip: {
+        ip: "203.0.113.20",
+        country_code: "JP",
+        timezone: "Asia/Tokyo",
+        locale: "ja-JP",
+        source: "ipwho.is",
+        resolved_at: "2026-05-25T00:00:00Z",
+      },
+      manual_overrides: { timezone: false, locale: false },
+      runtime: { status: "stopped", vnc_ws_port: null, automation_url: null },
+      warnings: [
+        {
+          code: "geoip_stale",
+          message: "最近一次 GeoIP 检测结果已过期。",
+          severity: "warning",
+          action: "重新运行健康检测刷新出口 IP 指纹。",
+        },
+      ],
+      checked_at: "2026-05-25T01:00:00Z",
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(health));
+
+    const result = await api.getProfileHealth("1");
+
+    expect(result.status).toBe("warning");
+    expect(result.warnings[0].code).toBe("geoip_stale");
+    expect(mockFetch).toHaveBeenCalledWith("/api/profiles/1/health", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+});
+
+describe("api.checkProfileHealth", () => {
+  it("sends POST to run an active profile health check", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      profile_id: "1",
+      status: "good",
+      geoip: null,
+      manual_overrides: { timezone: false, locale: false },
+      runtime: { status: "stopped", vnc_ws_port: null, automation_url: null },
+      warnings: [],
+      checked_at: "2026-05-25T01:00:00Z",
+    }));
+
+    await api.checkProfileHealth("1");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/1/health/check");
+    expect(options.method).toBe("POST");
+  });
+});
+
 // ── setClipboard ────────────────────────────────────────────────────────────
 
 describe("api.setClipboard", () => {

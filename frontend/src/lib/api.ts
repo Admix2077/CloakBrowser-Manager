@@ -73,6 +73,49 @@ export interface LaunchResult {
   automation_url: string | null;
 }
 
+export type HealthStatus = "unknown" | "good" | "warning" | "error";
+
+export type HealthWarningCode =
+  | "geoip_missing"
+  | "geoip_stale"
+  | "proxy_invalid"
+  | "geoip_lookup_failed"
+  | "manual_timezone_mismatch"
+  | "manual_locale_mismatch"
+  | "runtime_vnc_missing"
+  | "runtime_automation_missing"
+  | "launch_failed";
+
+export interface HealthWarning {
+  code: HealthWarningCode;
+  message: string;
+  severity: "info" | "warning" | "error";
+  action: string | null;
+}
+
+export interface HealthGeoIP {
+  ip: string | null;
+  country_code: string | null;
+  timezone: string | null;
+  locale: string | null;
+  source: string | null;
+  resolved_at: string | null;
+}
+
+export interface ProfileHealthResponse {
+  profile_id: string;
+  status: HealthStatus;
+  geoip: HealthGeoIP | null;
+  manual_overrides: Record<string, boolean>;
+  runtime: {
+    status: string;
+    vnc_ws_port: number | null;
+    automation_url: string | null;
+  };
+  warnings: HealthWarning[];
+  checked_at: string;
+}
+
 export interface SystemStatus {
   running_count: number;
   binary_version: string;
@@ -150,6 +193,14 @@ export const api = {
 
   stopProfile: (id: string) =>
     request<{ ok: boolean }>(`/api/profiles/${id}/stop`, { method: "POST" }),
+
+  getProfileHealth: (id: string) =>
+    request<ProfileHealthResponse>(`/api/profiles/${id}/health`),
+
+  checkProfileHealth: (id: string) =>
+    request<ProfileHealthResponse>(`/api/profiles/${id}/health/check`, {
+      method: "POST",
+    }),
 
   getStatus: () => request<SystemStatus>("/api/status"),
 

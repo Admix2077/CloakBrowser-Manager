@@ -89,7 +89,17 @@ interface AppContentProps {
 }
 
 function AppContent({ authRequired, onLogout }: AppContentProps) {
-  const { profiles, loading, error, create, update, remove, launch, stop } = useProfiles();
+  const {
+    profiles,
+    healthByProfileId,
+    loading,
+    error,
+    create,
+    update,
+    remove,
+    launch,
+    stop,
+  } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -161,6 +171,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             selectedId={selectedId}
             onSelect={handleSelect}
             onNew={handleNew}
+            healthByProfileId={healthByProfileId}
           />
         </div>
       )}

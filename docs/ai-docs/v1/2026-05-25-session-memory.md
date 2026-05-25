@@ -258,32 +258,141 @@ frontend/src/styles/globals.css
 - V1.5 做 proxy manager、profile template、检测历史、批量导入导出、API 控制台。
 - V2 做 RPA、同步器、团队权限、审计中心、cookie robot、短生命周期 automation profile。
 
-## 10. 推荐下一步执行计划
+## 10. 2026-05-25 至 2026-05-26 推进记录
+
+### 10.1 01 契约边界与事实源
+
+已提交：
+
+```text
+a1a1fb0 docs: define cloakbrowser runtime boundaries
+```
+
+完成内容：
+
+- 新增 `docs/ai-docs/v1` 文档树。
+- 明确 CloakBrowser、Project Mileage App、Project Mileage Payload 的职责边界。
+- `tasks/progress.md` 中 01 已勾选。
+
+### 10.2 02 指纹健康引擎后端
+
+已提交：
+
+```text
+e7a5c69 feat: add profile health engine api
+```
+
+完成内容：
+
+- 新增 `backend/health.py`。
+- 新增 `GET /api/profiles/{id}/health`。
+- 新增 `POST /api/profiles/{id}/health/check`。
+- 成功 GeoIP 检测只写 `last_geoip_*`，不覆盖手动 `timezone` / `locale`。
+- lookup 失败不清空旧检测结果。
+- 无效 proxy 返回稳定 health response，不发起 GeoIP lookup。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 11 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py backend/tests/test_geoip.py backend/tests/test_api.py -q
+# 77 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 216 passed
+```
+
+### 10.3 02 指纹健康引擎前端
+
+完成内容：
+
+- 新增前端 health 类型和 API client。
+- 新增 `frontend/src/lib/health.ts`。
+- 新增 `frontend/src/components/HealthBadge.tsx`。
+- `useProfiles()` 增加 `healthByProfileId`，首屏按 profile id 集合拉取 cached health。
+- `ProfileList` 在 profile 名称同行右侧显示 HealthBadge，第二行显示 warning summary 与 GeoIP 摘要。
+- 搜索仍只按 profile 名称，不被 health 文案污染。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run
+# 6 passed, 33 passed
+
+cd frontend && npm run build
+# built successfully
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py backend/tests/test_geoip.py backend/tests/test_api.py -q
+# 77 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 216 passed
+```
+
+浏览器走查：
+
+- 使用临时后端数据目录 `/tmp/cloakbrowser-manager-qa-data`，因为本机无 `/data` 写权限。
+- 使用 `agent-browser` 打开 `http://127.0.0.1:5173/`。
+- 桌面 `1440x900` 与移动 `390x844` 视口已检查。
+- `可继续`、`需关注`、`不可用`、`未检测` 四种状态可见。
+- warning / error / GeoIP 摘要没有明显重叠。
+- 搜索 `需关注` 返回 `No matches`。
+- 搜索 `Warning` 后选择 profile，编辑表单和 `Launch` 按钮仍可用。
+- 控制台无相关应用错误。
+
+02 模块已完成，`tasks/progress.md` 中 02 已勾选。
+
+### 10.4 GitHub 远端事实
+
+用户明确要求：
+
+- 只能维护用户自己的 GitHub 账号下仓库。
+- 不向上游 `CloakHQ/CloakBrowser-Manager.git` 推送。
+- 如果需要远端，必须新建用户账号下的私有仓库。
+
+当前事实：
+
+- 本地分支为 `feature/invisible-playwright-engine`。
+- `origin` fetch 仍指向上游：
+
+```text
+https://github.com/CloakHQ/CloakBrowser-Manager.git
+```
+
+- 已将 `origin` push URL 禁用：
+
+```text
+DISABLED_DO_NOT_PUSH_TO_UPSTREAM
+```
+
+- 此前尝试推送上游失败，GitHub 返回 401，没有成功在上游创建分支或提交。
+- `gh auth status` 显示 active account 为 `Admix2077`，但 token/API 当前不可用或超时，不能用 CLI 创建私有仓库。
+- 后续需要用户重新完成 `gh auth login`，或在 `Admix2077` 账号下手动创建私有仓库并提供 remote URL，再新增独立 remote 推送。
+
+## 11. 推荐下一步执行计划
 
 下一次 session 可以从这个顺序开始：
 
 1. 阅读本文档和同目录计划文档：
    - `docs/ai-docs/v1/2026-05-25-session-memory.md`
    - `docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md`
+   - `docs/ai-docs/v1/tasks/progress.md`
+   - `docs/ai-docs/v1/tasks/03-profile-operations-console.md`
 2. 检查工作区：
    - `git status --short`
 3. 跑现有测试作为基线：
    - `. .venv/bin/activate && python -m pytest backend/tests -q`
    - `cd frontend && npm test -- --run`
    - `cd frontend && npm run build`
-4. 后端先实现：
-   - `POST /api/profiles/{id}/health/check`
-   - `POST /api/profiles/bulk`
-5. 前端再实现：
-   - Profile table/list 运营台。
-   - HealthBadge。
-   - FilterBar。
-   - BulkActionBar。
-   - ProfileSummaryPanel。
-   - Viewer 环境条。
-6. 最后做 UI polish 和浏览器验收。
+4. 从 03 Profile 运营台开始推进第一个可验证小闭环：
+   - Profile list/table 的运营字段密度。
+   - health / proxy / GeoIP / tags / runtime status 的筛选和排序。
+   - 多选和批量操作入口的最小闭环。
+5. 每个前端小闭环必须跑前端测试、build 和浏览器 UI/UE 走查。
 
-## 11. 验证命令记录
+## 12. 验证命令记录
 
 之前已通过的验证：
 
@@ -325,7 +434,7 @@ docker rm -f invisible-browser-manager-live
 docker run -d --name invisible-browser-manager-live -p 100.104.13.11:8080:8080 -v invisible-browser-profiles:/data invisible-browser-manager:latest
 ```
 
-## 12. GitHub 状态
+## 13. GitHub 状态
 
 用户之前希望创建 GitHub private repo 并 push。
 
@@ -343,7 +452,7 @@ gh auth login -h github.com
 
 认证恢复后，可以继续创建 private repo 并 push。
 
-## 13. 注意事项
+## 14. 注意事项
 
 - 不要把 `timezone` / `locale` 自动改写为 GeoIP 结果。
 - 不要把当前项目重新设计成 Chromium CDP 架构。
