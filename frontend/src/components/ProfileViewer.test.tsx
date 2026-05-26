@@ -104,6 +104,39 @@ describe("ProfileViewer VNC connection", () => {
 
     await waitFor(() => expect(onDisconnect).toHaveBeenCalledTimes(1));
   });
+
+  it("redacts regular profile viewer security failures instead of rendering raw reasons", async () => {
+    const onDisconnect = vi.fn();
+    const rawReason =
+      "unexpected server detail for /api/profiles/profile-1/vnc?internal_ticket=secret-ticket";
+
+    render(
+      <ProfileViewer
+        profileId="profile-1"
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    await waitFor(() => expect(rfbInstances[0]?.listeners.securityfailure).toBeTruthy());
+
+    act(() => {
+      rfbInstances[0].listeners.securityfailure({
+        detail: { reason: rawReason },
+      });
+    });
+
+    expect(await screen.findByText("Connection failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.",
+      ),
+    ).toBeTruthy();
+    expect(onDisconnect).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("internal_ticket=secret-ticket");
+    expect(document.body.textContent).not.toContain(rawReason);
+  });
 });
 
 describe("ProfileViewer Automation API toolbar action", () => {

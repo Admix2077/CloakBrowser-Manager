@@ -54,6 +54,10 @@
   - runtime viewer 初始化/构造异常显示固定提示，不渲染异常 message，避免把 viewer token、URL query 或完整 viewer URL 暴露到 UI。
   - 已成功连接后的 runtime viewer 断开继续走原有 `onDisconnect()`。
   - 普通 profile viewer 的 VNC 断开行为保持不变。
+- [x] 普通 profile viewer 安全失败脱敏：
+  - 普通 profile viewer 的 `securityfailure` 同样显示固定提示。
+  - 不渲染 noVNC 原始 reason，避免把内部 ticket、URL query 或后端细节暴露到 UI。
+  - 普通 profile viewer 的 VNC 断开行为保持不变。
 - [x] 记录 viewer connected/disconnected audit：
   - 当前覆盖成功进入 runtime VNC 后的 `runtime.viewer.connected`。
   - 当前覆盖成功连接后的断开 `runtime.viewer.disconnected`。
@@ -265,24 +269,26 @@ git diff --check
 - 需要 Jeff/主 agent 确认 API 名称、DTO 字段、权限节点、扣费模型、viewer token 刷新策略和跨系统补偿策略。
 - 未确认前不得直接修改 `/home/jeff/code/project-mileage-v3-app` 或 `/home/jeff/code/project-mileage-v3-payload`。
 
-## 2026-05-27 CloakBrowser runtime viewer access failure hint 小闭环
+## 2026-05-27 CloakBrowser viewer access failure hint 小闭环
 
 当前状态：
 
-- 已完成 CloakBrowser 前端 runtime viewer 访问失败的固定安全提示。
+- 已完成 CloakBrowser 前端 viewer 访问失败的固定安全提示。
 - 本轮只改 CloakBrowser 前端组件和测试，不进入 Project Mileage app/payload。
 - 该提示不替代 Payload/App 的 viewer token 刷新、权限、扣费或审计契约。
 
 已完成：
 
 - `frontend/src/components/ProfileViewer.tsx`
-  - 新增 runtime viewer 固定失败提示文案。
+  - 新增 viewer 固定失败提示文案。
+  - 普通 profile viewer 和 runtime viewer 的 `securityfailure` 均显示固定提示，不渲染 noVNC 原始 reason。
   - `vncUrl` 存在时，`securityfailure` 显示固定提示，不渲染 noVNC 原始 reason。
   - `vncUrl` 存在且连接建立前触发 `disconnect` 时，显示固定提示，并且不调用普通 `onDisconnect()`。
   - `vncUrl` 存在且 noVNC 初始化/构造抛出异常时，显示固定提示，不渲染异常 message。
   - `vncUrl` 存在且已经成功连接后再断开时，继续调用 `onDisconnect()`，保持正常退出路径。
   - 未传 `vncUrl` 的普通 profile viewer 断开行为保持不变。
 - `frontend/src/components/ProfileViewer.test.tsx`
+  - 覆盖普通 profile viewer `securityfailure` 不渲染内部 ticket、URL query 或原始 reason。
   - 覆盖 runtime viewer `securityfailure` 不渲染 viewer token、完整 runtime viewer URL 或原始 reason。
   - 覆盖 runtime viewer 建立连接前断开时显示固定提示，且不调用普通断开回调。
   - 覆盖 runtime viewer 初始化/构造异常不渲染 viewer token、完整 runtime viewer URL 或原始异常 message。
@@ -292,7 +298,7 @@ git diff --check
 
 ```bash
 npm test -- ProfileViewer.test.tsx
-# 13 passed
+# 14 passed
 
 npm test -- App.test.tsx
 # 27 passed
@@ -301,7 +307,7 @@ npm test -- lib/api.test.ts
 # 29 passed
 
 npm test -- --run
-# 191 passed
+# 192 passed
 
 npm run build
 # built successfully

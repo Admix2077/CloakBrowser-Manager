@@ -88,12 +88,8 @@ export function ProfileViewer({
           }
         });
 
-        rfb.addEventListener("securityfailure", (e: any) => {
-          if (isRuntimeViewer) {
-            setError(RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE);
-            return;
-          }
-          setError(`Security failure: ${e.detail.reason}`);
+        rfb.addEventListener("securityfailure", () => {
+          setError(RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE);
         });
       } catch (err) {
         if (!cancelled) {
