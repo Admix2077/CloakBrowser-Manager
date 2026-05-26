@@ -40,14 +40,14 @@
 - [x] 新增 error banner。
 - [x] 新增 toast 或 inline feedback。
 - [x] 用项目内 ConfirmDialog 替代原生 `confirm`。
-- [ ] ProfileForm 改为分组页签：
+- [x] ProfileForm 改为分组页签：
   - Identity。
   - Network。
   - Device。
   - Behavior。
   - Advanced。
 - [x] Viewer 顶部 EnvironmentStrip 视觉升级。
-- [ ] 375px、768px、1024px、1440px 响应式检查。
+- [x] 375px、768px、1024px、1440px 响应式检查。
 - [ ] 文案避免“保证安全”“保证不封号”等不可验证承诺。
 
 ## 验证
@@ -60,7 +60,7 @@ cd frontend && npm run build
 浏览器检查：
 
 - [x] Profile table 无溢出。
-- [ ] 表单长字段不撑破容器。
+- [x] 表单长字段不撑破容器。
 - [x] Viewer 工具条不遮挡 VNC。
 - [x] 批量操作栏不挡住主操作。
 - [ ] 浅色默认主题对比度足够。
@@ -647,3 +647,85 @@ cd frontend && npm run build
 - 没有引入全局 toast provider。
 - 没有解锁 Launch / Stop / Tag / Delete 批量高风险动作。
 - 没有 push 到任何远端仓库。
+
+## 2026-05-26 ProfileForm 分组页签与导航回归小闭环
+
+背景：
+
+- Jeff 反馈当前 edit profile 页面里点击左侧 `All profiles` 未回主列表；当前分支已有 `handleSidebarFiltersChange` 修复，本轮补足 VNC viewer 分支回归测试，并用浏览器重新验证 8095。
+- 继续推进 `11 UI 视觉系统与体验升级` 的 `ProfileForm 改为分组页签`，把长表单收敛为更专业的分区编辑体验。
+- 子 agent `Copernicus` 只读审计 ProfileForm 字段归属；子 agent `Tesla` 只读 review 未提交 diff，确认保存 payload、删除确认、unsupported 字段隐藏、tags / launch args 语义保持。
+
+已完成：
+
+- [x] `frontend/src/App.test.tsx`
+  - 新增从 running profile 的 VNC viewer 点击侧栏 `All profiles` 回到 Profile operations table 的回归覆盖。
+  - 更新创建/编辑集成测试，按真实页签路径切到 `Network` / `Advanced` 后填写字段。
+- [x] `frontend/src/components/ProfileForm.tsx`
+  - 新增 `Identity` / `Network` / `Device` / `Behavior` / `Advanced` 页签。
+  - 页签只控制当前 panel 渲染；保存仍提交同一个 `form` state，不拆分保存流。
+  - `Delete`、`Cancel`、`Save/Create` 保持在页签外，删除确认仍使用项目内 `ConfirmDialog`。
+  - `Tags`、`Firefox Launch Args`、`Notes` 合并到 `Advanced`。
+  - `Hardware` 分区改为 `Device`，不新增 `platform`、`user_agent`、`human_preset`、`geoip`、`headless` 等当前阶段不暴露控件。
+  - Randomize seed 图标改为 lucide `Dices`，与当前按钮图标体系一致。
+- [x] `frontend/src/components/ProfileForm.test.tsx`
+  - 覆盖 tablist / tab / 默认 `Identity`。
+  - 覆盖跨页签填写后保存 payload 不丢字段。
+  - 覆盖 unsupported identity controls 跨页签仍隐藏。
+  - 覆盖 behavior checkbox、tag chip、launch args、delete dialog 在新页签结构下仍可用。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx -t "returns to the all profiles table when selecting All profiles from the VNC viewer"
+# 1 passed, 22 skipped
+
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 红灯：9 failed
+# 失败点：当前 ProfileForm 尚无 tablist/tab
+
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 1 passed, 9 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileForm.test.tsx
+# 2 passed, 32 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 166 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x960`：
+  - 打开 `Alpha Warmup` 编辑页，确认 `Identity` / `Network` / `Device` / `Behavior` / `Advanced` 页签可见。
+  - 切换到 `Network` 和 `Advanced`，确认字段跟随页签切换。
+  - 从编辑页点击侧栏 `All profiles` 后 JS 验证：`hasTable=true`、`hasEditHeading=false`、`scrollWidth=1440`、`clientWidth=1440`。
+- 移动 `390x844`：
+  - 打开 `Alpha Warmup` 编辑页，确认页签在窄屏可见且不撑破 body。
+  - 切换到 `Advanced` 后 JS 验证：`selectedTab="Advanced"`、`hasLaunchArg=true`、`scrollWidth=390`、`clientWidth=390`。
+- 响应式宽度检查：
+  - `375x844` Network panel：`scrollWidth=375`、`clientWidth=375`、`hasProxy=true`。
+  - `768x900` Network panel：`scrollWidth=768`、`clientWidth=768`、`hasProxy=true`。
+  - `1024x900` Network panel：`scrollWidth=1024`、`clientWidth=1024`、`hasProxy=true`。
+  - `1440x960` Network panel：`scrollWidth=1440`、`clientWidth=1440`、`hasProxy=true`。
+- `agent-browser errors` 无输出；`agent-browser console` 无输出。
+- 截图：
+  - `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-profile-form-identity.png`
+  - `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-profile-form-network.png`
+  - `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-profile-form-advanced.png`
+  - `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-all-profiles-after-edit.png`
+  - `/tmp/cloakbrowser-profile-form-tabs-screens/mobile-profile-form-identity.png`
+  - `/tmp/cloakbrowser-profile-form-tabs-screens/mobile-profile-form-advanced.png`
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有改变 profile 保存 API、删除事实流、tags / launch args 提交语义。
+- 没有推送到任何远端仓库。

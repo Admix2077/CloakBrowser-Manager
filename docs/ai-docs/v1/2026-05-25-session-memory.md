@@ -3875,3 +3875,82 @@ cd frontend && npm run build
 - 没有删除或清空真实 profile 数据。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 52. 2026-05-26 ProfileForm 分组页签与 All profiles 导航回归小闭环
+
+背景：
+
+- Jeff 反馈：在某个 profile 的 Edit Profile 页面点击左侧 `All profiles` 后应回到 All Profiles 列表页。
+- 当前分支已有 `handleSidebarFiltersChange` 修复 stopped edit 分支，本轮补充 running profile / VNC viewer 分支回归测试，并在 8095 浏览器实测。
+- 继续推进 `11 UI 视觉系统与体验升级` 的 ProfileForm 分组页签。
+
+已完成：
+
+- `frontend/src/App.test.tsx`
+  - 新增从 VNC viewer 点击侧栏 `All profiles` 回到主表的回归测试。
+  - 创建/编辑集成测试按新 ProfileForm 页签路径填写 `Network` 和 `Advanced` 字段。
+- `frontend/src/components/ProfileForm.tsx`
+  - 表单改为 `Identity` / `Network` / `Device` / `Behavior` / `Advanced` 页签。
+  - `form` state 和 `onSave(form)` 保持不变，跨页签字段不会丢失。
+  - 删除确认仍使用 `ConfirmDialog`，按钮仍在页签外。
+  - 不暴露当前阶段 unsupported 字段：`platform`、`user_agent`、`human_preset`、`geoip`、`headless`。
+- `frontend/src/components/ProfileForm.test.tsx`
+  - 覆盖页签可访问结构、默认 Identity、跨页签保存 payload、unsupported 字段隐藏、checkbox/tag/launch args/delete dialog。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md`
+  - 勾选 `ProfileForm 改为分组页签`。
+  - 勾选 `375px、768px、1024px、1440px 响应式检查`。
+  - 勾选浏览器检查 `表单长字段不撑破容器`。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx -t "returns to the all profiles table when selecting All profiles from the VNC viewer"
+# 1 passed, 22 skipped
+
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 红灯：9 failed
+# 失败点：当前 ProfileForm 尚无 tablist/tab
+
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 1 passed, 9 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileForm.test.tsx
+# 2 passed, 32 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 166 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x960`：
+  - `Alpha Warmup` 编辑页页签可见并可切换。
+  - 编辑页点击侧栏 `All profiles` 后 JS 验证：`hasTable=true`、`hasEditHeading=false`、`scrollWidth=1440`、`clientWidth=1440`。
+- 移动 `390x844`：
+  - 编辑页页签在窄屏可见。
+  - 切到 `Advanced` 后 JS 验证：`selectedTab="Advanced"`、`hasLaunchArg=true`、`scrollWidth=390`、`clientWidth=390`。
+- 额外宽度检查：
+  - `375x844`、`768x900`、`1024x900`、`1440x960` 的 Network panel 均无 body 横向溢出。
+- `agent-browser errors` 无输出；`agent-browser console` 无输出。
+
+截图：
+
+- `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-profile-form-identity.png`
+- `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-profile-form-network.png`
+- `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-profile-form-advanced.png`
+- `/tmp/cloakbrowser-profile-form-tabs-screens/desktop-all-profiles-after-edit.png`
+- `/tmp/cloakbrowser-profile-form-tabs-screens/mobile-profile-form-identity.png`
+- `/tmp/cloakbrowser-profile-form-tabs-screens/mobile-profile-form-advanced.png`
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有改变 profile 保存 API、删除事实流、tags / launch args 提交语义。
+- 没有 push 到任何远端仓库。

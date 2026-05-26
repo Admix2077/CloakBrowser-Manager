@@ -1,4 +1,4 @@
-import { Save, Trash2, X } from "lucide-react";
+import { Dices, Fingerprint, Monitor, MousePointer2, Network, Save, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Profile, ProfileCreateData } from "../lib/api";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -53,6 +53,20 @@ const GPU_PRESETS: Record<string, { vendor: string; renderer: string }> = {
   },
 };
 
+type ProfileFormSectionId = "identity" | "network" | "device" | "behavior" | "advanced";
+
+const PROFILE_FORM_SECTIONS: Array<{
+  id: ProfileFormSectionId;
+  label: string;
+  Icon: typeof Fingerprint;
+}> = [
+  { id: "identity", label: "Identity", Icon: Fingerprint },
+  { id: "network", label: "Network", Icon: Network },
+  { id: "device", label: "Device", Icon: Monitor },
+  { id: "behavior", label: "Behavior", Icon: MousePointer2 },
+  { id: "advanced", label: "Advanced", Icon: SlidersHorizontal },
+];
+
 export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileFormProps) {
   const isEdit = profile !== null;
 
@@ -77,6 +91,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
   const [tagColor, setTagColor] = useState<string | null>("#6366f1");
   const [launchArgInput, setLaunchArgInput] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<ProfileFormSectionId>("identity");
 
   useEffect(() => {
     if (profile) {
@@ -105,6 +120,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         tags: profile.tags ?? [],
       });
     }
+    setActiveSection("identity");
   }, [profile?.id]);
 
   const set = <K extends keyof ProfileCreateData>(key: K, value: ProfileCreateData[K]) => {
@@ -203,10 +219,44 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         </div>
       </div>
 
+      <div
+        role="tablist"
+        aria-label="Profile settings sections"
+        className="mb-5 flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1 shadow-hairline"
+      >
+        {PROFILE_FORM_SECTIONS.map(({ id, label, Icon }) => {
+          const selected = activeSection === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`profile-form-tab-${id}`}
+              aria-selected={selected}
+              aria-controls={`profile-form-panel-${id}`}
+              onClick={() => setActiveSection(id)}
+              className={`inline-flex h-9 min-w-max items-center gap-1.5 rounded-[7px] px-3 text-xs font-semibold transition-[background-color,color,box-shadow,transform] duration-150 ease-out active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
+                selected
+                  ? "bg-slate-950 text-white shadow-[0_1px_2px_rgba(15,23,42,0.16)]"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-950"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="space-y-4">
-        {/* Basic */}
-        <section className="form-section">
-          <h3 className="section-title">Basic</h3>
+        {activeSection === "identity" && (
+        <section
+          id="profile-form-panel-identity"
+          role="tabpanel"
+          aria-labelledby="profile-form-tab-identity"
+          className="form-section animate-console-section-in"
+        >
+          <h3 className="section-title">Identity</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="label" htmlFor="profile-name">Profile Name</label>
@@ -236,38 +286,21 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
                   className="btn-secondary px-2.5"
                   title="Randomize seed"
                 >
-                  <svg className="h-5 w-5" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round">
-                    {/* Right face - lightest */}
-                    <polygon points="28,10 16,16 16,28 28,22" fill="currentColor" opacity="0.06" />
-                    <polygon points="28,10 16,16 16,28 28,22" />
-                    {/* Left face - medium shade */}
-                    <polygon points="4,10 16,16 16,28 4,22" fill="currentColor" opacity="0.2" />
-                    <polygon points="4,10 16,16 16,28 4,22" />
-                    {/* Top face - brightest */}
-                    <polygon points="16,3 28,10 16,16 4,10" fill="currentColor" opacity="0.1" />
-                    <polygon points="16,3 28,10 16,16 4,10" />
-                    {/* Dots on top face (3 - diagonal) */}
-                    <circle cx="11.5" cy="8.5" r="1" fill="currentColor" opacity="0.7" />
-                    <circle cx="16" cy="9.5" r="1" fill="currentColor" opacity="0.7" />
-                    <circle cx="20.5" cy="10.5" r="1" fill="currentColor" opacity="0.7" />
-                    {/* Dots on left face (5 - dice pattern) */}
-                    <circle cx="7.5" cy="14" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="12.5" cy="16.5" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="10" cy="19" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="7.5" cy="22" r="0.9" fill="currentColor" opacity="0.6" />
-                    <circle cx="12.5" cy="24.5" r="0.9" fill="currentColor" opacity="0.6" />
-                    {/* Dots on right face (2 - diagonal) */}
-                    <circle cx="20" cy="15" r="0.9" fill="currentColor" opacity="0.5" />
-                    <circle cx="24" cy="20" r="0.9" fill="currentColor" opacity="0.5" />
-                  </svg>
+                  <Dices className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
         </section>
+        )}
 
-        {/* Network */}
-        <section className="form-section">
+        {activeSection === "network" && (
+        <section
+          id="profile-form-panel-network"
+          role="tabpanel"
+          aria-labelledby="profile-form-tab-network"
+          className="form-section animate-console-section-in"
+        >
           <h3 className="section-title">Network</h3>
           <div className="space-y-3">
             <div>
@@ -304,10 +337,16 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
             </div>
           </div>
         </section>
+        )}
 
-        {/* Hardware */}
-        <section className="form-section">
-          <h3 className="section-title">Hardware</h3>
+        {activeSection === "device" && (
+        <section
+          id="profile-form-panel-device"
+          role="tabpanel"
+          aria-labelledby="profile-form-tab-device"
+          className="form-section animate-console-section-in"
+        >
+          <h3 className="section-title">Device</h3>
           <div className="space-y-3">
             <div>
               <label className="label" htmlFor="profile-screen-resolution">Screen Resolution</label>
@@ -402,9 +441,15 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
             </div>
           </div>
         </section>
+        )}
 
-        {/* Behavior */}
-        <section className="form-section">
+        {activeSection === "behavior" && (
+        <section
+          id="profile-form-panel-behavior"
+          role="tabpanel"
+          aria-labelledby="profile-form-tab-behavior"
+          className="form-section animate-console-section-in"
+        >
           <h3 className="section-title">Behavior</h3>
           <div className="space-y-3">
             <label className="choice-card">
@@ -450,10 +495,18 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
             </div>
           </div>
         </section>
+        )}
 
-        {/* Tags */}
-        <section className="form-section">
-          <h3 className="section-title">Tags</h3>
+        {activeSection === "advanced" && (
+        <section
+          id="profile-form-panel-advanced"
+          role="tabpanel"
+          aria-labelledby="profile-form-tab-advanced"
+          className="form-section animate-console-section-in"
+        >
+          <h3 className="section-title">Advanced</h3>
+          <div className="border-b border-slate-200 pb-4">
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Tags</h4>
           {(form.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
               {(form.tags ?? []).map((t) => (
@@ -505,11 +558,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               Add
             </button>
           </div>
-        </section>
+          </div>
 
-        {/* Launch Args */}
-        <section className="form-section">
-          <h3 className="section-title">Firefox Launch Args</h3>
+          <div className="border-b border-slate-200 py-4">
+          <h4 className="section-title">Firefox Launch Args</h4>
           <p className="text-xs text-slate-500 mb-2">
             Custom Firefox arguments passed to invisible_playwright at launch. Only Firefox-compatible launch arguments are applied.
           </p>
@@ -547,11 +599,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
               Add
             </button>
           </div>
-        </section>
+          </div>
 
-        {/* Notes */}
-        <section className="form-section">
-          <h3 className="section-title">Notes</h3>
+          <div className="pt-4">
+          <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Notes</h4>
           <label className="sr-only" htmlFor="profile-notes">Notes</label>
           <textarea
             id="profile-notes"
@@ -560,7 +611,9 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
             onChange={(e) => set("notes", e.target.value || null)}
             placeholder="Optional notes about this profile..."
           />
+          </div>
         </section>
+        )}
       </div>
 
       {deleteConfirmOpen && isEdit && profile && (

@@ -283,9 +283,11 @@ describe("App operations console", () => {
 
     expect(await screen.findByRole("heading", { name: "New Profile" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Profile Name"), { target: { value: "Created From Console" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Network" }));
     fireEvent.change(screen.getByLabelText("Proxy"), { target: { value: "http://proxy.example:8080" } });
     fireEvent.change(screen.getByLabelText("Timezone"), { target: { value: "America/New_York" } });
     fireEvent.change(screen.getByLabelText("Locale"), { target: { value: "en-US" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
     fireEvent.change(screen.getByPlaceholderText("Optional notes about this profile..."), {
       target: { value: "Created from operations console" },
     });
@@ -310,7 +312,9 @@ describe("App operations console", () => {
 
     expect(await screen.findByRole("heading", { name: "Edit Profile" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Profile Name"), { target: { value: "Alpha Edited" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Network" }));
     fireEvent.change(screen.getByLabelText("Timezone"), { target: { value: "America/Los_Angeles" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
     fireEvent.change(screen.getByPlaceholderText("Optional notes about this profile..."), {
       target: { value: "Edited from operations console" },
     });
@@ -679,6 +683,56 @@ describe("App operations console", () => {
     expect(tableProfileNames().join(" ")).toContain("Beta Broken");
     expect(screen.queryByRole("heading", { name: "Edit Profile" })).toBeNull();
     expect((screen.getByLabelText("Health status") as HTMLSelectElement).value).toBe("all");
+  });
+
+  it("returns to the all profiles table when selecting All profiles from the VNC viewer", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [
+        profile({
+          id: "running",
+          name: "Running Profile",
+          status: "running",
+          automation_url: "/api/profiles/running/automation",
+          clipboard_sync: true,
+          vnc_ws_port: 6100,
+        }),
+        profile({ id: "stopped", name: "Stopped Profile", status: "stopped" }),
+      ],
+      healthByProfileId: {
+        running: health("running", {
+          status: "good",
+          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
+        }),
+        stopped: health("stopped", { status: "unknown" }),
+      },
+      loading: false,
+      error: null,
+      create: mockCreate,
+      update: mockUpdate,
+      remove: mockRemove,
+      launch: mockLaunch,
+      stop: mockStop,
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(within(screen.getByRole("table")).getByRole("button", { name: "Open Running Profile" }));
+    expect(await screen.findByRole("region", { name: "VNC viewer" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "All profiles" }));
+
+    expect(await screen.findByRole("table")).toBeTruthy();
+    expect(tableProfileNames()).toHaveLength(2);
+    expect(tableProfileNames().join(" ")).toContain("Running Profile");
+    expect(tableProfileNames().join(" ")).toContain("Stopped Profile");
+    expect(screen.queryByRole("region", { name: "VNC viewer" })).toBeNull();
+    expect((screen.getByLabelText("Runtime status") as HTMLSelectElement).value).toBe("all");
   });
 
   it("previews a profile summary from the operations table without leaving the table", async () => {
