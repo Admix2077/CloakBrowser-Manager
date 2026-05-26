@@ -595,6 +595,23 @@ describe("App operations console", () => {
     expect((screen.getByLabelText("Health status") as HTMLSelectElement).value).toBe("error");
   });
 
+  it("returns to the all profiles table when selecting the sidebar All profiles quick view from profile editing", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Open Alpha Good" }));
+
+    expect(await screen.findByText("Edit Profile")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "All profiles" }));
+
+    expect(screen.getByRole("table")).toBeTruthy();
+    expect(tableProfileNames()).toHaveLength(2);
+    expect(tableProfileNames().join(" ")).toContain("Alpha Good");
+    expect(tableProfileNames().join(" ")).toContain("Beta Broken");
+    expect(screen.queryByRole("heading", { name: "Edit Profile" })).toBeNull();
+    expect((screen.getByLabelText("Health status") as HTMLSelectElement).value).toBe("all");
+  });
+
   it("previews a profile summary from the operations table without leaving the table", async () => {
     render(<App />);
 

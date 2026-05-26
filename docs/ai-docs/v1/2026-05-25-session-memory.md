@@ -3164,3 +3164,59 @@ git diff --check
 - 新建 / 编辑 / 删除 proxy UI。
 - CSV 粘贴导入。
 - `profiles.proxy` 到 `proxy_id` 的数据模型迁移。
+
+## 45. 2026-05-26 Profile 运营台 All profiles 返回列表 bugfix
+
+背景：
+
+- 用户反馈：打开某个 profile 进入 edit/detail 页面后，点击左侧导航栏 `All profiles` 不会回到 All profiles 列表页。
+- 根因：左侧 Saved views 只更新 `filters`，没有清空 `selectedId` 或把 `view` 从 `edit/view` 切回 `empty`；主表格只在 `section === "profiles" && view === "empty"` 时渲染。
+- 派发 1 个只读子 agent 定位状态机和测试切入点；主 agent 本地按 TDD 修复。
+
+已完成：
+
+- `frontend/src/App.tsx`
+  - 新增 `handleSidebarFiltersChange(nextFilters)`。
+  - 左侧 `ProfileList onFiltersChange` 改为该 handler。
+  - 点击左侧 Saved views 时同步设置 `section=profiles`、更新 filters、清空 `selectedId`、设置 `view=empty`。
+  - 主区 toolbar 的 `ProfileFilters onChange={setFilters}` 保持不变。
+- `frontend/src/App.test.tsx`
+  - 新增回归测试：从主表格打开 `Alpha Good` 进入 `Edit Profile`，点击左侧 `All profiles` 后回到主表格，并确认筛选回到 `all`。
+- `docs/ai-docs/v1/tasks/03-profile-operations-console.md`
+  - 追加本 bugfix 小闭环记录；03 模块完成状态不变。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx
+# 红灯：1 failed, 18 passed
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 passed, 19 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 146 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，当前 `frontend/dist` 生产 build。
+- 桌面 `1440x900`：
+  - 初始主表格可见。
+  - 点击 `Open Alpha Warmup` 进入 `Edit Profile`。
+  - 点击左侧 `All profiles` 后回到 `Profile operations` 主表格，`Edit Profile` 消失。
+  - JS 验证：`hasTable=true`、`hasEditHeading=false`、`allProfilesPressed="true"`、body 未横向撑破。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-all-profiles-nav-bugfix-screens/desktop-before-open.png`
+- `/tmp/cloakbrowser-all-profiles-nav-bugfix-screens/desktop-edit-profile.png`
+- `/tmp/cloakbrowser-all-profiles-nav-bugfix-screens/desktop-after-all-profiles.png`

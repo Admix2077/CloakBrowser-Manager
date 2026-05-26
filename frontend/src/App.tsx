@@ -202,6 +202,13 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     setView(profile?.status === "running" ? "view" : "edit");
   }, [profiles]);
 
+  const handleSidebarFiltersChange = useCallback((nextFilters: ProfileFilterState) => {
+    setSection("profiles");
+    setFilters(nextFilters);
+    setSelectedId(null);
+    setView("empty");
+  }, []);
+
   const handleNew = useCallback(() => {
     setSection("profiles");
     setSelectedId(null);
@@ -361,7 +368,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               healthByProfileId={healthByProfileId}
               filters={filters}
               filterOptions={filterOptions}
-              onFiltersChange={setFilters}
+              onFiltersChange={handleSidebarFiltersChange}
               showFilters={false}
             />
           </div>

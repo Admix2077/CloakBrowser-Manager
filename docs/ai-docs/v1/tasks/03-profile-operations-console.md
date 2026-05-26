@@ -1886,6 +1886,65 @@ git diff --check
 - 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip。
 - 03 模块仍保持完成状态；本记录作为用户反馈驱动的 UI polish 小闭环。
 
+## 2026-05-26 Profile 运营台 All profiles 返回列表 bugfix
+
+背景：
+
+- 用户反馈：打开某个 profile 进入 edit/detail 页面后，点击左侧导航栏 `All profiles` 不会回到 All profiles 列表页。
+- 根因：左侧 `ProfileList` 的 Saved views 只调用 `setFilters(view.filters)`，没有把 `AppContent` 的 `selectedId` 清空，也没有把 `view` 从 `edit/view` 切回 `empty`。主表格只在 `section === "profiles" && view === "empty"` 时渲染，因此页面继续停留在编辑页。
+
+已完成：
+
+- [x] `frontend/src/App.tsx`
+  - 新增 `handleSidebarFiltersChange(nextFilters)`。
+  - 左侧 sidebar 的 `ProfileList onFiltersChange` 改为该 handler。
+  - 点击左侧 Saved views 时会同步：
+    - `setSection("profiles")`。
+    - `setFilters(nextFilters)`。
+    - `setSelectedId(null)`。
+    - `setView("empty")`。
+  - 主区 toolbar 的 `ProfileFilters onChange={setFilters}` 保持不变，避免普通表格筛选误关闭当前主区上下文。
+- [x] `frontend/src/App.test.tsx`
+  - 新增回归测试：从主表格打开 `Alpha Good` 进入 `Edit Profile`，点击左侧 `All profiles` 后回到主表格。
+  - 断言主表格恢复 2 条 profile、`Edit Profile` heading 消失、`Health status` 回到 `all`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx
+# 红灯：1 failed, 18 passed
+# 点击 All profiles 后仍无 table，仍停留在 Edit Profile
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 passed, 19 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 146 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，当前 `frontend/dist` 生产 build。
+- 桌面 `1440x900`：
+  - 初始进入 Profile operations 主表格。
+  - 点击 `Open Alpha Warmup` 进入 `Edit Profile`。
+  - 点击左侧 `All profiles` 后回到 `Profile operations` 主表格。
+  - JS 验证：`hasTable: true`、`hasEditHeading: false`、`allProfilesPressed: "true"`、`document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-all-profiles-nav-bugfix-screens/desktop-before-open.png`
+- `/tmp/cloakbrowser-all-profiles-nav-bugfix-screens/desktop-edit-profile.png`
+- `/tmp/cloakbrowser-all-profiles-nav-bugfix-screens/desktop-after-all-profiles.png`
+
 ## 2026-05-26 Profile 运营台控件质感五次降噪 polish 小闭环
 
 背景：
