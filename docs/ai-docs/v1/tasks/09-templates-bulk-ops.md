@@ -24,6 +24,9 @@
 ### Proxy Template
 
 - [ ] 支持 proxy provider preset。
+  - [x] 后端事实源 CRUD API。
+  - [ ] 前端接入/选择。
+  - [ ] 与国家/标签选择、随机分配策略联动。
 - [ ] 支持按国家/标签选择 proxy。
 - [ ] 支持随机分配策略。
 
@@ -578,3 +581,53 @@ cd frontend && npm run build
 未覆盖范围：
 
 - 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。
+
+## 2026-05-26 Proxy Provider Preset 后端事实源 CRUD 小闭环
+
+背景：
+
+- Module 09 继续从低风险、可测试的 Proxy Template 前置能力切入。
+- 本轮只实现 proxy provider preset 的后端事实源和 CRUD API，不做前端选择器，不做按国家/标签选择 proxy，不做随机分配策略。
+- Preset 只保存 provider 元数据、国家和标签，不保存 proxy 凭证、provider API key、billing/account 信息。
+
+已完成：
+
+- [x] `backend/database.py`
+  - 新增 `proxy_provider_presets` 表。
+  - 新增 `create_proxy_provider_preset` / `list_proxy_provider_presets` / `get_proxy_provider_preset` / `update_proxy_provider_preset` / `delete_proxy_provider_preset`。
+  - 删除 preset 不级联删除已有 proxy assets。
+- [x] `backend/models.py`
+  - 新增 `ProxyProviderPresetCreate` / `ProxyProviderPresetUpdate` / `ProxyProviderPresetResponse`。
+  - 字段限制为 `name`、`provider`、`country_code`、`tags`、`notes` 和时间戳。
+- [x] `backend/main.py`
+  - 新增 `/api/proxy-provider-presets` CRUD：
+    - `GET /api/proxy-provider-presets`
+    - `POST /api/proxy-provider-presets`
+    - `GET /api/proxy-provider-presets/{preset_id}`
+    - `PUT /api/proxy-provider-presets/{preset_id}`
+    - `DELETE /api/proxy-provider-presets/{preset_id}`
+- [x] `backend/tests/test_proxy_provider_presets.py`
+  - 覆盖表创建、DB CRUD、API CRUD、not found、空名称拒绝。
+  - 覆盖删除 preset 不影响 proxy assets。
+  - 覆盖传入 `api_key` / `password` / `billing_account` 等凭证或账务字段不会进入响应和列表。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py -q
+# 7 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py backend/tests/test_proxies.py -q
+# 22 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 255 passed
+```
+
+未覆盖范围：
+
+- 前端 preset 创建/选择/管理入口。
+- CSV import dialog 消费 provider preset。
+- 按国家/标签选择 proxy。
+- 随机分配策略。
+- Proxy check/assign/GeoIP 行为，本轮没有修改。

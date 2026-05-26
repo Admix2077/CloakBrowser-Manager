@@ -178,6 +178,33 @@ class ProxyUpdate(BaseModel):
     notes: str | None = Field(default=None)
 
 
+class ProxyProviderPresetCreate(BaseModel):
+    name: str = Field(min_length=1)
+    provider: str | None = None
+    country_code: str | None = None
+    tags: list[TagCreate] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class ProxyProviderPresetUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    provider: str | None = Field(default=None)
+    country_code: str | None = Field(default=None)
+    tags: list[TagCreate] | None = None
+    notes: str | None = Field(default=None)
+
+
+class ProxyProviderPresetResponse(BaseModel):
+    id: str
+    name: str
+    provider: str | None = None
+    country_code: str | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
+    notes: str | None = None
+    created_at: str
+    updated_at: str
+
+
 class ProxyResponse(BaseModel):
     id: str
     name: str

@@ -52,6 +52,9 @@ from .models import (
     ProxyBulkCheckResult,
     ProxyCreate,
     ProxyFromProfileCreate,
+    ProxyProviderPresetCreate,
+    ProxyProviderPresetResponse,
+    ProxyProviderPresetUpdate,
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
@@ -486,6 +489,12 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     return ProxyResponse(**safe)
 
 
+def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
+    safe = dict(preset)
+    safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
+    return ProxyProviderPresetResponse(**safe)
+
+
 def _tag_payloads(tags: list[dict] | None) -> list[dict]:
     return [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in (tags or [])]
 
@@ -578,6 +587,53 @@ async def delete_proxy(proxy_id: str):
     deleted = db.delete_proxy(proxy_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Proxy not found")
+    return {"ok": True}
+
+
+@app.get("/api/proxy-provider-presets", response_model=list[ProxyProviderPresetResponse])
+async def list_proxy_provider_presets():
+    return [
+        _proxy_provider_preset_response(preset)
+        for preset in db.list_proxy_provider_presets()
+    ]
+
+
+@app.post(
+    "/api/proxy-provider-presets",
+    response_model=ProxyProviderPresetResponse,
+    status_code=201,
+)
+async def create_proxy_provider_preset(req: ProxyProviderPresetCreate):
+    data = req.model_dump()
+    data["tags"] = _tag_payloads(data.get("tags"))
+    preset = db.create_proxy_provider_preset(**data)
+    return _proxy_provider_preset_response(preset)
+
+
+@app.get("/api/proxy-provider-presets/{preset_id}", response_model=ProxyProviderPresetResponse)
+async def get_proxy_provider_preset(preset_id: str):
+    preset = db.get_proxy_provider_preset(preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Proxy provider preset not found")
+    return _proxy_provider_preset_response(preset)
+
+
+@app.put("/api/proxy-provider-presets/{preset_id}", response_model=ProxyProviderPresetResponse)
+async def update_proxy_provider_preset(preset_id: str, req: ProxyProviderPresetUpdate):
+    data = req.model_dump(exclude_unset=True)
+    if "tags" in data and data["tags"] is not None:
+        data["tags"] = _tag_payloads(data["tags"])
+    preset = db.update_proxy_provider_preset(preset_id, **data)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Proxy provider preset not found")
+    return _proxy_provider_preset_response(preset)
+
+
+@app.delete("/api/proxy-provider-presets/{preset_id}")
+async def delete_proxy_provider_preset(preset_id: str):
+    deleted = db.delete_proxy_provider_preset(preset_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Proxy provider preset not found")
     return {"ok": True}
 
 

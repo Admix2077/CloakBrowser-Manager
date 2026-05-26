@@ -95,6 +95,17 @@ def init_db():
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS proxy_provider_presets (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                provider TEXT,
+                country_code TEXT,
+                tags TEXT DEFAULT '[]',
+                notes TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS profile_templates (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -540,5 +551,94 @@ def update_proxy(proxy_id: str, **fields: Any) -> dict[str, Any] | None:
 def delete_proxy(proxy_id: str) -> bool:
     with get_db() as conn:
         cursor = conn.execute("DELETE FROM proxies WHERE id = ?", (proxy_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def _proxy_provider_preset_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    preset = dict(row)
+    preset["tags"] = _decode_tags(preset.get("tags"))
+    return preset
+
+
+def create_proxy_provider_preset(name: str, **fields: Any) -> dict[str, Any]:
+    preset_id = str(uuid.uuid4())
+    now = _now()
+    tags = fields.get("tags") or []
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO proxy_provider_presets (
+                id, name, provider, country_code, tags, notes, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                preset_id,
+                name,
+                fields.get("provider"),
+                fields.get("country_code"),
+                json.dumps(tags),
+                fields.get("notes"),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+
+    return get_proxy_provider_preset(preset_id)  # type: ignore[return-value]
+
+
+def list_proxy_provider_presets() -> list[dict[str, Any]]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM proxy_provider_presets ORDER BY created_at DESC"
+        ).fetchall()
+    return [_proxy_provider_preset_from_row(row) for row in rows]
+
+
+def get_proxy_provider_preset(preset_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM proxy_provider_presets WHERE id = ?",
+            (preset_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return _proxy_provider_preset_from_row(row)
+
+
+def update_proxy_provider_preset(preset_id: str, **fields: Any) -> dict[str, Any] | None:
+    if not get_proxy_provider_preset(preset_id):
+        return None
+
+    update_cols = []
+    update_vals = []
+    if "tags" in fields:
+        fields["tags"] = json.dumps(fields["tags"] or [])
+
+    for col in ("name", "provider", "country_code", "tags", "notes"):
+        if col in fields:
+            update_cols.append(f"{col} = ?")
+            update_vals.append(fields[col])
+
+    if update_cols:
+        update_cols.append("updated_at = ?")
+        update_vals.append(_now())
+        update_vals.append(preset_id)
+        with get_db() as conn:
+            conn.execute(
+                f"UPDATE proxy_provider_presets SET {', '.join(update_cols)} WHERE id = ?",
+                update_vals,
+            )
+            conn.commit()
+
+    return get_proxy_provider_preset(preset_id)
+
+
+def delete_proxy_provider_preset(preset_id: str) -> bool:
+    with get_db() as conn:
+        cursor = conn.execute(
+            "DELETE FROM proxy_provider_presets WHERE id = ?",
+            (preset_id,),
+        )
         conn.commit()
         return cursor.rowcount > 0

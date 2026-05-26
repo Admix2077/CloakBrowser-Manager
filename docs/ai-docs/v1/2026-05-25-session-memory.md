@@ -4675,3 +4675,48 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 63. 2026-05-26 Proxy Provider Preset 后端事实源 CRUD 小闭环
+
+背景：
+
+- Module 09 继续推进 Proxy Template 前置能力。
+- 本轮只做后端事实源 CRUD，不做前端 preset 管理/选择，不做国家/标签 proxy 选择或随机分配策略。
+- Preset 只保存 provider 元数据、国家和标签，不保存 proxy 凭证、provider API key、billing/account 信息。
+
+已完成：
+
+- `backend/database.py`
+  - 新增 `proxy_provider_presets` 表。
+  - 新增 `create_proxy_provider_preset` / `list_proxy_provider_presets` / `get_proxy_provider_preset` / `update_proxy_provider_preset` / `delete_proxy_provider_preset`。
+  - 删除 preset 不影响已有 proxy assets。
+- `backend/models.py`
+  - 新增 `ProxyProviderPresetCreate` / `ProxyProviderPresetUpdate` / `ProxyProviderPresetResponse`。
+- `backend/main.py`
+  - 新增 `/api/proxy-provider-presets` CRUD API。
+- `backend/tests/test_proxy_provider_presets.py`
+  - 覆盖表创建、DB CRUD、API CRUD、not found、空名称拒绝。
+  - 覆盖删除 preset 不影响 proxy assets。
+  - 覆盖传入 `api_key` / `password` / `billing_account` 等字段不会进入响应和列表。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 将 `proxy provider preset` 拆成子项：后端事实源已完成，前端接入与策略联动仍未完成。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py -q
+# 7 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py backend/tests/test_proxies.py -q
+# 22 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 255 passed
+```
+
+边界：
+
+- 没有修改 Proxy check/assign/GeoIP 行为。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
