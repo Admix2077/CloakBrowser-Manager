@@ -265,3 +265,71 @@ cd frontend && npm run build
 - 没有改变 VNC websocket、clipboard bridge、Automation REST API 契约。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 2026-05-26 Profile 运营台选中与批量操作微反馈小闭环
+
+背景：
+
+- Jeff 反馈当前页面美观度已经接近 SS 风格，但交互反馈仍偏生硬。
+- 本小闭环优先处理 Profile 运营台最高频的表格/卡片选择、批量操作栏出现、批量 Check health 忙碌反馈。
+- 不改变虚拟滚动固定行高、不改变真实批量 `Check health` 逻辑、不解锁 Launch / Stop / Tag / Delete 等高风险批量动作。
+
+已完成：
+
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - selected desktop row 与 mobile card 增加 `animate-profile-selection` 轻量反馈类。
+  - 保留 `data-state=selected` / `data-state=previewed` 优先级，行高仍由 `PROFILE_TABLE_ROW_HEIGHT` / `PROFILE_CARD_ROW_HEIGHT` 控制。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - bulk action bar 出现时增加 `animate-bulk-action-in`。
+  - `Check health` 忙碌态下 `HeartPulse` 图标增加 pulse 反馈，保留 `aria-busy=true` 和 disabled 状态。
+- [x] `frontend/src/styles/globals.css`
+  - 新增 `cloak-profile-selection` 与 `cloak-bulk-action-in` keyframes。
+  - 继续复用现有 `prefers-reduced-motion: reduce` 全局降级。
+- [x] `frontend/src/components/ProfileTable.test.tsx`
+  - 覆盖 selected row/card 动效类。
+  - 覆盖 bulk action bar 入场动效类。
+  - 覆盖 `Checking health` 时 icon pulse、disabled 和 `aria-busy`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 红灯：4 failed, 30 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 34 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 151 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x900`：
+  - 选择 `Alpha Warmup` 后出现 bulk action bar。
+  - JS 验证：`selectedRowMotion=true`、`bulkMotion=true`、`actionsVisible=true`、`scrollWidth=1440`、`innerWidth=1440`。
+  - 点击 `Check health` 后 JS 验证：`checkingVisible=true`、`ariaLabel=Checking health`、`iconPulse=true`、`toolbarBusy=true`。
+- 移动 `390x844`：
+  - 选择 `Alpha Warmup` card 后 bulk action bar 可见。
+  - JS 验证：`selectedCardMotion=true`、`bulkMotion=true`、`scrollWidth=390`、`innerWidth=390`、`overflow=false`。
+- `agent-browser console` 无输出；`agent-browser errors` 无输出。
+- 截图：
+  - `/tmp/cloakbrowser-profile-motion-screens/desktop-selected-bulkbar.png`
+  - `/tmp/cloakbrowser-profile-motion-screens/desktop-health-checking.png`
+  - `/tmp/cloakbrowser-profile-motion-screens/mobile-card-selected-bulkbar.png`
+
+边界：
+
+- 没有修改后端或 runtime。
+- 没有改变批量 health check API 调用。
+- 没有解锁高风险批量操作。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

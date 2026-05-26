@@ -669,7 +669,7 @@ function ProfileCard({
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
       className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 transition-[border-color,background-color,box-shadow] duration-150 focus-within:ring-2 focus-within:ring-blue-500/10 hover:border-slate-300 ${
         selected
-          ? "border-blue-200 border-l-blue-600 bg-blue-50/60"
+          ? "animate-profile-selection border-blue-200 border-l-blue-600 bg-blue-50/60"
           : previewed
             ? "border-slate-300 border-l-slate-500 bg-slate-50/90"
             : "border-slate-200 border-l-transparent"
@@ -787,7 +787,7 @@ function ProfileTableRow({
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
       className={`group transition-[background-color,box-shadow] duration-150 focus-within:bg-blue-50/50 ${
         selected
-          ? "bg-blue-50/75 shadow-[inset_3px_0_0_#2563eb,inset_0_1px_0_rgba(37,99,235,0.06),inset_0_-1px_0_rgba(37,99,235,0.06)] hover:bg-blue-50"
+          ? "animate-profile-selection bg-blue-50/75 shadow-[inset_3px_0_0_#2563eb,inset_0_1px_0_rgba(37,99,235,0.06),inset_0_-1px_0_rgba(37,99,235,0.06)] hover:bg-blue-50"
           : previewed
             ? "bg-slate-50/90 shadow-[inset_3px_0_0_#94a3b8] hover:bg-slate-100/70"
             : "odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/60"

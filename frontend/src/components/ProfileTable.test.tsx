@@ -232,7 +232,9 @@ describe("ProfileTable", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Preview Good US" }).closest("tr")?.getAttribute("data-state")).toBe("selected");
+    const selectedRow = screen.getByRole("button", { name: "Preview Good US" }).closest("tr");
+    expect(selectedRow?.getAttribute("data-state")).toBe("selected");
+    expect(selectedRow?.className).toContain("animate-profile-selection");
     expect(screen.getByRole("button", { name: "Preview Broken Proxy" }).closest("tr")?.getAttribute("data-state")).toBe("previewed");
     expect(screen.getByRole("button", { name: "Open Good US" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Broken Proxy" })).toBeTruthy();
@@ -305,7 +307,9 @@ describe("ProfileTable", () => {
       />,
     );
 
-    expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("false");
+    const toolbar = screen.getByRole("toolbar", { name: "Bulk profile actions" });
+    expect(toolbar.getAttribute("aria-busy")).toBe("false");
+    expect(toolbar.parentElement?.className).toContain("animate-bulk-action-in");
     expect(screen.getByRole("group", { name: "Selected profile summary" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Bulk action commands" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Primary bulk action" })).toBeTruthy();
@@ -489,7 +493,9 @@ describe("ProfileTable", () => {
     );
 
     expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("true");
-    expect((screen.getByRole("button", { name: "Checking health" }) as HTMLButtonElement).disabled).toBe(true);
+    const checkButton = screen.getByRole("button", { name: "Checking health" }) as HTMLButtonElement;
+    expect(checkButton.disabled).toBe(true);
+    expect(checkButton.querySelector("svg")?.getAttribute("class")).toContain("animate-pulse");
     expect(screen.getByText("Checking...")).toBeTruthy();
   });
 
@@ -710,7 +716,9 @@ describe("ProfileTable", () => {
       />,
     );
 
-    expect(screen.getByRole("listitem", { name: "Profile card Good US" }).getAttribute("data-state")).toBe("selected");
+    const selectedCard = screen.getByRole("listitem", { name: "Profile card Good US" });
+    expect(selectedCard.getAttribute("data-state")).toBe("selected");
+    expect(selectedCard.className).toContain("animate-profile-selection");
   });
 
   it("keeps narrow card preview, open, and proxy redaction separate", () => {

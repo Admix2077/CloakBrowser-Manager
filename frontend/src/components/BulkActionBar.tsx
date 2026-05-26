@@ -116,7 +116,7 @@ export function BulkActionBar({
 
   return (
     <div
-      className="sticky top-0 z-20 h-11 border-b border-slate-200/90 bg-[#fbfdff]/95 text-xs shadow-[0_8px_18px_rgba(15,23,42,0.045),inset_0_-1px_0_rgba(255,255,255,0.7)] backdrop-blur supports-[backdrop-filter]:bg-[#fbfdff]/90"
+      className="animate-bulk-action-in sticky top-0 z-20 h-11 border-b border-slate-200/90 bg-[#fbfdff]/95 text-xs shadow-[0_8px_18px_rgba(15,23,42,0.045),inset_0_-1px_0_rgba(255,255,255,0.7)] backdrop-blur supports-[backdrop-filter]:bg-[#fbfdff]/90"
     >
       <div
         role="toolbar"
@@ -153,7 +153,7 @@ export function BulkActionBar({
               className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-[6px] border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.28),inset_0_1px_0_rgba(255,255,255,0.18)] transition-[background-color,border-color,box-shadow] hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
               onClick={() => void onCheckHealth?.()}
             >
-              <HeartPulse className="h-3.5 w-3.5" />
+              <HeartPulse className={`h-3.5 w-3.5 ${checkingHealth ? "animate-pulse" : ""}`} />
               <span>{checkingHealth ? "Checking..." : "Check health"}</span>
             </button>
           </div>

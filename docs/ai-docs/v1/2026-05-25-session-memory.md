@@ -3383,6 +3383,83 @@ git diff --check
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
 
+## 49. 2026-05-26 Profile 运营台选中与批量操作微反馈小闭环
+
+背景：
+
+- Jeff 反馈当前 UI 美观度已经接近 SS 风格，但部分交互反馈仍生硬，需要继续加快做 UI/UE polish。
+- 上一轮 Viewer EnvironmentStrip 已提交为 `4ac9481 polish viewer environment strip`。
+- 本轮沿着子 agent `Boyle` 的候选建议，优先处理 Profile 运营台最高频的表格/卡片选择、bulk action bar 出现、批量 Check health 忙碌反馈。
+- 本轮不改变虚拟滚动、不改变批量 health check 事实流、不解锁 Launch / Stop / Tag / Delete 等高风险批量动作。
+
+已完成：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - selected desktop row 增加 `animate-profile-selection`。
+  - selected mobile card 增加 `animate-profile-selection`。
+  - 保留 `data-state=selected` / `data-state=previewed` 优先级。
+  - 保留 `PROFILE_TABLE_ROW_HEIGHT=64` 与 `PROFILE_CARD_ROW_HEIGHT=188` 固定行高语义。
+- `frontend/src/components/BulkActionBar.tsx`
+  - bulk action bar 根节点增加 `animate-bulk-action-in`。
+  - `Check health` 忙碌态下 `HeartPulse` 图标增加 pulse 反馈。
+  - 保留 `aria-busy`、disabled、高风险动作 disabled。
+- `frontend/src/styles/globals.css`
+  - 新增 `animate-profile-selection` 与 `animate-bulk-action-in` utilities。
+  - 新增 `cloak-profile-selection` 与 `cloak-bulk-action-in` keyframes。
+  - 继续由全局 `prefers-reduced-motion: reduce` 降级动画。
+- `frontend/src/components/ProfileTable.test.tsx`
+  - 新增 selected row/card 动效类断言。
+  - 新增 bulk action bar 入场动效类断言。
+  - 新增 `Checking health` 下 icon pulse 断言。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md`
+  - 追加本小闭环记录和验证证据。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 红灯：4 failed, 30 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 34 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 151 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`。
+- 桌面 `1440x900`：
+  - 选择 `Alpha Warmup` 后出现 bulk action bar。
+  - JS 验证：`selectedRowMotion=true`、`bulkMotion=true`、`actionsVisible=true`、`scrollWidth=1440`、`innerWidth=1440`。
+  - 点击 `Check health` 后 JS 验证：`checkingVisible=true`、`ariaLabel=Checking health`、`iconPulse=true`、`toolbarBusy=true`。
+- 移动 `390x844`：
+  - 选择 `Alpha Warmup` card 后 bulk action bar 可见。
+  - JS 验证：`selectedCardMotion=true`、`bulkMotion=true`、`scrollWidth=390`、`innerWidth=390`、`overflow=false`。
+- `agent-browser console` 无输出；`agent-browser errors` 无输出。
+
+截图：
+
+- `/tmp/cloakbrowser-profile-motion-screens/desktop-selected-bulkbar.png`
+- `/tmp/cloakbrowser-profile-motion-screens/desktop-health-checking.png`
+- `/tmp/cloakbrowser-profile-motion-screens/mobile-card-selected-bulkbar.png`
+
+边界：
+
+- 没有修改后端或 runtime。
+- 没有改变批量 health check API 调用。
+- 没有解锁高风险批量操作。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
 ## 48. 2026-05-26 Viewer 顶部 EnvironmentStrip 视觉升级小闭环
 
 背景：
