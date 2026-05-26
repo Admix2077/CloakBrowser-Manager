@@ -50,7 +50,7 @@
 - [x] 新增 `GET /api/tasks`。
 - [x] 新增 `GET /api/tasks/{id}`。
 - [x] 新增 `POST /api/tasks/{id}/cancel`。
-- [ ] 支持第一版 step：
+- [x] 支持第一版 step：
   - [x] open_url。
   - [x] wait。
   - [x] wait_for_selector。
@@ -59,7 +59,7 @@
   - [x] keyboard_type。
   - [x] scroll。
   - [x] evaluate。
-  - [ ] screenshot。
+  - [x] screenshot。
 - [ ] 支持并发限制。
 - [ ] 支持失败重试。
 - [ ] 前端新增 Automation 页面。
@@ -294,13 +294,40 @@ cd frontend && npm run build
 - Playwright evaluate 执行异常进入 `failed` 并返回固定低敏错误 `Evaluate step failed`，不回显异常原文。
 - task 对外响应对 `evaluate` step 做白名单脱敏：只回显 `type/page_ref`，不回显 expression 或未知字段。
 - `result.steps[]` 只记录 `index/type/status`，不复制 expression、evaluate 返回值、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、screenshot step。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel。
 
 验证记录：
 
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps backend/tests/test_api.py::test_automation_task_responses_redact_evaluate_steps backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_evaluate_step_marks_failed_for_invalid_expression_without_leaking_payload backend/tests/test_api.py::test_run_evaluate_step_marks_failed_for_non_string_expression_without_leaking_payload backend/tests/test_api.py::test_run_evaluate_step_failure_uses_redacted_error -q
 # 6 passed
+```
+
+## 2026-05-27 Automation Script Runner screenshot step 小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已支持 `screenshot` step。
+- step 格式：
+  - `type`: `screenshot`。
+  - `page_ref`: 可选，默认 `"0"`，可传 page index 或 page id。
+  - `full_page`: 可选布尔值，默认 `false`，不接受字符串、数字或其他类型。
+- 执行时复用已运行 profile 的既有 page 和 `page.screenshot(type="png", full_page=full_page)`，不自动启动 profile，不创建新 page，不开放 `path`、`clip`、`quality` 或下载 URL。
+- 成功后 task 按既有状态机进入 `succeeded`；非法 `full_page` 进入 `failed` 并返回固定低敏错误 `Invalid screenshot step`。
+- Playwright screenshot 执行异常进入 `failed` 并返回固定低敏错误 `Screenshot step failed`，不回显异常原文。
+- task 对外响应对 `screenshot` step 做白名单脱敏：只回显 `type/page_ref/full_page`，不回显 `path`、`filename`、`base64`、`note` 或未知字段。
+- 创建 task 时会先按 step 类型做执行字段白名单裁剪；`screenshot` 入库仅保留 `type/page_ref/full_page`，不持久化调用方附带的 `path`、`filename`、`base64`、`note` 等未知字段。
+- runner 会调用 screenshot 但丢弃返回的 PNG bytes；`result.steps[]` 只记录 `index/type/status`，不复制 PNG bytes、base64、路径、下载 URL、完整 step payload 或异常原文。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_screenshot_steps backend/tests/test_api.py::test_create_automation_task_persists_sanitized_screenshot_step backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png backend/tests/test_api.py::test_run_screenshot_step_uses_default_full_page backend/tests/test_api.py::test_run_screenshot_step_marks_failed_for_non_bool_full_page_without_leaking_payload backend/tests/test_api.py::test_run_screenshot_step_failure_uses_redacted_error -q
+# 7 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps backend/tests/test_api.py::test_automation_task_responses_redact_wait_for_selector_steps backend/tests/test_api.py::test_automation_task_responses_redact_evaluate_steps backend/tests/test_api.py::test_automation_task_responses_redact_screenshot_steps backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps -q
+# 14 passed
 ```
 
 ## 2026-05-27 Automation Script Runner click step 小闭环

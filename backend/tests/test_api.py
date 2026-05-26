@@ -1192,6 +1192,80 @@ def test_automation_task_responses_redact_evaluate_steps(app_client: TestClient)
     assert "do-not-echo" not in str(cancel_resp.json())
 
 
+def test_automation_task_responses_redact_screenshot_steps(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskScreenshotRedactProfile"})
+    pid = create.json()["id"]
+    steps = [
+        {
+            "type": "screenshot",
+            "page_ref": "0",
+            "full_page": True,
+            "path": "/tmp/screenshot-token-super-secret.png",
+            "filename": "screenshot-token-super-secret.png",
+            "base64": "png-token-super-secret",
+            "note": "do-not-echo",
+        },
+    ]
+    expected_steps = [{"type": "screenshot", "page_ref": "0", "full_page": True}]
+
+    create_resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+    task_id = create_resp.json()["id"]
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["steps"] == expected_steps
+    assert "super-secret" not in str(create_resp.json())
+    assert "do-not-echo" not in str(create_resp.json())
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    assert "super-secret" not in str(get_resp.json())
+    assert "do-not-echo" not in str(get_resp.json())
+
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["steps"] == expected_steps
+    assert "super-secret" not in str(list_resp.json())
+    assert "do-not-echo" not in str(list_resp.json())
+
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == expected_steps
+    assert "super-secret" not in str(cancel_resp.json())
+    assert "do-not-echo" not in str(cancel_resp.json())
+
+
+def test_create_automation_task_persists_sanitized_screenshot_step(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskScreenshotPersistProfile"})
+    pid = create.json()["id"]
+    resp = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "screenshot",
+                    "page_ref": "0",
+                    "full_page": True,
+                    "path": "/tmp/screenshot-token-super-secret.png",
+                    "filename": "screenshot-token-super-secret.png",
+                    "base64": "png-token-super-secret",
+                    "note": "do-not-echo",
+                }
+            ],
+        },
+    )
+
+    persisted = main.db.get_automation_task(resp.json()["id"])
+
+    assert resp.status_code == 201
+    assert persisted is not None
+    assert persisted["steps"] == [{"type": "screenshot", "page_ref": "0", "full_page": True}]
+    assert "super-secret" not in str(persisted["steps"])
+    assert "do-not-echo" not in str(persisted["steps"])
+
+
 def test_automation_task_responses_redact_persisted_result_steps(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskResultRedactProfile"})
     pid = create.json()["id"]
@@ -1242,9 +1316,38 @@ def test_automation_task_responses_redact_persisted_result_steps(app_client: Tes
             "raw_result": {"token": "super-secret"},
         },
     )
+    screenshot_resp = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "screenshot", "full_page": True, "path": "/tmp/super-secret.png"}],
+        },
+    )
+    screenshot_task_id = screenshot_resp.json()["id"]
+    main.db.update_automation_task(
+        screenshot_task_id,
+        status="succeeded",
+        result={
+            "steps": [
+                {
+                    "index": 0,
+                    "type": "screenshot",
+                    "status": "succeeded",
+                    "png": b"\x89PNG\r\nsuper-secret".hex(),
+                    "base64": "c3VwZXItc2VjcmV0",
+                    "path": "/tmp/super-secret.png",
+                    "payload": {"token": "super-secret"},
+                }
+            ],
+            "png": "super-secret",
+            "base64": "c3VwZXItc2VjcmV0",
+            "path": "/tmp/super-secret.png",
+        },
+    )
 
     get_resp = app_client.get(f"/api/tasks/{task_id}")
     evaluate_get_resp = app_client.get(f"/api/tasks/{evaluate_task_id}")
+    screenshot_get_resp = app_client.get(f"/api/tasks/{screenshot_task_id}")
     list_resp = app_client.get("/api/tasks")
 
     assert get_resp.status_code == 200
@@ -1259,6 +1362,13 @@ def test_automation_task_responses_redact_persisted_result_steps(app_client: Tes
     assert "window.localStorage" not in str(evaluate_get_resp.json())
     assert "super-secret" not in str(evaluate_get_resp.json())
 
+    assert screenshot_get_resp.status_code == 200
+    assert screenshot_get_resp.json()["result"] == {
+        "steps": [{"index": 0, "type": "screenshot", "status": "succeeded"}],
+    }
+    assert "c3VwZXItc2VjcmV0" not in str(screenshot_get_resp.json())
+    assert "super-secret" not in str(screenshot_get_resp.json())
+
     assert list_resp.status_code == 200
     listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
     assert listed_task["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "succeeded"}]}
@@ -1266,8 +1376,13 @@ def test_automation_task_responses_redact_persisted_result_steps(app_client: Tes
     assert listed_evaluate_task["result"] == {
         "steps": [{"index": 0, "type": "evaluate", "status": "succeeded"}],
     }
+    listed_screenshot_task = next(task for task in list_resp.json()["tasks"] if task["id"] == screenshot_task_id)
+    assert listed_screenshot_task["result"] == {
+        "steps": [{"index": 0, "type": "screenshot", "status": "succeeded"}],
+    }
     assert secret_url not in str(list_resp.json())
     assert "window.localStorage" not in str(list_resp.json())
+    assert "c3VwZXItc2VjcmV0" not in str(list_resp.json())
     assert "super-secret" not in str(list_resp.json())
 
 
@@ -2174,6 +2289,124 @@ def test_run_scroll_step_marks_failed_for_invalid_delta_without_leaking_payload(
     assert data["result"] == {"steps": [{"index": 0, "type": "scroll", "status": "failed"}]}
     assert data["error"] == "Invalid scroll step"
     assert "do-not-echo" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_screenshot_step_captures_existing_page_without_returning_png(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunScreenshotProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.screenshot.return_value = b"\x89PNG\r\nsuper-secret"
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "screenshot",
+                    "page_ref": "0",
+                    "full_page": True,
+                    "note": "do-not-echo",
+                    "base64": "png-token-super-secret",
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.screenshot.assert_awaited_once_with(type="png", full_page=True)
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "screenshot", "page_ref": "0", "full_page": True}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "screenshot", "status": "succeeded"}]}
+    assert data["error"] is None
+    assert "PNG" not in str(data)
+    assert "png-token" not in str(data)
+    assert "super-secret" not in str(data)
+    assert "do-not-echo" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_screenshot_step_uses_default_full_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunScreenshotDefaultProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "screenshot"}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.screenshot.assert_awaited_once_with(type="png", full_page=False)
+    data = resp.json()
+    assert data["steps"] == [{"type": "screenshot"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "screenshot", "status": "succeeded"}]}
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_screenshot_step_marks_failed_for_non_bool_full_page_without_leaking_payload(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunScreenshotInvalidFullPageProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "screenshot",
+                    "full_page": "true",
+                    "path": "/tmp/screenshot-token-super-secret.png",
+                    "note": "do-not-echo",
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "screenshot"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "screenshot", "status": "failed"}]}
+    assert data["error"] == "Invalid screenshot step"
+    assert "super-secret" not in str(data)
+    assert "do-not-echo" not in str(data)
+    page.screenshot.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_screenshot_step_failure_uses_redacted_error(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunScreenshotFailureProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.screenshot.side_effect = RuntimeError("failed /tmp/screenshot-token-super-secret.png")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "screenshot"}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "screenshot"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "screenshot", "status": "failed"}]}
+    assert data["error"] == "Screenshot step failed"
+    assert "screenshot-token" not in str(data)
+    assert "super-secret" not in str(data)
     main.browser_mgr.running.pop(pid, None)
 
 

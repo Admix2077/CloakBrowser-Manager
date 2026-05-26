@@ -1497,6 +1497,11 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
         if step_type == "evaluate":
             if isinstance(step.get("page_ref"), str):
                 redacted["page_ref"] = step["page_ref"]
+        if step_type == "screenshot":
+            if isinstance(step.get("page_ref"), str):
+                redacted["page_ref"] = step["page_ref"]
+            if "full_page" in step and isinstance(step.get("full_page"), bool):
+                redacted["full_page"] = step["full_page"]
         if step_type == "click":
             if isinstance(step.get("page_ref"), str):
                 redacted["page_ref"] = step["page_ref"]
@@ -1541,6 +1546,26 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
                 redacted["delta_y"] = step["delta_y"]
         redacted_steps.append(redacted)
     return redacted_steps
+
+
+def _automation_task_persisted_steps(steps: list[dict]) -> list[dict]:
+    persisted_steps = []
+    allowed_keys_by_type = {
+        "click": {"type", "selector", "page_ref", "timeout_ms"},
+        "evaluate": {"type", "expression", "page_ref"},
+        "fill": {"type", "selector", "value", "page_ref", "timeout_ms"},
+        "keyboard_type": {"type", "text", "page_ref", "delay_ms"},
+        "open_url": {"type", "url", "page_ref", "wait_until", "timeout_ms"},
+        "screenshot": {"type", "page_ref", "full_page"},
+        "scroll": {"type", "page_ref", "delta_x", "delta_y"},
+        "wait": {"type", "ms"},
+        "wait_for_selector": {"type", "selector", "page_ref", "state", "timeout_ms"},
+    }
+    for step in steps:
+        step_type = str(step.get("type", ""))
+        allowed_keys = allowed_keys_by_type.get(step_type, {"type"})
+        persisted_steps.append({key: value for key, value in step.items() if key in allowed_keys})
+    return persisted_steps
 
 
 def _automation_task_redacted_result(result: dict | None) -> dict | None:
@@ -1623,7 +1648,10 @@ def _is_supported_automation_url(raw_url: str) -> bool:
 async def create_automation_task(req: AutomationTaskCreate):
     if db.get_profile(req.profile_id) is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    task = db.create_automation_task(profile_id=req.profile_id, steps=req.steps)
+    task = db.create_automation_task(
+        profile_id=req.profile_id,
+        steps=_automation_task_persisted_steps(req.steps),
+    )
     return _automation_task_response(task)
 
 
@@ -1678,7 +1706,16 @@ async def run_automation_task(task_id: str):
     for index, step in enumerate(running_task["steps"]):
         step_type = step.get("type")
         if step_type != "wait":
-            if step_type not in {"click", "evaluate", "fill", "keyboard_type", "open_url", "scroll", "wait_for_selector"}:
+            if step_type not in {
+                "click",
+                "evaluate",
+                "fill",
+                "keyboard_type",
+                "open_url",
+                "screenshot",
+                "scroll",
+                "wait_for_selector",
+            }:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(
                     task_id,
@@ -1732,6 +1769,25 @@ async def run_automation_task(task_id: str):
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
                     failed = _fail_automation_task(task_id, step_results, "Evaluate step failed")
+                    return _automation_task_finished_response(failed, status_code=400)
+                step_results.append(_automation_task_step_result(index, step, "succeeded"))
+                continue
+
+            if step_type == "screenshot":
+                raw_full_page = step.get("full_page", False)
+                page_ref = _automation_step_str(step, "page_ref", "0") or "0"
+                if not isinstance(raw_full_page, bool):
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Invalid screenshot step")
+                    return _automation_task_finished_response(failed, status_code=400)
+                try:
+                    _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
+                    await page.screenshot(type="png", full_page=raw_full_page)
+                except HTTPException:
+                    raise
+                except Exception:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Screenshot step failed")
                     return _automation_task_finished_response(failed, status_code=400)
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue

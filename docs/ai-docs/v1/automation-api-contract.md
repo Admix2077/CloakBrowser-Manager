@@ -358,6 +358,7 @@ POST /api/tasks
 - profile 不存在时返回 `404`。
 - 不执行脚本，不启动 profile，不读取敏感配置。
 - 对外响应中的 `steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
+- 入库前会按 step 类型做执行字段白名单裁剪，保留 runner 必须使用的字段，丢弃未知字段；例如 `screenshot` 仅持久化 `type/page_ref/full_page`，不会持久化调用方附带的 `path`、`filename`、`base64` 或 `note`。
 
 返回：
 
@@ -458,6 +459,7 @@ POST /api/tasks/{id}/run
   - `fill`：`{"type": "fill", "selector": "#email", "value": "user@example.com", "page_ref": "0", "timeout_ms": 30000}`。
   - `keyboard_type`：`{"type": "keyboard_type", "text": "hello", "page_ref": "0", "delay_ms": 25}`。
   - `evaluate`：`{"type": "evaluate", "expression": "document.title", "page_ref": "0"}`。
+  - `screenshot`：`{"type": "screenshot", "page_ref": "0", "full_page": false}`。
   - `scroll`：`{"type": "scroll", "page_ref": "0", "delta_x": 0, "delta_y": 600}`。
   - `wait`：`{"type": "wait", "ms": 1..300000}`，内部执行 `asyncio.sleep(ms / 1000)`。
 - 当前不支持的 step 会让 task 进入 `failed`，并返回 `400`。
@@ -468,10 +470,11 @@ POST /api/tasks/{id}/run
 - 当前非法 `fill.selector`、`value` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `keyboard_type.text` 或 `delay_ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `evaluate.expression` 会让 task 进入 `failed`，并返回 `400`。
+- 当前非法 `screenshot.full_page` 会让 task 进入 `failed`，并返回 `400`；`full_page` 必须是布尔值。
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
-- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。
-- 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression 或 evaluate 返回值，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前不实现后台队列、并发限制、失败重试、running cancel、screenshot step。
+- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
+- 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
+- 当前不实现后台队列、并发限制、失败重试、running cancel。
 
 ## Script Runner 接入建议
 
@@ -489,7 +492,7 @@ POST /api/tasks/{id}/run
 
 Script Runner 的 task result/log 不应默认复制 console log、network URL、evaluate result、screenshot 或 clipboard 内容。需要展示时，应按白名单和长度上限返回。
 
-当前 `POST /api/tasks/{id}/run` 已实现第一版 `open_url`、`wait_for_selector`、`click`、`fill`、`keyboard_type`、`evaluate`、`scroll` 和 `wait` step。后续接入 page 级 step 时继续复用现有 Automation REST helper，但不得把 URL query/fragment、`wait_for_selector.selector`、`click.selector`、`fill.selector/value`、`keyboard_type.text`、`evaluate.expression/result`、screenshot 内容、clipboard 内容、console text、network URL/query/header/body 直接写入 task result/log。
+当前 `POST /api/tasks/{id}/run` 已实现第一版 `open_url`、`wait_for_selector`、`click`、`fill`、`keyboard_type`、`evaluate`、`screenshot`、`scroll` 和 `wait` step。后续接入 page 级 step 时继续复用现有 Automation REST helper，但不得把 URL query/fragment、`wait_for_selector.selector`、`click.selector`、`fill.selector/value`、`keyboard_type.text`、`evaluate.expression/result`、screenshot 内容、clipboard 内容、console text、network URL/query/header/body 直接写入 task result/log。
 
 ## 安全边界
 
