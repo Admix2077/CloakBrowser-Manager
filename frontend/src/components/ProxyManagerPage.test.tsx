@@ -9,6 +9,7 @@ vi.mock("../lib/api", async (importOriginal) => {
     ...actual,
     api: {
       listProxies: vi.fn(),
+      listProxyProviderPresets: vi.fn(),
       createProxy: vi.fn(),
       bulkCheckProxies: vi.fn(),
       assignProxyToProfiles: vi.fn(),
@@ -17,6 +18,7 @@ vi.mock("../lib/api", async (importOriginal) => {
 });
 
 const mockListProxies = api.listProxies as ReturnType<typeof vi.fn>;
+const mockListProxyProviderPresets = api.listProxyProviderPresets as ReturnType<typeof vi.fn>;
 const mockCreateProxy = api.createProxy as ReturnType<typeof vi.fn>;
 const mockBulkCheckProxies = api.bulkCheckProxies as ReturnType<typeof vi.fn>;
 const mockAssignProxyToProfiles = api.assignProxyToProfiles as ReturnType<typeof vi.fn>;
@@ -89,6 +91,8 @@ function profile(overrides: Partial<Profile>): Profile {
 
 beforeEach(() => {
   mockListProxies.mockReset();
+  mockListProxyProviderPresets.mockReset();
+  mockListProxyProviderPresets.mockResolvedValue([]);
   mockCreateProxy.mockReset();
   mockBulkCheckProxies.mockReset();
   mockAssignProxyToProfiles.mockReset();
@@ -745,6 +749,75 @@ describe("ProxyManagerPage", () => {
     ].join(" ");
     expect(renderedEvidence).not.toContain("hiddenpass");
     expect(renderedEvidence).not.toContain("user:");
+  });
+
+  it("applies proxy provider preset defaults to CSV import rows", async () => {
+    const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
+    const importedProxy = proxy({
+      id: "proxy-imported",
+      name: "Imported Preset JP",
+      url: "http://jp.proxy.example:8080",
+      country_code: "JP",
+      provider: "ProxyJP",
+      tags: [
+        { tag: "mobile", color: "#0ea5e9" },
+        { tag: "bulk", color: null },
+      ],
+    });
+    mockListProxies
+      .mockResolvedValueOnce([existingProxy])
+      .mockResolvedValueOnce([existingProxy, importedProxy]);
+    mockListProxyProviderPresets.mockResolvedValue([
+      {
+        id: "preset-jp",
+        name: "Japan mobile default",
+        provider: "ProxyJP",
+        country_code: "JP",
+        tags: [{ tag: "mobile", color: "#0ea5e9" }],
+        notes: "Tokyo exits",
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+    mockCreateProxy.mockResolvedValue(importedProxy);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    await waitFor(() => expect(mockListProxyProviderPresets).toHaveBeenCalledTimes(1));
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    fireEvent.change(within(dialog).getByLabelText("Provider preset"), {
+      target: { value: "preset-jp" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Proxy CSV content"), {
+      target: {
+        value: [
+          "name,url,tags",
+          "Imported Preset JP,http://user:hiddenpass@jp.proxy.example:8080,bulk",
+        ].join("\n"),
+      },
+    });
+
+    expect(within(dialog).getByText("Japan mobile default")).toBeTruthy();
+    expect(within(dialog).getByText("ProxyJP")).toBeTruthy();
+    expect(within(dialog).getByText("mobile, bulk")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import valid rows" }));
+
+    await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledWith({
+      name: "Imported Preset JP",
+      url: "http://user:hiddenpass@jp.proxy.example:8080",
+      country_code: "JP",
+      provider: "ProxyJP",
+      tags: [
+        { tag: "mobile", color: "#0ea5e9" },
+        { tag: "bulk", color: null },
+      ],
+      notes: "Tokyo exits",
+    }));
+    expect(`${document.body.textContent}`).not.toContain("hiddenpass");
   });
 
   it("keeps CSV import failures visible and redacted after partial success", async () => {

@@ -229,6 +229,88 @@ describe("api.listProxies", () => {
   });
 });
 
+describe("api.listProxyProviderPresets", () => {
+  it("requests proxy provider presets", async () => {
+    const presets = [{
+      id: "preset-1",
+      name: "Japan mobile default",
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: [{ tag: "mobile", color: "#0ea5e9" }],
+      notes: "Tokyo exits",
+      created_at: "2026-05-26T00:00:00Z",
+      updated_at: "2026-05-26T00:00:00Z",
+    }];
+    mockFetch.mockResolvedValueOnce(jsonResponse(presets));
+
+    const result = await api.listProxyProviderPresets();
+
+    expect(result).toEqual(presets);
+    expect(mockFetch).toHaveBeenCalledWith("/api/proxy-provider-presets", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+});
+
+describe("api.createProxyProviderPreset", () => {
+  it("sends provider preset metadata without proxy credentials", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "preset-1", name: "US default" }, 201));
+
+    await api.createProxyProviderPreset({
+      name: "US default",
+      provider: "ProxyCo",
+      country_code: "US",
+      tags: [{ tag: "residential", color: null }],
+      notes: "Provider defaults",
+    });
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxy-provider-presets");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      name: "US default",
+      provider: "ProxyCo",
+      country_code: "US",
+      tags: [{ tag: "residential", color: null }],
+      notes: "Provider defaults",
+    });
+  });
+});
+
+describe("api.updateProxyProviderPreset", () => {
+  it("sends PUT with partial provider preset metadata", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "preset-1", name: "US updated" }));
+
+    await api.updateProxyProviderPreset("preset-1", {
+      name: "US updated",
+      tags: [{ tag: "stable", color: null }],
+      notes: null,
+    });
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxy-provider-presets/preset-1");
+    expect(options.method).toBe("PUT");
+    expect(JSON.parse(options.body)).toEqual({
+      name: "US updated",
+      tags: [{ tag: "stable", color: null }],
+      notes: null,
+    });
+  });
+});
+
+describe("api.deleteProxyProviderPreset", () => {
+  it("sends DELETE to a provider preset endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    const result = await api.deleteProxyProviderPreset("preset-1");
+
+    expect(result).toEqual({ ok: true });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxy-provider-presets/preset-1");
+    expect(options.method).toBe("DELETE");
+  });
+});
+
 describe("api.createProxy", () => {
   it("sends POST with proxy asset JSON body", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ id: "proxy-1", name: "US pool" }, 201));

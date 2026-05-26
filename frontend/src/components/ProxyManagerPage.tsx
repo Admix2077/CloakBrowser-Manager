@@ -1,6 +1,6 @@
 import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, RefreshCw, Search, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { api, type Profile, type ProxyAsset, type ProxyCreateData } from "../lib/api";
+import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset } from "../lib/api";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
@@ -33,6 +33,7 @@ export function ProxyManagerPage({
   onProfilesAssigned,
 }: ProxyManagerPageProps = {}) {
   const [proxies, setProxies] = useState<ProxyAsset[]>([]);
+  const [providerPresets, setProviderPresets] = useState<ProxyProviderPreset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProxyIds, setSelectedProxyIds] = useState<Set<string>>(() => new Set());
@@ -47,6 +48,8 @@ export function ProxyManagerPage({
   const [assignError, setAssignError] = useState<string | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importText, setImportText] = useState("");
+  const [importSourceText, setImportSourceText] = useState("");
+  const [selectedImportPresetId, setSelectedImportPresetId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importNotice, setImportNotice] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -78,6 +81,22 @@ export function ProxyManagerPage({
   useEffect(() => {
     void loadProxies();
   }, [loadProxies]);
+
+  useEffect(() => {
+    let active = true;
+
+    api.listProxyProviderPresets()
+      .then((presets) => {
+        if (active) setProviderPresets(presets);
+      })
+      .catch(() => {
+        if (active) setProviderPresets([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (recentlyImportedProxyIds.size === 0) return;
@@ -285,7 +304,14 @@ export function ProxyManagerPage({
     }
   }, [assigning, onProfilesAssigned, selectedAssignProfileIds, selectedProxy]);
 
-  const importPreview = useMemo(() => parseProxyCsvImport(importText), [importText]);
+  const selectedImportPreset = useMemo(
+    () => providerPresets.find((preset) => preset.id === selectedImportPresetId) ?? null,
+    [providerPresets, selectedImportPresetId],
+  );
+  const importPreview = useMemo(
+    () => parseProxyCsvImport(importSourceText, selectedImportPreset),
+    [importSourceText, selectedImportPreset],
+  );
   const validImportRows = useMemo(
     () => importPreview.rows.filter((row) => row.issues.length === 0),
     [importPreview.rows],
@@ -294,6 +320,8 @@ export function ProxyManagerPage({
 
   const openImportDialog = useCallback(() => {
     setImportText("");
+    setImportSourceText("");
+    setSelectedImportPresetId("");
     setImportNotice(null);
     setImportError(null);
     setImportFailures([]);
@@ -582,6 +610,8 @@ export function ProxyManagerPage({
         <ProxyCsvImportDialog
           text={importText}
           preview={importPreview}
+          providerPresets={providerPresets}
+          selectedPresetId={selectedImportPresetId}
           validCount={validImportRows.length}
           blockedCount={blockedImportCount}
           importing={importing}
@@ -589,7 +619,14 @@ export function ProxyManagerPage({
           error={importError}
           failures={importFailures}
           onTextChange={(value) => {
-            setImportText(value);
+            setImportSourceText(value);
+            setImportText(redactUrlCredentials(value));
+            setImportError(null);
+            setImportFailures([]);
+            setImportNotice(null);
+          }}
+          onPresetChange={(presetId) => {
+            setSelectedImportPresetId(presetId);
             setImportError(null);
             setImportFailures([]);
             setImportNotice(null);
@@ -717,6 +754,8 @@ function FilterSelect({
 function ProxyCsvImportDialog({
   text,
   preview,
+  providerPresets,
+  selectedPresetId,
   validCount,
   blockedCount,
   importing,
@@ -724,11 +763,14 @@ function ProxyCsvImportDialog({
   error,
   failures,
   onTextChange,
+  onPresetChange,
   onImport,
   onClose,
 }: {
   text: string;
   preview: ProxyCsvImportPreview;
+  providerPresets: ProxyProviderPreset[];
+  selectedPresetId: string;
   validCount: number;
   blockedCount: number;
   importing: boolean;
@@ -736,11 +778,20 @@ function ProxyCsvImportDialog({
   error: string | null;
   failures: ProxyCsvImportFailure[];
   onTextChange: (value: string) => void;
+  onPresetChange: (presetId: string) => void;
   onImport: () => void;
   onClose: () => void;
 }) {
   const previewRows = preview.rows.slice(0, 60);
   const canImport = validCount > 0 && !preview.parseError && !importing;
+  const selectedPreset = providerPresets.find((preset) => preset.id === selectedPresetId) ?? null;
+  const selectedPresetSummary = selectedPreset
+    ? [
+        selectedPreset.provider,
+        selectedPreset.country_code,
+        selectedPreset.tags.map((tag) => tag.tag).join(", "),
+      ].filter(Boolean).join(" · ")
+    : null;
 
   return (
     <div className="animate-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-sm">
@@ -788,6 +839,28 @@ function ProxyCsvImportDialog({
             />
           </label>
           <div className="grid content-start gap-2">
+            <label className="min-w-0">
+              <span className="label">Provider preset</span>
+              <select
+                aria-label="Provider preset"
+                className="input"
+                value={selectedPresetId}
+                onChange={(event) => onPresetChange(event.target.value)}
+                disabled={providerPresets.length === 0 || importing}
+              >
+                <option value="">No preset</option>
+                {providerPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+              {selectedPresetSummary && (
+                <p className="mt-1 truncate text-xs text-slate-500" title={selectedPresetSummary}>
+                  {selectedPresetSummary}
+                </p>
+              )}
+            </label>
             <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
               <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                 Supported fields
@@ -1395,7 +1468,7 @@ function ProxySummaryTile({
   );
 }
 
-function parseProxyCsvImport(text: string): ProxyCsvImportPreview {
+function parseProxyCsvImport(text: string, preset: ProxyProviderPreset | null = null): ProxyCsvImportPreview {
   if (!text.trim()) {
     return { rows: [], parseError: null };
   }
@@ -1441,12 +1514,12 @@ function parseProxyCsvImport(text: string): ProxyCsvImportPreview {
 
     const name = getField("name");
     const url = getField("url");
-    const countryCode = getField("country_code");
+    const countryCode = getField("country_code") || preset?.country_code || "";
     const city = getField("city");
     const asn = getField("asn");
-    const provider = getField("provider");
-    const notes = getField("notes");
-    const tags = parseCsvTags(getField("tags"));
+    const provider = getField("provider") || preset?.provider || "";
+    const notes = getField("notes") || preset?.notes || "";
+    const tags = mergeTags(preset?.tags ?? [], parseCsvTags(getField("tags")));
 
     const issues: string[] = [];
     if (!name) issues.push("Missing name");
@@ -1542,6 +1615,23 @@ function parseCsvTags(value: string): { tag: string; color: string | null }[] {
     .map((tag) => tag.trim())
     .filter(Boolean)
     .map((tag) => ({ tag, color: null }));
+}
+
+function mergeTags(
+  presetTags: { tag: string; color: string | null }[],
+  rowTags: { tag: string; color: string | null }[],
+): { tag: string; color: string | null }[] {
+  const seen = new Set<string>();
+  const merged: { tag: string; color: string | null }[] = [];
+
+  for (const tag of [...presetTags, ...rowTags]) {
+    const key = normalizeFilterValue(tag.tag);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(tag);
+  }
+
+  return merged;
 }
 
 function getProxyStatusTone(status: string | null): ProxyStatusTone {

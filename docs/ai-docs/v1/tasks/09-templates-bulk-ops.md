@@ -25,7 +25,7 @@
 
 - [ ] 支持 proxy provider preset。
   - [x] 后端事实源 CRUD API。
-  - [ ] 前端接入/选择。
+  - [x] 前端接入/选择（Proxy CSV import preset 默认值）。
   - [ ] 与国家/标签选择、随机分配策略联动。
 - [ ] 支持按国家/标签选择 proxy。
 - [ ] 支持随机分配策略。
@@ -626,8 +626,80 @@ cd frontend && npm run build
 
 未覆盖范围：
 
-- 前端 preset 创建/选择/管理入口。
-- CSV import dialog 消费 provider preset。
+- 前端 preset 创建/管理入口仍未覆盖；Proxy CSV import 选择入口已在后续小闭环补齐。
+- CSV import dialog 消费 provider preset 已在后续小闭环补齐。
 - 按国家/标签选择 proxy。
+- 随机分配策略。
+- Proxy check/assign/GeoIP 行为，本轮没有修改。
+
+## 2026-05-26 Proxy Provider Preset 前端消费小闭环
+
+背景：
+
+- 后端 `proxy_provider_presets` 事实源已完成，本轮把 preset 接入 Proxy Manager 的 proxy CSV import。
+- 本轮只做“选择 provider preset 作为导入默认值”，不做 preset CRUD 管理页，不做随机分配策略，不修改 Profile CSV import 合约。
+- 行内 CSV 显式字段优先，preset 只补空字段；tags 使用 preset tags + row tags 去重合并。
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProxyProviderPreset` / `ProxyProviderPresetCreateData` / `ProxyProviderPresetUpdateData`。
+  - 新增 `listProxyProviderPresets` / `createProxyProviderPreset` / `updateProxyProviderPreset` / `deleteProxyProviderPreset` API client。
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - Proxy Manager 加载 provider presets。
+  - `Import proxy CSV` 弹窗新增 `Provider preset` 下拉。
+  - CSV preview/import 使用 preset 默认 `provider`、`country_code`、`notes`、`tags`。
+  - textarea 显示脱敏 URL，内部保留刚粘贴的 raw CSV 用于创建 proxy asset。
+- [x] `frontend/src/lib/api.test.ts`
+  - 覆盖 provider preset API client 路由、method 和 request body。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖选择 preset 后 CSV 行自动继承 provider/country/notes/tags。
+  - 覆盖 row tags 与 preset tags 合并。
+  - 覆盖 UI 不渲染 `hiddenpass`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "ProxyProviderPreset|listProxyProviderPresets|createProxyProviderPreset|updateProxyProviderPreset|deleteProxyProviderPreset"
+# 4 passed, 24 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx -t "applies proxy provider preset defaults"
+# 1 passed, 18 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 19 passed
+
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 28 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 180 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 重启本地 QA 服务 `http://127.0.0.1:8095/`，让服务加载最新后端和 `frontend/dist`。
+- 通过 API 创建 QA preset `QA Japan Mobile`。
+- 桌面/移动交互：
+  - 进入 `Proxy Manager`。
+  - 打开 `Import CSV`。
+  - `Provider preset` 下拉可选择 `QA Japan Mobile`。
+  - 粘贴 `name,url,tags` CSV 后，textarea 显示脱敏 endpoint，不显示 `user:hiddenpass`。
+  - Preview 行显示 `ProxyJP`、`mobile, bulk`、`Ready`。
+  - 点击 `Import valid rows` 后，新增 `QA Preset Import` proxy asset，列表中显示 `JP`、`ProxyJP`、`Tokyo QA defaults`、`mobile/bulk`。
+  - `document.body.innerText` 不包含 `hiddenpass` 或 `user:`。
+  - 移动端 `body.scrollWidth=390`、`clientWidth=390`，未横向撑破。
+- Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-proxy-preset-desktop.png`
+  - `/home/jeff/code/cloakbrowser-proxy-preset-mobile.png`
+
+未覆盖范围：
+
+- Provider preset 前端 CRUD 管理页。
+- 与国家/标签选择 proxy 的运营策略联动。
 - 随机分配策略。
 - Proxy check/assign/GeoIP 行为，本轮没有修改。

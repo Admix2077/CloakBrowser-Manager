@@ -214,6 +214,27 @@ export interface ProxyAsset {
   updated_at: string;
 }
 
+export interface ProxyProviderPreset {
+  id: string;
+  name: string;
+  provider: string | null;
+  country_code: string | null;
+  tags: { tag: string; color: string | null }[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProxyProviderPresetCreateData {
+  name: string;
+  provider?: string | null;
+  country_code?: string | null;
+  tags?: { tag: string; color: string | null }[];
+  notes?: string | null;
+}
+
+export type ProxyProviderPresetUpdateData = Partial<ProxyProviderPresetCreateData>;
+
 export interface ProxyCreateData {
   name: string;
   url: string;
@@ -434,6 +455,24 @@ export const api = {
   listProxies: () => request<ProxyAsset[]>("/api/proxies"),
 
   getProxy: (id: string) => request<ProxyAsset>(`/api/proxies/${id}`),
+
+  listProxyProviderPresets: () =>
+    request<ProxyProviderPreset[]>("/api/proxy-provider-presets"),
+
+  createProxyProviderPreset: (data: ProxyProviderPresetCreateData) =>
+    request<ProxyProviderPreset>("/api/proxy-provider-presets", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateProxyProviderPreset: (id: string, data: ProxyProviderPresetUpdateData) =>
+    request<ProxyProviderPreset>(`/api/proxy-provider-presets/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteProxyProviderPreset: (id: string) =>
+    request<{ ok: boolean }>(`/api/proxy-provider-presets/${id}`, { method: "DELETE" }),
 
   createProxy: (data: ProxyCreateData) =>
     request<ProxyAsset>("/api/proxies", {

@@ -4720,3 +4720,75 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 64. 2026-05-26 Proxy Provider Preset 前端消费小闭环
+
+背景：
+
+- 继续 Module 09 Proxy Template，基于后端 `proxy_provider_presets` 事实源做最小前端消费。
+- 本轮把 preset 接入 Proxy Manager 的 proxy CSV import，用作导入默认值。
+- 不做 preset CRUD 管理页，不做按国家/标签选择 proxy，不做随机分配策略，不改 runtime。
+
+已完成：
+
+- `frontend/src/lib/api.ts`
+  - 新增 `ProxyProviderPreset` 类型和 provider preset CRUD API client。
+- `frontend/src/components/ProxyManagerPage.tsx`
+  - Proxy Manager 加载 provider presets。
+  - `Import proxy CSV` 弹窗新增 `Provider preset` 下拉。
+  - CSV preview/import 使用 preset 默认 `provider`、`country_code`、`notes`、`tags`。
+  - 行内 CSV 显式字段优先，tags 按 preset tags + row tags 去重合并。
+  - textarea 显示脱敏 URL，内部保留刚粘贴的 raw CSV 用于创建 proxy asset。
+- 测试覆盖：
+  - provider preset API client。
+  - 选择 preset 后 CSV import 行继承 provider/country/notes/tags。
+  - row tags 与 preset tags 合并。
+  - UI 不渲染 `hiddenpass`。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `前端接入/选择（Proxy CSV import preset 默认值）`。
+  - 保持顶层 `支持 proxy provider preset` 未完成，因为策略联动和管理入口仍未完成。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "ProxyProviderPreset|listProxyProviderPresets|createProxyProviderPreset|updateProxyProviderPreset|deleteProxyProviderPreset"
+# 4 passed, 24 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx -t "applies proxy provider preset defaults"
+# 1 passed, 18 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 19 passed
+
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 28 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 180 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 本地 QA 服务：`http://127.0.0.1:8095/`。
+- 创建 QA preset `QA Japan Mobile`。
+- Proxy Manager -> Import CSV -> 选择 `QA Japan Mobile` -> 粘贴 `name,url,tags` CSV -> 预览 -> 导入。
+- 结果：
+  - Preview 显示 `ProxyJP`、`mobile, bulk`、`Ready`。
+  - 新增 `QA Preset Import` proxy asset，列表显示 `JP`、`ProxyJP`、`Tokyo QA defaults`、`mobile/bulk`。
+  - DOM 检查：`hiddenpass=false`、`userColon=false`。
+  - 移动端 `body.scrollWidth=390`、`clientWidth=390`。
+  - Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-proxy-preset-desktop.png`
+  - `/home/jeff/code/cloakbrowser-proxy-preset-mobile.png`
+
+边界：
+
+- 没有修改 Profile CSV import 合约。
+- 没有修改 Proxy check/assign/GeoIP 行为。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
