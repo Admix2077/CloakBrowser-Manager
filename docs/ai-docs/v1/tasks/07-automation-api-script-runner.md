@@ -135,6 +135,40 @@ cd frontend && npm run build
 # 34 passed
 ```
 
+## 2026-05-27 Automation task claim/lease 数据层小闭环
+
+当前状态：
+
+- `automation_tasks` 表新增内部 worker lease 字段：
+  - `lease_owner`。
+  - `lease_expires_at`。
+- `init_db()` 已包含既有数据库迁移，老库缺少字段时会 `ALTER TABLE` 补齐。
+- 新增 DB 层 `claim_next_automation_task(lease_owner, lease_seconds, now=None)`：
+  - 使用 `BEGIN IMMEDIATE` 包裹 claim，避免多个 worker 同时领取同一 task。
+  - 优先重领 lease 已过期的 `running` task。
+  - 否则领取最早创建的 `queued` task。
+  - 同一 `profile_id` 如果存在其他有效 `running` 或 `cancel_requested` task，则跳过该 profile 的 queued task。
+  - claim 成功后写入 `status=running`、`started_at`、`lease_owner`、`lease_expires_at`，并清空 `finished_at`。
+- 当前只完成后台 worker 池的 DB 前置能力，不新增公开 REST API，不启动后台 worker，不自动执行脚本，不自动启动 profile。
+- `lease_owner` / `lease_expires_at` 是内部调度字段，不属于 `AutomationTaskResponse`；`create/get/list/cancel/retry/run` 对外响应不暴露这些字段。
+- 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token、VNC token 或审计事实源。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py::test_init_db_creates_automation_task_lease_columns backend/tests/test_database.py::test_claim_next_automation_task_claims_oldest_queued_task backend/tests/test_database.py::test_claim_next_automation_task_skips_profiles_with_active_task backend/tests/test_database.py::test_claim_next_automation_task_reclaims_expired_running_lease -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_do_not_expose_worker_lease_metadata -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py -q
+# 39 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_create_automation_task_queues_steps_without_running_script backend/tests/test_api.py::test_automation_task_responses_do_not_expose_worker_lease_metadata backend/tests/test_api.py::test_cancel_queued_automation_task_marks_cancelled backend/tests/test_api.py::test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_automation_task_rejects_concurrent_task_for_same_profile_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_honors_cancel_request_at_step_boundary_without_running_next_step -q
+# 7 passed
+```
+
 ## 2026-05-27 Automation task 最小 API 小闭环
 
 当前状态：

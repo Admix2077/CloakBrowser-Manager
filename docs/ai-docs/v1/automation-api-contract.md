@@ -414,6 +414,7 @@ GET /api/tasks
 - 按 `created_at desc` 排序，最新 task 在前。
 - `limit/offset` 在 profile 过滤后应用，用于前端 task log viewer 或运营台分页加载。
 - 对外响应中的 `steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
+- 对外响应不包含内部 worker lease 元数据；即使 DB 中存在 `lease_owner` 或 `lease_expires_at`，`create/get/list/cancel/retry/run` 仍只返回 `AutomationTaskResponse` 白名单字段。
 - 当前未提供权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - Project Mileage 后续需要 task 列表时，必须由 Payload 按账号归属、权限和审计策略输出安全 DTO。
 
@@ -540,6 +541,20 @@ POST /api/tasks/{id}/run
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
 - 当前不实现后台队列或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
+
+### 内部 Task Claim / Lease
+
+当前 DB 层已提供后台队列的前置 claim 能力，但没有开放公开 REST API：
+
+- `automation_tasks` 内部字段：
+  - `lease_owner`：内部 worker 标识。
+  - `lease_expires_at`：内部 worker 租约过期时间。
+- `claim_next_automation_task(lease_owner, lease_seconds)` 会原子选择最早可执行 task：
+  - 优先重领已过期 lease 的 `running` task。
+  - 否则选择最早 `queued` task。
+  - 如果同一 `profile_id` 已有 `running` 或 `cancel_requested` task 且租约仍有效，则跳过该 profile 的 queued task，避免同 profile 并发。
+- 该能力只用于后续内部 worker 池，不自动启动 profile，不执行脚本，不新增 Project Mileage 对接面。
+- 内部 `lease_owner` / `lease_expires_at` 不属于前端或 Project Mileage DTO，不应出现在 task API、前端 task log、审计 metadata 或跨仓契约响应中。
 
 ## Script Runner 接入建议
 

@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task claim/lease 数据层小闭环：
+  - `automation_tasks` 表新增内部 worker lease 字段 `lease_owner`、`lease_expires_at`，并在 `init_db()` 中补齐既有数据库迁移。
+  - 新增 DB 层 `claim_next_automation_task(lease_owner, lease_seconds, now=None)`，用于后续后台 worker 池领取 task。
+  - claim 使用 `BEGIN IMMEDIATE`，优先重领 lease 已过期的 `running` task，否则领取最早 `queued` task。
+  - 同一 `profile_id` 若已有有效 `running` 或 `cancel_requested` task，则跳过该 profile 的 queued task，延续 profile 级并发边界。
+  - claim 成功后只更新 DB 内部调度字段和 `status=running/started_at`，不开放新的公开 REST API，不启动后台 worker，不自动执行脚本，不自动启动 profile。
+  - `lease_owner`、`lease_expires_at` 不属于 `AutomationTaskResponse`；`create/get/list/cancel/retry/run` 对外响应不暴露这些内部 worker 字段。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task log task/profile search 小闭环：
   - `frontend/src/components/AutomationTaskLogViewer.tsx` 在 status filter 旁新增只读本地搜索框。
   - 搜索只匹配 `task.id` 和 `profile_id`，并与 status filter 组合生效。

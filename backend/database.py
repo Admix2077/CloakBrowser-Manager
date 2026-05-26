@@ -157,7 +157,9 @@ def init_db():
                 error TEXT,
                 created_at TEXT NOT NULL,
                 started_at TEXT,
-                finished_at TEXT
+                finished_at TEXT,
+                lease_owner TEXT,
+                lease_expires_at TEXT
             );
         """)
         conn.commit()
@@ -203,6 +205,14 @@ def init_db():
         runtime_cols = {row[1] for row in conn.execute("PRAGMA table_info(runtime_sessions)").fetchall()}
         if "viewer_token_expires_at" not in runtime_cols:
             conn.execute("ALTER TABLE runtime_sessions ADD COLUMN viewer_token_expires_at TEXT")
+            conn.commit()
+
+        automation_cols = {row[1] for row in conn.execute("PRAGMA table_info(automation_tasks)").fetchall()}
+        if "lease_owner" not in automation_cols:
+            conn.execute("ALTER TABLE automation_tasks ADD COLUMN lease_owner TEXT")
+            conn.commit()
+        if "lease_expires_at" not in automation_cols:
+            conn.execute("ALTER TABLE automation_tasks ADD COLUMN lease_expires_at TEXT")
             conn.commit()
 
 
@@ -704,6 +714,85 @@ def update_automation_task(
         if cursor.rowcount == 0:
             return None
     return get_automation_task(task_id)
+
+
+def _lease_expires_at(now: str | None, lease_seconds: int) -> tuple[str, str]:
+    if now is None:
+        current = datetime.datetime.now(datetime.timezone.utc)
+    else:
+        current = datetime.datetime.fromisoformat(now)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=datetime.timezone.utc)
+    return current.isoformat(), (current + datetime.timedelta(seconds=lease_seconds)).isoformat()
+
+
+def claim_next_automation_task(
+    *,
+    lease_owner: str,
+    lease_seconds: int,
+    now: str | None = None,
+) -> dict[str, Any] | None:
+    now_value, lease_expires_at = _lease_expires_at(now, lease_seconds)
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT task.*
+            FROM automation_tasks AS task
+            WHERE (
+                task.status = 'running'
+                AND task.lease_expires_at IS NOT NULL
+                AND task.lease_expires_at <= ?
+            ) OR (
+                task.status = 'queued'
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM automation_tasks AS active
+                    WHERE active.profile_id = task.profile_id
+                      AND active.id != task.id
+                      AND active.status IN ('running', 'cancel_requested')
+                      AND (
+                          active.status = 'cancel_requested'
+                          OR active.lease_expires_at IS NULL
+                          OR active.lease_expires_at > ?
+                      )
+                )
+            )
+            ORDER BY
+                CASE WHEN task.status = 'running' THEN 0 ELSE 1 END,
+                task.created_at ASC
+            LIMIT 1
+            """,
+            (now_value, now_value),
+        ).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+
+        cursor = conn.execute(
+            """
+            UPDATE automation_tasks
+            SET status = 'running',
+                lease_owner = ?,
+                lease_expires_at = ?,
+                started_at = COALESCE(started_at, ?),
+                finished_at = NULL
+            WHERE id = ?
+              AND (
+                  status = 'queued'
+                  OR (
+                      status = 'running'
+                      AND lease_expires_at IS NOT NULL
+                      AND lease_expires_at <= ?
+                  )
+              )
+            """,
+            (lease_owner, lease_expires_at, now_value, row["id"], now_value),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_automation_task(row["id"])
 
 
 _AUDIT_SENSITIVE_KEYS = {

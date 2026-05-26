@@ -24,6 +24,15 @@ def test_init_db_creates_tables(tmp_db: Path):
     assert "automation_tasks" in names
 
 
+def test_init_db_creates_automation_task_lease_columns(tmp_db: Path):
+    with db.get_db() as conn:
+        rows = conn.execute("PRAGMA table_info(automation_tasks)").fetchall()
+        cols = {row["name"] for row in rows}
+
+    assert "lease_owner" in cols
+    assert "lease_expires_at" in cols
+
+
 def test_init_db_idempotent(tmp_db: Path):
     # Second call should not crash
     db.init_db()
@@ -312,6 +321,69 @@ def test_list_automation_tasks_paginates_after_profile_filter(tmp_db: Path):
 
     assert [task["id"] for task in tasks] == [second["id"], first["id"]]
     assert third["id"] not in [task["id"] for task in tasks]
+
+
+def test_claim_next_automation_task_claims_oldest_queued_task(tmp_db: Path):
+    profile = db.create_profile("Automation Task Claim")
+    first = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])
+    time.sleep(0.01)
+    second = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 2}])
+
+    claimed = db.claim_next_automation_task(lease_owner="worker-a", lease_seconds=60)
+
+    assert claimed is not None
+    assert claimed["id"] == first["id"]
+    assert claimed["status"] == "running"
+    assert claimed["started_at"] is not None
+    assert claimed["finished_at"] is None
+    assert claimed["lease_owner"] == "worker-a"
+    assert claimed["lease_expires_at"] is not None
+    assert db.get_automation_task(first["id"])["status"] == "running"
+    assert db.get_automation_task(second["id"])["status"] == "queued"
+
+
+def test_claim_next_automation_task_skips_profiles_with_active_task(tmp_db: Path):
+    blocked_profile = db.create_profile("Automation Task Claim Blocked")
+    free_profile = db.create_profile("Automation Task Claim Free")
+    blocked_running = db.create_automation_task(
+        profile_id=blocked_profile["id"],
+        steps=[{"type": "wait", "ms": 1}],
+        status="running",
+    )
+    blocked_queued = db.create_automation_task(profile_id=blocked_profile["id"], steps=[{"type": "wait", "ms": 2}])
+    free_queued = db.create_automation_task(profile_id=free_profile["id"], steps=[{"type": "wait", "ms": 3}])
+
+    claimed = db.claim_next_automation_task(lease_owner="worker-a", lease_seconds=60)
+
+    assert claimed is not None
+    assert claimed["id"] == free_queued["id"]
+    assert claimed["profile_id"] == free_profile["id"]
+    assert db.get_automation_task(blocked_running["id"])["status"] == "running"
+    assert db.get_automation_task(blocked_queued["id"])["status"] == "queued"
+
+
+def test_claim_next_automation_task_reclaims_expired_running_lease(tmp_db: Path):
+    profile = db.create_profile("Automation Task Reclaim")
+    expired = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}], status="running")
+    expired_at = "2026-05-27T00:00:00+00:00"
+    with db.get_db() as conn:
+        conn.execute(
+            "UPDATE automation_tasks SET lease_owner = ?, lease_expires_at = ?, started_at = ? WHERE id = ?",
+            ("worker-old", expired_at, expired_at, expired["id"]),
+        )
+        conn.commit()
+
+    claimed = db.claim_next_automation_task(
+        lease_owner="worker-new",
+        lease_seconds=60,
+        now="2026-05-27T00:01:00+00:00",
+    )
+
+    assert claimed is not None
+    assert claimed["id"] == expired["id"]
+    assert claimed["status"] == "running"
+    assert claimed["lease_owner"] == "worker-new"
+    assert claimed["lease_expires_at"] > "2026-05-27T00:01:00+00:00"
 
 
 # ── update_profile ───────────────────────────────────────────────────────────
