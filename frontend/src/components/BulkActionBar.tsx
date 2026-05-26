@@ -12,6 +12,10 @@ interface BulkActionBarProps {
   onClearSelection?: () => void;
   onCheckHealth?: () => Promise<void> | void;
   checkingHealth?: boolean;
+  feedback?: {
+    tone: "success" | "warning";
+    message: string;
+  } | null;
   onLaunch?: () => Promise<void> | void;
   launching?: boolean;
   onStop?: () => Promise<void> | void;
@@ -29,6 +33,7 @@ export function BulkActionBar({
   onClearSelection,
   onCheckHealth,
   checkingHealth = false,
+  feedback = null,
   onLaunch,
   launching = false,
   onStop,
@@ -156,6 +161,19 @@ export function BulkActionBar({
               <HeartPulse className={`h-3.5 w-3.5 ${checkingHealth ? "animate-pulse" : ""}`} />
               <span>{checkingHealth ? "Checking..." : "Check health"}</span>
             </button>
+            {feedback && !checkingHealth && (
+              <span
+                role={feedback.tone === "warning" ? "alert" : "status"}
+                aria-label="Profile operation feedback"
+                className={`ml-1 inline-flex h-7 shrink-0 items-center rounded-[6px] border px-2 font-medium ${
+                  feedback.tone === "warning"
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {feedback.message}
+              </span>
+            )}
           </div>
           <div role="group" aria-label="Secondary bulk actions" className="flex shrink-0 items-center gap-1">
             <button

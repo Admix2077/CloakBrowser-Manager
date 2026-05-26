@@ -45,6 +45,12 @@ export interface BulkDeleteResult {
   deletedIds: string[];
 }
 
+export interface BulkHealthResult {
+  requestedCount: number;
+  checkedCount: number;
+  failedCount: number;
+}
+
 type ProfileTag = NonNullable<ProfileCreateData["tags"]>[number];
 
 export function useProfiles() {
@@ -89,9 +95,15 @@ export function useProfiles() {
     [],
   );
 
-  const checkHealth = useCallback(async (profileIds: string[]) => {
+  const checkHealth = useCallback(async (profileIds: string[]): Promise<BulkHealthResult> => {
     const ids = [...new Set(profileIds.filter(Boolean))];
-    if (ids.length === 0) return;
+    if (ids.length === 0) {
+      return {
+        requestedCount: 0,
+        checkedCount: 0,
+        failedCount: 0,
+      };
+    }
 
     const successfulResults: [string, ProfileHealthResponse][] = [];
     let failedCount = 0;
@@ -128,6 +140,12 @@ export function useProfiles() {
     } else {
       setOperationError(null);
     }
+
+    return {
+      requestedCount: ids.length,
+      checkedCount: successfulResults.length,
+      failedCount,
+    };
   }, []);
 
   const refresh = useCallback(async (): Promise<Profile[] | undefined> => {

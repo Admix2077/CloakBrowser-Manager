@@ -38,7 +38,7 @@
 - [x] 新增 table 样式。
 - [x] 新增 empty state 样式。
 - [x] 新增 error banner。
-- [ ] 新增 toast 或 inline feedback。
+- [x] 新增 toast 或 inline feedback。
 - [x] 用项目内 ConfirmDialog 替代原生 `confirm`。
 - [ ] ProfileForm 改为分组页签：
   - Identity。
@@ -579,4 +579,71 @@ cd frontend && npm run build
 
 - 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
 - 没有删除或清空真实 profile 数据。
+- 没有 push 到任何远端仓库。
+
+## 2026-05-26 Profile 批量 health inline feedback 小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的 `新增 toast 或 inline feedback`。
+- 子 agent `Bernoulli` 只读审计确认：当前已有错误 banner 和 `Checking...` loading，但批量 `Check health` 成功后缺少完成反馈；最小范围应做 toolbar 内联反馈，不引入全局 toast 系统。
+- 本轮不改后端 API，不解锁高风险批量动作，不引入新依赖。
+
+已完成：
+
+- [x] `frontend/src/hooks/useProfiles.ts`
+  - `checkHealth(ids)` 返回 `{ requestedCount, checkedCount, failedCount }`。
+  - 保留成功更新 health cache、失败写入 `operationError` 的既有语义。
+- [x] `frontend/src/App.tsx`
+  - 新增 Profile operations 本地 `bulkFeedback` 状态。
+  - 开始 `Check health` 时清空旧 feedback。
+  - 全成功显示 success inline feedback：`Health checked for N profiles.`。
+  - 部分失败显示 warning inline feedback：`Health check finished: X checked, Y failed.`。
+  - selection / filters / section 变化时清空旧 feedback，避免陈旧提示。
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - 透传 `bulkFeedback` 到 `BulkActionBar`。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - `Check health` 按钮旁新增紧凑 inline feedback pill。
+  - success 使用 `role="status"`，warning 使用 `role="alert"`，统一 `aria-label="Profile operation feedback"`。
+  - 保持 toolbar `h-11`，不改变 sticky 表头 offset。
+- [x] 测试覆盖：
+  - `useProfiles.test.ts` 覆盖 bulk health result 返回值。
+  - `ProfileTable.test.tsx` 覆盖 success / warning inline feedback。
+  - `App.test.tsx` 覆盖真实点击 `Check health` 后 success / warning feedback。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx
+# 红灯：2 failed, 20 passed
+# 失败点：完成 bulk health 后没有 Profile operation feedback
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/hooks/useProfiles.test.ts
+# 3 passed, 83 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 163 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x960`：
+  - 选中 profile 后点击 `Check health`。
+  - JS 验证：`feedback="Health checked for 4 profiles."`、`role="status"`、`bulkToolbar=true`、`bodyOverflow=false`、`width=1440`、`scrollWidth=1440`。
+- 移动 `390x844`：
+  - 选中 1 个 card 后点击 `Check health`。
+  - JS 验证：`feedback="Health checked for 1 profile."`、`role="status"`、`bulkToolbar=true`、`bodyOverflow=false`、`width=390`、`scrollWidth=390`。
+- 截图：
+  - `/tmp/cloakbrowser-inline-feedback-screens/desktop-profile-bulk-health-inline-feedback.png`
+  - `/tmp/cloakbrowser-inline-feedback-screens/mobile-profile-bulk-health-inline-feedback.png`
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有引入全局 toast provider。
+- 没有解锁 Launch / Stop / Tag / Delete 批量高风险动作。
 - 没有 push 到任何远端仓库。

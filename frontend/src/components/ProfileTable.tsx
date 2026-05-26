@@ -27,6 +27,10 @@ interface ProfileTableProps {
   onPreviewProfile?: (id: string) => void;
   onCheckSelectedHealth?: (ids: string[]) => Promise<void> | void;
   checkingSelectedHealth?: boolean;
+  bulkFeedback?: {
+    tone: "success" | "warning";
+    message: string;
+  } | null;
   onLaunchSelectedProfiles?: (ids: string[]) => Promise<void> | void;
   launchingSelectedProfiles?: boolean;
   onStopSelectedProfiles?: (ids: string[]) => Promise<void> | void;
@@ -53,6 +57,7 @@ export function ProfileTable({
   onPreviewProfile,
   onCheckSelectedHealth,
   checkingSelectedHealth = false,
+  bulkFeedback = null,
   onLaunchSelectedProfiles,
   launchingSelectedProfiles = false,
   onStopSelectedProfiles,
@@ -146,6 +151,7 @@ export function ProfileTable({
             onClearSelection={onClearSelection}
             onCheckHealth={() => onCheckSelectedHealth?.(selectedProfiles.map((profile) => profile.id))}
             checkingHealth={checkingSelectedHealth}
+            feedback={bulkFeedback}
             onLaunch={() => onLaunchSelectedProfiles?.(
               selectedProfiles.filter((profile) => profile.status === "stopped").map((profile) => profile.id),
             )}

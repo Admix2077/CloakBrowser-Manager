@@ -338,6 +338,40 @@ describe("ProfileTable", () => {
     expect(onDeleteSelected).not.toHaveBeenCalled();
   });
 
+  it("shows inline feedback for completed bulk health checks", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        bulkFeedback={{
+          tone: "success",
+          message: "Health checked for 2 profiles.",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "Profile operation feedback" }).textContent).toBe("Health checked for 2 profiles.");
+  });
+
+  it("shows warning inline feedback for partial bulk health checks", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        bulkFeedback={{
+          tone: "warning",
+          message: "Health check finished: 1 checked, 1 failed.",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("alert", { name: "Profile operation feedback" }).textContent).toBe("Health check finished: 1 checked, 1 failed.");
+  });
+
   it("clears selected profiles from the bulk action bar with Escape", () => {
     const onClearSelection = vi.fn();
 

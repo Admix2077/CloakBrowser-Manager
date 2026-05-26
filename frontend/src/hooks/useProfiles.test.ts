@@ -633,13 +633,19 @@ describe("useProfiles", () => {
     const { result } = renderHook(() => useProfiles());
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let checkResult;
     await act(async () => {
-      await result.current.checkHealth(["abc-123", "abc-123"]);
+      checkResult = await result.current.checkHealth(["abc-123", "abc-123"]);
     });
 
     expect(mockApi.checkProfileHealth).toHaveBeenCalledTimes(1);
     expect(mockApi.checkProfileHealth).toHaveBeenCalledWith("abc-123");
     expect(result.current.healthByProfileId["abc-123"]).toEqual(checkedHealth);
+    expect(checkResult).toEqual({
+      requestedCount: 1,
+      checkedCount: 1,
+      failedCount: 0,
+    });
   });
 
   it("keeps successful bulk health results when another check fails", async () => {
@@ -656,12 +662,18 @@ describe("useProfiles", () => {
     const { result } = renderHook(() => useProfiles());
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    let checkResult;
     await act(async () => {
-      await result.current.checkHealth(["abc-123", "missing"]);
+      checkResult = await result.current.checkHealth(["abc-123", "missing"]);
     });
 
     expect(mockApi.checkProfileHealth).toHaveBeenCalledTimes(2);
     expect(result.current.healthByProfileId["abc-123"]).toEqual(checkedHealth);
     expect(result.current.error).toBe("Failed to check health for 1 profile(s)");
+    expect(checkResult).toEqual({
+      requestedCount: 2,
+      checkedCount: 1,
+      failedCount: 1,
+    });
   });
 });

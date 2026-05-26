@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
-import { useProfiles } from "./hooks/useProfiles";
+import { useProfiles, type BulkHealthResult } from "./hooks/useProfiles";
 import { api, setOnUnauthorized, type Profile, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
@@ -22,6 +22,10 @@ import {
 type AuthState = "checking" | "required" | "ok" | "error";
 type View = "empty" | "create" | "edit" | "view";
 type ConsoleSection = "profiles" | "proxies";
+type BulkFeedback = {
+  tone: "success" | "warning";
+  message: string;
+} | null;
 
 function getInitialSidebarOpen(): boolean {
   return typeof window === "undefined" || window.innerWidth >= 768;
@@ -169,6 +173,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [bulkStopping, setBulkStopping] = useState(false);
   const [bulkTagging, setBulkTagging] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkFeedback, setBulkFeedback] = useState<BulkFeedback>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -212,6 +217,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       return next.size === prev.size ? prev : next;
     });
   }, [filteredProfiles]);
+
+  useEffect(() => {
+    setBulkFeedback(null);
+  }, [filters, section]);
 
   useEffect(() => {
     setPreviewProfileId((prev) => {
@@ -278,6 +287,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   }, []);
 
   const handleToggleProfileSelection = useCallback((id: string) => {
+    setBulkFeedback(null);
     setSelectedProfileIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -290,6 +300,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   }, []);
 
   const handleToggleVisibleSelection = useCallback((ids: string[], shouldSelect: boolean) => {
+    setBulkFeedback(null);
     setSelectedProfileIds((prev) => {
       const next = new Set(prev);
       ids.forEach((id) => {
@@ -305,9 +316,20 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
   const handleCheckSelectedHealth = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
+    setBulkFeedback(null);
     setBulkHealthChecking(true);
     try {
-      await checkHealth(ids);
+      const result = await checkHealth(ids) as BulkHealthResult | undefined;
+      if (!result || result.requestedCount === 0) return;
+      setBulkFeedback(result.failedCount > 0
+        ? {
+          tone: "warning",
+          message: `Health check finished: ${result.checkedCount} checked, ${result.failedCount} failed.`,
+        }
+        : {
+          tone: "success",
+          message: `Health checked for ${result.checkedCount} profile${result.checkedCount === 1 ? "" : "s"}.`,
+        });
     } finally {
       setBulkHealthChecking(false);
     }
@@ -540,11 +562,15 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     selectedProfileIds={selectedProfileIds}
                     onToggleProfileSelection={handleToggleProfileSelection}
                     onToggleVisibleSelection={handleToggleVisibleSelection}
-                    onClearSelection={() => setSelectedProfileIds(new Set())}
+                    onClearSelection={() => {
+                      setBulkFeedback(null);
+                      setSelectedProfileIds(new Set());
+                    }}
                     previewProfileId={previewProfile?.id ?? null}
                     onPreviewProfile={setPreviewProfileId}
                     onCheckSelectedHealth={handleCheckSelectedHealth}
                     checkingSelectedHealth={bulkHealthChecking}
+                    bulkFeedback={bulkFeedback}
                     onLaunchSelectedProfiles={handleLaunchSelectedProfiles}
                     launchingSelectedProfiles={bulkLaunching}
                     onStopSelectedProfiles={handleStopSelectedProfiles}

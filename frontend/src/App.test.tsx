@@ -150,7 +150,11 @@ beforeEach(() => {
   mockStop.mockReset();
   mockStop.mockResolvedValue(undefined);
   mockCheckHealth.mockReset();
-  mockCheckHealth.mockResolvedValue(undefined);
+  mockCheckHealth.mockResolvedValue({
+    requestedCount: 2,
+    checkedCount: 2,
+    failedCount: 0,
+  });
   mockRefresh.mockReset();
   mockRefresh.mockResolvedValue(undefined);
   mockProxyManagerPage.mockClear();
@@ -555,7 +559,25 @@ describe("App operations console", () => {
     await waitFor(() => {
       expect(mockCheckHealth).toHaveBeenCalledWith(["beta", "alpha"]);
     });
+    expect((await screen.findByRole("status", { name: "Profile operation feedback" })).textContent).toBe("Health checked for 2 profiles.");
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows inline warning feedback when a bulk health check partially fails", async () => {
+    mockCheckHealth.mockResolvedValue({
+      requestedCount: 2,
+      checkedCount: 1,
+      failedCount: 1,
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText("Select Beta Broken"));
+    fireEvent.click(screen.getByLabelText("Select Alpha Good"));
+    fireEvent.click(screen.getByRole("button", { name: "Check health" }));
+
+    expect((await screen.findByRole("alert", { name: "Profile operation feedback" })).textContent).toBe("Health check finished: 1 checked, 1 failed.");
   });
 
   it("keeps high-risk bulk actions disabled while leaving health check available", async () => {
