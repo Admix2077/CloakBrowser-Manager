@@ -28,7 +28,7 @@
 - [x] 新增 `proxies` 表。
 - [x] 新增 proxy CRUD。
 - [x] 新增 `POST /api/proxies/{id}/check`。
-- [ ] 新增 `POST /api/proxies/bulk/check`。
+- [x] 新增 `POST /api/proxies/bulk/check`。
 - [x] 支持字段：
   - name。
   - url。
@@ -192,5 +192,85 @@ git diff --check
 
 - `POST /api/proxies/bulk/check` 未做。
 - 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入未做。
+- 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset 未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 2026-05-26 Proxy 批量检测 API 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于单个 proxy check 增加后端批量检测接口。
+- 本小闭环只做 `POST /api/proxies/bulk/check`，不进入前端 Proxy Manager 页面、搜索筛选、CSV 导入或 profile 分配。
+- 使用 TDD：先补充 `backend/tests/test_proxies.py` 并确认红灯，再实现最小后端能力。
+
+红灯确认：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 2 failed, 9 passed
+# /api/proxies/bulk/check 当前被 /api/proxies/{proxy_id}/check 动态路由匹配为 proxy_id=bulk，返回 404
+```
+
+已完成：
+
+- [x] `backend/tests/test_proxies.py`
+  - 覆盖批量请求中成功、检测失败、缺失 id 三种结果共存。
+  - 覆盖 HTTP 仍返回 200，按 `total/succeeded/failed/results` 汇总，部分失败不让整批失败。
+  - 覆盖 GeoIP resolver 使用包含凭据的原始 proxy URL 进行真实检测。
+  - 覆盖响应、`results[].error`、`results[].proxy.last_check_error` 和 DB 中的 `last_check_error` 不泄露 proxy 密码。
+  - 覆盖 `proxy_ids=[]` 返回 422。
+- [x] `backend/models.py`
+  - 新增 `ProxyBulkCheckRequest`。
+  - 新增 `ProxyBulkCheckResult`。
+  - 新增 `ProxyBulkCheckResponse`。
+- [x] `backend/main.py`
+  - 新增 `POST /api/proxies/bulk/check`，路由放在 `POST /api/proxies/{proxy_id}/check` 前，避免 `bulk` 被动态 id 路由吞掉。
+  - 抽出 `_run_proxy_check()`，让单个检测和批量检测共用 GeoIP 调用、`last_check_*` 写库和错误处理。
+  - 抽出 `_safe_proxy_check_error()`，将异常中的原始 proxy URL 替换为脱敏 URL，并额外移除独立出现的 proxy password。
+  - 缺失 proxy id 只记录该项失败，不抛整批 404。
+
+接口响应形态：
+
+```json
+{
+  "total": 3,
+  "succeeded": 1,
+  "failed": 2,
+  "results": [
+    {"proxy_id": "...", "ok": true, "error": null, "proxy": "...redacted ProxyResponse..."},
+    {"proxy_id": "...", "ok": false, "error": "...redacted...", "proxy": "...redacted ProxyResponse..."},
+    {"proxy_id": "missing", "ok": false, "error": "Proxy not found", "proxy": null}
+  ]
+}
+```
+
+保持不变：
+
+- Profile 仍保留原有 `proxy` 字符串字段；本轮不引入 `proxy_id` 分配。
+- 本轮不新增前端 Proxy Manager 页面，因此没有前端测试或 build 要求。
+- 本轮不做前端搜索、筛选、批量检测交互。
+- 本轮不进入 Project Mileage 跨仓联动，不引入 Chromium CDP 能力。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 11 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 19 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_api.py -q
+# 70 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 228 passed
+```
+
+范围说明：
+
+- 前端 Proxy Manager 页面、搜索筛选、批量检测交互未做。
+- 按国家、provider、tag 筛选未做。
+- CSV 粘贴导入未做。
 - 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset 未做。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

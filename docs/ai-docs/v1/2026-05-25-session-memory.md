@@ -2207,3 +2207,56 @@ git diff --check
 - 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入。
 - 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 33. 2026-05-26 Proxy 批量检测 API 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于单个 proxy check 增加 `POST /api/proxies/bulk/check`。
+- 本小闭环只做后端批量检测 API，不做前端 Proxy Manager 页面、CSV 导入、搜索筛选或 profile 分配。
+- 使用 TDD：先补充 `backend/tests/test_proxies.py`，确认 `/api/proxies/bulk/check` 返回 404 红灯后实现。
+
+本轮实现：
+
+- `backend/tests/test_proxies.py`
+  - 新增 bulk check 部分成功测试：成功 proxy、检测失败 proxy、missing id 同批返回。
+  - 断言 HTTP 200、`total/succeeded/failed/results` 汇总正确，部分失败不影响整批。
+  - 断言 GeoIP resolver 接收包含凭据的原始 proxy URL。
+  - 断言响应、错误原因和 DB `last_check_error` 不泄露 `hiddenpass`。
+  - 新增 `proxy_ids=[]` 返回 422 测试。
+- `backend/models.py`
+  - 新增 `ProxyBulkCheckRequest`、`ProxyBulkCheckResult`、`ProxyBulkCheckResponse`。
+- `backend/main.py`
+  - 新增 `POST /api/proxies/bulk/check`。
+  - 路由放在 `POST /api/proxies/{proxy_id}/check` 前，避免 `bulk` 被动态路由当成 proxy id。
+  - 抽出 `_run_proxy_check()`，单个检测和批量检测共用 GeoIP、写库和失败状态逻辑。
+  - 抽出 `_safe_proxy_check_error()`，异常中的原始 proxy URL 会被替换成脱敏 URL，独立出现的 proxy password 也会被替换。
+  - missing proxy id 只作为单项失败返回 `Proxy not found`。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 勾选 `新增 POST /api/proxies/bulk/check`。
+  - 追加本轮小闭环记录。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 11 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 19 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_api.py -q
+# 70 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 228 passed
+```
+
+仍未做：
+
+- 前端 Proxy Manager 页面、搜索筛选、批量检测交互。
+- 按国家、provider、tag 筛选。
+- CSV 粘贴导入。
+- 将 proxy 分配到 profile。
+- 从 profile 当前 proxy 保存为 proxy asset。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

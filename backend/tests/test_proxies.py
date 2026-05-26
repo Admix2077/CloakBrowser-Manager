@@ -229,3 +229,93 @@ def test_proxy_check_records_failure_without_leaking_credentials(
     assert stored is not None
     assert stored["last_check_status"] == "error"
     assert "hiddenpass" not in stored["last_check_error"]
+
+
+def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured_proxy_urls: list[str | None] = []
+
+    async def fake_resolve(proxy_url: str | None):
+        captured_proxy_urls.append(proxy_url)
+        if proxy_url and "broken" in proxy_url:
+            raise RuntimeError(f"cannot connect via {proxy_url}")
+        return GeoIPResult(
+            timezone="Europe/Berlin",
+            locale="de-DE",
+            ip="198.51.100.25",
+            country_code="DE",
+            source="qa",
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    good = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Good bulk",
+            "url": "http://user:hiddenpass@good.example:8080",
+        },
+    ).json()
+    broken = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Broken bulk",
+            "url": "http://user:hiddenpass@broken.example:8080",
+        },
+    ).json()
+
+    resp = app_client.post(
+        "/api/proxies/bulk/check",
+        json={"proxy_ids": [good["id"], broken["id"], "missing"]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 3
+    assert data["succeeded"] == 1
+    assert data["failed"] == 2
+    assert captured_proxy_urls == [
+        "http://user:hiddenpass@good.example:8080",
+        "http://user:hiddenpass@broken.example:8080",
+    ]
+    assert "hiddenpass" not in str(data)
+
+    good_result, broken_result, missing_result = data["results"]
+    assert good_result["proxy_id"] == good["id"]
+    assert good_result["ok"] is True
+    assert good_result["error"] is None
+    assert good_result["proxy"]["url"] == "http://good.example:8080"
+    assert good_result["proxy"]["last_check_status"] == "good"
+    assert good_result["proxy"]["last_check_country_code"] == "DE"
+
+    assert broken_result["proxy_id"] == broken["id"]
+    assert broken_result["ok"] is False
+    assert "http://broken.example:8080" in broken_result["error"]
+    assert "hiddenpass" not in broken_result["error"]
+    assert broken_result["proxy"]["url"] == "http://broken.example:8080"
+    assert broken_result["proxy"]["last_check_status"] == "error"
+    assert "hiddenpass" not in broken_result["proxy"]["last_check_error"]
+
+    assert missing_result == {
+        "proxy_id": "missing",
+        "ok": False,
+        "error": "Proxy not found",
+        "proxy": None,
+    }
+
+    stored_good = db.get_proxy(good["id"])
+    assert stored_good is not None
+    assert stored_good["last_check_status"] == "good"
+    assert stored_good["last_check_ip"] == "198.51.100.25"
+
+    stored_broken = db.get_proxy(broken["id"])
+    assert stored_broken is not None
+    assert stored_broken["last_check_status"] == "error"
+    assert "hiddenpass" not in stored_broken["last_check_error"]
+
+
+def test_proxy_bulk_check_requires_at_least_one_proxy_id(app_client: TestClient):
+    resp = app_client.post("/api/proxies/bulk/check", json={"proxy_ids": []})
+
+    assert resp.status_code == 422

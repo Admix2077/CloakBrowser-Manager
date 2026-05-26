@@ -111,6 +111,24 @@ class ProxyResponse(BaseModel):
     updated_at: str
 
 
+class ProxyBulkCheckRequest(BaseModel):
+    proxy_ids: list[str] = Field(min_length=1)
+
+
+class ProxyBulkCheckResult(BaseModel):
+    proxy_id: str
+    ok: bool
+    error: str | None = None
+    proxy: ProxyResponse | None = None
+
+
+class ProxyBulkCheckResponse(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    results: list[ProxyBulkCheckResult]
+
+
 class ProfileResponse(BaseModel):
     id: str
     name: str
