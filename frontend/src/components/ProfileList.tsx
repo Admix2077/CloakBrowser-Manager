@@ -1,4 +1,4 @@
-import { AlertTriangle, Layers3, Play, Plus, ShieldAlert, Square, WifiOff } from "lucide-react";
+import { AlertTriangle, FilterX, Layers3, Play, Plus, PlusCircle, ShieldAlert, Square, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
@@ -168,9 +168,11 @@ export function ProfileList({
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
       >
         {filtered.length === 0 && (
-          <div className="py-8 text-center text-xs text-slate-500">
-            {profiles.length === 0 ? "No profiles yet" : "No matches"}
-          </div>
+          <ProfileListEmptyState
+            kind={profiles.length === 0 ? "first-run" : "filtered"}
+            onCreateProfile={onNew}
+            onClearFilters={() => setFilters(defaultProfileFilters)}
+          />
         )}
         {shouldVirtualize ? (
           <div
@@ -319,6 +321,48 @@ function QuickViewButton({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       <span aria-hidden="true" className={`tabular-nums ${active ? "text-blue-600" : "text-slate-400"}`}>{count}</span>
     </button>
+  );
+}
+
+function ProfileListEmptyState({
+  kind,
+  onCreateProfile,
+  onClearFilters,
+}: {
+  kind: "first-run" | "filtered";
+  onCreateProfile: () => void;
+  onClearFilters: () => void;
+}) {
+  const isFirstRun = kind === "first-run";
+  const label = isFirstRun ? "No profiles yet" : "No matching profile shortcuts";
+  const title = isFirstRun ? "No profiles yet" : "No matches";
+  const description = isFirstRun
+    ? "Create the first profile to start building shortcuts."
+    : "Clear filters to bring profile shortcuts back.";
+  const actionLabel = isFirstRun ? "Create profile" : "Clear filters";
+  const action = isFirstRun ? onCreateProfile : onClearFilters;
+  const Icon = isFirstRun ? PlusCircle : FilterX;
+
+  return (
+    <div
+      role="status"
+      aria-label={label}
+      className="m-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-5 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
+    >
+      <span className="mx-auto mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="text-sm font-semibold text-slate-950">{title}</div>
+      <p className="mx-auto mt-1 max-w-[210px] text-xs leading-5 text-slate-500">{description}</p>
+      <button
+        type="button"
+        className="mt-3 inline-flex h-8 items-center justify-center gap-1.5 rounded-[6px] border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow,transform] duration-150 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 active:translate-y-px focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        onClick={action}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {actionLabel}
+      </button>
+    </div>
   );
 }
 

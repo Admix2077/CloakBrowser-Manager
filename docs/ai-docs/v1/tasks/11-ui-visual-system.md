@@ -36,7 +36,7 @@
   - country。
   - tag。
 - [x] 新增 table 样式。
-- [ ] 新增 empty state 样式。
+- [x] 新增 empty state 样式。
 - [x] 新增 error banner。
 - [ ] 新增 toast 或 inline feedback。
 - [x] 用项目内 ConfirmDialog 替代原生 `confirm`。
@@ -517,4 +517,66 @@ git diff --check
 - 没有修改后端或 runtime。
 - 没有修改 Proxy Manager API 或内部加载状态机。
 - 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
+## 2026-05-26 ProfileList 左侧 rail empty state 小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的 `新增 empty state 样式`。
+- 子 agent `Euclid` 只读审计确认：`ProfileTable`、`ProfileSummaryPanel`、`ProxyManagerPage` 空态已基本够用，最小高收益范围是 `ProfileList` 左侧 rail。
+- 本轮不改 profile 数据、筛选算法、虚拟滚动、主表空态或后端 API。
+
+已完成：
+
+- [x] `frontend/src/components/ProfileList.tsx`
+  - 新增本地 `ProfileListEmptyState`。
+  - first-run 状态从纯文本升级为 `role="status"` 的 dashed panel，提供 `Create profile` 动作并调用 `onNew`。
+  - filtered-empty 状态提供 `No matching profile shortcuts` status 和 `Clear filters` 动作，调用 `setFilters(defaultProfileFilters)`。
+  - 样式尺寸控制在左侧 264px rail 内，不影响虚拟列表 item 高度。
+- [x] `frontend/src/components/ProfileList.test.tsx`
+  - 覆盖 first-run rail empty state 和创建动作。
+  - 覆盖 filtered rail empty state 和清空筛选动作。
+- [x] `frontend/src/App.test.tsx`
+  - 集成测试改为按区域区分左侧 rail 空态和主表空态，避免同名 status / button 的全局查询歧义。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileList.test.tsx
+# 红灯：2 failed, 9 passed
+# 失败点：ProfileList 仍是纯文本 No profiles yet / No matches
+
+cd frontend && npm test -- --run src/components/ProfileList.test.tsx
+# 1 passed, 11 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProxyManagerPage.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 红灯：App 集成测试因 rail 和主表同名空态/按钮出现全局查询歧义
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProxyManagerPage.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 5 passed, 86 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 160 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 当前真实服务有 4 个 profile；未清空真实数据。
+- 桌面 `1440x960`：
+  - 输入不存在搜索词后 JS 验证：`railEmpty=true`、`tableEmpty=true`、`clearButtons=2`、`bodyOverflow=false`、`width=1440`、`scrollWidth=1440`。
+- 移动 `390x844`：
+  - 保持不存在搜索词后 JS 验证：`railEmpty=true`、`tableEmpty=true`、`bodyOverflow=false`、`width=390`、`scrollWidth=390`。
+- 截图：
+  - `/tmp/cloakbrowser-empty-state-screens/desktop-filtered-empty-state.png`
+  - `/tmp/cloakbrowser-empty-state-screens/mobile-filtered-empty-state.png`
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有删除或清空真实 profile 数据。
 - 没有 push 到任何远端仓库。

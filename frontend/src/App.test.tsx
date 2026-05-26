@@ -446,8 +446,11 @@ describe("App operations console", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("status", { name: "No profiles yet" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    const tableRegion = await screen.findByRole("region", { name: "Profile operations table" });
+    const emptyState = within(tableRegion).getByRole("status", { name: "No profiles yet" });
+    expect(emptyState).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Profiles list" })).getByRole("status", { name: "No profiles yet" })).toBeTruthy();
+    fireEvent.click(within(emptyState).getByRole("button", { name: "Create profile" }));
     expect(await screen.findByRole("heading", { name: "New Profile" })).toBeTruthy();
   });
 
@@ -457,8 +460,11 @@ describe("App operations console", () => {
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
     fireEvent.change(screen.getByLabelText("Search profiles"), { target: { value: "does-not-exist" } });
 
-    expect(screen.getByRole("status", { name: "No profiles match these filters" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    const tableRegion = screen.getByRole("region", { name: "Profile operations table" });
+    const emptyState = within(tableRegion).getByRole("status", { name: "No profiles match these filters" });
+    expect(emptyState).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Profiles list" })).getByRole("status", { name: "No matching profile shortcuts" })).toBeTruthy();
+    fireEvent.click(within(emptyState).getByRole("button", { name: "Clear filters" }));
 
     expect(tableProfileNames()).toHaveLength(2);
     expect((screen.getByLabelText("Search profiles") as HTMLInputElement).value).toBe("");

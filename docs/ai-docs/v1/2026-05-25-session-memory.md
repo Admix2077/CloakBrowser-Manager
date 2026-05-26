@@ -3734,3 +3734,71 @@ cd frontend && npm run build
 - 没有改变 VNC websocket、clipboard bridge、Automation REST API 契约。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 51. 2026-05-26 ProfileList 左侧 rail empty state 小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的 `新增 empty state 样式`。
+- 子 agent `Euclid` 只读审计确认：`ProfileTable`、`ProfileSummaryPanel`、`ProxyManagerPage` 空态已基本够用，最小高收益范围是 `ProfileList` 左侧 rail。
+- 本轮不改 profile 数据、筛选算法、虚拟滚动、主表空态或后端 API。
+
+已完成：
+
+- `frontend/src/components/ProfileList.tsx`
+  - 新增本地 `ProfileListEmptyState`。
+  - first-run 状态从纯文本升级为 `role="status"` 的 dashed panel，提供 `Create profile` 动作并调用 `onNew`。
+  - filtered-empty 状态提供 `No matching profile shortcuts` status 和 `Clear filters` 动作，调用 `setFilters(defaultProfileFilters)`。
+  - 样式尺寸控制在左侧 264px rail 内，不影响虚拟列表 item 高度。
+- `frontend/src/components/ProfileList.test.tsx`
+  - 覆盖 first-run rail empty state 和创建动作。
+  - 覆盖 filtered rail empty state 和清空筛选动作。
+- `frontend/src/App.test.tsx`
+  - 集成测试改为按区域区分左侧 rail 空态和主表空态，避免同名 status / button 的全局查询歧义。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md`
+  - 勾选 `新增 empty state 样式`。
+  - 追加本小闭环验证证据。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileList.test.tsx
+# 红灯：2 failed, 9 passed
+# 失败点：ProfileList 仍是纯文本 No profiles yet / No matches
+
+cd frontend && npm test -- --run src/components/ProfileList.test.tsx
+# 1 passed, 11 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProxyManagerPage.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 红灯：App 集成测试因 rail 和主表同名空态/按钮出现全局查询歧义
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProxyManagerPage.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 5 passed, 86 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 160 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 当前真实服务有 4 个 profile；未清空真实数据。
+- 桌面 `1440x960`：
+  - 输入不存在搜索词后 JS 验证：`railEmpty=true`、`tableEmpty=true`、`clearButtons=2`、`bodyOverflow=false`、`width=1440`、`scrollWidth=1440`。
+- 移动 `390x844`：
+  - 保持不存在搜索词后 JS 验证：`railEmpty=true`、`tableEmpty=true`、`bodyOverflow=false`、`width=390`、`scrollWidth=390`。
+
+截图：
+
+- `/tmp/cloakbrowser-empty-state-screens/desktop-filtered-empty-state.png`
+- `/tmp/cloakbrowser-empty-state-screens/mobile-filtered-empty-state.png`
+
+边界：
+
+- 没有修改后端、runtime 或 Docker。
+- 没有删除或清空真实 profile 数据。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

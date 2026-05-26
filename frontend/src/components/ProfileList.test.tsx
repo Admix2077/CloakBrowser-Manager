@@ -169,6 +169,46 @@ describe("ProfileList health display", () => {
   });
 });
 
+describe("ProfileList empty states", () => {
+  it("renders a styled first-run empty state with a create action", () => {
+    const onNew = vi.fn();
+
+    render(
+      <ProfileList
+        profiles={[]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onNew={onNew}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "No profiles yet" })).toBeTruthy();
+    expect(screen.getByText("Create the first profile to start building shortcuts.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    expect(onNew).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a styled filtered empty state with a clear filters action", () => {
+    const onFiltersChange = vi.fn();
+
+    render(
+      <ProfileList
+        profiles={[profile]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        filters={{ ...defaultProfileFilters, search: "missing" }}
+        onFiltersChange={onFiltersChange}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "No matching profile shortcuts" })).toBeTruthy();
+    expect(screen.getByText("No matches")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(onFiltersChange).toHaveBeenCalledWith(defaultProfileFilters);
+  });
+});
+
 describe("ProfileList operations filters", () => {
   it("filters profiles by runtime status, health, proxy, country, and tag", () => {
     render(
