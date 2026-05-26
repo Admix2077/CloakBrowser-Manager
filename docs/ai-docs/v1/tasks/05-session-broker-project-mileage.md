@@ -8,6 +8,10 @@
 
 本模块进入实现前，必须确认 Project Mileage 的 Contract Change Proposal 或任务级契约。
 
+当前跨仓契约提案见：
+
+- `../project-mileage-remote-workspace-contract-proposal.md`
+
 禁止：
 
 - CloakBrowser 直接扣 Project Mileage 用户钱包。

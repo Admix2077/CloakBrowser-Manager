@@ -59,12 +59,13 @@
   - audit metadata 不记录 viewer token、viewer URL、viewer token hash、runtime service token、proxy password、cookie、Origin 原文、请求头或 URL query。
   - runtime VNC failure audit metadata 仅记录固定 `reason_code`，不记录 Origin 原文、后端 VNC 地址或异常 message。
 - 05/06 模块整体仍保持未完成；不要勾选顶层 05 或 06。
+- Project Mileage 跨仓契约提案已落地：`../project-mileage-remote-workspace-contract-proposal.md`。未确认前不改 app/payload。
 
 下一步建议：
 
-1. 准备 Project Mileage Payload/App 跨仓契约联动提案和验收清单。
-2. Project Mileage 跨仓联动仍需 Payload 侧授权、扣费、续期契约确认后再进入。
-3. CloakBrowser 独立侧可继续补 runtime viewer token 过期/刷新 UX 的安全提示，但不替代 Payload 契约。
+1. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
+2. 未确认前不改 Project Mileage app/payload；如继续 CloakBrowser 独立侧，可补 runtime viewer token 过期/刷新 UX 的安全提示，但不替代 Payload 契约。
+3. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。
 
 ## 推荐执行顺序
 

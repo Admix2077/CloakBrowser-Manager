@@ -9,6 +9,7 @@
 - 05 会话 Broker 已完成。
 - Project Mileage Payload 已确认 remote session contract。
 - App 当前 P2 placeholder 测试需要改为真实 API 测试。
+- 当前跨仓契约提案见 `../project-mileage-remote-workspace-contract-proposal.md`；未确认前不修改 Project Mileage app/payload。
 
 ## 任务清单
 
@@ -236,3 +237,23 @@ git diff --check
 - Project Mileage Payload 侧 remote session contract、授权、扣费、续期和业务审计。
 - Project Mileage App 侧真实远程账号列表和受控 viewer 页面。
 - 真实 runtime viewer 页面如何刷新过期 viewer token，仍应由 Payload/App 契约确认。
+
+## 2026-05-27 Project Mileage remote workspace contract proposal 小闭环
+
+当前状态：
+
+- 已完成跨仓契约提案文档：`../project-mileage-remote-workspace-contract-proposal.md`。
+- 本轮只读 Project Mileage app/payload 并输出建议，不修改主仓。
+
+提案覆盖：
+
+- Payload 用户端 `remote-accounts`、`remote-sessions`、viewer-token、renew、terminate API。
+- Payload 运营端 remote sessions 列表、详情、viewer-token 和强制终止 API。
+- App 远程工作台、受控 VNC viewer、运营远程监控建议文件范围。
+- 权限、扣费/续期、viewer token、审计、CORS/service token、跨系统一致性和状态源风险。
+- 禁止范围、测试命令和验收证据。
+
+当前阻塞项：
+
+- 需要 Jeff/主 agent 确认 API 名称、DTO 字段、权限节点、扣费模型、viewer token 刷新策略和跨系统补偿策略。
+- 未确认前不得直接修改 `/home/jeff/code/project-mileage-v3-app` 或 `/home/jeff/code/project-mileage-v3-payload`。
