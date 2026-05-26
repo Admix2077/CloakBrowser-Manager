@@ -35,6 +35,11 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task result 响应脱敏加固小闭环：
+  - create/get/list/cancel/run 的所有对外 `AutomationTaskResponse.result` 统一走白名单脱敏。
+  - 对外只保留 `result.steps[]` 的 `index/type/status`。
+  - 即使历史持久化数据或后续 runner 误写入 `raw_url`、完整 step payload、URL query、fragment 或 token 字段，对外响应也不会回显。
+  - 该加固不修改数据库内部结构，不扩大 task runner 能力，不修改 Project Mileage app/payload。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner scroll step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `scroll` step。
   - `scroll` 支持可选 `page_ref`，默认 `"0"`。
@@ -49,7 +54,7 @@
   - `wait` step 仅回显 `type/ms`。
   - `open_url` step 仅回显 `type/page_ref/wait_until/timeout_ms`。
   - `open_url.url`、query、fragment、未知 step 字段、表单值、token、cookie、secret 不会在 task 响应中回显。
-  - `result.steps[]` 仍只记录 `index/type/status`。
+  - `result` 对外响应也统一做白名单脱敏；即使历史持久化数据或后续 runner 误写入 `raw_url`、完整 step payload、URL query、fragment 或 token 字段，对外也只返回 `result.steps[]` 的 `index/type/status`。
   - 当前 `steps` 仍作为内部脚本定义持久化；调用方不得提交 secret。
   - `open_url` 任意 `http/https` 跳转仍属于可信管理 API 能力，不能直接暴露给 Project Mileage App。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner open_url step 小闭环：

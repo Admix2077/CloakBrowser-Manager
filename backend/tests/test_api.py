@@ -1091,6 +1091,47 @@ def test_automation_task_responses_redact_open_url_steps(app_client: TestClient)
     assert "super-secret" not in str(cancel_resp.json())
 
 
+def test_automation_task_responses_redact_persisted_result_steps(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskResultRedactProfile"})
+    pid = create.json()["id"]
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    create_resp = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "open_url", "url": secret_url}]},
+    )
+    task_id = create_resp.json()["id"]
+    main.db.update_automation_task(
+        task_id,
+        status="succeeded",
+        result={
+            "steps": [
+                {
+                    "index": 0,
+                    "type": "open_url",
+                    "status": "succeeded",
+                    "url": secret_url,
+                    "payload": {"token": "super-secret"},
+                }
+            ],
+            "raw_url": secret_url,
+        },
+    )
+
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "succeeded"}]}
+    assert secret_url not in str(get_resp.json())
+    assert "super-secret" not in str(get_resp.json())
+
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "succeeded"}]}
+    assert secret_url not in str(list_resp.json())
+    assert "super-secret" not in str(list_resp.json())
+
+
 def test_get_automation_task_returns_persisted_task(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskGetProfile"})
     pid = create.json()["id"]

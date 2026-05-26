@@ -460,7 +460,7 @@ POST /api/tasks/{id}/run
 - 当前非法 `open_url.url`、`wait_until` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。
-- `result.steps[]` 只记录 `index`、`type`、`status`。
+- 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token 或业务敏感 URL，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
 - 当前不实现后台队列、并发限制、失败重试、running cancel、click/fill/evaluate/screenshot step。
 
 ## Script Runner 接入建议

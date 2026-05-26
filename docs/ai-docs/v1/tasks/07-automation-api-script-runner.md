@@ -194,13 +194,16 @@ cd frontend && npm run build
 - `wait` step 仅回显 `type/ms`。
 - `open_url` step 仅回显 `type/page_ref/wait_until/timeout_ms`。
 - `open_url.url`、query、fragment、未知 step 字段、表单值、token、cookie、secret 不会在 task 响应中回显。
-- `result.steps[]` 仍只记录 `index/type/status`。
+- `result` 对外响应也统一做白名单脱敏；即使历史持久化数据或后续 runner 误写入 `raw_url`、完整 step payload、URL query、fragment 或 token 字段，对外也只返回 `result.steps[]` 的 `index/type/status`。
 - 当前 `steps` 仍作为内部脚本定义持久化；调用方不得提交 secret。后续若要对 Project Mileage 暴露 task 能力，必须由 Payload 输出安全 DTO，App 不能直连 CloakBrowser task API。
 - `open_url` 任意 `http/https` 跳转仍属于可信管理 API 能力，不能直接暴露给 Project Mileage App。
 
 验证记录：
 
 ```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps -q
+# 1 passed
+
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps -q
 # 1 passed
 

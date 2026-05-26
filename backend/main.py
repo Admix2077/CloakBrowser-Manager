@@ -1502,8 +1502,31 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
     return redacted_steps
 
 
+def _automation_task_redacted_result(result: dict | None) -> dict | None:
+    if not isinstance(result, dict):
+        return None
+    steps = result.get("steps")
+    if not isinstance(steps, list):
+        return None
+    redacted_steps = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        redacted_step = {
+            "index": step.get("index"),
+            "type": str(step.get("type", "")),
+            "status": str(step.get("status", "")),
+        }
+        redacted_steps.append(redacted_step)
+    return {"steps": redacted_steps}
+
+
 def _automation_task_response(task: dict) -> AutomationTaskResponse:
-    task = {**task, "steps": _automation_task_redacted_steps(task.get("steps") or [])}
+    task = {
+        **task,
+        "steps": _automation_task_redacted_steps(task.get("steps") or []),
+        "result": _automation_task_redacted_result(task.get("result")),
+    }
     return AutomationTaskResponse(**task)
 
 
