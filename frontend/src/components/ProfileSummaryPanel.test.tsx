@@ -109,12 +109,14 @@ describe("ProfileSummaryPanel", () => {
     expect(screen.getByText("Inspector")).toBeTruthy();
     expect(screen.getAllByText("不可用").length).toBeGreaterThan(0);
     expect(screen.getByText("Proxy URL missing port: http://proxy.example")).toBeTruthy();
-    expect(screen.getByText("stopped")).toBeTruthy();
+    expect(screen.getByText("stopped").closest("[data-badge-type]")?.getAttribute("data-badge-type")).toBe("runtime");
     expect(screen.getByText("23.144.4.92")).toBeTruthy();
     expect(screen.getByText("US")).toBeTruthy();
     expect(screen.getByText("America/Los_Angeles")).toBeTruthy();
     expect(screen.getByText("en-US")).toBeTruthy();
     expect(screen.getByText("Timezone override")).toBeTruthy();
+    expect(screen.getByText("Timezone override").getAttribute("data-badge-type")).toBe("tag");
+    expect(screen.getByText("Locale override").getAttribute("data-badge-type")).toBe("tag");
     expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
     expect(screen.getByText("1920 x 1080")).toBeTruthy();
     expect(screen.getByText("8 cores")).toBeTruthy();

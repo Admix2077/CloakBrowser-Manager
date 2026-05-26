@@ -3383,6 +3383,72 @@ git diff --check
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
 
+## 49. 2026-05-26 Profile 运营台 Badge 系统小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的第一个未完成任务：`health/runtime/proxy/country/tag` badge 系统。
+- Jeff 反馈当前界面风格基本符合 SS 方向，但部分交互反馈仍生硬；本轮先把已进入 RED 状态的 badge 语义闭环收住，后续继续推进动效 polish。
+- 本轮不改后端、runtime、筛选、排序、批量动作或虚拟滚动高度语义。
+
+子 agent：
+
+- `Hume` 只读调查 `Edit Profile -> All profiles` 不切回列表问题，确认当前源码已有 `handleSidebarFiltersChange()` 修复；本轮通过浏览器在当前 build 复验。
+- `Halley` 只读审计下一轮 motion polish，建议优先处理 preview 行反馈、Inspector 切换、左侧 rail active/press、bulk confirm、移动侧栏进入反馈。
+
+已完成：
+
+- 新增 `frontend/src/components/Badge.tsx`：
+  - `Badge` primitive，提供 `data-badge-type`。
+  - `BadgeDot`、`TagBadge`、`CountryBadge`、`ProxyBadge`。
+  - tag 保留自定义颜色。
+- 新增 `frontend/src/components/Badge.test.tsx`。
+- `HealthBadge` 改为 `Badge type="health"`，保留中文 label、aria-label、warning summary 和 compact 模式。
+- `StatusIndicator` 复用 `BadgeDot`，running 继续保留 pulse。
+- `ProfileTable` 接入 runtime / country / tag badge，保留桌面固定列宽、移动 card、高风险批量动作 disabled 和固定行高虚拟滚动。
+- `ProfileList` 接入 proxy / country / tag badge，保留左侧 rail 搜索/筛选/虚拟滚动。
+- `ProfileSummaryPanel` 接入 runtime / country / override tag badge，保留 inspector region、Open profile 和 proxy 脱敏展示。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md` 勾选 `新增 badge 系统`，追加验证证据。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/Badge.test.tsx src/components/HealthBadge.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 红灯：1 failed, 51 passed
+# 失败点：BadgeDot pulse 测试仍断言内层 dot class 包含 animate-ping，和实际外层 pulse ring 结构不一致
+
+cd frontend && npm test -- --run src/components/Badge.test.tsx src/components/HealthBadge.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 5 passed, 52 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 157 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser`，首次启动遇到 Chrome sandbox 限制，按提示改用 `--args "--no-sandbox"`。
+- QA 地址：`http://127.0.0.1:8095/`，继续由 `/tmp/cloakbrowser_user_test_8095.py` 服务 `frontend/dist`。
+- 桌面 `1440x960`：
+  - JS 验证：`health=10`、`proxy=3`、`runtime=5`、`tag=10`，`bodyOverflow=false`，`tableOverflow=true`。
+  - `Open Alpha Warmup` 进入 `Edit Profile` 后点击左侧 `All profiles`，JS 验证：`hasEdit=false`、`hasTable=true`、`activeAllProfiles=true`。
+- 移动 `390x844`：
+  - JS 验证：`health=10`、`proxy=3`、`runtime=5`、`tag=10`，`bodyOverflow=false`，`tableOverflow=false`。
+
+截图：
+
+- `/tmp/cloakbrowser-badge-system-screens/desktop-badge-system.png`
+- `/tmp/cloakbrowser-badge-system-screens/desktop-all-profiles-after-edit.png`
+- `/tmp/cloakbrowser-badge-system-screens/mobile-badge-system.png`
+
+边界：
+
+- 没有修改后端或 Docker/runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
 ## 49. 2026-05-26 Profile 运营台选中与批量操作微反馈小闭环
 
 背景：

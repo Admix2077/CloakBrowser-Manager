@@ -29,7 +29,7 @@
   - disabled。
   - loading。
 - [x] 重写 input/select/textarea 样式。
-- [ ] 新增 badge 系统：
+- [x] 新增 badge 系统：
   - health。
   - runtime。
   - proxy。
@@ -256,8 +256,69 @@ cd frontend && npm run build
   - JS 验证：`scrollWidth=390`、`innerWidth=390`、`stripHeight=45`、`overflow=false`、`toolbar=true`。
 - 新浏览器会话 `agent-browser errors` 无输出；console 只有 Vite/React dev 信息和现有 clipboard debug log。
 - 截图：
-  - `/tmp/cloakbrowser-viewer-strip-screens/desktop-viewer-environment-strip.png`
-  - `/tmp/cloakbrowser-viewer-strip-screens/mobile-viewer-environment-strip.png`
+- `/tmp/cloakbrowser-viewer-strip-screens/desktop-viewer-environment-strip.png`
+- `/tmp/cloakbrowser-viewer-strip-screens/mobile-viewer-environment-strip.png`
+
+## 2026-05-26 Profile 运营台 Badge 系统小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的第一个未完成任务：`health/runtime/proxy/country/tag` badge 系统。
+- 本轮只统一高频 metadata badge 的视觉和可测试语义，不改变筛选、排序、虚拟滚动、批量动作或后端 API。
+
+已完成：
+
+- [x] `frontend/src/components/Badge.tsx`
+  - 新增 `Badge` primitive，提供 `data-badge-type` 语义。
+  - 新增 `BadgeDot`、`TagBadge`、`CountryBadge`、`ProxyBadge`。
+  - 保留 tag 自定义颜色能力。
+- [x] `frontend/src/components/HealthBadge.tsx`
+  - health status 改用 `Badge type="health"`。
+  - 保留中文健康标签、aria-label、warning summary 和 compact 行为。
+- [x] `frontend/src/components/StatusIndicator.tsx`
+  - runtime dot 复用 `BadgeDot`，running 继续保留 pulse。
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - runtime、country、tag 接入统一 badge。
+  - 保留桌面固定列宽、移动 card、高风险批量动作 disabled、固定行高虚拟滚动语义。
+- [x] `frontend/src/components/ProfileList.tsx`
+  - proxy、country、tag 接入统一 badge。
+  - 保留左侧 rail 搜索/筛选/虚拟滚动。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - runtime、country、override tag 接入统一 badge。
+  - 保留 inspector region、Open profile 和 proxy 脱敏展示。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/Badge.test.tsx src/components/HealthBadge.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 5 passed, 52 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 157 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser`，首次无 sandbox 启动失败后按提示使用 `--args "--no-sandbox"` 复用会话。
+- QA 地址：`http://127.0.0.1:8095/`，服务端口继续由 `/tmp/cloakbrowser_user_test_8095.py` 提供 `frontend/dist`。
+- 桌面 `1440x960`：
+  - JS 验证：`health=10`、`proxy=3`、`runtime=5`、`tag=10`，`bodyOverflow=false`，`tableOverflow=true`。
+  - 进入 `Edit Profile` 后点击左侧 `All profiles`，JS 验证：`hasEdit=false`、`hasTable=true`、`activeAllProfiles=true`。
+- 移动 `390x844`：
+  - JS 验证：`health=10`、`proxy=3`、`runtime=5`、`tag=10`，`bodyOverflow=false`，`tableOverflow=false`。
+- 截图：
+  - `/tmp/cloakbrowser-badge-system-screens/desktop-badge-system.png`
+  - `/tmp/cloakbrowser-badge-system-screens/desktop-all-profiles-after-edit.png`
+  - `/tmp/cloakbrowser-badge-system-screens/mobile-badge-system.png`
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有修改 Firefox/invisible_playwright 自动化能力。
+- 没有 push 到任何远端仓库。
 
 边界：
 

@@ -5,6 +5,7 @@ import {
   getHealthTone,
   getHealthWarningSummary,
 } from "../lib/health";
+import { Badge, BadgeDot } from "./Badge";
 
 interface HealthBadgeProps {
   health?: ProfileHealthResponse | null;
@@ -16,17 +17,26 @@ export function HealthBadge({ health, compact = false }: HealthBadgeProps) {
   const label = getHealthLabel(health?.status);
   const ariaLabel = getHealthAriaLabel(health);
   const summary = getHealthWarningSummary(health);
+  const badgeTone = health?.status === "good"
+    ? "success"
+    : health?.status === "warning"
+      ? "warning"
+      : health?.status === "error"
+        ? "danger"
+        : "muted";
 
   return (
     <span className="inline-flex max-w-full items-center gap-1.5">
-      <span
-        className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-4 ${tone.badgeClassName}`}
+      <Badge
+        type="health"
+        tone={badgeTone}
+        className={tone.badgeClassName}
         aria-label={ariaLabel}
         title={summary ?? ariaLabel}
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${tone.dotClassName}`} />
+        <BadgeDot tone={badgeTone} className={tone.dotClassName} />
         <span>{label}</span>
-      </span>
+      </Badge>
       {!compact && summary && (
         <span className={`truncate text-xs ${tone.summaryClassName}`} title={summary}>
           {summary}

@@ -1,3 +1,5 @@
+import { BadgeDot } from "./Badge";
+
 interface StatusIndicatorProps {
   status: "running" | "stopped";
   size?: "sm" | "md";
@@ -8,17 +10,11 @@ export function StatusIndicator({ status, size = "sm" }: StatusIndicatorProps) {
   const isRunning = status === "running";
 
   return (
-    <span className="relative inline-flex">
-      {isRunning && (
-        <span
-          className={`absolute inline-flex ${sizeClass} rounded-full bg-emerald-400 opacity-75 animate-ping`}
-        />
-      )}
-      <span
-        className={`relative inline-flex ${sizeClass} rounded-full ${
-          isRunning ? "bg-emerald-500" : "bg-slate-400"
-        }`}
-      />
-    </span>
+    <BadgeDot
+      tone={isRunning ? "success" : "muted"}
+      pulse={isRunning}
+      className={sizeClass}
+      aria-label={`Runtime ${status}`}
+    />
   );
 }

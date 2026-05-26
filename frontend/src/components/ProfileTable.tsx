@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
+import { Badge, CountryBadge, TagBadge } from "./Badge";
 import { BulkActionBar } from "./BulkActionBar";
 import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
@@ -711,7 +712,9 @@ function ProfileCard({
       <div className="mt-3 flex items-center justify-between gap-2 rounded-[6px] border border-slate-100 bg-slate-50/60 px-2 py-1.5">
         <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
-          <span className="truncate">{profile.status}</span>
+          <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
+            {profile.status}
+          </Badge>
         </span>
         <HealthBadge health={health} compact />
       </div>
@@ -719,7 +722,11 @@ function ProfileCard({
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
         <CardField label="Proxy" value={proxyLabel} mono />
         <CardField label="IP" value={ip ?? "-"} mono />
-        <CardField label="Country" value={country ?? "-"} />
+        <CardField
+          label="Country"
+          value={country ? <CountryBadge country={country} /> : "-"}
+          title={country ?? "-"}
+        />
         <CardField label="Last checked" value={formatTimestamp(lastChecked)} />
         <CardField label="Timezone" value={timezone ?? "-"} />
         <CardField label="Locale" value={locale ?? "-"} />
@@ -728,13 +735,7 @@ function ProfileCard({
       <div className="mt-3 flex min-w-0 items-center gap-1 overflow-hidden">
         <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Tags</span>
         {profile.tags.length > 0 ? profile.tags.map((tag) => (
-          <span
-            key={tag.tag}
-            className="shrink-0 rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-            style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
-          >
-            {tag.tag}
-          </span>
+          <TagBadge key={tag.tag} tag={tag.tag} color={tag.color} />
         )) : (
           <span className="text-xs text-slate-400">-</span>
         )}
@@ -747,17 +748,21 @@ function CardField({
   label,
   value,
   mono = false,
+  title,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   mono?: boolean;
+  title?: string;
 }) {
+  const valueTitle = title ?? (typeof value === "string" ? value : undefined);
+
   return (
     <div className="min-w-0">
       <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</div>
       <div
-        className={`mt-0.5 truncate font-medium text-slate-700 ${mono ? "font-mono" : ""}`}
-        title={value}
+        className={`mt-0.5 flex min-w-0 truncate font-medium text-slate-700 ${mono ? "font-mono" : ""}`}
+        title={valueTitle}
       >
         {value}
       </div>
@@ -821,7 +826,9 @@ function ProfileTableRow({
       <td className="truncate border-b border-slate-100 px-2 py-2">
         <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
-          <span>{profile.status}</span>
+          <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
+            {profile.status}
+          </Badge>
         </span>
       </td>
       <td className="border-b border-slate-100 px-2 py-2">
@@ -833,19 +840,15 @@ function ProfileTableRow({
         </span>
       </td>
       <td className="truncate border-b border-slate-100 px-2 py-2 font-mono text-[11px] text-slate-600" title={ip ?? undefined}>{ip ?? "-"}</td>
-      <td className="truncate border-b border-slate-100 px-2 py-2 font-medium text-slate-600" title={country ?? undefined}>{country ?? "-"}</td>
+      <td className="truncate border-b border-slate-100 px-2 py-2 font-medium text-slate-600" title={country ?? undefined}>
+        {country ? <CountryBadge country={country} /> : "-"}
+      </td>
       <td className="truncate border-b border-slate-100 px-2 py-2 text-slate-600" title={timezone ?? undefined}>{timezone ?? "-"}</td>
       <td className="truncate border-b border-slate-100 px-2 py-2 text-slate-600" title={locale ?? undefined}>{locale ?? "-"}</td>
       <td className="border-b border-slate-100 px-2 py-2">
         <div className="flex max-h-10 max-w-[150px] flex-wrap gap-1 overflow-hidden">
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
-            <span
-              key={tag.tag}
-              className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600"
-              style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
-            >
-              {tag.tag}
-            </span>
+            <TagBadge key={tag.tag} tag={tag.tag} color={tag.color} />
           )) : (
             <span className="text-slate-400">-</span>
           )}

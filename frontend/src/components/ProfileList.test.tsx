@@ -126,7 +126,7 @@ describe("ProfileList invisible_playwright identity display", () => {
     );
 
     expect(screen.getByText("Stored Platform Profile")).toBeTruthy();
-    expect(screen.getByText("Proxy")).toBeTruthy();
+    expect(screen.getByText("Proxy").getAttribute("data-badge-type")).toBe("proxy");
     expect(screen.queryByText("macos")).toBeNull();
   });
 });
@@ -146,7 +146,7 @@ describe("ProfileList health display", () => {
     expect(screen.getByLabelText("存在需关注项，建议检查后继续")).toBeTruthy();
     expect(screen.getByText("手动 timezone 为 America/Los_Angeles，当前出口建议为 Asia/Tokyo。")).toBeTruthy();
     expect(screen.getByText("203.0.113.20")).toBeTruthy();
-    expect(screen.getAllByText("JP").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("JP").some((node) => node.getAttribute("data-badge-type") === "country")).toBe(true);
   });
 
   it("does not include health labels in profile name search", () => {

@@ -14,6 +14,7 @@ import {
   getHealthTone,
   getHealthWarningSummary,
 } from "../lib/health";
+import { CountryBadge, ProxyBadge, TagBadge } from "./Badge";
 import { HealthBadge } from "./HealthBadge";
 import { ProfileFilters } from "./ProfileFilters";
 import { StatusIndicator } from "./StatusIndicator";
@@ -381,7 +382,7 @@ function ProfileListItem({
       {hasMeta && (
         <div className="mt-1 ml-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           {profile.proxy && (
-            <span className="text-xs text-slate-500">Proxy</span>
+            <ProxyBadge />
           )}
           {warningSummary && (
             <span
@@ -392,9 +393,13 @@ function ProfileListItem({
             </span>
           )}
           {geoipParts.map((part) => (
-            <span key={part} className="text-xs text-slate-500">
-              {part}
-            </span>
+            isCountryCode(part) ? (
+              <CountryBadge key={part} country={part} />
+            ) : (
+              <span key={part} className="text-xs text-slate-500">
+                {part}
+              </span>
+            )
           ))}
         </div>
       )}
@@ -402,16 +407,14 @@ function ProfileListItem({
       {profile.tags.length > 0 && (
         <div className="flex gap-1 mt-1.5 ml-4 flex-wrap">
           {profile.tags.map((t) => (
-            <span
-              key={t.tag}
-              className="rounded-full bg-surface-4 px-1.5 py-0.5 text-[10px] text-slate-600"
-              style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
-            >
-              {t.tag}
-            </span>
+            <TagBadge key={t.tag} tag={t.tag} color={t.color} />
           ))}
         </div>
       )}
     </button>
   );
+}
+
+function isCountryCode(part: string): boolean {
+  return /^[A-Z]{2}$/.test(part);
 }

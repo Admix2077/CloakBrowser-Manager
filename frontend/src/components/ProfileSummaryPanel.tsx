@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
+import { Badge, CountryBadge } from "./Badge";
 import { HealthBadge } from "./HealthBadge";
 import { StatusIndicator } from "./StatusIndicator";
 
@@ -103,7 +104,9 @@ export function ProfileSummaryPanel({
         <SummarySection icon={<Monitor className="h-3.5 w-3.5" />} title="Runtime" priority="primary">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <StatusIndicator status={profile.status} />
-            <span>{profile.status}</span>
+            <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
+              {profile.status}
+            </Badge>
           </div>
           <SummaryRow label="VNC" value={profile.vnc_ws_port ? `:${profile.vnc_ws_port}` : "-"} />
           <SummaryRow label="Automation" value={profile.automation_url ? "available" : "-"} />
@@ -111,7 +114,11 @@ export function ProfileSummaryPanel({
 
         <SummarySection icon={<Globe2 className="h-3.5 w-3.5" />} title="GeoIP" priority="secondary">
           <SummaryRow label="IP" value={ip ?? "-"} mono />
-          <SummaryRow label="Country" value={country ?? "-"} />
+          <SummaryRow
+            label="Country"
+            value={country ? <CountryBadge country={country} /> : "-"}
+            title={country ?? "-"}
+          />
           <SummaryRow label="Timezone" value={timezone ?? "-"} />
           <SummaryRow label="Locale" value={locale ?? "-"} />
           <div className="mt-2 flex flex-wrap gap-1">
@@ -183,16 +190,18 @@ function SummaryRow({
   title,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   mono?: boolean;
   title?: string;
 }) {
+  const valueTitle = title ?? (typeof value === "string" ? value : undefined);
+
   return (
     <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-2 rounded-[6px] px-1.5 py-1 text-xs transition-colors hover:bg-slate-50">
       <span className="text-slate-500">{label}</span>
       <span
-        className={`truncate text-right font-medium text-slate-700 ${mono ? "font-mono text-[11px]" : ""}`}
-        title={title ?? value}
+        className={`flex min-w-0 justify-end truncate text-right font-medium text-slate-700 ${mono ? "font-mono text-[11px]" : ""}`}
+        title={valueTitle}
       >
         {value}
       </span>
@@ -202,14 +211,12 @@ function SummaryRow({
 
 function OverridePill({ label, active }: { label: string; active: boolean }) {
   return (
-    <span
-      className={`rounded-[5px] border px-2 py-0.5 text-[10px] font-medium ${
-        active
-          ? "border-amber-200 bg-amber-50 text-amber-800"
-          : "border-border bg-white text-slate-500"
-      }`}
+    <Badge
+      type="tag"
+      tone={active ? "warning" : "muted"}
+      className="text-[10px]"
     >
       {label}
-    </span>
+    </Badge>
   );
 }

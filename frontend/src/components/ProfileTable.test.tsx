@@ -153,7 +153,7 @@ describe("ProfileTable", () => {
     expect(screen.getByText("Invalid proxy")).toBeTruthy();
     expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
     expect(screen.getByText("23.144.4.92")).toBeTruthy();
-    expect(screen.getByText("US")).toBeTruthy();
+    expect(screen.getByText("US").getAttribute("data-badge-type")).toBe("country");
     expect(screen.getByText("America/Los_Angeles")).toBeTruthy();
     expect(screen.getByText("en-US")).toBeTruthy();
   });
@@ -668,6 +668,7 @@ describe("ProfileTable", () => {
     expect(screen.getByText("Invalid proxy")).toBeTruthy();
     expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
     expect(screen.getByText("23.144.4.92")).toBeTruthy();
+    expect(screen.getByText("US").getAttribute("data-badge-type")).toBe("country");
     expect(screen.getByText("America/Los_Angeles")).toBeTruthy();
     expect(screen.getByText("en-US")).toBeTruthy();
   });

@@ -21,6 +21,7 @@ describe("HealthBadge", () => {
 
     expect(screen.getByText("可继续")).toBeTruthy();
     expect(screen.getByLabelText("健康检查通过，可继续启动或使用")).toBeTruthy();
+    expect(screen.getByText("可继续").closest("[data-badge-type]")?.getAttribute("data-badge-type")).toBe("health");
   });
 
   it("renders warning status with warning summary", () => {
@@ -54,5 +55,24 @@ describe("HealthBadge", () => {
 
     expect(screen.getByText("未检测")).toBeTruthy();
     expect(screen.getByLabelText("尚未完成健康检测")).toBeTruthy();
+  });
+
+  it("keeps compact mode limited to the status badge", () => {
+    render(
+      <HealthBadge
+        compact
+        health={health("warning", [
+          {
+            code: "manual_locale_mismatch",
+            message: "手动 locale 为 en-US，当前出口建议为 ja-JP。",
+            severity: "warning",
+            action: "确认是否需要保留手动覆盖。",
+          },
+        ])}
+      />,
+    );
+
+    expect(screen.getByText("需关注")).toBeTruthy();
+    expect(screen.queryByText("手动 locale 为 en-US，当前出口建议为 ja-JP。")).toBeNull();
   });
 });
