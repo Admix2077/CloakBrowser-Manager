@@ -99,7 +99,7 @@ export function BulkActionBar({
 
   return (
     <div
-      className="sticky top-0 z-20 h-11 border-b border-slate-200 bg-white/95 text-xs shadow-[0_8px_20px_rgba(15,23,42,0.065)] backdrop-blur"
+      className="sticky top-0 z-20 h-11 border-b border-slate-200 bg-white/92 text-xs shadow-[0_8px_20px_rgba(15,23,42,0.055)] backdrop-blur"
     >
       <div
         role="toolbar"
@@ -110,7 +110,7 @@ export function BulkActionBar({
         <div
           role="group"
           aria-label="Selected profile summary"
-          className="flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-gradient-to-b from-white to-slate-50/90 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.035),inset_0_1px_0_rgba(255,255,255,0.92)]"
         >
           <span
             role="status"
@@ -126,13 +126,13 @@ export function BulkActionBar({
         <div
           role="group"
           aria-label="Bulk action commands"
-          className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]"
+          className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-gradient-to-b from-white to-slate-50/60 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.035),inset_0_1px_0_rgba(255,255,255,0.92)]"
         >
           <button
             type="button"
             disabled={!onCheckHealth || checkingHealth}
             aria-label={checkingHealth ? "Checking health" : "Check health"}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.18)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-gradient-to-b from-blue-500 to-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.2),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:border-blue-700 hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-none disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
             onClick={() => void onCheckHealth?.()}
           >
             <HeartPulse className="h-3.5 w-3.5" />
@@ -185,7 +185,7 @@ export function BulkActionBar({
                 type="submit"
                 disabled={!normalizedTagName || tagging}
                 aria-label={tagging ? "Applying tag" : "Apply tag"}
-                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.22)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+                className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-blue-600 bg-gradient-to-b from-blue-500 to-blue-600 px-2.5 font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.22),inset_0_1px_0_rgba(255,255,255,0.18)] transition-colors hover:border-blue-700 hover:from-blue-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-none disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
               >
                 <Tags className="h-3.5 w-3.5" />
                 {tagging ? "Applying..." : "Apply tag"}

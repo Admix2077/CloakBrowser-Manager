@@ -70,6 +70,20 @@ function health(overrides: Partial<ProfileHealthResponse>): ProfileHealthRespons
 }
 
 describe("ProfileSummaryPanel", () => {
+  it("renders a quiet empty inspector state when no profile is previewed", () => {
+    render(
+      <ProfileSummaryPanel
+        profile={null}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    const summary = screen.getByRole("complementary", { name: "Profile summary" });
+    expect(within(summary).getByText("Inspector")).toBeTruthy();
+    expect(within(summary).getByText("No profile selected")).toBeTruthy();
+    expect(within(summary).getByText("Preview a row to inspect runtime, health, proxy, and fingerprint context.")).toBeTruthy();
+  });
+
   it("summarizes health, runtime, geoip, overrides, proxy, and device without exposing proxy credentials", () => {
     const onOpen = vi.fn();
 

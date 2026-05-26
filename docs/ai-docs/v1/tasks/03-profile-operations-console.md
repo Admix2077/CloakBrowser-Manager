@@ -1685,3 +1685,105 @@ cd frontend && npm run build
 - 本轮不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
 - 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip 或 Proxy Manager 页面。
 - 本轮不处理 04 Proxy Manager 的 `POST /api/proxies/{id}/check` 红灯测试；该后端小闭环仍待继续。
+
+## 2026-05-26 Profile 运营台控件质感三次 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，尤其是 checkbox / bulk action / table row / toolbar / inspector。
+- 本轮继续使用 `ui-ux-pro-max` 和 frontend design 方向，并让子 agent 只读审计当前 Profile 运营台与 `/home/jeff/code/reference-repos/saas_kit`。
+- 参考结论：只吸收 B2B SaaS app shell / data table 的密度、低噪声状态、ring / shadow、控件分组和 inspector 层级；不复制参考仓库代码，不迁入 auth / db / payment / schema。
+
+设计判断：
+
+- 信息架构继续保持：左侧 rail 是 saved views / shortcuts，主区 table/card 承担数百 profile 的搜索、筛选、批量和核心运营，右侧 inspector 做只读扫视。
+- 参考仓库常见的底部浮动 bulk toolbar 暂不迁移；当前 ProfileTable 的 sticky header、移动 card selection toolbar 和虚拟滚动已经围绕 `h-11` / `top-11` 成熟，改成底部浮动会引入新的遮挡和回归面。
+- 本轮只做可验证小 polish，不改筛选/排序、批量 API、固定行高虚拟滚动、proxy 脱敏或高风险动作确认语义。
+
+已完成：
+
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - `SelectionCheckbox` 继续保留真实 checkbox input、`data-state`、`aria-checked="mixed"`、键盘 focus 和 disabled 语义。
+  - checkbox 命中区增加低噪声 hover border / surface / inset highlight。
+  - checkbox 视觉层改为 white-to-slate / blue gradient 和更稳定 inset highlight，提升 checked / mixed 状态质感。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - 保持 `sticky top-0 h-11` 不变，不破坏 table header 和 card selection toolbar 的 `top-11` 偏移。
+  - summary group / command group 改为更克制的 gradient surface 和更轻 shadow。
+  - `Check health` 与 inline `Apply tag` 主按钮增加低噪声 blue gradient 和 inset highlight；真实动作、loading、disabled 语义不变。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - 空 inspector 从普通 dashed panel 改为带 `Inspector` header、icon container 和内层空态 surface 的审计面板空态。
+  - 已选 profile 的 inspector section / proxy 脱敏 / region 可访问语义不变。
+- [x] 测试补充：
+  - 桌面 selected 后 `thead` 仍包含 `top-11`，锁住 bulk bar 与 sticky header 的 offset。
+  - 桌面和窄屏 selected + previewed 同时存在时，`selected` 状态优先。
+  - 窄屏 card checkbox 也暴露 checked / unchecked / indeterminate `data-state`。
+  - bulk tag form 和 delete confirm 支持 Escape 关闭且不触发 mutation。
+  - 空 inspector 有明确可访问文本。
+
+保持不变：
+
+- 桌面 table `Actions` / `Open` 仍可见。
+- 移动端 body 不横向撑破；窄屏继续只渲染 card list，不重复 desktop table。
+- `Check health` 批量动作仍真实调用后端。
+- 批量 launch / stop / tag / delete 保留既有真实动作、运行态过滤、disabled 和 typed delete 确认语义。
+- 主表超过 120 条、左侧超过 80 条的固定行高虚拟滚动语义不变。
+- proxy 可见文本和 `title` 继续不暴露用户名/密码。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 2 passed, 37 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 121 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8080/`，当前 QA 数据 162 个 profiles。
+- 桌面 `1440x900`：
+  - dense table 可见，card list 不渲染。
+  - `body.scrollWidth === window.innerWidth === 1440`。
+  - `Actions` / `Open` 首屏可见。
+  - 当前主表只渲染 26 个 `Open Polish QA Profile` 按钮，不是 162 条全量渲染。
+  - 选择首行后 bulk toolbar 显示 `1 selected`，`Selected profile summary` / `Bulk action commands` 分组存在。
+  - 表头 `Select all visible profiles` 为 `aria-checked="mixed"`，`thead` 保留 `top-11`。
+  - 点击 `Check health` 后 selection 保留，无前端 alert。
+  - 主表滚动到中段后 early rows 离开 table region，窗口内显示 `Polish QA Profile 115+`，虚拟滚动仍生效。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 首屏渲染约 20 张 card，不是全量渲染。
+  - 选择首张 card 后 bulk toolbar 可见，card selection toolbar 保留 `top-11`。
+  - 滚动到中段后 early card 离开 table region，仍只渲染约 20 张 card。
+  - 打开 sidebar 后为 overlay，body 仍不横向撑破。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 仅执行清理，无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v4-screens/desktop-table.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/desktop-bulk-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/desktop-check-health.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/desktop-virtual-scroll.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/mobile-card.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/mobile-card-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/mobile-card-virtual-scroll.png`
+- `/tmp/cloakbrowser-ui-polish-v4-screens/mobile-sidebar.png`
+
+范围说明：
+
+- 本轮不做服务端分页。
+- 本轮不把 bulk toolbar 改成底部浮动形态。
+- 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip 或 Proxy Manager 页面。
+- 03 模块仍保持完成状态；当前继续按用户反馈在已完成模块上做 UI polish 小闭环。

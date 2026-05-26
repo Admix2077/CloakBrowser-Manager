@@ -600,8 +600,10 @@ function SelectionCheckbox({
   return (
     <label
       data-state={state}
-      className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center align-middle ${
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer rounded-lg hover:bg-slate-100/80"
+      className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent align-middle transition-[background-color,border-color,box-shadow] duration-150 ${
+        disabled
+          ? "cursor-not-allowed opacity-50"
+          : "cursor-pointer hover:border-slate-200 hover:bg-slate-100/75 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]"
       }`}
     >
       <input
@@ -616,10 +618,10 @@ function SelectionCheckbox({
       />
       <span
         aria-hidden="true"
-        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border shadow-[0_1px_1px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
+        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border shadow-[0_1px_1px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.82)] ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
           checked || indeterminate
-            ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.22),inset_0_1px_0_rgba(255,255,255,0.18)]"
-            : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50"
+            ? "border-blue-600 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.24),inset_0_1px_0_rgba(255,255,255,0.2)]"
+            : "border-slate-300 bg-gradient-to-b from-white to-slate-50 text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50"
         }`}
       >
         {indeterminate ? (

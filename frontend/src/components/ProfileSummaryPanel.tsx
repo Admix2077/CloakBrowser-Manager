@@ -22,10 +22,20 @@ export function ProfileSummaryPanel({
       <aside
         role="complementary"
         aria-label="Profile summary"
-        className="h-full rounded-lg border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-500 shadow-hairline ring-1 ring-slate-900/[0.02]"
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-dashed border-slate-300 bg-gradient-to-b from-white to-slate-50/70 p-4 text-sm text-slate-500 shadow-hairline ring-1 ring-slate-900/[0.02]"
       >
-        <h2 className="text-sm font-semibold text-slate-950">Profile summary</h2>
-        <p className="mt-2 text-xs">Select a profile in the table to inspect runtime, health, and fingerprint context.</p>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            Inspector
+          </span>
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-hairline">
+            <Monitor className="h-3.5 w-3.5" />
+          </span>
+        </div>
+        <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <h2 className="text-sm font-semibold text-slate-950">No profile selected</h2>
+          <p className="mt-2 text-xs leading-5 text-slate-500">Preview a row to inspect runtime, health, proxy, and fingerprint context.</p>
+        </div>
       </aside>
     );
   }

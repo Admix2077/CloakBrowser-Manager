@@ -191,6 +191,20 @@ describe("ProfileTable", () => {
     expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
   });
 
+  it("keeps the desktop header offset below the sticky bulk action bar", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+      />,
+    );
+
+    expect(screen.getByRole("toolbar", { name: "Bulk profile actions" })).toBeTruthy();
+    expect(document.querySelector("thead")?.className).toContain("top-11");
+  });
+
   it("keeps horizontal scrolling isolated to the operations table region", () => {
     render(
       <ProfileTable
@@ -221,6 +235,20 @@ describe("ProfileTable", () => {
     expect(screen.getByRole("button", { name: "Preview Broken Proxy" }).closest("tr")?.getAttribute("data-state")).toBe("previewed");
     expect(screen.getByRole("button", { name: "Open Good US" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Broken Proxy" })).toBeTruthy();
+  });
+
+  it("prioritizes selected state over previewed state on the same desktop row", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        previewProfileId="good"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Preview Good US" }).closest("tr")?.getAttribute("data-state")).toBe("selected");
   });
 
   it("keeps checkbox inputs focusable when selection handlers are available", () => {
@@ -322,6 +350,26 @@ describe("ProfileTable", () => {
     expect(onDeleteSelected).toHaveBeenCalledWith(["error"]);
   });
 
+  it("closes bulk delete confirmation with Escape without deleting profiles", () => {
+    const onDeleteSelected = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["error"])}
+        onDeleteSelectedProfiles={onDeleteSelected}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    fireEvent.keyDown(screen.getByLabelText("Type DELETE to confirm bulk deletion"), { key: "Escape" });
+
+    expect(onDeleteSelected).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Confirm bulk profile deletion" })).toBeNull();
+  });
+
   it("cancels bulk delete confirmation without deleting profiles", () => {
     const onDeleteSelected = vi.fn();
 
@@ -382,6 +430,28 @@ describe("ProfileTable", () => {
       [{ tag: "ops", color: "#6366f1" }],
     );
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("closes the bulk tag form with Escape without applying a tag", () => {
+    const onTagSelected = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        onAddTagsToSelectedProfiles={onTagSelected}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
+    fireEvent.change(screen.getByLabelText("Bulk tag name"), { target: { value: "ops" } });
+    fireEvent.keyDown(screen.getByLabelText("Bulk tag name"), { key: "Escape" });
+
+    expect(onTagSelected).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Bulk tag name")).toBeNull();
+    expect(screen.getByRole("button", { name: "Tag selected" })).toBeTruthy();
   });
 
   it("disables the bulk tag action while tags are applying", () => {
@@ -640,7 +710,10 @@ describe("ProfileTable", () => {
 
     const headerCheckbox = screen.getByLabelText("Select all visible profiles") as HTMLInputElement;
     expect(headerCheckbox.indeterminate).toBe(true);
+    expect(headerCheckbox.closest("label")?.getAttribute("data-state")).toBe("indeterminate");
     expect((screen.getByLabelText("Select Good US") as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByLabelText("Select Good US").closest("label")?.getAttribute("data-state")).toBe("checked");
+    expect(screen.getByLabelText("Select Broken Proxy").closest("label")?.getAttribute("data-state")).toBe("unchecked");
     expect(screen.getByRole("toolbar", { name: "Profile card selection" }).className).toContain("top-11");
 
     fireEvent.click(screen.getByLabelText("Select Broken Proxy"));
@@ -648,6 +721,22 @@ describe("ProfileTable", () => {
 
     fireEvent.click(screen.getByLabelText("Select all visible profiles"));
     expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
+  });
+
+  it("prioritizes selected state over previewed state on the same narrow card", () => {
+    setViewportWidth(390);
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        previewProfileId="good"
+      />,
+    );
+
+    expect(screen.getByRole("listitem", { name: "Profile card Good US" }).getAttribute("data-state")).toBe("selected");
   });
 
   it("keeps narrow card preview, open, and proxy redaction separate", () => {
