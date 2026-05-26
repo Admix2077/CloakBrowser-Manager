@@ -62,6 +62,7 @@
   - [x] screenshot。
 - [x] 支持并发限制。
 - [x] 支持失败重试。
+- [x] 支持 running task 协作式取消。
 - [x] 前端新增 Automation 页面。
 - [x] 前端新增 task log viewer。
 
@@ -270,6 +271,34 @@ cd frontend && npm test -- src/App.test.tsx
 # 28 passed
 ```
 
+## 2026-05-27 Automation running task 协作式取消小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/cancel` 仍支持 queued task 直接取消：`queued -> cancelled`，并写入 `finished_at`。
+- `POST /api/tasks/{id}/cancel` 现在支持 running task 请求取消：`running -> cancel_requested`，`finished_at` 保持 `null`，不伪造已经停止。
+- 已经处于 `cancel_requested` 的 task 重复取消会幂等返回当前 task。
+- 已结束 task 取消返回 `409 Only queued or running automation tasks can be cancelled`。
+- `cancel_requested` task 会继续占用同一 `profile_id` 的执行槽；同 profile 新 queued task run 返回 `409 Automation profile already has a running task`，直到原 task 被 runner 收束。
+- runner 在每个 step 开始前检查 `cancel_requested`；如果发现取消请求，当前未执行 step 记录为低敏 `cancelled` 结果，并将 task 收束为 `cancelled`。
+- `wait` step 在 sleep 返回后也会检查取消请求；如果还有下一步，会把下一步记录为低敏 `cancelled` 结果且不执行它。
+- 该取消是协作式边界检查，不承诺打断正在 await 的 Playwright 操作，不终止浏览器，不停止 profile，不修改 Project Mileage 钱包、订单、权限、扣费、续期、viewer token 或审计事实源。
+- cancel/get/list/run 的对外响应继续统一脱敏；`open_url.url`、query、fragment、token、未知字段、selector、表单值、keyboard text、evaluate expression/result、screenshot 内容不会回显。
+- 本小闭环不实现后台队列、全局 worker 池、强杀 Playwright 操作、跨系统补偿或 Project Mileage App/Payload 对接。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload backend/tests/test_api.py::test_cancel_requested_automation_task_blocks_same_profile_run_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_honors_cancel_request_at_step_boundary_without_running_next_step -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_cancel_queued_automation_task_marks_cancelled backend/tests/test_api.py::test_retry_automation_task_rejects_active_status backend/tests/test_api.py::test_run_automation_task_rejects_non_queued_status backend/tests/test_api.py::test_run_automation_task_rejects_concurrent_task_for_same_profile_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_allows_running_task_on_different_profile -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_automation_task_requires_running_profile backend/tests/test_api.py::test_run_automation_task_fails_unknown_step_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page -q
+# 12 passed
+```
+
 ## 2026-05-27 Automation task 响应脱敏收口小闭环
 
 当前状态：
@@ -301,7 +330,7 @@ cd frontend && npm test -- src/App.test.tsx
 验证记录：
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_returns_newest_tasks backend/tests/test_api.py::test_cancel_queued_automation_task_marks_cancelled backend/tests/test_api.py::test_cancel_running_automation_task_is_rejected -q
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_returns_newest_tasks backend/tests/test_api.py::test_cancel_queued_automation_task_marks_cancelled backend/tests/test_api.py::test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload -q
 # 3 passed
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
@@ -322,7 +351,7 @@ cd frontend && npm test -- src/App.test.tsx
 - 成功后 task 按既有状态机进入 `succeeded`；非法 delta 进入 `failed` 并返回 `400`。
 - task 对外响应对 `scroll` step 做白名单脱敏：只回显 `type/page_ref/delta_x/delta_y`。
 - `result.steps[]` 只记录 `index/type/status`，不复制完整 step payload。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -353,7 +382,7 @@ cd frontend && npm test -- src/App.test.tsx
 - Playwright wait_for_selector 执行异常进入 `failed` 并返回固定低敏错误 `Wait for selector step failed`，不回显异常原文。
 - task 对外响应对 `wait_for_selector` step 做白名单脱敏：只回显 `type/page_ref/state/timeout_ms`，不回显 selector 或未知字段。
 - `result.steps[]` 只记录 `index/type/status`，不复制 selector、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -376,7 +405,7 @@ cd frontend && npm test -- src/App.test.tsx
 - Playwright evaluate 执行异常进入 `failed` 并返回固定低敏错误 `Evaluate step failed`，不回显异常原文。
 - task 对外响应对 `evaluate` step 做白名单脱敏：只回显 `type/page_ref`，不回显 expression 或未知字段。
 - `result.steps[]` 只记录 `index/type/status`，不复制 expression、evaluate 返回值、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -400,7 +429,7 @@ cd frontend && npm test -- src/App.test.tsx
 - task 对外响应对 `screenshot` step 做白名单脱敏：只回显 `type/page_ref/full_page`，不回显 `path`、`filename`、`base64`、`note` 或未知字段。
 - 创建 task 时会先按 step 类型做执行字段白名单裁剪；`screenshot` 入库仅保留 `type/page_ref/full_page`，不持久化调用方附带的 `path`、`filename`、`base64`、`note` 等未知字段。
 - runner 会调用 screenshot 但丢弃返回的 PNG bytes；`result.steps[]` 只记录 `index/type/status`，不复制 PNG bytes、base64、路径、下载 URL、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -417,12 +446,12 @@ cd frontend && npm test -- src/App.test.tsx
 当前状态：
 
 - `POST /api/tasks/{id}/run` 已增加 profile 级并发限制。
-- 同一个 `profile_id` 已存在其他 `running` task 时，新的 queued task run 返回 `409`。
+- 同一个 `profile_id` 已存在其他 `running` 或 `cancel_requested` task 时，新的 queued task run 返回 `409`。
 - 该限制只按 profile 生效；不同 profile 的 running task 不阻塞当前 profile 的 queued task。
 - 被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`，便于稍后重试。
 - 错误 detail 固定为 `Automation profile already has a running task`，不回显 step payload、URL query、token、selector、表单值或未知字段。
-- 该小闭环不实现后台队列、全局 worker 池、失败重试或 running cancel；不修改 Project Mileage app/payload。
-- 当前仍未实现后台队列、失败重试、running cancel。
+- 该小闭环不实现后台队列、全局 worker 池或失败重试；不修改 Project Mileage app/payload。
+- 当前仍未实现后台队列。
 
 验证记录：
 
@@ -443,7 +472,7 @@ cd frontend && npm test -- src/App.test.tsx
   - `failed`。
   - `cancelled`。
   - `succeeded`。
-- `queued` 或 `running` task retry 返回 `409 Only finished automation tasks can be retried`，避免给未结束任务制造重复执行入口。
+- `queued`、`running` 或 `cancel_requested` task retry 返回 `409 Only finished automation tasks can be retried`，避免给未结束任务制造重复执行入口。
 - task 不存在时返回 `404 Automation task not found`。
 - profile 不存在时返回 `404 Profile not found`。
 - 成功后返回新创建的 queued task，状态码 `201`。
@@ -451,7 +480,7 @@ cd frontend && npm test -- src/App.test.tsx
 - retry 不自动执行脚本，不启动 profile，不绕过 `run` 的 profile running 检查或 profile 级并发限制。
 - retry 复制的是已持久化并裁剪过的内部 `steps`；对外响应继续走统一白名单脱敏，`open_url.url`、query、fragment、selector、表单值、evaluate expression、screenshot 内容、token 和未知字段不会回显。
 - retry 只是显式再排队一次，不判断 step 是否有副作用；涉及点击、填写、跳转等副作用脚本时，调用方必须在可信管理侧确认可重复执行。
-- 本小闭环不实现后台队列、自动 retry worker、重试次数上限、指数退避、running cancel 或跨系统补偿。
+- 本小闭环不实现后台队列、自动 retry worker、重试次数上限、指数退避或跨系统补偿。
 - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token 或审计事实源。
 
 验证记录：
@@ -476,7 +505,7 @@ cd frontend && npm test -- src/App.test.tsx
 - Playwright click 执行异常进入 `failed` 并返回固定低敏错误 `Click step failed`，不回显异常原文。
 - task 对外响应对 `click` step 做白名单脱敏：只回显 `type/page_ref/timeout_ms`，不回显 selector 或未知字段。
 - `result.steps[]` 只记录 `index/type/status`，不复制 selector、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、fill/evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -500,7 +529,7 @@ cd frontend && npm test -- src/App.test.tsx
 - Playwright keyboard type 执行异常进入 `failed` 并返回固定低敏错误 `Keyboard type step failed`，不回显异常原文。
 - task 对外响应对 `keyboard_type` step 做白名单脱敏：只回显 `type/page_ref/delay_ms`，不回显 text 或未知字段。
 - `result.steps[]` 只记录 `index/type/status`，不复制 text、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -525,7 +554,7 @@ cd frontend && npm test -- src/App.test.tsx
 - Playwright fill 执行异常进入 `failed` 并返回固定低敏错误 `Fill step failed`，不回显异常原文。
 - task 对外响应对 `fill` step 做白名单脱敏：只回显 `type/page_ref/timeout_ms`，不回显 selector、value 或未知字段。
 - `result.steps[]` 只记录 `index/type/status`，不复制 selector、value、完整 step payload 或异常原文。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -549,7 +578,7 @@ cd frontend && npm test -- src/App.test.tsx
 - 成功后 task 按既有状态机进入 `succeeded`；非法 URL 或非法参数进入 `failed` 并返回 `400`。
 - `run` 响应对 `open_url` step 做白名单脱敏：只回显 `type/page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment。
 - `result.steps[]` 只记录 `index`、`type`、`status`，不复制 URL、console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 
@@ -579,7 +608,7 @@ cd frontend && npm test -- src/App.test.tsx
 - run 不自动启动 profile，不读取 proxy/cookie/token/secret，不写 Project Mileage 钱包、订单、权限或续期逻辑。
 - 当前 `run` 响应会对 `steps` 做白名单脱敏：只回显 step `type`，并仅对 `wait` 回显安全的 `ms`；未知 step 的其他字段不会出现在 run 响应中。
 - `result.steps[]` 只记录 `index`、`type`、`status`，不复制 console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
+- 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 
 验证记录：
 

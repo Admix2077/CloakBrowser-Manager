@@ -1614,6 +1614,35 @@ def _automation_task_step_result(index: int, step: dict, status: str) -> dict:
     }
 
 
+def _cancel_automation_task(task_id: str, step_results: list[dict]) -> dict:
+    cancelled = db.update_automation_task(
+        task_id,
+        status="cancelled",
+        result={"steps": step_results},
+        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    if cancelled is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    return cancelled
+
+
+def _finish_cancel_requested_automation_task(
+    task_id: str,
+    step_results: list[dict],
+    index: int | None = None,
+    step: dict | None = None,
+) -> dict | None:
+    latest = db.get_automation_task(task_id)
+    if latest is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    if latest.get("status") != "cancel_requested":
+        return None
+    final_step_results = list(step_results)
+    if index is not None and step is not None:
+        final_step_results.append(_automation_task_step_result(index, step, "cancelled"))
+    return _cancel_automation_task(task_id, final_step_results)
+
+
 def _fail_automation_task(task_id: str, step_results: list[dict], error: str) -> dict:
     failed = db.update_automation_task(
         task_id,
@@ -1646,7 +1675,7 @@ def _is_supported_automation_url(raw_url: str) -> bool:
 
 def _automation_profile_has_running_task(profile_id: str, task_id: str) -> bool:
     return any(
-        existing_task.get("id") != task_id and existing_task.get("status") == "running"
+        existing_task.get("id") != task_id and existing_task.get("status") in {"running", "cancel_requested"}
         for existing_task in db.list_automation_tasks(profile_id=profile_id)
     )
 
@@ -1687,12 +1716,15 @@ async def cancel_automation_task(task_id: str):
     task = db.get_automation_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
-    if task["status"] != "queued":
-        raise HTTPException(status_code=409, detail="Only queued automation tasks can be cancelled")
+    if task["status"] == "cancel_requested":
+        return _automation_task_response(task)
+    if task["status"] not in {"queued", "running"}:
+        raise HTTPException(status_code=409, detail="Only queued or running automation tasks can be cancelled")
+    next_status = "cancelled" if task["status"] == "queued" else "cancel_requested"
     cancelled = db.update_automation_task(
         task_id,
-        status="cancelled",
-        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        status=next_status,
+        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat() if next_status == "cancelled" else None,
     )
     if cancelled is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
@@ -1735,6 +1767,10 @@ async def run_automation_task(task_id: str):
 
     step_results: list[dict] = []
     for index, step in enumerate(running_task["steps"]):
+        cancelled = _finish_cancel_requested_automation_task(task_id, step_results, index, step)
+        if cancelled is not None:
+            return _automation_task_response(cancelled)
+
         step_type = step.get("type")
         if step_type != "wait":
             if step_type not in {
@@ -1970,6 +2006,22 @@ async def run_automation_task(task_id: str):
 
         await asyncio.sleep(wait_ms / 1000)
         step_results.append(_automation_task_step_result(index, step, "succeeded"))
+        next_index = index + 1
+        if next_index < len(running_task["steps"]):
+            cancelled = _finish_cancel_requested_automation_task(
+                task_id,
+                step_results,
+                next_index,
+                running_task["steps"][next_index],
+            )
+        else:
+            cancelled = _finish_cancel_requested_automation_task(task_id, step_results)
+        if cancelled is not None:
+            return _automation_task_response(cancelled)
+
+    cancelled = _finish_cancel_requested_automation_task(task_id, step_results)
+    if cancelled is not None:
+        return _automation_task_response(cancelled)
 
     finished = db.update_automation_task(
         task_id,

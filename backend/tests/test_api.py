@@ -1518,15 +1518,66 @@ def test_cancel_queued_automation_task_marks_cancelled(app_client: TestClient):
     assert data["finished_at"] is not None
 
 
-def test_cancel_running_automation_task_is_rejected(app_client: TestClient):
+def test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskCancelRunningProfile"})
     pid = create.json()["id"]
-    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {"type": "wait", "ms": 1},
+                {"type": "open_url", "url": secret_url, "note": "do-not-echo"},
+            ],
+        },
+    ).json()
     main.db.update_automation_task(task["id"], status="running")
 
     resp = app_client.post(f"/api/tasks/{task['id']}/cancel")
 
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == task["id"]
+    assert data["status"] == "cancel_requested"
+    assert data["finished_at"] is None
+    assert data["result"] is None
+    assert data["error"] is None
+    assert secret_url not in str(data)
+    assert "super-secret" not in str(data)
+    assert "do-not-echo" not in str(data)
+
+
+def test_cancel_requested_automation_task_blocks_same_profile_run_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskCancelRequestedConcurrentProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    cancel_requested_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    main.db.update_automation_task(cancel_requested_task["id"], status="cancel_requested")
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    queued_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "open_url", "url": secret_url, "note": "do-not-echo"}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{queued_task['id']}/run")
+    persisted = main.db.get_automation_task(queued_task["id"])
+
     assert resp.status_code == 409
+    assert resp.json()["detail"] == "Automation profile already has a running task"
+    assert secret_url not in resp.text
+    assert "super-secret" not in resp.text
+    assert "do-not-echo" not in resp.text
+    assert persisted is not None
+    assert persisted["status"] == "queued"
+    assert persisted["started_at"] is None
+    assert persisted["finished_at"] is None
+    page.goto.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
 
 
 def test_retry_failed_automation_task_creates_new_queued_task_without_running_script(app_client: TestClient):
@@ -1742,6 +1793,52 @@ def test_run_automation_task_allows_running_task_on_different_profile(app_client
     assert data["result"] == {"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]}
     assert main.db.get_automation_task(first_task["id"])["status"] == "running"
     main.browser_mgr.running.pop(second_pid, None)
+
+
+def test_run_automation_task_honors_cancel_request_at_step_boundary_without_running_next_step(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunCancelBoundaryProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("about:blank", "Before")
+    _automation_running_profile(pid, [page])
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {"type": "wait", "ms": 1},
+                {"type": "open_url", "url": secret_url, "note": "do-not-echo"},
+            ],
+        },
+    ).json()
+
+    async def request_cancel(_seconds: float):
+        main.db.update_automation_task(task["id"], status="cancel_requested")
+
+    monkeypatch.setattr(main.asyncio, "sleep", request_cancel)
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == task["id"]
+    assert data["status"] == "cancelled"
+    assert data["result"] == {
+        "steps": [
+            {"index": 0, "type": "wait", "status": "succeeded"},
+            {"index": 1, "type": "open_url", "status": "cancelled"},
+        ]
+    }
+    assert data["error"] is None
+    assert data["finished_at"] is not None
+    assert secret_url not in str(data)
+    assert "super-secret" not in str(data)
+    assert "do-not-echo" not in str(data)
+    page.goto.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
 
 
 def test_run_automation_task_requires_running_profile(app_client: TestClient):

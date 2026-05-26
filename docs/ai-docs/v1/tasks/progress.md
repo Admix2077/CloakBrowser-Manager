@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation running task 协作式取消小闭环：
+  - queued task 取消仍为 `queued -> cancelled`，并写入 `finished_at`。
+  - running task 取消改为 `running -> cancel_requested`，`finished_at` 保持 `null`，不伪造已停止。
+  - `cancel_requested` task 重复取消会幂等返回当前 task。
+  - 已结束 task 取消返回 `409 Only queued or running automation tasks can be cancelled`。
+  - `cancel_requested` 会继续占用同一 `profile_id` 的执行槽；同 profile 新 queued task run 返回 `409 Automation profile already has a running task`，直到原 task 被 runner 收束。
+  - runner 在 step 边界检查 `cancel_requested`，把当前未执行 step 或 wait 后的下一步记录为低敏 `cancelled` 结果，并将 task 收束为 `cancelled`。
+  - 该取消是协作式边界检查，不承诺打断正在 await 的 Playwright 操作，不终止浏览器，不停止 profile。
+  - cancel/get/list/run 的对外响应继续统一脱敏；`open_url.url`、query、fragment、token、selector、表单值、keyboard text、evaluate expression/result、screenshot 内容不会回显。
+  - 本小闭环不实现后台队列、全局 worker 池、强杀 Playwright 操作、跨系统补偿，不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token 或审计事实源。
 - 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task log viewer 小闭环：
   - 前端新增 `Automation` 顶部分段入口，与 `Profiles`、`Proxy Manager` 同级。
   - 新增 `frontend/src/components/AutomationTaskLogViewer.tsx`，只读展示最近 50 条 Automation task。
@@ -76,11 +86,11 @@
   - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task profile 并发限制小闭环：
   - `POST /api/tasks/{id}/run` 已增加 profile 级并发限制。
-  - 同一个 `profile_id` 已存在其他 `running` task 时，新的 queued task run 返回 `409`。
+  - 同一个 `profile_id` 已存在其他 `running` 或 `cancel_requested` task 时，新的 queued task run 返回 `409`。
   - 不同 profile 的 running task 不阻塞当前 profile 的 queued task。
   - 被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`，便于稍后重试。
   - 错误 detail 固定为 `Automation profile already has a running task`，不回显 step payload、URL query、token、selector、表单值或未知字段。
-  - 当前仍未实现后台队列、running cancel。
+  - 当前仍未实现后台队列。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner screenshot step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `screenshot` step。
   - `screenshot` 支持可选 `page_ref`，默认 `"0"`；可选 `full_page`，默认 `false`，且严格要求布尔值。
@@ -89,7 +99,7 @@
   - 创建 task 时会先按 step 类型做执行字段白名单裁剪；`screenshot` 入库仅保留 `type/page_ref/full_page`，不持久化调用方附带的 `path`、`filename`、`base64`、`note` 等未知字段。
   - task 对外响应对 `screenshot` step 做白名单脱敏，只回显 `type/page_ref/full_page`，不回显 PNG bytes、base64、路径、下载 URL 或未知字段。
   - `result.steps[]` 只记录 `index/type/status`，runner 会丢弃 `page.screenshot()` 返回的 PNG bytes，不复制 screenshot 内容、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、失败重试、running cancel。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner evaluate step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `evaluate` step。
   - `evaluate` 支持必填 `expression`，长度 `1..200000`；可选 `page_ref`，默认 `"0"`。
@@ -97,7 +107,7 @@
   - 非法 expression 进入 `failed` 并返回固定低敏错误 `Invalid evaluate step`；执行异常进入 `failed` 并返回固定低敏错误 `Evaluate step failed`。
   - task 对外响应对 `evaluate` step 做白名单脱敏，只回显 `type/page_ref`，不回显 expression。
   - `result.steps[]` 只记录 `index/type/status`，不复制 expression、evaluate 返回值、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner wait_for_selector step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `wait_for_selector` step。
   - `wait_for_selector` 支持必填 `selector`，长度 `1..10000`；可选 `page_ref`，默认 `"0"`；可选 `state`，默认 `visible`，允许 `attached | detached | visible | hidden`；可选 `timeout_ms`，默认 `30000`，范围 `1..300000`，且拒绝 `bool`。
@@ -105,7 +115,7 @@
   - 非法 selector、state 或 timeout 进入 `failed` 并返回固定低敏错误 `Invalid wait_for_selector step`；执行异常进入 `failed` 并返回固定低敏错误 `Wait for selector step failed`。
   - task 对外响应对 `wait_for_selector` step 做白名单脱敏，只回显 `type/page_ref/state/timeout_ms`，不回显 selector。
   - `result.steps[]` 只记录 `index/type/status`，不复制 selector、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner keyboard_type step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `keyboard_type` step。
   - `keyboard_type` 支持必填 `text`，长度 `1..1048576`；可选 `page_ref`，默认 `"0"`；可选 `delay_ms`，默认 `0`，范围 `0..10000`，且拒绝 `bool`。
@@ -113,7 +123,7 @@
   - 非法 text 或 delay 进入 `failed` 并返回固定低敏错误 `Invalid keyboard_type step`；执行异常进入 `failed` 并返回固定低敏错误 `Keyboard type step failed`。
   - task 对外响应对 `keyboard_type` step 做白名单脱敏，只回显 `type/page_ref/delay_ms`，不回显 text。
   - `result.steps[]` 只记录 `index/type/status`，不复制 text、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner fill step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `fill` step。
   - `fill` 支持必填 `selector`，长度 `1..10000`；必填 `value`，长度 `0..1048576`，允许空字符串用于清空输入；可选 `page_ref`，默认 `"0"`；可选 `timeout_ms`，默认 `30000`，范围 `1..300000`，且拒绝 `bool`。
@@ -121,7 +131,7 @@
   - 非法 selector、value 或 timeout 进入 `failed` 并返回固定低敏错误 `Invalid fill step`；执行异常进入 `failed` 并返回固定低敏错误 `Fill step failed`。
   - task 对外响应对 `fill` step 做白名单脱敏，只回显 `type/page_ref/timeout_ms`，不回显 selector 或 value。
   - `result.steps[]` 只记录 `index/type/status`，不复制 selector、value、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner click step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `click` step。
   - `click` 支持必填 `selector`，长度 `1..10000`；可选 `page_ref`，默认 `"0"`；可选 `timeout_ms`，默认 `30000`，范围 `1..300000`，且拒绝 `bool`。
@@ -129,7 +139,7 @@
   - 非法 selector 或 timeout 进入 `failed` 并返回固定低敏错误 `Invalid click step`；执行异常进入 `failed` 并返回固定低敏错误 `Click step failed`。
   - task 对外响应对 `click` step 做白名单脱敏，只回显 `type/page_ref/timeout_ms`，不回显 selector。
   - `result.steps[]` 只记录 `index/type/status`，不复制 selector、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、fill/evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task result 响应脱敏加固小闭环：
   - create/get/list/cancel/run 的所有对外 `AutomationTaskResponse.result` 统一走白名单脱敏。
   - 对外只保留 `result.steps[]` 的 `index/type/status`。
@@ -143,7 +153,7 @@
   - 非法 delta 进入 `failed` 并返回 `400`。
   - task 对外响应对 `scroll` step 做白名单脱敏，只回显 `type/page_ref/delta_x/delta_y`。
   - `result.steps[]` 只记录 `index/type/status`，不复制完整 step payload。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task 响应脱敏收口小闭环：
   - create/get/list/cancel/run 的所有对外 `AutomationTaskResponse.steps` 统一走白名单脱敏。
   - `wait` step 仅回显 `type/ms`。
@@ -160,7 +170,7 @@
   - 非法 URL 或非法参数进入 `failed` 并返回 `400`。
   - `run` 响应对 `open_url` step 做白名单脱敏，只回显 `type/page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment。
   - `result.steps[]` 只记录 `index`、`type`、`status`，不复制 URL、console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner wait step 小闭环：
   - 新增 `POST /api/tasks/{id}/run`。
   - 第一版 run endpoint 只执行已创建的 `queued` task，不让 `POST /api/tasks` 隐式执行脚本。
@@ -171,7 +181,7 @@
   - 执行前要求 profile 已存在且正在运行；run 不自动启动 profile，不读取 proxy/cookie/token/secret。
   - `run` 响应对 `steps` 做白名单脱敏：只回显 step `type`，并仅对 `wait` 回显安全的 `ms`。
   - `result.steps[]` 只记录 `index`、`type`、`status`，不复制 console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
+  - 该小闭环完成时，后台队列和其他后续 runner 能力留待后续小闭环。
 - 本轮继续 07 Automation API 与脚本运行器，完成 task 列表与取消小闭环：
   - 新增 `AutomationTasksResponse`。
   - 新增 `GET /api/tasks`：返回所有已持久化 task，并按 `created_at desc` 让最新 task 在前；当前已支持可选 `profile_id` query 过滤。
@@ -278,7 +288,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，进入 running cancel、后台队列、全局 worker 池、task detail drawer 或更完整任务过滤等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
+1. 继续 CloakBrowser 独立侧 07 Automation API，进入后台队列、全局 worker 池、task detail drawer 或更完整任务过滤等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

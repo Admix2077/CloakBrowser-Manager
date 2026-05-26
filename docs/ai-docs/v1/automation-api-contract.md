@@ -453,14 +453,16 @@ POST /api/tasks/{id}/cancel
 
 当前行为：
 
-- 只允许取消 `queued` task。
-- 成功后状态更新为 `cancelled`，并写入 `finished_at`。
+- `queued` task 取消后状态更新为 `cancelled`，并写入 `finished_at`。
+- `running` task 取消后不会伪造已停止，而是更新为 `cancel_requested`，`finished_at` 保持 `null`，等待 runner 在 step 边界协作式收束。
+- 已经处于 `cancel_requested` 的 task 重复取消会幂等返回当前 task。
 - task 不存在时返回 `404`。
-- 非 `queued` task 返回 `409`，避免把运行中、已完成或失败 task 伪装成可取消成功。
-- 当前取消接口不终止浏览器、不停止运行中脚本、不修改 Project Mileage 订单、钱包、权限或续期状态。
+- 已结束 task 返回 `409 Only queued or running automation tasks can be cancelled`。
+- 当前取消接口不终止浏览器、不强制打断正在 await 的 Playwright 操作、不修改 Project Mileage 订单、钱包、权限或续期状态。
 - 对外响应中的 `steps` 统一走白名单脱敏。
-- 重复取消已 `cancelled` task 当前返回 `409`；是否改为幂等成功留给后续 API 版本决定。
-- 运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
+- `cancel_requested` 会继续占用同一 `profile_id` 的 task 执行槽；同 profile 新 task run 返回 `409 Automation profile already has a running task`，直到原 task 被 runner 收束为 `cancelled`。
+- runner 在每个 step 开始前检查 `cancel_requested`；如果已请求取消，当前未执行 step 会在 `result.steps[]` 中记录为低敏 `cancelled` 摘要。
+- 对 `wait` step，runner 会在 sleep 返回后再次检查取消请求；如果后面还有 step，会把下一步记录为 `cancelled` 且不执行它。
 
 ### 重试 Task
 
@@ -471,7 +473,7 @@ POST /api/tasks/{id}/retry
 当前行为：
 
 - 只允许对已结束 task 创建重试任务，允许状态为 `failed | cancelled | succeeded`。
-- `queued` 或 `running` task 返回 `409 Only finished automation tasks can be retried`。
+- `queued`、`running` 或 `cancel_requested` task 返回 `409 Only finished automation tasks can be retried`。
 - task 不存在时返回 `404`。
 - profile 不存在时返回 `404 Profile not found`。
 - 成功后创建一个新的 `queued` task，并返回新 task，状态码 `201`。
@@ -494,13 +496,14 @@ POST /api/tasks/{id}/run
 - task 不存在时返回 `404`。
 - profile 不存在时返回 `404 Profile not found`。
 - profile 未运行时返回 `404 Profile not running`。
-- 同一 `profile_id` 已存在其他 `running` task 时返回 `409 Automation profile already has a running task`；被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`。
+- 同一 `profile_id` 已存在其他 `running` 或 `cancel_requested` task 时返回 `409 Automation profile already has a running task`；被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`。
 - profile 级并发限制不影响不同 profile 的 task 并行运行。
 - 第一版同步执行，响应返回最终 `AutomationTaskResponse`。
 - 不自动启动 profile，不读取 proxy/cookie/token/secret，不修改 Project Mileage 订单、钱包、权限或续期状态。
 - 状态机：
   - 成功：`queued -> running -> succeeded`。
   - 失败：`queued -> running -> failed`。
+  - 协作式取消：`queued -> running -> cancel_requested -> cancelled`。
 - 当前支持的 step：
   - `open_url`：`{"type": "open_url", "url": "https://example.com", "page_ref": "0", "wait_until": "load", "timeout_ms": 30000}`。
   - `wait_for_selector`：`{"type": "wait_for_selector", "selector": "#ready", "page_ref": "0", "state": "visible", "timeout_ms": 30000}`。
@@ -521,9 +524,10 @@ POST /api/tasks/{id}/run
 - 当前非法 `evaluate.expression` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `screenshot.full_page` 会让 task 进入 `failed`，并返回 `400`；`full_page` 必须是布尔值。
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
+- `cancel_requested` 只在 step 边界生效，不承诺中断正在执行或正在 await 的 Playwright 操作；收束为 `cancelled` 后 `result.steps[]` 只包含已执行 step 的 `succeeded/failed` 低敏摘要和一个未执行 step 的 `cancelled` 低敏摘要。
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前不实现后台队列、全局 worker 池或 running cancel；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
+- 当前不实现后台队列或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
 
 ## Script Runner 接入建议
 
