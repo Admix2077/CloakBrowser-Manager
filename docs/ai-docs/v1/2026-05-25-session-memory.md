@@ -4334,3 +4334,88 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 59. 2026-05-26 Profile CSV 导入预览前端 UI 小闭环
+
+背景：
+
+- 后端 `POST /api/profiles/import/preview` 完成后，继续补齐 Profile 运营台前端 preview 入口。
+- 子 agent 只读审计建议：入口放 Profiles 顶栏，弹窗只 preview，不放入 `ProfileTable` / `BulkActionBar` / row Actions，避免破坏虚拟滚动和 bulk selection 语义。
+
+已完成：
+
+- `frontend/src/lib/api.test.ts`
+  - 先写红灯测试：`api.previewProfileImport` 不存在。
+- `frontend/src/lib/api.ts`
+  - 新增 Profile CSV preview 类型和 `api.previewProfileImport(csvText)`。
+- `frontend/src/App.test.tsx`
+  - 先写红灯测试：Profile 顶栏缺少 `Import CSV`。
+  - 覆盖弹窗提交 preview、显示 `1 ready / 1 blocked`、展示模板应用后的 profile 字段、显示无效行错误。
+  - 覆盖不调用 `create`，确保本轮不创建 profile。
+  - 覆盖 dialog 文本和 title 不泄漏 proxy 凭证。
+- `frontend/src/components/ProfileCsvPreviewDialog.tsx`
+  - 新增 `Import profile CSV preview` 弹窗。
+  - 支持粘贴 CSV、调用后端 preview API、展示最多 60 行 preview。
+  - 有效行展示 profile 摘要；无效行 amber 高亮并展示 errors。
+  - Preview 成功后将 textarea 中 URL 凭证脱敏，降低截图和 UI 证据泄漏风险。
+- `frontend/src/App.tsx`
+  - Profile 顶栏新增 `Import CSV` 按钮，与 `New Profile` 并列。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `无效行标红（Profile CSV preview 前端弹窗）`。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "previewProfileImport"
+# 红灯：1 failed
+# 失败点：api.previewProfileImport is not a function
+
+cd frontend && npm test -- --run src/lib/api.test.ts -t "previewProfileImport"
+# 1 passed, 21 skipped
+
+cd frontend && npm test -- --run src/App.test.tsx -t "previews profile CSV import"
+# 红灯：1 failed
+# 失败点：Profiles 顶栏没有 Import CSV 按钮
+
+cd frontend && npm test -- --run src/App.test.tsx -t "previews profile CSV import"
+# 中间红灯：textarea 展示原始 proxy 凭证
+
+cd frontend && npm test -- --run src/App.test.tsx -t "previews profile CSV import"
+# 1 passed, 24 skipped
+
+cd frontend && npm test -- --run
+# 13 passed, 169 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 重启本地 QA 服务 `http://127.0.0.1:8095/`。
+- 通过 API 创建 QA 模板 `CSV QA Mac`。
+- 桌面 `1440x960`：
+  - Profile 顶栏可见 `Import CSV`。
+  - 打开 `Import profile CSV preview` 弹窗。
+  - 粘贴 2 行 CSV 后点击 `Preview CSV`，显示 `2 total / 1 ready / 1 blocked`。
+  - 有效行展示 `CSV QA Import`、`macos`、`ja-JP`、`Asia/Tokyo`、`asia/warmup`。
+  - 无效行展示 `name is required`、`Template not found`、`platform must be one of...`。
+  - 页面正文不包含 `hiddenpass` 或 `user:`，且没有出现 `Import valid rows`。
+- 移动 `390x844`：
+  - 弹窗可见，表格区域内部横向滚动。
+  - `body.scrollWidth=390`、`body.clientWidth=390`。
+- Playwright MCP console：当前交互后 0 errors、0 warnings。
+- 截图：
+  - `/tmp/cloakbrowser-profile-csv-preview-screens/desktop.png`
+  - `/tmp/cloakbrowser-profile-csv-preview-screens/mobile.png`
+
+未覆盖范围：
+
+- 真正批量创建 profile 与部分成功写入。
+
+边界：
+
+- 没有修改 `ProfileTable` 虚拟滚动、bulk Check health、Actions 列、移动端 card/table 滚动语义。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

@@ -40,7 +40,7 @@
   - locale。
   - timezone。
 - [x] 导入前预览（后端 API；前端导入 UI 另起闭环）。
-- [ ] 无效行标红。
+- [x] 无效行标红（Profile CSV preview 前端弹窗）。
 - [ ] 部分导入成功，失败行保留原因。
 
 ### 批量运营
@@ -264,3 +264,85 @@ cd frontend && npm run build
 - 无效行前端标红。
 - 真正批量创建 profile 与部分成功写入。
 - 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。
+
+## 2026-05-26 Profile CSV 导入预览前端 UI 小闭环
+
+背景：
+
+- 在后端 `POST /api/profiles/import/preview` 完成后，补齐 Profile 运营台里的 CSV preview 入口。
+- 本轮只做前端预览：粘贴 CSV、调用 preview API、展示 ready/blocked 行和错误原因。
+- 本轮不做真正 profile 批量创建，不把 preview rows 合并进真实 profile table，不改虚拟滚动、bulk health check、Actions 列或移动端横向滚动语义。
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProfileImportPreviewProfile` / `ProfileImportPreviewRow` / `ProfileImportPreviewResponse` 类型。
+  - 新增 `api.previewProfileImport(csvText)`。
+- [x] `frontend/src/components/ProfileCsvPreviewDialog.tsx`
+  - 新增 `Import profile CSV preview` 弹窗。
+  - 支持粘贴 CSV、点击 `Preview CSV` 调用后端 preview API。
+  - 展示 `total / ready / blocked` 计数和最多 60 行 preview。
+  - 有效行显示 profile 摘要、platform、locale/timezone、proxy、tags。
+  - 无效行以 amber 状态高亮并展示后端返回的行级 errors。
+  - Preview 成功后将 textarea 中的 URL 凭证脱敏，避免截图和 UI 证据泄漏 proxy 密码。
+- [x] `frontend/src/App.tsx`
+  - Profile 顶栏新增 `Import CSV` 按钮，与 `New Profile` 并列。
+  - 入口不放入 `ProfileTable`、`BulkActionBar` 或 row Actions，避免和 selection/bulk 状态耦合。
+- [x] `frontend/src/lib/api.test.ts`
+  - 覆盖 API client 调用 `/api/profiles/import/preview`。
+- [x] `frontend/src/App.test.tsx`
+  - 先写红灯测试：`Import CSV` 按钮不存在。
+  - 覆盖打开弹窗、提交 preview、展示 ready/blocked 行、显示模板应用后的字段和错误原因。
+  - 覆盖不调用 `create`，确认本轮只是 preview。
+  - 覆盖 dialog 文本与 title 不泄漏 `user:hiddenpass` / `user:`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "previewProfileImport"
+# 红灯：1 failed
+# 失败点：api.previewProfileImport is not a function
+
+cd frontend && npm test -- --run src/lib/api.test.ts -t "previewProfileImport"
+# 1 passed, 21 skipped
+
+cd frontend && npm test -- --run src/App.test.tsx -t "previews profile CSV import"
+# 红灯：1 failed
+# 失败点：Profiles 顶栏没有 Import CSV 按钮
+
+cd frontend && npm test -- --run src/App.test.tsx -t "previews profile CSV import"
+# 中间红灯：textarea 展示原始 proxy 凭证
+
+cd frontend && npm test -- --run src/App.test.tsx -t "previews profile CSV import"
+# 1 passed, 24 skipped
+
+cd frontend && npm test -- --run
+# 13 passed, 169 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 重启本地 QA 服务 `http://127.0.0.1:8095/`，让服务加载新的后端和 `frontend/dist`。
+- 通过 API 创建 QA 模板 `CSV QA Mac`。
+- 桌面 `1440x960`：
+  - Profile 顶栏可见 `Import CSV`，与 `New Profile` 并列。
+  - 点击后打开 `Import profile CSV preview` 弹窗。
+  - 粘贴 2 行 CSV 后点击 `Preview CSV`，返回 `2 total / 1 ready / 1 blocked`。
+  - 有效行展示 `CSV QA Import`、`macos`、`ja-JP`、`Asia/Tokyo`、`asia/warmup`。
+  - 无效行展示 `name is required`、`Template not found`、`platform must be one of...`，且没有出现真实导入按钮。
+  - 页面正文不包含 `hiddenpass` 或 `user:`。
+- 移动 `390x844`：
+  - 弹窗可见，表格区域内部横向滚动。
+  - `document.body.scrollWidth=390`、`document.body.clientWidth=390`，body 未被横向撑破。
+- Playwright MCP console：当前交互后 0 errors、0 warnings。
+- 截图：
+  - `/tmp/cloakbrowser-profile-csv-preview-screens/desktop.png`
+  - `/tmp/cloakbrowser-profile-csv-preview-screens/mobile.png`
+
+未覆盖范围：
+
+- 真正批量创建 profile。
+- 部分成功写入失败行保留原因。

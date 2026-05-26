@@ -101,6 +101,42 @@ export interface ProfileTemplateCreateData {
 
 export type ProfileTemplateUpdateData = Partial<ProfileTemplateCreateData>;
 
+export interface ProfileImportPreviewProfile {
+  name: string;
+  template_id: string | null;
+  proxy: string | null;
+  timezone: string | null;
+  locale: string | null;
+  platform: string;
+  screen_width: number;
+  screen_height: number;
+  gpu_vendor: string | null;
+  gpu_renderer: string | null;
+  hardware_concurrency: number | null;
+  color_scheme: string | null;
+  humanize: boolean;
+  human_preset: string;
+  launch_args: string[];
+  geoip: boolean;
+  notes: string | null;
+  tags: { tag: string; color: string | null }[];
+}
+
+export interface ProfileImportPreviewRow {
+  line_number: number;
+  ok: boolean;
+  errors: string[];
+  source: Record<string, string>;
+  profile: ProfileImportPreviewProfile | null;
+}
+
+export interface ProfileImportPreviewResponse {
+  total: number;
+  valid: number;
+  invalid: number;
+  rows: ProfileImportPreviewRow[];
+}
+
 export interface ProxyAsset {
   id: string;
   name: string;
@@ -279,6 +315,12 @@ export const api = {
     request<Profile>("/api/profiles", {
       method: "POST",
       body: JSON.stringify(data),
+    }),
+
+  previewProfileImport: (csvText: string) =>
+    request<ProfileImportPreviewResponse>("/api/profiles/import/preview", {
+      method: "POST",
+      body: JSON.stringify({ csv_text: csvText }),
     }),
 
   updateProfile: (id: string, data: Partial<ProfileCreateData>) =>

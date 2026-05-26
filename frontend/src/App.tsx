@@ -1,11 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
+import { FileSpreadsheet, Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles, type BulkHealthResult } from "./hooks/useProfiles";
 import { api, setOnUnauthorized, type Profile, type ProfileCreateData, type ProfileTemplate } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
 import { ProfileTable } from "./components/ProfileTable";
+import { ProfileCsvPreviewDialog } from "./components/ProfileCsvPreviewDialog";
 import { ProfileFilters } from "./components/ProfileFilters";
 import { ProfileSummaryPanel } from "./components/ProfileSummaryPanel";
 import { ProxyManagerPage } from "./components/ProxyManagerPage";
@@ -175,6 +176,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkFeedback, setBulkFeedback] = useState<BulkFeedback>(null);
   const [profileTemplates, setProfileTemplates] = useState<ProfileTemplate[]>([]);
+  const [profileImportDialogOpen, setProfileImportDialogOpen] = useState(false);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -501,14 +503,24 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
           </div>
           <div className="flex min-w-0 shrink-0 items-center gap-2">
             {section === "profiles" && (
-              <button
-                type="button"
-                onClick={handleNew}
-                className="btn-primary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                New Profile
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setProfileImportDialogOpen(true)}
+                  className="btn-secondary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" />
+                  Import CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNew}
+                  className="btn-primary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New Profile
+                </button>
+              </>
             )}
             {section === "profiles" && selected && (
               <LaunchButton
@@ -643,6 +655,9 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
           )}
         </div>
       </div>
+      {profileImportDialogOpen && (
+        <ProfileCsvPreviewDialog onClose={() => setProfileImportDialogOpen(false)} />
+      )}
     </div>
   );
 }

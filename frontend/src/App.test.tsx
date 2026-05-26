@@ -25,6 +25,7 @@ vi.mock("./lib/api", () => ({
     authStatus: vi.fn(),
     logout: vi.fn(),
     listProfileTemplates: vi.fn(),
+    previewProfileImport: vi.fn(),
   },
   setOnUnauthorized: vi.fn(),
 }));
@@ -65,6 +66,7 @@ const mockApi = api as {
   authStatus: ReturnType<typeof vi.fn>;
   logout: ReturnType<typeof vi.fn>;
   listProfileTemplates: ReturnType<typeof vi.fn>;
+  previewProfileImport: ReturnType<typeof vi.fn>;
 };
 
 const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
@@ -143,6 +145,13 @@ beforeEach(() => {
   mockApi.logout.mockResolvedValue({ ok: true });
   mockApi.listProfileTemplates.mockReset();
   mockApi.listProfileTemplates.mockResolvedValue([]);
+  mockApi.previewProfileImport.mockReset();
+  mockApi.previewProfileImport.mockResolvedValue({
+    total: 0,
+    valid: 0,
+    invalid: 0,
+    rows: [],
+  });
   mockCreate.mockReset();
   mockCreate.mockResolvedValue(profile({ id: "created", name: "Created Profile" }));
   mockUpdate.mockReset();
@@ -736,6 +745,95 @@ describe("App operations console", () => {
       launch_args: ["--private-window"],
       geoip: false,
     })));
+  });
+
+  it("previews profile CSV import without creating profiles or leaking proxy credentials", async () => {
+    mockApi.previewProfileImport.mockResolvedValue({
+      total: 2,
+      valid: 1,
+      invalid: 1,
+      rows: [
+        {
+          line_number: 2,
+          ok: true,
+          errors: [],
+          source: {
+            name: "Imported JP",
+            proxy: "http://jp.proxy.example:8080",
+            template: "Mac warmup",
+          },
+          profile: {
+            name: "Imported JP",
+            template_id: "template-mac",
+            proxy: "http://jp.proxy.example:8080",
+            timezone: "Asia/Tokyo",
+            locale: "ja-JP",
+            platform: "macos",
+            screen_width: 1440,
+            screen_height: 900,
+            gpu_vendor: "Apple",
+            gpu_renderer: "Apple M2",
+            hardware_concurrency: 8,
+            color_scheme: "light",
+            humanize: true,
+            human_preset: "careful",
+            launch_args: ["--private-window"],
+            geoip: false,
+            notes: "Warmup row",
+            tags: [
+              { tag: "asia", color: null },
+              { tag: "warmup", color: null },
+            ],
+          },
+        },
+        {
+          line_number: 3,
+          ok: false,
+          errors: ["name is required", "platform must be one of: windows, macos, linux"],
+          source: {
+            proxy: "http://bad.proxy.example:8080",
+            platform: "ios",
+          },
+          profile: null,
+        },
+      ],
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import profile CSV preview" });
+    fireEvent.change(within(dialog).getByLabelText("Profile CSV content"), {
+      target: {
+        value: [
+          "name,proxy,tags,notes,template,platform,locale,timezone",
+          "Imported JP,http://user:hiddenpass@jp.proxy.example:8080,asia|warmup,Warmup row,Mac warmup,macos,ja-JP,Asia/Tokyo",
+          ",http://user:hiddenpass@bad.proxy.example:8080,bad,,Missing,ios,en-US,America/Chicago",
+        ].join("\n"),
+      },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Preview CSV" }));
+
+    await waitFor(() => expect(mockApi.previewProfileImport).toHaveBeenCalledWith(
+      expect.stringContaining("Imported JP"),
+    ));
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(within(dialog).getByText("1 ready")).toBeTruthy();
+    expect(within(dialog).getByText("1 blocked")).toBeTruthy();
+    expect(within(dialog).getByText("Imported JP")).toBeTruthy();
+    expect(within(dialog).getByText("macos")).toBeTruthy();
+    expect(within(dialog).getByText("ja-JP")).toBeTruthy();
+    expect(within(dialog).getByText("asia")).toBeTruthy();
+    expect(within(dialog).getByText("name is required")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+    expect(renderedEvidence).not.toContain("hiddenpass");
+    expect(renderedEvidence).not.toContain("user:");
   });
 
   it("returns to the all profiles table when selecting All profiles from the VNC viewer", async () => {
