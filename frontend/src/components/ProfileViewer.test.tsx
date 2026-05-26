@@ -192,6 +192,104 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(document.body.textContent).not.toContain(runtimeViewerUrl);
   });
 
+  it("redacts runtime viewer security failures instead of rendering token-bearing reasons", async () => {
+    const runtimeViewerUrl =
+      "/api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";
+    const rawReason =
+      "viewer_token=secret-viewer-token rejected for /api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";
+
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1"
+        externalSessionId="pm-session-runtime-viewer"
+        vncUrl={runtimeViewerUrl}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(rfbInstances[0]?.listeners.securityfailure).toBeTruthy());
+
+    act(() => {
+      rfbInstances[0].listeners.securityfailure({
+        detail: { reason: rawReason },
+      });
+    });
+
+    expect(await screen.findByText("Connection failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.",
+      ),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain("secret-viewer-token");
+    expect(document.body.textContent).not.toContain(runtimeViewerUrl);
+    expect(document.body.textContent).not.toContain(rawReason);
+  });
+
+  it("shows a redacted runtime viewer access hint when noVNC disconnects before connecting", async () => {
+    const onDisconnect = vi.fn();
+    const runtimeViewerUrl =
+      "/api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";
+
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1"
+        externalSessionId="pm-session-runtime-viewer"
+        vncUrl={runtimeViewerUrl}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    await waitFor(() => expect(rfbInstances[0]?.listeners.disconnect).toBeTruthy());
+
+    act(() => {
+      rfbInstances[0].listeners.disconnect({
+        detail: { reason: `closed ${runtimeViewerUrl}` },
+      });
+    });
+
+    expect(await screen.findByText("Connection failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.",
+      ),
+    ).toBeTruthy();
+    expect(onDisconnect).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("secret-viewer-token");
+    expect(document.body.textContent).not.toContain(runtimeViewerUrl);
+  });
+
+  it("keeps runtime viewer disconnects after a successful connection on the normal disconnect path", async () => {
+    const onDisconnect = vi.fn();
+    const runtimeViewerUrl =
+      "/api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";
+
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1"
+        externalSessionId="pm-session-runtime-viewer"
+        vncUrl={runtimeViewerUrl}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    await waitFor(() => expect(rfbInstances[0]?.listeners.connect).toBeTruthy());
+
+    act(() => {
+      rfbInstances[0].listeners.connect();
+      rfbInstances[0].listeners.disconnect();
+    });
+
+    await waitFor(() => expect(onDisconnect).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Connection failed")).toBeNull();
+  });
+
   it("keeps viewer actions compact and fullscreens the whole viewer frame", async () => {
     const requestFullscreen = vi.fn(function requestFullscreen(this: HTMLElement) {
       Object.defineProperty(document, "fullscreenElement", {

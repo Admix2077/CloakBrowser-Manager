@@ -16,6 +16,8 @@ const XK_v = 0x0076;
 const AUTOMATION_UNAVAILABLE_LABEL = "Automation API unavailable until profile is running";
 const AUTOMATION_UNAVAILABLE_TITLE =
   "Launch the profile to expose its Automation API endpoint.";
+const RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE =
+  "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.";
 
 function formatProfileHandle(profileId: string) {
   if (profileId.length <= 13) return profileId;
@@ -42,10 +44,12 @@ export function ProfileViewer({
   const shortExternalSessionId = externalSessionId
     ? formatProfileHandle(externalSessionId)
     : null;
+  const isRuntimeViewer = Boolean(vncUrl);
 
   useEffect(() => {
     let rfb: any = null;
     let cancelled = false;
+    let hasConnected = false;
 
     async function connect() {
       try {
@@ -67,17 +71,28 @@ export function ProfileViewer({
         rfb.showDotCursor = true;
 
         rfb.addEventListener("connect", () => {
-          if (!cancelled) setConnected(true);
+          if (!cancelled) {
+            hasConnected = true;
+            setConnected(true);
+          }
         });
 
         rfb.addEventListener("disconnect", () => {
           if (!cancelled) {
             setConnected(false);
+            if (isRuntimeViewer && !hasConnected) {
+              setError(RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE);
+              return;
+            }
             onDisconnect();
           }
         });
 
         rfb.addEventListener("securityfailure", (e: any) => {
+          if (isRuntimeViewer) {
+            setError(RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE);
+            return;
+          }
           setError(`Security failure: ${e.detail.reason}`);
         });
       } catch (err) {
@@ -100,7 +115,7 @@ export function ProfileViewer({
       }
       rfbRef.current = null;
     };
-  }, [profileId, vncUrl, onDisconnect]);
+  }, [profileId, vncUrl, isRuntimeViewer, onDisconnect]);
 
   // Host→VNC: intercept Ctrl+V/Cmd+V at keydown (capture phase)
   // Must fire BEFORE noVNC's canvas listener to prevent the race condition

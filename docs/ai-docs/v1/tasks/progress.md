@@ -50,6 +50,7 @@
   - runtime VNC 成功 connected/disconnected 写 audit。
   - runtime VNC 失败事件写低敏 reason code audit。
   - EnvironmentStrip 支持低敏业务 session 标识和可选 runtime viewer URL。
+  - runtime viewer 访问失败时显示固定安全提示，不把 viewer token、完整 VNC URL 或 noVNC 原始 reason 渲染到 UI。
   - 从 profile 创建 runtime session。
   - 从 template 创建 runtime session 并复制 template 指纹字段。
   - runtime response 不包含 wallet/order/billing 字段，也不暴露内部 `viewer_token_hash`。
@@ -64,7 +65,7 @@
 下一步建议：
 
 1. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
-2. 未确认前不改 Project Mileage app/payload；如继续 CloakBrowser 独立侧，可补 runtime viewer token 过期/刷新 UX 的安全提示，但不替代 Payload 契约。
+2. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 3. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。
 
 ## 推荐执行顺序
