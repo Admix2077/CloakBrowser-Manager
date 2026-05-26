@@ -1487,21 +1487,18 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
     return redacted_steps
 
 
-def _automation_task_response(task: dict, *, redact_steps: bool = False) -> AutomationTaskResponse:
-    if redact_steps:
-        task = {**task, "steps": _automation_task_redacted_steps(task.get("steps") or [])}
+def _automation_task_response(task: dict) -> AutomationTaskResponse:
+    task = {**task, "steps": _automation_task_redacted_steps(task.get("steps") or [])}
     return AutomationTaskResponse(**task)
 
 
 def _automation_task_finished_response(
     task: dict,
     status_code: int = 200,
-    *,
-    redact_steps: bool = False,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
-        content=jsonable_encoder(_automation_task_response(task, redact_steps=redact_steps)),
+        content=jsonable_encoder(_automation_task_response(task)),
     )
 
 
@@ -1609,7 +1606,7 @@ async def run_automation_task(task_id: str):
                     step_results,
                     "Unsupported automation step type",
                 )
-                return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+                return _automation_task_finished_response(failed, status_code=400)
 
             url = _automation_step_str(step, "url")
             wait_until = _automation_step_str(step, "wait_until", "load")
@@ -1624,7 +1621,7 @@ async def run_automation_task(task_id: str):
             ):
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(task_id, step_results, "Invalid open_url step")
-                return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+                return _automation_task_finished_response(failed, status_code=400)
 
             try:
                 running, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
@@ -1635,7 +1632,7 @@ async def run_automation_task(task_id: str):
             except Exception:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(task_id, step_results, "Open URL step failed")
-                return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+                return _automation_task_finished_response(failed, status_code=400)
 
             step_results.append(_automation_task_step_result(index, step, "succeeded"))
             continue
@@ -1644,7 +1641,7 @@ async def run_automation_task(task_id: str):
         if not isinstance(wait_ms, int) or isinstance(wait_ms, bool) or wait_ms < 1 or wait_ms > 300_000:
             step_results.append(_automation_task_step_result(index, step, "failed"))
             failed = _fail_automation_task(task_id, step_results, "Invalid wait step")
-            return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+            return _automation_task_finished_response(failed, status_code=400)
 
         await asyncio.sleep(wait_ms / 1000)
         step_results.append(_automation_task_step_result(index, step, "succeeded"))
@@ -1657,7 +1654,7 @@ async def run_automation_task(task_id: str):
     )
     if finished is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
-    return _automation_task_response(finished, redact_steps=True)
+    return _automation_task_response(finished)
 
 
 # ── Clipboard Relay ──────────────────────────────────────────────────────────

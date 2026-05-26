@@ -152,6 +152,7 @@ cd frontend && npm run build
   - `started_at`。
   - `finished_at`。
 - `POST /api/tasks` 当前只创建 `queued` task，不执行脚本，不启动 profile，不读取敏感配置。
+- create/get/list/cancel/run 的对外 `AutomationTaskResponse.steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
 - profile 不存在时返回 `404`。
 - 当前未实现并发限制、失败重试和 step 执行器。
 
@@ -173,6 +174,7 @@ cd frontend && npm run build
 - 已新增 `GET /api/tasks`：
   - 返回所有已持久化 task。
   - 按 `created_at desc` 排序，最新 task 在前。
+  - 对外响应中的 `steps` 统一走白名单脱敏。
   - 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - 已新增 `POST /api/tasks/{id}/cancel`：
   - 只允许取消 `queued` task。
@@ -183,6 +185,31 @@ cd frontend && npm run build
   - 当前不停止运行中的 Playwright 操作；运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
 - 本小闭环不执行脚本，不启动 profile，不读取敏感配置，不写 Project Mileage 钱包、订单、权限或续期逻辑。
 - 当前仍未实现并发限制、失败重试和 step 执行器。
+
+## 2026-05-27 Automation task 响应脱敏收口小闭环
+
+当前状态：
+
+- create/get/list/cancel/run 的所有对外 `AutomationTaskResponse.steps` 统一走白名单脱敏。
+- `wait` step 仅回显 `type/ms`。
+- `open_url` step 仅回显 `type/page_ref/wait_until/timeout_ms`。
+- `open_url.url`、query、fragment、未知 step 字段、表单值、token、cookie、secret 不会在 task 响应中回显。
+- `result.steps[]` 仍只记录 `index/type/status`。
+- 当前 `steps` 仍作为内部脚本定义持久化；调用方不得提交 secret。后续若要对 Project Mileage 暴露 task 能力，必须由 Payload 输出安全 DTO，App 不能直连 CloakBrowser task API。
+- `open_url` 任意 `http/https` 跳转仍属于可信管理 API 能力，不能直接暴露给 Project Mileage App。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_create_automation_task_queues_steps_without_running_script backend/tests/test_api.py::test_get_automation_task_returns_persisted_task backend/tests/test_api.py::test_list_automation_tasks_returns_newest_tasks backend/tests/test_api.py::test_cancel_queued_automation_task_marks_cancelled backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps -q
+# 8 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 81 passed
+```
 
 验证记录：
 

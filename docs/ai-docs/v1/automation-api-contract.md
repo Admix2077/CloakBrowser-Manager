@@ -357,6 +357,7 @@ POST /api/tasks
 - `steps` 长度为 `1..200`。
 - profile 不存在时返回 `404`。
 - 不执行脚本，不启动 profile，不读取敏感配置。
+- 对外响应中的 `steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
 
 返回：
 
@@ -404,6 +405,7 @@ GET /api/tasks
 
 - 返回所有已持久化 task。
 - 按 `created_at desc` 排序，最新 task 在前。
+- 对外响应中的 `steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
 - 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - Project Mileage 后续需要 task 列表时，必须由 Payload 按账号归属、权限和审计策略输出安全 DTO。
 
@@ -413,7 +415,7 @@ GET /api/tasks
 GET /api/tasks/{id}
 ```
 
-task 不存在时返回 `404`。
+task 不存在时返回 `404`。对外响应中的 `steps` 统一走白名单脱敏。
 
 ### 取消 Task
 
@@ -428,6 +430,7 @@ POST /api/tasks/{id}/cancel
 - task 不存在时返回 `404`。
 - 非 `queued` task 返回 `409`，避免把运行中、已完成或失败 task 伪装成可取消成功。
 - 当前取消接口不终止浏览器、不停止运行中脚本、不修改 Project Mileage 订单、钱包、权限或续期状态。
+- 对外响应中的 `steps` 统一走白名单脱敏。
 - 重复取消已 `cancelled` task 当前返回 `409`；是否改为幂等成功留给后续 API 版本决定。
 - 运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
 
@@ -454,7 +457,7 @@ POST /api/tasks/{id}/run
 - 当前不支持的 step 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `wait.ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `open_url.url`、`wait_until` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
-- `run` 响应会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；未知 step 的其他字段不会出现在 run 响应中。
+- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；未知 step 的其他字段不会出现在响应中。
 - `result.steps[]` 只记录 `index`、`type`、`status`。
 - 当前不实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
 

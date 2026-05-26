@@ -1028,12 +1028,67 @@ def test_create_automation_task_queues_steps_without_running_script(app_client: 
     assert data["id"]
     assert data["profile_id"] == pid
     assert data["status"] == "queued"
-    assert data["steps"] == steps
+    assert data["steps"] == [
+        {"type": "open_url"},
+        {"type": "wait", "ms": 1000},
+    ]
     assert data["result"] is None
     assert data["error"] is None
     assert data["created_at"] is not None
     assert data["started_at"] is None
     assert data["finished_at"] is None
+
+
+def test_automation_task_responses_redact_open_url_steps(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRedactProfile"})
+    pid = create.json()["id"]
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    steps = [
+        {
+            "type": "open_url",
+            "url": secret_url,
+            "page_ref": "0",
+            "wait_until": "domcontentloaded",
+            "timeout_ms": 5000,
+        },
+        {"type": "wait", "ms": 1},
+    ]
+    expected_steps = [
+        {
+            "type": "open_url",
+            "page_ref": "0",
+            "wait_until": "domcontentloaded",
+            "timeout_ms": 5000,
+        },
+        {"type": "wait", "ms": 1},
+    ]
+
+    create_resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+    task_id = create_resp.json()["id"]
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["steps"] == expected_steps
+    assert secret_url not in str(create_resp.json())
+    assert "super-secret" not in str(create_resp.json())
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    assert secret_url not in str(get_resp.json())
+    assert "super-secret" not in str(get_resp.json())
+
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["steps"] == expected_steps
+    assert secret_url not in str(list_resp.json())
+    assert "super-secret" not in str(list_resp.json())
+
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == expected_steps
+    assert secret_url not in str(cancel_resp.json())
+    assert "super-secret" not in str(cancel_resp.json())
 
 
 def test_get_automation_task_returns_persisted_task(app_client: TestClient):
