@@ -21,6 +21,7 @@ def test_init_db_creates_tables(tmp_db: Path):
         names = {r["name"] for r in tables}
     assert "profiles" in names
     assert "profile_tags" in names
+    assert "automation_tasks" in names
 
 
 def test_init_db_idempotent(tmp_db: Path):
@@ -239,6 +240,64 @@ def test_list_profiles_includes_tags(tmp_db: Path):
     db.create_profile("Tagged", tags=[{"tag": "x"}])
     profiles = db.list_profiles()
     assert len(profiles[0]["tags"]) == 1
+
+
+# ── automation tasks ─────────────────────────────────────────────────────────
+
+
+def test_create_and_get_automation_task_roundtrip(tmp_db: Path):
+    profile = db.create_profile("Automation Task")
+    steps = [
+        {"type": "open_url", "url": "https://example.com"},
+        {"type": "wait", "ms": 1000},
+    ]
+
+    task = db.create_automation_task(profile_id=profile["id"], steps=steps)
+
+    assert task["id"]
+    assert task["profile_id"] == profile["id"]
+    assert task["status"] == "queued"
+    assert task["steps"] == steps
+    assert task["result"] is None
+    assert task["error"] is None
+    assert task["created_at"] is not None
+    assert task["started_at"] is None
+    assert task["finished_at"] is None
+
+    fetched = db.get_automation_task(task["id"])
+    assert fetched == task
+
+
+def test_update_automation_task_status_result_and_error(tmp_db: Path):
+    profile = db.create_profile("Automation Task Update")
+    task = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])
+
+    updated = db.update_automation_task(
+        task["id"],
+        status="failed",
+        result={"step_index": 0},
+        error="step failed",
+        started_at="2026-05-27T00:00:00+00:00",
+        finished_at="2026-05-27T00:00:01+00:00",
+    )
+
+    assert updated is not None
+    assert updated["status"] == "failed"
+    assert updated["result"] == {"step_index": 0}
+    assert updated["error"] == "step failed"
+    assert updated["started_at"] == "2026-05-27T00:00:00+00:00"
+    assert updated["finished_at"] == "2026-05-27T00:00:01+00:00"
+
+
+def test_list_automation_tasks_for_profile(tmp_db: Path):
+    first_profile = db.create_profile("Automation Task List A")
+    second_profile = db.create_profile("Automation Task List B")
+    first = db.create_automation_task(profile_id=first_profile["id"], steps=[{"type": "wait", "ms": 1}])
+    db.create_automation_task(profile_id=second_profile["id"], steps=[{"type": "wait", "ms": 2}])
+
+    tasks = db.list_automation_tasks(profile_id=first_profile["id"])
+
+    assert [task["id"] for task in tasks] == [first["id"]]
 
 
 # ── update_profile ───────────────────────────────────────────────────────────

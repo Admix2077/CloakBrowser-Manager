@@ -36,7 +36,7 @@
 - [x] 新增 scroll。
 - [x] 新增 console logs。
 - [x] 新增 network summary。
-- [ ] 新增 task 表：
+- [x] 新增 task 表：
   - id。
   - profile_id。
   - status。
@@ -98,6 +98,39 @@ cd frontend && npm run build
 - `../automation-api-contract.md`
 
 该文档覆盖现有 endpoint、请求/响应字段、Script Runner step 复用建议，以及 console logs / network summary 的敏感信息边界。
+
+## 2026-05-27 Automation task 表小闭环
+
+当前状态：
+
+- 已新增 `automation_tasks` 表。
+- 已新增 DB CRUD：
+  - `create_automation_task()`。
+  - `get_automation_task()`。
+  - `list_automation_tasks()`。
+  - `update_automation_task()`。
+- 表字段覆盖：
+  - `id`。
+  - `profile_id`。
+  - `status`。
+  - `steps`。
+  - `result`。
+  - `error`。
+  - `created_at`。
+  - `started_at`。
+  - `finished_at`。
+- `steps` 和 `result` 以 JSON 存储，读取时恢复为结构化对象。
+- 本小闭环只完成持久层，不开放 `/api/tasks`，不执行脚本，不引入并发限制或重试。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py::test_init_db_creates_tables backend/tests/test_database.py::test_create_and_get_automation_task_roundtrip backend/tests/test_database.py::test_update_automation_task_status_result_and_error backend/tests/test_database.py::test_list_automation_tasks_for_profile -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py -q
+# 34 passed
+```
 
 ## 2026-05-27 Automation wait-for-selector 小闭环
 

@@ -147,6 +147,18 @@ def init_db():
                 metadata TEXT DEFAULT '{}',
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS automation_tasks (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+                status TEXT NOT NULL,
+                steps TEXT NOT NULL,
+                result TEXT,
+                error TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT
+            );
         """)
         conn.commit()
 
@@ -573,6 +585,112 @@ def renew_runtime_session(session_id: str, lease_seconds: int) -> dict[str, Any]
         if cursor.rowcount == 0:
             return None
     return get_runtime_session(session_id)
+
+
+def _automation_task_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    task = dict(row)
+    try:
+        steps = json.loads(task.get("steps") or "[]")
+    except (TypeError, ValueError):
+        steps = []
+    try:
+        result = json.loads(task["result"]) if task.get("result") is not None else None
+    except (TypeError, ValueError):
+        result = None
+    task["steps"] = steps if isinstance(steps, list) else []
+    task["result"] = result
+    return task
+
+
+def create_automation_task(
+    *,
+    profile_id: str,
+    steps: list[dict[str, Any]],
+    status: str = "queued",
+) -> dict[str, Any]:
+    task_id = str(uuid.uuid4())
+    now = _now()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO automation_tasks (
+                id, profile_id, status, steps, result, error, created_at, started_at, finished_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                task_id,
+                profile_id,
+                status,
+                json.dumps(steps),
+                None,
+                None,
+                now,
+                None,
+                None,
+            ),
+        )
+        conn.commit()
+    task = get_automation_task(task_id)
+    if task is None:
+        raise RuntimeError("Automation task was not persisted")
+    return task
+
+
+def get_automation_task(task_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM automation_tasks WHERE id = ?", (task_id,)).fetchone()
+    return _automation_task_from_row(row) if row else None
+
+
+def list_automation_tasks(profile_id: str | None = None) -> list[dict[str, Any]]:
+    with get_db() as conn:
+        if profile_id:
+            rows = conn.execute(
+                "SELECT * FROM automation_tasks WHERE profile_id = ? ORDER BY created_at DESC",
+                (profile_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM automation_tasks ORDER BY created_at DESC").fetchall()
+    return [_automation_task_from_row(row) for row in rows]
+
+
+def update_automation_task(
+    task_id: str,
+    *,
+    status: str | None = None,
+    result: dict[str, Any] | None = None,
+    error: str | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+) -> dict[str, Any] | None:
+    update_cols = []
+    update_vals: list[Any] = []
+    if status is not None:
+        update_cols.append("status = ?")
+        update_vals.append(status)
+    if result is not None:
+        update_cols.append("result = ?")
+        update_vals.append(json.dumps(result))
+    if error is not None:
+        update_cols.append("error = ?")
+        update_vals.append(error)
+    if started_at is not None:
+        update_cols.append("started_at = ?")
+        update_vals.append(started_at)
+    if finished_at is not None:
+        update_cols.append("finished_at = ?")
+        update_vals.append(finished_at)
+    if not update_cols:
+        return get_automation_task(task_id)
+
+    update_vals.append(task_id)
+    with get_db() as conn:
+        cursor = conn.execute(
+            f"UPDATE automation_tasks SET {', '.join(update_cols)} WHERE id = ?",
+            update_vals,
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_automation_task(task_id)
 
 
 _AUDIT_SENSITIVE_KEYS = {
