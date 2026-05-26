@@ -50,7 +50,7 @@
   - runtime VNC 成功 connected/disconnected 写 audit。
   - runtime VNC 失败事件写低敏 reason code audit。
   - EnvironmentStrip 支持低敏业务 session 标识和可选 runtime viewer URL。
-  - runtime viewer 访问失败时显示固定安全提示，不把 viewer token、完整 VNC URL 或 noVNC 原始 reason 渲染到 UI。
+  - runtime viewer 访问失败时显示固定安全提示，不把 viewer token、完整 VNC URL、noVNC 原始 reason 或初始化异常 message 渲染到 UI。
   - 从 profile 创建 runtime session。
   - 从 template 创建 runtime session 并复制 template 指纹字段。
   - runtime response 不包含 wallet/order/billing 字段，也不暴露内部 `viewer_token_hash`。

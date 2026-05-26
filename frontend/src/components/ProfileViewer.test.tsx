@@ -263,6 +263,37 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(document.body.textContent).not.toContain(runtimeViewerUrl);
   });
 
+  it("redacts runtime viewer initialization errors instead of rendering token-bearing messages", async () => {
+    const runtimeViewerUrl =
+      "/api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";
+    const rawMessage = `failed to initialize ${runtimeViewerUrl}`;
+
+    MockRFB.mockImplementationOnce(function MockRFBInitFailure() {
+      throw new Error(rawMessage);
+    });
+
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1"
+        externalSessionId="pm-session-runtime-viewer"
+        vncUrl={runtimeViewerUrl}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Connection failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.",
+      ),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toContain("secret-viewer-token");
+    expect(document.body.textContent).not.toContain(runtimeViewerUrl);
+    expect(document.body.textContent).not.toContain(rawMessage);
+  });
+
   it("keeps runtime viewer disconnects after a successful connection on the normal disconnect path", async () => {
     const onDisconnect = vi.fn();
     const runtimeViewerUrl =

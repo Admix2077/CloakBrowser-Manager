@@ -97,7 +97,11 @@ export function ProfileViewer({
         });
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to connect");
+          setError(
+            isRuntimeViewer
+              ? RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE
+              : err instanceof Error ? err.message : "Failed to connect",
+          );
         }
       }
     }
