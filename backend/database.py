@@ -94,6 +94,24 @@ def init_db():
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS profile_templates (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                platform TEXT DEFAULT 'windows',
+                screen_width INTEGER DEFAULT 1920,
+                screen_height INTEGER DEFAULT 1080,
+                gpu_vendor TEXT,
+                gpu_renderer TEXT,
+                hardware_concurrency INTEGER,
+                color_scheme TEXT,
+                humanize BOOLEAN DEFAULT 0,
+                human_preset TEXT DEFAULT 'default',
+                launch_args TEXT DEFAULT '[]',
+                geoip BOOLEAN DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
         """)
         conn.commit()
 
@@ -321,6 +339,100 @@ def update_profile_geoip_result(
 def delete_profile(profile_id: str) -> bool:
     with get_db() as conn:
         cursor = conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def _template_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    template = dict(row)
+    template["launch_args"] = json.loads(template.get("launch_args") or "[]")
+    return template
+
+
+def create_profile_template(name: str, **fields: Any) -> dict[str, Any]:
+    template_id = str(uuid.uuid4())
+    now = _now()
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO profile_templates (
+                id, name, platform, screen_width, screen_height, gpu_vendor,
+                gpu_renderer, hardware_concurrency, color_scheme, humanize,
+                human_preset, launch_args, geoip, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                template_id,
+                name,
+                fields.get("platform", "windows"),
+                fields.get("screen_width", 1920),
+                fields.get("screen_height", 1080),
+                fields.get("gpu_vendor"),
+                fields.get("gpu_renderer"),
+                fields.get("hardware_concurrency"),
+                fields.get("color_scheme"),
+                fields.get("humanize", False),
+                fields.get("human_preset", "default"),
+                json.dumps(fields.get("launch_args") or []),
+                fields.get("geoip", True),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+
+    return get_profile_template(template_id)  # type: ignore[return-value]
+
+
+def get_profile_template(template_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM profile_templates WHERE id = ?",
+            (template_id,),
+        ).fetchone()
+        return _template_from_row(row) if row else None
+
+
+def list_profile_templates() -> list[dict[str, Any]]:
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM profile_templates ORDER BY created_at DESC").fetchall()
+        return [_template_from_row(row) for row in rows]
+
+
+def update_profile_template(template_id: str, **fields: Any) -> dict[str, Any] | None:
+    if not get_profile_template(template_id):
+        return None
+
+    if "launch_args" in fields:
+        fields["launch_args"] = json.dumps(fields["launch_args"] or [])
+
+    update_cols = []
+    update_vals = []
+    for col in (
+        "name", "platform", "screen_width", "screen_height", "gpu_vendor",
+        "gpu_renderer", "hardware_concurrency", "color_scheme", "humanize",
+        "human_preset", "launch_args", "geoip",
+    ):
+        if col in fields:
+            update_cols.append(f"{col} = ?")
+            update_vals.append(fields[col])
+
+    if update_cols:
+        update_cols.append("updated_at = ?")
+        update_vals.append(_now())
+        update_vals.append(template_id)
+        with get_db() as conn:
+            conn.execute(
+                f"UPDATE profile_templates SET {', '.join(update_cols)} WHERE id = ?",
+                update_vals,
+            )
+            conn.commit()
+
+    return get_profile_template(template_id)
+
+
+def delete_profile_template(template_id: str) -> bool:
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM profile_templates WHERE id = ?", (template_id,))
         conn.commit()
         return cursor.rowcount > 0
 

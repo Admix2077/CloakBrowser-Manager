@@ -4103,3 +4103,57 @@ cd frontend && npm run build
 - 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
 - 没有改变 profile API、批量 health check、批量高风险 disabled 语义、表格虚拟滚动或移动端横向滚动策略。
 - 没有 push 到任何远端仓库。
+
+## 55. 2026-05-26 Profile Template 后端基础 CRUD 小闭环
+
+背景：
+
+- `11 UI 视觉系统与体验升级` 已收口并在 `tasks/progress.md` 勾选。
+- 继续推进 CloakBrowser 独立成熟化优先级，进入 `09 模板、批量创建与批量运营`。
+- 子 agent `Archimedes` 只读调研确认：当前无 `profile_templates` 实现；后端最小闭环应新增 SQLite 表、DB helper、Pydantic models、CRUD API 和测试。
+- 本轮只做 Profile Template 后端事实源，不做前端模板选择，不改变 profile 创建流程，不触碰 Project Mileage。
+
+已完成：
+
+- `backend/tests/test_templates.py`
+  - 先写红灯测试，初始失败点为缺表、缺 DB helper、缺 API 路由。
+  - 覆盖表创建、DB CRUD、API CRUD、not found、模板更新不静默改写已有 profile。
+- `backend/database.py`
+  - 新增 `profile_templates` 表。
+  - 新增 `create_profile_template` / `list_profile_templates` / `get_profile_template` / `update_profile_template` / `delete_profile_template`。
+  - `launch_args` 采用 JSON roundtrip。
+- `backend/models.py`
+  - 新增 `ProfileTemplateCreate` / `ProfileTemplateUpdate` / `ProfileTemplateResponse`。
+- `backend/main.py`
+  - 新增 `/api/profile-templates` CRUD API。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `新增 profile_templates 表`。
+  - 勾选 `支持保存模板`。
+  - 勾选 `模板变更不自动修改已有 profile`。
+  - 勾选验收 `模板不会静默改写已有 profile`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 红灯：4 failed
+# 失败点：缺 profile_templates 表、缺 create_profile_template helper、缺 API routes
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 237 passed
+```
+
+未覆盖范围：
+
+- 前端模板列表/保存入口。
+- 创建 profile 时选择模板并应用字段。
+- CSV 批量导入、批量启动/停止/GeoIP/tag/proxy/export/delete。
+
+边界：
+
+- 没有修改前端 UI、runtime、Docker 或 Project Mileage 仓库。
+- 没有把模板变更联动写回既有 profile，避免意外批量污染。
+- 没有 push 到任何远端仓库。

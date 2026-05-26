@@ -57,6 +57,9 @@ from .models import (
     ProfileCreate,
     ProfileResponse,
     ProfileStatusResponse,
+    ProfileTemplateCreate,
+    ProfileTemplateResponse,
+    ProfileTemplateUpdate,
     ProfileUpdate,
     StatusResponse,
     TagResponse,
@@ -471,6 +474,10 @@ def _tag_payloads(tags: list[dict] | None) -> list[dict]:
     return [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in (tags or [])]
 
 
+def _template_response(template: dict) -> ProfileTemplateResponse:
+    return ProfileTemplateResponse(**template)
+
+
 def _safe_proxy_check_error(exc: Exception, raw_url: str) -> str:
     redacted_url = redact_proxy_asset_url(raw_url)
     message = str(exc).replace(raw_url, redacted_url)
@@ -625,6 +632,41 @@ async def bulk_check_proxies(req: ProxyBulkCheckRequest):
         failed=len(req.proxy_ids) - succeeded,
         results=results,
     )
+
+
+@app.get("/api/profile-templates", response_model=list[ProfileTemplateResponse])
+async def list_profile_templates():
+    return [_template_response(template) for template in db.list_profile_templates()]
+
+
+@app.post("/api/profile-templates", response_model=ProfileTemplateResponse, status_code=201)
+async def create_profile_template(req: ProfileTemplateCreate):
+    template = db.create_profile_template(**req.model_dump())
+    return _template_response(template)
+
+
+@app.get("/api/profile-templates/{template_id}", response_model=ProfileTemplateResponse)
+async def get_profile_template(template_id: str):
+    template = db.get_profile_template(template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return _template_response(template)
+
+
+@app.put("/api/profile-templates/{template_id}", response_model=ProfileTemplateResponse)
+async def update_profile_template(template_id: str, req: ProfileTemplateUpdate):
+    template = db.update_profile_template(template_id, **req.model_dump(exclude_unset=True))
+    if not template:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return _template_response(template)
+
+
+@app.delete("/api/profile-templates/{template_id}")
+async def delete_profile_template(template_id: str):
+    deleted = db.delete_profile_template(template_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Profile template not found")
+    return {"ok": True}
 
 
 @app.post("/api/proxies/{proxy_id}/check", response_model=ProxyResponse)

@@ -8,8 +8,8 @@
 
 ### Profile Template
 
-- [ ] 新增 profile_templates 表。
-- [ ] 支持保存模板：
+- [x] 新增 profile_templates 表。
+- [x] 支持保存模板：
   - platform。
   - screen。
   - GPU。
@@ -19,7 +19,7 @@
   - launch args。
   - geoip。
 - [ ] 创建 profile 时可选择模板。
-- [ ] 模板变更不自动修改已有 profile，避免意外批量污染。
+- [x] 模板变更不自动修改已有 profile，避免意外批量污染。
 
 ### Proxy Template
 
@@ -67,4 +67,46 @@ cd frontend && npm run build
 - [ ] 批量导入不会因为一行失败而全部失败。
 - [ ] 批量启动有并发限制。
 - [ ] 批量删除需要确认。
-- [ ] 模板不会静默改写已有 profile。
+- [x] 模板不会静默改写已有 profile。
+
+## 2026-05-26 Profile Template 后端基础 CRUD 小闭环
+
+背景：
+
+- 当前 09 模块先从低风险、可测试的 Profile Template 事实源切入。
+- 本轮只实现后端 `profile_templates` 表和 CRUD API，不做前端模板选择，不改变 profile 创建流程，不触碰 Project Mileage。
+
+已完成：
+
+- [x] `backend/database.py`
+  - 新增 `profile_templates` 表。
+  - 新增 `create_profile_template` / `list_profile_templates` / `get_profile_template` / `update_profile_template` / `delete_profile_template`。
+  - `launch_args` 采用与 profile 一致的 JSON roundtrip。
+- [x] `backend/models.py`
+  - 新增 `ProfileTemplateCreate` / `ProfileTemplateUpdate` / `ProfileTemplateResponse`。
+  - 字段覆盖 platform、screen、GPU、hardware concurrency、color scheme、humanize、human preset、launch args、geoip。
+- [x] `backend/main.py`
+  - 新增 `/api/profile-templates` CRUD：
+    - `GET /api/profile-templates`
+    - `POST /api/profile-templates`
+    - `GET /api/profile-templates/{template_id}`
+    - `PUT /api/profile-templates/{template_id}`
+    - `DELETE /api/profile-templates/{template_id}`
+- [x] `backend/tests/test_templates.py`
+  - 覆盖表创建、DB CRUD、API CRUD、not found、模板更新不静默改写已有 profile。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 237 passed
+```
+
+未覆盖范围：
+
+- 前端模板列表/保存入口。
+- 创建 profile 时选择模板并应用字段。
+- CSV 批量导入、批量启动/停止/GeoIP/tag/proxy/export/delete。

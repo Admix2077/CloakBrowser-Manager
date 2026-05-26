@@ -67,6 +67,54 @@ class TagResponse(BaseModel):
     color: str | None = None
 
 
+class ProfileTemplateCreate(BaseModel):
+    name: str = Field(min_length=1)
+    platform: Literal["windows", "macos", "linux"] = "windows"
+    screen_width: int = 1920
+    screen_height: int = 1080
+    gpu_vendor: str | None = None
+    gpu_renderer: str | None = None
+    hardware_concurrency: int | None = None
+    color_scheme: Literal["light", "dark", "no-preference"] | None = None
+    humanize: bool = False
+    human_preset: Literal["default", "careful"] = "default"
+    launch_args: list[str] = Field(default_factory=list)
+    geoip: bool = True
+
+
+class ProfileTemplateUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    platform: Literal["windows", "macos", "linux"] | None = None
+    screen_width: int | None = None
+    screen_height: int | None = None
+    gpu_vendor: str | None = Field(default=None)
+    gpu_renderer: str | None = Field(default=None)
+    hardware_concurrency: int | None = Field(default=None)
+    color_scheme: Literal["light", "dark", "no-preference"] | None = Field(default=None)
+    humanize: bool | None = None
+    human_preset: Literal["default", "careful"] | None = None
+    launch_args: list[str] | None = None
+    geoip: bool | None = None
+
+
+class ProfileTemplateResponse(BaseModel):
+    id: str
+    name: str
+    platform: str = "windows"
+    screen_width: int = 1920
+    screen_height: int = 1080
+    gpu_vendor: str | None = None
+    gpu_renderer: str | None = None
+    hardware_concurrency: int | None = None
+    color_scheme: str | None = None
+    humanize: bool = False
+    human_preset: str = "default"
+    launch_args: list[str] = []
+    geoip: bool = True
+    created_at: str
+    updated_at: str
+
+
 class ProxyCreate(BaseModel):
     name: str = Field(min_length=1)
     url: str = Field(min_length=1)
