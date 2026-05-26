@@ -64,6 +64,14 @@ def _audit_event_types() -> list[str]:
     return [event["event_type"] for event in db.list_audit_events()]
 
 
+def _viewer_failure_events(session_id: str | None = None) -> list[dict]:
+    return [
+        event
+        for event in db.list_audit_events(session_id)
+        if event["event_type"] == "runtime.viewer.failed"
+    ]
+
+
 def test_runtime_session_create_requires_service_token(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -320,6 +328,26 @@ def test_runtime_vnc_rejects_missing_wrong_or_expired_viewer_token(
             pass
     assert expired.value.code == 4401
 
+    failures = _viewer_failure_events(session["id"])
+    assert [event["metadata"] for event in failures] == [
+        {"reason_code": "viewer_credential_missing"},
+        {"reason_code": "viewer_credential_invalid"},
+        {"reason_code": "viewer_credential_expired"},
+    ]
+    assert all(event["actor_type"] == "runtime_viewer" for event in failures)
+    assert all(event["runtime_session_id"] == session["id"] for event in failures)
+    assert all(event["profile_id"] == profile_id for event in failures)
+    assert all(event["external_session_id"] == session["external_session_id"] for event in failures)
+
+    serialized_events = json.dumps(failures, sort_keys=True)
+    assert "wrong-token" not in serialized_events
+    assert token_resp.json()["viewer_token"] not in serialized_events
+    assert db.get_runtime_session(session["id"])["viewer_token_hash"] not in serialized_events
+    assert token_resp.json()["viewer_url"] not in serialized_events
+    assert "viewer_token" not in serialized_events
+    assert "runtime.viewer.connected" not in _audit_event_types()
+    assert "runtime.viewer.disconnected" not in _audit_event_types()
+
 
 def test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token(
     app_client: TestClient,
@@ -343,6 +371,92 @@ def test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token(
             pass
 
     assert rejected.value.code == 4403
+
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["actor_type"] == "runtime_viewer"
+    assert failures[0]["runtime_session_id"] == session["id"]
+    assert failures[0]["profile_id"] is None
+    assert failures[0]["external_session_id"] is None
+    assert failures[0]["metadata"] == {"reason_code": "origin_not_allowed"}
+
+    serialized_events = json.dumps(failures, sort_keys=True)
+    assert "evil.com" not in serialized_events
+    assert token_resp.json()["viewer_token"] not in serialized_events
+    assert db.get_runtime_session(session["id"])["viewer_token_hash"] not in serialized_events
+    assert token_resp.json()["viewer_url"] not in serialized_events
+    assert "viewer_token" not in serialized_events
+    assert "http://evil.com" not in serialized_events
+
+
+def test_runtime_vnc_failure_audits_session_not_live_and_skips_missing_session(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    db.terminate_runtime_session(session["id"])
+
+    with pytest.raises(Exception) as terminated:
+        with app_client.websocket_connect(
+            f"/api/runtime/sessions/{session['id']}/vnc?viewer_token=anything",
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+    assert terminated.value.code == 4404
+
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["actor_type"] == "runtime_viewer"
+    assert failures[0]["runtime_session_id"] == session["id"]
+    assert failures[0]["profile_id"] == profile_id
+    assert failures[0]["external_session_id"] == session["external_session_id"]
+    assert failures[0]["metadata"] == {"reason_code": "runtime_session_not_live"}
+
+    with pytest.raises(Exception) as missing:
+        with app_client.websocket_connect(
+            "/api/runtime/sessions/missing/vnc?viewer_token=anything",
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+    assert missing.value.code == 4404
+    assert _viewer_failure_events("missing") == []
+
+
+def test_runtime_vnc_failure_audits_profile_not_running(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            token_resp.json()["viewer_url"],
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+    assert rejected.value.code == 4004
+
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["actor_type"] == "runtime_viewer"
+    assert failures[0]["runtime_session_id"] == session["id"]
+    assert failures[0]["profile_id"] == profile_id
+    assert failures[0]["external_session_id"] == session["external_session_id"]
+    assert failures[0]["metadata"] == {"reason_code": "profile_not_running"}
+
+    serialized_events = json.dumps(failures, sort_keys=True)
+    assert token_resp.json()["viewer_token"] not in serialized_events
+    assert db.get_runtime_session(session["id"])["viewer_token_hash"] not in serialized_events
+    assert token_resp.json()["viewer_url"] not in serialized_events
+    assert "viewer_token" not in serialized_events
 
 
 def test_runtime_vnc_accepts_valid_viewer_token_and_proxies_to_profile_vnc(
@@ -481,7 +595,7 @@ def test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit(
     assert "origin" not in serialized_events.lower()
 
 
-def test_runtime_vnc_backend_connect_failure_does_not_write_viewer_audit(
+def test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit(
     app_client: TestClient,
     runtime_headers: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
@@ -520,6 +634,22 @@ def test_runtime_vnc_backend_connect_failure_does_not_write_viewer_audit(
     event_types = _audit_event_types()
     assert "runtime.viewer.connected" not in event_types
     assert "runtime.viewer.disconnected" not in event_types
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["actor_type"] == "runtime_viewer"
+    assert failures[0]["runtime_session_id"] == session["id"]
+    assert failures[0]["profile_id"] == profile_id
+    assert failures[0]["external_session_id"] == session["external_session_id"]
+    assert failures[0]["metadata"] == {"reason_code": "backend_vnc_unavailable"}
+
+    serialized_events = json.dumps(failures, sort_keys=True)
+    assert "backend vnc unavailable" not in serialized_events
+    assert "127.0.0.1" not in serialized_events
+    assert "6109" not in serialized_events
+    assert token_resp.json()["viewer_token"] not in serialized_events
+    assert db.get_runtime_session(session["id"])["viewer_token_hash"] not in serialized_events
+    assert token_resp.json()["viewer_url"] not in serialized_events
+    assert "viewer_token" not in serialized_events
 
 
 def test_runtime_session_terminate_requires_runtime_service_token(

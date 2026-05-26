@@ -48,6 +48,7 @@
   - 通用 `audit_events` 表。
   - runtime service API 成功动作写 audit。
   - runtime VNC 成功 connected/disconnected 写 audit。
+  - runtime VNC 失败事件写低敏 reason code audit。
   - 从 profile 创建 runtime session。
   - 从 template 创建 runtime session 并复制 template 指纹字段。
   - runtime response 不包含 wallet/order/billing 字段，也不暴露内部 `viewer_token_hash`。
@@ -55,11 +56,12 @@
   - terminate 后 session 标记为 `terminated`，viewer token 被撤销，runtime VNC 失效。
   - renew 后 active session lease 延长，短生命周期 viewer token 保持自身 TTL。
   - audit metadata 不记录 viewer token、viewer URL、viewer token hash、runtime service token、proxy password、cookie、Origin 原文、请求头或 URL query。
+  - runtime VNC failure audit metadata 仅记录固定 `reason_code`，不记录 Origin 原文、后端 VNC 地址或异常 message。
 - 05/06 模块整体仍保持未完成；不要勾选顶层 05 或 06。
 
 下一步建议：
 
-1. 继续 05/06 时优先补 runtime VNC 失败事件 reason code 审计。
+1. 继续 06 时补 `EnvironmentStrip` 支持业务 session 标识，方便后续 Project Mileage viewer 页面展示当前业务 session 的低敏上下文。
 2. 随后再准备 Project Mileage Payload/App 跨仓契约联动。
 3. Project Mileage 跨仓联动仍需 Payload 侧授权、扣费、续期契约确认后再进入。
 

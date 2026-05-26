@@ -47,7 +47,12 @@
   - 当前覆盖成功连接后的断开 `runtime.viewer.disconnected`。
   - metadata 仅记录 `subprotocol` 和 `close_code`。
   - 不记录 viewer token、viewer URL、viewer token hash、Origin 原文、请求头或 URL query。
-  - 上游 KasmVNC 连接失败不写 connected/disconnected；失败事件 reason code 留给后续小闭环。
+- [x] 记录 viewer failed audit：
+  - 当前覆盖 `runtime.viewer.failed`。
+  - metadata 仅记录固定 `reason_code`。
+  - 当前 reason code：`origin_not_allowed`、`runtime_session_not_live`、`viewer_credential_missing`、`viewer_credential_invalid`、`viewer_credential_expired`、`profile_not_running`、`backend_vnc_unavailable`。
+  - 不记录 viewer token、viewer URL、viewer token hash、Origin 原文、请求头、URL query、后端 VNC 地址或异常 message。
+  - missing session 不写 audit，避免把未认证 path 输入和扫描噪声写入审计表。
 
 ## 验证
 
@@ -126,4 +131,54 @@ cd /home/jeff/code/project-mileage-v3-payload && pnpm build
 
 - Project Mileage Payload 侧 remote session contract、授权、扣费、续期和业务审计。
 - Project Mileage App 侧真实远程账号列表和受控 viewer 页面。
-- runtime VNC 失败事件 reason code 审计。
+
+## 2026-05-27 CloakBrowser runtime viewer failure reason audit 小闭环
+
+当前状态：
+
+- 已完成 CloakBrowser 侧 runtime VNC 失败事件 reason code 审计。
+- 本轮只覆盖低敏失败分类，不改变 Project Mileage 业务权限、订单、钱包或扣费逻辑。
+- Project Mileage app/payload 未修改；业务远程工作台仍需要 Payload contract 确认后再进入跨仓实现。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 TDD 覆盖，确认初始红灯：失败 VNC 连接不会写 `runtime.viewer.failed`。
+  - 覆盖缺失、错误、过期 viewer credential 分别写 `viewer_credential_missing`、`viewer_credential_invalid`、`viewer_credential_expired`。
+  - 覆盖跨域 Origin 拒绝写 `origin_not_allowed`，但不记录 Origin 原文。
+  - 覆盖 terminated session 写 `runtime_session_not_live`。
+  - 覆盖 missing session 不写 failure audit，避免未认证输入刷表。
+  - 覆盖 profile 未运行写 `profile_not_running`。
+  - 覆盖后端 KasmVNC 连接失败写 `backend_vnc_unavailable`，但仍不写 connected/disconnected。
+  - 覆盖审计不包含 viewer token、viewer URL、viewer token hash、后端 VNC 地址或异常 message。
+- `backend/main.py`
+  - 新增 `_audit_runtime_viewer_failure()`。
+  - runtime VNC 的 origin、session live、credential、profile running 和 backend VNC connect 失败分支写 `runtime.viewer.failed`。
+  - `_proxy_running_vnc()` 新增 `on_connect_failed` 回调；只有未成功 connected 的 backend connect 异常才触发 failed audit。
+  - failure audit metadata 固定为 `{ "reason_code": "<enum>" }`。
+  - failure audit 异常不阻断 WebSocket close 路径。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_rejects_missing_wrong_or_expired_viewer_token backend/tests/test_session_broker.py::test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token backend/tests/test_session_broker.py::test_runtime_vnc_failure_audits_session_not_live_and_skips_missing_session backend/tests/test_session_broker.py::test_runtime_vnc_failure_audits_profile_not_running backend/tests/test_session_broker.py::test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 24 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_ws_allows_same_origin backend/tests/test_api.py::test_ws_allows_no_origin backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 281 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- Project Mileage Payload 侧 remote session contract、授权、扣费、续期和业务审计。
+- Project Mileage App 侧真实远程账号列表和受控 viewer 页面。
+- `EnvironmentStrip` 支持业务 session 标识。

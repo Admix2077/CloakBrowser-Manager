@@ -320,6 +320,56 @@ git diff --check
 - 更完整的失败事件审计与 reason code 分类。
 - profile/proxy/health/bulk/automation 等非 runtime service API 审计。
 
+## 2026-05-27 Runtime viewer failure reason audit 小闭环
+
+当前状态：
+
+- 已完成 CloakBrowser 侧 runtime VNC 失败事件 reason code 审计。
+- 本轮不进入 Project Mileage app/payload 跨仓实现，不处理钱包、订单、权限或扣费。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 runtime VNC 失败审计 TDD 覆盖。
+  - 覆盖 credential 缺失、错误、过期分别写 `viewer_credential_missing`、`viewer_credential_invalid`、`viewer_credential_expired`。
+  - 覆盖 Origin 拒绝写 `origin_not_allowed`。
+  - 覆盖 terminated 或 lease 非 live session 写 `runtime_session_not_live`。
+  - 覆盖 missing session 不写 failure audit，避免未认证 path 输入和扫描噪声落库。
+  - 覆盖 profile 未运行写 `profile_not_running`。
+  - 覆盖后端 KasmVNC 连接失败写 `backend_vnc_unavailable`，并且不写 connected/disconnected。
+  - 覆盖 failure audit 不包含 viewer token、viewer URL、viewer token hash、Origin 原文、后端 VNC 地址或异常 message。
+- `backend/main.py`
+  - 新增 `_audit_runtime_viewer_failure()`。
+  - 新增 `_runtime_viewer_token_failure_reason()`，保留 `_runtime_viewer_token_is_valid()` 兼容当前内部语义。
+  - runtime VNC 失败分支统一写 `runtime.viewer.failed`，metadata 只放 `{ "reason_code": "<enum>" }`。
+  - `_proxy_running_vnc()` 新增 `on_connect_failed` 回调，只在后端 VNC connect 阶段失败且尚未 connected 时触发。
+  - failure audit 异常不阻断 WebSocket 拒绝/关闭路径。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_rejects_missing_wrong_or_expired_viewer_token backend/tests/test_session_broker.py::test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token backend/tests/test_session_broker.py::test_runtime_vnc_failure_audits_session_not_live_and_skips_missing_session backend/tests/test_session_broker.py::test_runtime_vnc_failure_audits_profile_not_running backend/tests/test_session_broker.py::test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 24 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_ws_allows_same_origin backend/tests/test_api.py::test_ws_allows_no_origin backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 281 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- Payload 侧确认授权、扣费、续期后再调用 runtime API。
+- Project Mileage App 侧真实远程账号列表和受控 viewer。
+- profile/proxy/health/bulk/automation 等非 runtime service API 审计。
+
 ## 2026-05-27 Runtime session terminate 小闭环
 
 当前状态：

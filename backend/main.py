@@ -146,7 +146,7 @@ def _is_https(request: Request) -> bool:
     return "https" in proto
 
 
-async def _check_websocket_origin(websocket: WebSocket) -> bool:
+async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> bool:
     """Reject cross-origin WebSocket connections (CSWSH protection).
 
     Browsers always send an Origin header on WebSocket upgrades.
@@ -172,6 +172,8 @@ async def _check_websocket_origin(websocket: WebSocket) -> bool:
         origin_port = parsed.port
     except ValueError:
         logger.warning("WebSocket origin malformed: %s", origin)
+        if on_rejected:
+            on_rejected()
         await websocket.close(code=4403, reason="Origin not allowed")
         return False
     # Build origin netloc (host:port or just host if default port)
@@ -192,6 +194,8 @@ async def _check_websocket_origin(websocket: WebSocket) -> bool:
         return True
 
     logger.warning("WebSocket origin mismatch: origin=%s host=%s", origin, host)
+    if on_rejected:
+        on_rejected()
     await websocket.close(code=4403, reason="Origin not allowed")
     return False
 
@@ -597,6 +601,25 @@ def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict |
     )
 
 
+def _audit_runtime_viewer_failure(
+    reason_code: str,
+    *,
+    session: dict | None = None,
+    session_id: str | None = None,
+) -> None:
+    try:
+        db.create_audit_event(
+            event_type="runtime.viewer.failed",
+            actor_type="runtime_viewer",
+            runtime_session_id=str(session["id"]) if session else session_id,
+            profile_id=str(session["profile_id"]) if session else None,
+            external_session_id=str(session["external_session_id"]) if session else None,
+            metadata={"reason_code": reason_code},
+        )
+    except Exception as exc:
+        logger.warning("Runtime viewer failure audit skipped: %s", type(exc).__name__)
+
+
 def _runtime_service_token_from_request(request: Request) -> str | None:
     token = request.headers.get("X-Runtime-Service-Token")
     return token or None
@@ -633,14 +656,20 @@ def _runtime_session_is_live(session: dict) -> bool:
     return bool(lease_expires_at and lease_expires_at > _utc_now())
 
 
-def _runtime_viewer_token_is_valid(session: dict, viewer_token: str | None) -> bool:
+def _runtime_viewer_token_failure_reason(session: dict, viewer_token: str | None) -> str | None:
     if not viewer_token:
-        return False
+        return "viewer_credential_missing"
     token_hash = session.get("viewer_token_hash")
     if not token_hash or not hmac.compare_digest(token_hash, _runtime_token_hash(viewer_token)):
-        return False
+        return "viewer_credential_invalid"
     expires_at = _parse_datetime(session.get("viewer_token_expires_at", ""))
-    return bool(expires_at and expires_at > _utc_now())
+    if not expires_at or expires_at <= _utc_now():
+        return "viewer_credential_expired"
+    return None
+
+
+def _runtime_viewer_token_is_valid(session: dict, viewer_token: str | None) -> bool:
+    return _runtime_viewer_token_failure_reason(session, viewer_token) is None
 
 
 def _safe_proxy_check_error(exc: Exception, raw_url: str) -> str:
@@ -1526,20 +1555,36 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
 @app.websocket("/api/runtime/sessions/{session_id}/vnc")
 async def runtime_vnc_proxy(websocket: WebSocket, session_id: str):
     """Proxy a runtime session VNC stream after validating a short-lived viewer token."""
-    if not await _check_websocket_origin(websocket):
+    if not await _check_websocket_origin(
+        websocket,
+        on_rejected=lambda: _audit_runtime_viewer_failure(
+            "origin_not_allowed",
+            session_id=session_id,
+        ),
+    ):
         return
 
     session = db.get_runtime_session(session_id)
-    if not session or not _runtime_session_is_live(session):
+    if not session:
         await websocket.close(code=4404, reason="Runtime session not found")
         return
-    if not _runtime_viewer_token_is_valid(session, websocket.query_params.get("viewer_token")):
+    if not _runtime_session_is_live(session):
+        _audit_runtime_viewer_failure("runtime_session_not_live", session=session)
+        await websocket.close(code=4404, reason="Runtime session not found")
+        return
+    viewer_token_failure = _runtime_viewer_token_failure_reason(
+        session,
+        websocket.query_params.get("viewer_token"),
+    )
+    if viewer_token_failure:
+        _audit_runtime_viewer_failure(viewer_token_failure, session=session)
         await websocket.close(code=4401, reason="Runtime viewer token invalid")
         return
 
     profile_id = str(session["profile_id"])
     running = browser_mgr.running.get(profile_id)
     if not running:
+        _audit_runtime_viewer_failure("profile_not_running", session=session)
         await websocket.close(code=4004, reason="Profile not running")
         return
 
@@ -1557,6 +1602,10 @@ async def runtime_vnc_proxy(websocket: WebSocket, session_id: str):
             session,
             metadata,
         ),
+        on_connect_failed=lambda: _audit_runtime_viewer_failure(
+            "backend_vnc_unavailable",
+            session=session,
+        ),
     )
 
 
@@ -1566,6 +1615,7 @@ async def _proxy_running_vnc(
     running,
     on_connected=None,
     on_disconnected=None,
+    on_connect_failed=None,
 ):
     # Accept with client's requested subprotocol (if any) — RFC 6455 requires
     # the server must not respond with a subprotocol the client didn't request.
@@ -1721,6 +1771,8 @@ async def _proxy_running_vnc(
 
     except Exception as exc:
         logger.error("VNC proxy connect error for %s: %s: %s", profile_id, type(exc).__name__, exc)
+        if on_connect_failed and not audit_connected:
+            on_connect_failed()
     finally:
         if on_disconnected and audit_connected:
             on_disconnected(disconnect_metadata)

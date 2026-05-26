@@ -34,7 +34,8 @@
 - [x] runtime session 写 audit：
   - 当前已覆盖 runtime service API 成功动作。
   - 当前已覆盖 runtime VNC 成功 connected/disconnected。
-  - 失败事件 reason code 仍待后续小闭环。
+  - 当前已覆盖 runtime VNC 失败 reason code。
+  - failure metadata 仅记录固定 `reason_code`，不记录 viewer token、viewer URL、token hash、Origin 原文、请求头、URL query、后端 VNC 地址或异常 message。
 
 ### RBAC 远期设计
 
