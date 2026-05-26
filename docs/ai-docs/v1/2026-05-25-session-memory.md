@@ -4335,6 +4335,64 @@ cd frontend && npm run build
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
 
+## 60. 2026-05-26 Profile CSV 批量创建后端 API 小闭环
+
+背景：
+
+- 在 CSV preview parser/validator 和前端 preview UI 完成后，继续推进真正批量创建的后端闭环。
+- 子 agent 只读审计建议：新增 `POST /api/profiles/import`，复用 preview parser，成功行写库，失败行保留原因；不做前端提交按钮，不启动浏览器。
+
+已完成：
+
+- `backend/tests/test_bulk.py`
+  - 先写红灯测试，确认 `/api/profiles/import` 不存在时返回 `405`。
+  - 覆盖混合成功/失败：有效行创建 profile，无效行保留 `line_number/source/errors/profile:null`。
+  - 覆盖模板字段复制和 CSV 显式字段覆盖模板字段。
+  - 覆盖 tags 写入后可通过 `GET /api/profiles` 读回。
+  - 覆盖 headerless CSV 返回 `422` 且不写库。
+- `backend/profile_import.py`
+  - 抽出 `parse_profile_csv_import`，preview 和 import 共用同一套 parser/validator。
+  - 新增 `profile_create_data_for_import`，创建前移除 `template_id`。
+  - Preview 响应继续脱敏，import 内部保留 raw normalized create data。
+- `backend/models.py`
+  - 新增 `ProfileImportResult` / `ProfileImportResponse`。
+- `backend/main.py`
+  - 新增 `POST /api/profiles/import`。
+  - 成功行调用 `db.create_profile`，不调用 `browser_mgr.launch`。
+  - 只要 CSV header 可解析，部分失败仍返回 `200`。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `支持 CSV 粘贴导入 profile（后端 API）`、`支持字段（CSV preview/import 后端契约）`、`部分导入成功，失败行保留原因（后端 API）`、`批量导入不会因为一行失败而全部失败（后端 API）`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 红灯：2 failed, 4 passed
+# 失败点：/api/profiles/import 尚不存在，返回 405
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 6 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_templates.py -q
+# 14 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 246 passed
+```
+
+未覆盖范围：
+
+- 前端 `Import valid rows` / `Create valid profiles` 提交入口。
+- 导入后的前端刷新、成功/失败反馈和重复提交保护。
+- 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。
+
+边界：
+
+- 没有修改前端 UI。
+- 没有启动 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
 ## 59. 2026-05-26 Profile CSV 导入预览前端 UI 小闭环
 
 背景：

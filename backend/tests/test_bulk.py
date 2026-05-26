@@ -141,3 +141,78 @@ def test_profile_csv_import_preview_has_no_database_side_effects(app_client: Tes
     )
 
     assert db.list_profiles() == []
+
+
+def test_profile_csv_import_creates_valid_rows_and_keeps_invalid_row_errors(app_client: TestClient):
+    template = app_client.post(
+        "/api/profile-templates",
+        json={
+            "name": "Mac import",
+            "platform": "macos",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "gpu_vendor": "Apple",
+            "gpu_renderer": "Apple M2",
+            "hardware_concurrency": 8,
+            "color_scheme": "light",
+            "humanize": True,
+            "human_preset": "careful",
+            "launch_args": ["--private-window"],
+            "geoip": False,
+        },
+    ).json()
+
+    resp = app_client.post(
+        "/api/profiles/import",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,proxy,tags,notes,template,platform,locale,timezone",
+                    f"Imported Good,http://user:hiddenpass@jp.proxy.example:8080,asia|warmup,Primary row,{template['name']},linux,ja-JP,Asia/Tokyo",
+                    ",http://user:hiddenpass@bad.proxy.example:8080,bad,Broken row,missing,ios,en-US,America/Chicago",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert data["succeeded"] == 1
+    assert data["failed"] == 1
+
+    good, bad = data["results"]
+    assert good["line_number"] == 2
+    assert good["ok"] is True
+    assert good["errors"] == []
+    assert good["profile"]["name"] == "Imported Good"
+    assert good["profile"]["platform"] == "linux"
+    assert good["profile"]["screen_width"] == 1440
+    assert good["profile"]["screen_height"] == 900
+    assert good["profile"]["gpu_renderer"] == "Apple M2"
+    assert good["profile"]["proxy"] == "http://user:hiddenpass@jp.proxy.example:8080"
+    assert good["profile"]["locale"] == "ja-JP"
+    assert good["profile"]["timezone"] == "Asia/Tokyo"
+    assert good["profile"]["tags"] == [
+        {"tag": "asia", "color": None},
+        {"tag": "warmup", "color": None},
+    ]
+
+    assert bad["line_number"] == 3
+    assert bad["ok"] is False
+    assert bad["profile"] is None
+    assert "name is required" in bad["errors"]
+    assert "Template not found: missing" in bad["errors"]
+    assert "platform must be one of: windows, macos, linux" in bad["errors"]
+    assert "hiddenpass" not in str(bad)
+
+    profiles = app_client.get("/api/profiles").json()
+    assert [profile["name"] for profile in profiles] == ["Imported Good"]
+
+
+def test_profile_csv_import_rejects_headerless_csv_without_creating_profiles(app_client: TestClient):
+    resp = app_client.post("/api/profiles/import", json={"csv_text": "just-one-cell"})
+
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == "CSV header with profile columns is required"
+    assert db.list_profiles() == []

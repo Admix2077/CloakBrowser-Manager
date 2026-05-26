@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import ValidationError
@@ -59,6 +60,14 @@ COLOR_SCHEMES = {"light", "dark", "no-preference"}
 HUMAN_PRESETS = {"default", "careful"}
 
 
+@dataclass(frozen=True)
+class ParsedProfileImportRow:
+    line_number: int
+    source: dict[str, str]
+    errors: list[str]
+    create_data: dict[str, Any] | None
+
+
 class ProfileImportHeaderError(ValueError):
     """Raised when pasted CSV does not contain a usable profile header."""
 
@@ -84,18 +93,8 @@ def apply_profile_template_fields(data: dict[str, Any], explicit_fields: set[str
 
 
 def preview_profile_csv_import(csv_text: str) -> ProfileImportPreviewResponse:
-    reader = csv.DictReader(io.StringIO(csv_text))
-    headers = [_normalize_header(header) for header in (reader.fieldnames or [])]
-    if not headers or not any(header in SUPPORTED_COLUMNS for header in headers):
-        raise ProfileImportHeaderError("CSV header with profile columns is required")
-
-    rows: list[ProfileImportPreviewRow] = []
-    for raw_row in reader:
-        line_number = reader.line_num
-        row = _normalize_row(raw_row)
-        preview = _preview_row(line_number, row)
-        rows.append(preview)
-
+    parsed_rows = parse_profile_csv_import(csv_text)
+    rows = [_preview_from_parsed(row) for row in parsed_rows]
     valid = sum(1 for row in rows if row.ok)
     return ProfileImportPreviewResponse(
         total=len(rows),
@@ -105,7 +104,52 @@ def preview_profile_csv_import(csv_text: str) -> ProfileImportPreviewResponse:
     )
 
 
-def _preview_row(line_number: int, row: dict[str, str]) -> ProfileImportPreviewRow:
+def parse_profile_csv_import(csv_text: str) -> list[ParsedProfileImportRow]:
+    reader = csv.DictReader(io.StringIO(csv_text))
+    headers = [_normalize_header(header) for header in (reader.fieldnames or [])]
+    if not headers or not any(header in SUPPORTED_COLUMNS for header in headers):
+        raise ProfileImportHeaderError("CSV header with profile columns is required")
+
+    rows: list[ParsedProfileImportRow] = []
+    for raw_row in reader:
+        line_number = reader.line_num
+        row = _normalize_row(raw_row)
+        rows.append(_parse_row(line_number, row))
+    return rows
+
+
+def profile_create_data_for_import(row: ParsedProfileImportRow) -> dict[str, Any]:
+    if row.create_data is None:
+        raise ValueError("Cannot create profile from an invalid CSV import row")
+    data = dict(row.create_data)
+    data.pop("template_id", None)
+    return data
+
+
+def _preview_from_parsed(row: ParsedProfileImportRow) -> ProfileImportPreviewRow:
+    if row.errors or row.create_data is None:
+        return ProfileImportPreviewRow(
+            line_number=row.line_number,
+            ok=False,
+            errors=row.errors,
+            source=row.source,
+            profile=None,
+        )
+
+    profile_data = dict(row.create_data)
+    profile_data["proxy"] = _redact_optional_proxy(profile_data.get("proxy"))
+    profile_data["tags"] = [TagResponse(**tag) for tag in profile_data.get("tags") or []]
+    profile = ProfileImportPreviewProfile(**profile_data)
+    return ProfileImportPreviewRow(
+        line_number=row.line_number,
+        ok=True,
+        errors=[],
+        source=row.source,
+        profile=profile,
+    )
+
+
+def _parse_row(line_number: int, row: dict[str, str]) -> ParsedProfileImportRow:
     errors: list[str] = []
     source = _redacted_source(row)
 
@@ -194,35 +238,28 @@ def _preview_row(line_number: int, row: dict[str, str]) -> ProfileImportPreviewR
             errors.append(str(exc))
 
     if errors:
-        return ProfileImportPreviewRow(
+        return ParsedProfileImportRow(
             line_number=line_number,
-            ok=False,
             errors=errors,
             source=source,
-            profile=None,
+            create_data=None,
         )
 
     try:
         profile_create = ProfileCreate(**data)
     except ValidationError as exc:
-        return ProfileImportPreviewRow(
+        return ParsedProfileImportRow(
             line_number=line_number,
-            ok=False,
             errors=_validation_errors(exc),
             source=source,
-            profile=None,
+            create_data=None,
         )
 
-    profile_data = profile_create.model_dump()
-    profile_data["proxy"] = _redact_optional_proxy(profile_data.get("proxy"))
-    profile_data["tags"] = [TagResponse(**tag) for tag in profile_data.get("tags") or []]
-    profile = ProfileImportPreviewProfile(**profile_data)
-    return ProfileImportPreviewRow(
+    return ParsedProfileImportRow(
         line_number=line_number,
-        ok=True,
         errors=[],
         source=source,
-        profile=profile,
+        create_data=profile_create.model_dump(),
     )
 
 

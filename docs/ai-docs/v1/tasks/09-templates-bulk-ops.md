@@ -29,8 +29,8 @@
 
 ### 批量创建
 
-- [ ] 支持 CSV 粘贴导入 profile。
-- [ ] 支持字段：
+- [x] 支持 CSV 粘贴导入 profile（后端 API；前端提交导入按钮另起闭环）。
+- [x] 支持字段（CSV preview/import 后端契约）：
   - name。
   - proxy。
   - tags。
@@ -41,7 +41,7 @@
   - timezone。
 - [x] 导入前预览（后端 API；前端导入 UI 另起闭环）。
 - [x] 无效行标红（Profile CSV preview 前端弹窗）。
-- [ ] 部分导入成功，失败行保留原因。
+- [x] 部分导入成功，失败行保留原因（后端 API）。
 
 ### 批量运营
 
@@ -64,7 +64,7 @@ cd frontend && npm run build
 
 ## 验收标准
 
-- [ ] 批量导入不会因为一行失败而全部失败。
+- [x] 批量导入不会因为一行失败而全部失败（后端 API）。
 - [ ] 批量启动有并发限制。
 - [ ] 批量删除需要确认。
 - [x] 模板不会静默改写已有 profile。
@@ -344,5 +344,55 @@ cd frontend && npm run build
 
 未覆盖范围：
 
-- 真正批量创建 profile。
-- 部分成功写入失败行保留原因。
+- 前端真正批量创建 profile 提交入口。
+- 前端展示部分成功写入后的失败行保留原因。
+
+## 2026-05-26 Profile CSV 批量创建后端 API 小闭环
+
+背景：
+
+- 在 CSV preview parser/validator 稳定后，继续推进真正批量创建的后端最小闭环。
+- 本轮只做 `POST /api/profiles/import` 后端 API，不做前端提交导入按钮，不启动浏览器，不触碰 Project Mileage。
+
+已完成：
+
+- [x] `backend/tests/test_bulk.py`
+  - 先写红灯测试：`/api/profiles/import` 尚不存在，返回 `405`。
+  - 覆盖有效行写入 profile，无效行保留 `line_number/source/errors/profile:null`。
+  - 覆盖一行失败不会阻断其他行创建。
+  - 覆盖模板字段复制与 CSV 显式字段覆盖模板字段。
+  - 覆盖 tags 写入后 `GET /api/profiles` 可读回。
+  - 覆盖 headerless CSV 返回 `422` 且不写库。
+- [x] `backend/profile_import.py`
+  - 抽出 `parse_profile_csv_import`，preview 和 import 共用同一套 CSV parser/validator。
+  - 新增 `profile_create_data_for_import`，创建前移除 `template_id`，避免传入 DB 层。
+  - Preview 响应继续脱敏，import 内部保留 raw normalized create data，避免丢失 proxy 凭证。
+- [x] `backend/models.py`
+  - 新增 `ProfileImportResult` / `ProfileImportResponse`。
+- [x] `backend/main.py`
+  - 新增 `POST /api/profiles/import`。
+  - 成功行调用 `db.create_profile`，不调用 `browser_mgr.launch`。
+  - 成功行返回真实 `ProfileResponse`，失败行保留错误；只要 header 可解析，部分失败仍返回 `200`。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 红灯：2 failed, 4 passed
+# 失败点：/api/profiles/import 尚不存在，返回 405
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 6 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_templates.py -q
+# 14 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 246 passed
+```
+
+未覆盖范围：
+
+- 前端 `Import valid rows` / `Create valid profiles` 提交入口。
+- 导入后的前端刷新、成功/失败反馈和重复提交保护。
+- 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。

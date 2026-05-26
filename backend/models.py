@@ -291,6 +291,21 @@ class ProfileResponse(BaseModel):
     automation_url: str | None = None
 
 
+class ProfileImportResult(BaseModel):
+    line_number: int
+    ok: bool
+    errors: list[str] = Field(default_factory=list)
+    source: dict[str, str] = Field(default_factory=dict)
+    profile: ProfileResponse | None = None
+
+
+class ProfileImportResponse(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    results: list[ProfileImportResult] = Field(default_factory=list)
+
+
 class LaunchResponse(BaseModel):
     profile_id: str
     status: str = "running"

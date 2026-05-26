@@ -55,8 +55,10 @@ from .models import (
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
+    ProfileImportResponse,
     ProfileImportPreviewRequest,
     ProfileImportPreviewResponse,
+    ProfileImportResult,
     ProfileResponse,
     ProfileStatusResponse,
     ProfileTemplateCreate,
@@ -70,6 +72,8 @@ from .profile_import import (
     ProfileImportHeaderError,
     ProfileTemplateNotFoundError,
     apply_profile_template_fields,
+    parse_profile_csv_import,
+    profile_create_data_for_import,
     preview_profile_csv_import,
 )
 from .proxies import redact_proxy_asset_url
@@ -729,6 +733,65 @@ async def preview_profile_import(req: ProfileImportPreviewRequest):
         return preview_profile_csv_import(req.csv_text)
     except ProfileImportHeaderError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/profiles/import", response_model=ProfileImportResponse)
+async def import_profiles(req: ProfileImportPreviewRequest):
+    try:
+        rows = parse_profile_csv_import(req.csv_text)
+    except ProfileImportHeaderError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    results: list[ProfileImportResult] = []
+    for row in rows:
+        if row.errors or row.create_data is None:
+            results.append(
+                ProfileImportResult(
+                    line_number=row.line_number,
+                    ok=False,
+                    errors=row.errors,
+                    source=row.source,
+                    profile=None,
+                )
+            )
+            continue
+
+        try:
+            profile = db.create_profile(**profile_create_data_for_import(row))
+        except Exception:
+            results.append(
+                ProfileImportResult(
+                    line_number=row.line_number,
+                    ok=False,
+                    errors=["Failed to create profile"],
+                    source=row.source,
+                    profile=None,
+                )
+            )
+            continue
+
+        status = browser_mgr.get_status(profile["id"])
+        profile["status"] = status["status"]
+        profile["vnc_ws_port"] = status["vnc_ws_port"]
+        profile["automation_url"] = status["automation_url"]
+        profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
+        results.append(
+            ProfileImportResult(
+                line_number=row.line_number,
+                ok=True,
+                errors=[],
+                source=row.source,
+                profile=ProfileResponse(**profile),
+            )
+        )
+
+    succeeded = sum(1 for result in results if result.ok)
+    return ProfileImportResponse(
+        total=len(results),
+        succeeded=succeeded,
+        failed=len(results) - succeeded,
+        results=results,
+    )
 
 
 @app.post("/api/profiles/{profile_id}/proxy-asset", response_model=ProxyResponse, status_code=201)
