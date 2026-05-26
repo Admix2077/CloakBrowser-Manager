@@ -1644,6 +1644,13 @@ def _is_supported_automation_url(raw_url: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
 
 
+def _automation_profile_has_running_task(profile_id: str, task_id: str) -> bool:
+    return any(
+        existing_task.get("id") != task_id and existing_task.get("status") == "running"
+        for existing_task in db.list_automation_tasks(profile_id=profile_id)
+    )
+
+
 @app.post("/api/tasks", response_model=AutomationTaskResponse, status_code=201)
 async def create_automation_task(req: AutomationTaskCreate):
     if db.get_profile(req.profile_id) is None:
@@ -1696,6 +1703,8 @@ async def run_automation_task(task_id: str):
     if db.get_profile(task["profile_id"]) is None:
         raise HTTPException(status_code=404, detail="Profile not found")
     _automation_running(task["profile_id"])
+    if _automation_profile_has_running_task(task["profile_id"], task_id):
+        raise HTTPException(status_code=409, detail="Automation profile already has a running task")
 
     started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     running_task = db.update_automation_task(task_id, status="running", started_at=started_at)

@@ -447,6 +447,8 @@ POST /api/tasks/{id}/run
 - task 不存在时返回 `404`。
 - profile 不存在时返回 `404 Profile not found`。
 - profile 未运行时返回 `404 Profile not running`。
+- 同一 `profile_id` 已存在其他 `running` task 时返回 `409 Automation profile already has a running task`；被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`。
+- profile 级并发限制不影响不同 profile 的 task 并行运行。
 - 第一版同步执行，响应返回最终 `AutomationTaskResponse`。
 - 不自动启动 profile，不读取 proxy/cookie/token/secret，不修改 Project Mileage 订单、钱包、权限或续期状态。
 - 状态机：
@@ -474,7 +476,7 @@ POST /api/tasks/{id}/run
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前不实现后台队列、并发限制、失败重试、running cancel。
+- 当前不实现后台队列、全局 worker 池、失败重试、running cancel。
 
 ## Script Runner 接入建议
 

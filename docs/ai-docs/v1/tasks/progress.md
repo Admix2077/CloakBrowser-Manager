@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task profile 并发限制小闭环：
+  - `POST /api/tasks/{id}/run` 已增加 profile 级并发限制。
+  - 同一个 `profile_id` 已存在其他 `running` task 时，新的 queued task run 返回 `409`。
+  - 不同 profile 的 running task 不阻塞当前 profile 的 queued task。
+  - 被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`，便于稍后重试。
+  - 错误 detail 固定为 `Automation profile already has a running task`，不回显 step payload、URL query、token、selector、表单值或未知字段。
+  - 当前仍未实现后台队列、失败重试、running cancel。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner screenshot step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `screenshot` step。
   - `screenshot` 支持可选 `page_ref`，默认 `"0"`；可选 `full_page`，默认 `false`，且严格要求布尔值。
@@ -43,7 +50,7 @@
   - 创建 task 时会先按 step 类型做执行字段白名单裁剪；`screenshot` 入库仅保留 `type/page_ref/full_page`，不持久化调用方附带的 `path`、`filename`、`base64`、`note` 等未知字段。
   - task 对外响应对 `screenshot` step 做白名单脱敏，只回显 `type/page_ref/full_page`，不回显 PNG bytes、base64、路径、下载 URL 或未知字段。
   - `result.steps[]` 只记录 `index/type/status`，runner 会丢弃 `page.screenshot()` 返回的 PNG bytes，不复制 screenshot 内容、完整 step payload 或异常原文。
-  - 当前仍未实现后台队列、并发限制、失败重试、running cancel。
+  - 当前仍未实现后台队列、失败重试、running cancel。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner evaluate step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `evaluate` step。
   - `evaluate` 支持必填 `expression`，长度 `1..200000`；可选 `page_ref`，默认 `"0"`。
@@ -232,7 +239,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，进入并发限制、失败重试、running cancel、前端 Automation 页面或 task log viewer 等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
+1. 继续 CloakBrowser 独立侧 07 Automation API，进入失败重试、running cancel、前端 Automation 页面或 task log viewer 等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

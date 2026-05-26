@@ -1475,6 +1475,70 @@ def test_run_automation_task_rejects_non_queued_status(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_automation_task_rejects_concurrent_task_for_same_profile_without_leaking_payload(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunConcurrentProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    running_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    main.db.update_automation_task(running_task["id"], status="running")
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    queued_task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "open_url", "url": secret_url, "note": "do-not-echo"}],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{queued_task['id']}/run")
+    persisted = main.db.get_automation_task(queued_task["id"])
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Automation profile already has a running task"
+    assert secret_url not in resp.text
+    assert "super-secret" not in resp.text
+    assert "do-not-echo" not in resp.text
+    assert persisted is not None
+    assert persisted["status"] == "queued"
+    assert persisted["started_at"] is None
+    assert persisted["finished_at"] is None
+    page.goto.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_automation_task_allows_running_task_on_different_profile(app_client: TestClient):
+    first_create = app_client.post("/api/profiles", json={"name": "TaskRunConcurrentFirstProfile"})
+    second_create = app_client.post("/api/profiles", json={"name": "TaskRunConcurrentSecondProfile"})
+    first_pid = first_create.json()["id"]
+    second_pid = second_create.json()["id"]
+    _automation_running_profile(second_pid, [_automation_page()])
+    first_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": first_pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    main.db.update_automation_task(first_task["id"], status="running")
+    second_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": second_pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{second_task['id']}/run")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == second_task["id"]
+    assert data["status"] == "succeeded"
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]}
+    assert main.db.get_automation_task(first_task["id"])["status"] == "running"
+    main.browser_mgr.running.pop(second_pid, None)
+
+
 def test_run_automation_task_requires_running_profile(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunStoppedProfile"})
     pid = create.json()["id"]

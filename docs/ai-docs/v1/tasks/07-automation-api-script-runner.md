@@ -60,7 +60,7 @@
   - [x] scroll。
   - [x] evaluate。
   - [x] screenshot。
-- [ ] 支持并发限制。
+- [x] 支持并发限制。
 - [ ] 支持失败重试。
 - [ ] 前端新增 Automation 页面。
 - [ ] 前端新增 task log viewer。
@@ -328,6 +328,28 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps backend/tests/test_api.py::test_automation_task_responses_redact_wait_for_selector_steps backend/tests/test_api.py::test_automation_task_responses_redact_evaluate_steps backend/tests/test_api.py::test_automation_task_responses_redact_screenshot_steps backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps -q
 # 14 passed
+```
+
+## 2026-05-27 Automation task profile 并发限制小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已增加 profile 级并发限制。
+- 同一个 `profile_id` 已存在其他 `running` task 时，新的 queued task run 返回 `409`。
+- 该限制只按 profile 生效；不同 profile 的 running task 不阻塞当前 profile 的 queued task。
+- 被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`，便于稍后重试。
+- 错误 detail 固定为 `Automation profile already has a running task`，不回显 step payload、URL query、token、selector、表单值或未知字段。
+- 该小闭环不实现后台队列、全局 worker 池、失败重试或 running cancel；不修改 Project Mileage app/payload。
+- 当前仍未实现后台队列、失败重试、running cancel。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_automation_task_rejects_concurrent_task_for_same_profile_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_allows_running_task_on_different_profile -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_automation_task_rejects_non_queued_status backend/tests/test_api.py::test_run_automation_task_requires_running_profile backend/tests/test_api.py::test_run_automation_task_fails_unknown_step_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page backend/tests/test_api.py::test_run_automation_task_rejects_concurrent_task_for_same_profile_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_allows_running_task_on_different_profile -q
+# 15 passed
 ```
 
 ## 2026-05-27 Automation Script Runner click step 小闭环
