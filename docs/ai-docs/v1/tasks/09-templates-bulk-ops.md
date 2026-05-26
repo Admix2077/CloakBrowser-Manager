@@ -26,9 +26,14 @@
 - [ ] 支持 proxy provider preset。
   - [x] 后端事实源 CRUD API。
   - [x] 前端接入/选择（Proxy CSV import preset 默认值）。
-  - [ ] 与国家/标签选择、随机分配策略联动。
+  - [x] 后端与国家/标签选择、随机分配策略联动。
+  - [ ] 前端完整管理入口。
 - [ ] 支持按国家/标签选择 proxy。
+  - [x] 后端候选过滤 API。
+  - [ ] 前端运营入口。
 - [ ] 支持随机分配策略。
+  - [x] 后端 random assignment API。
+  - [ ] 前端运营入口。
 
 ### 批量创建
 
@@ -628,8 +633,7 @@ cd frontend && npm run build
 
 - 前端 preset 创建/管理入口仍未覆盖；Proxy CSV import 选择入口已在后续小闭环补齐。
 - CSV import dialog 消费 provider preset 已在后续小闭环补齐。
-- 按国家/标签选择 proxy。
-- 随机分配策略。
+- 按国家/标签选择 proxy 和随机分配策略的后端 API 已在后续小闭环补齐；前端运营入口仍未覆盖。
 - Proxy check/assign/GeoIP 行为，本轮没有修改。
 
 ## 2026-05-26 Proxy Provider Preset 前端消费小闭环
@@ -700,6 +704,56 @@ cd frontend && npm run build
 未覆盖范围：
 
 - Provider preset 前端 CRUD 管理页。
-- 与国家/标签选择 proxy 的运营策略联动。
-- 随机分配策略。
+- 与国家/标签选择 proxy、随机分配策略的后端联动已在后续小闭环补齐；前端运营入口仍未覆盖。
 - Proxy check/assign/GeoIP 行为，本轮没有修改。
+
+## 2026-05-26 Proxy 国家/标签候选过滤与随机分配后端 API 小闭环
+
+背景：
+
+- 在 proxy provider preset 后端事实源和前端消费之后，继续推进 Proxy Template 的核心运营策略。
+- 本轮只做后端契约：按 provider preset / country / tags 筛选候选 proxy，并随机分配给多个 profiles。
+- 不做前端入口，不修改既有单 proxy assign API，不触碰 browser runtime、CDP、VNC 或高风险批量启动/删除。
+
+已完成：
+
+- [x] `backend/models.py`
+  - 新增 `ProxyRandomAssignRequest` / `ProxyRandomAssignResult` / `ProxyRandomAssignResponse`。
+  - 请求支持 `profile_ids`、`provider_preset_id`、`provider`、`country_code`、`tags`。
+  - 响应包含 `strategy=random`、筛选条件、`candidate_count`、部分成功结果和脱敏 proxy。
+- [x] `backend/main.py`
+  - 新增 `POST /api/proxies/assign/random`。
+  - `provider_preset_id` 可注入 preset 的 `provider/country_code/tags`。
+  - `country_code` trim + uppercase 后匹配。
+  - tags 使用 preset tags + request tags 去重合并，当前语义为全部 tag 同时匹配。
+  - 每个有效 profile 从候选 proxy 中 `random.choice` 一个并写入 raw proxy URL。
+  - missing profile 返回行级失败，不阻断其他 profile。
+  - 候选为空返回 `400 No proxy assets match selection`，不改 profile。
+- [x] `backend/tests/test_proxies.py`
+  - 覆盖 provider preset + country + tag 候选过滤。
+  - 覆盖 random assignment 对多个 profile 的部分成功。
+  - 覆盖响应不泄漏 proxy credentials，但数据库写入 raw proxy URL。
+  - 覆盖候选为空返回 400 且不改 profile。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "random_proxy_assignment"
+# 2 passed, 15 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 17 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_proxy_provider_presets.py -q
+# 24 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 257 passed
+```
+
+未覆盖范围：
+
+- 前端按国家/标签/随机分配的运营入口。
+- tag match `any` 策略；当前后端为 all-match。
+- 随机分配并发限制和审计。
+- 批量启动/停止/GeoIP/tag/proxy/delete。

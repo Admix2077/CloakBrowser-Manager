@@ -264,6 +264,35 @@ class ProxyAssignResponse(BaseModel):
     results: list[ProxyAssignResult]
 
 
+class ProxyRandomAssignRequest(BaseModel):
+    profile_ids: list[str] = Field(min_length=1)
+    provider_preset_id: str | None = None
+    provider: str | None = None
+    country_code: str | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+class ProxyRandomAssignResult(BaseModel):
+    profile_id: str
+    ok: bool
+    error: str | None = None
+    proxy_id: str | None = None
+    proxy: ProxyResponse | None = None
+
+
+class ProxyRandomAssignResponse(BaseModel):
+    strategy: str = "random"
+    provider_preset_id: str | None = None
+    provider: str | None = None
+    country_code: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    candidate_count: int
+    total: int
+    succeeded: int
+    failed: int
+    results: list[ProxyRandomAssignResult] = Field(default_factory=list)
+
+
 class ProxyFromProfileCreate(BaseModel):
     name: str = Field(min_length=1)
     country_code: str | None = None

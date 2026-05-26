@@ -372,6 +372,124 @@ def test_proxy_assign_not_found_and_empty_profiles(app_client: TestClient):
     assert app_client.post(f"/api/proxies/{proxy['id']}/assign", json={"profile_ids": []}).status_code == 422
 
 
+def test_random_proxy_assignment_filters_by_country_tag_and_preset_without_leaking_credentials(
+    app_client: TestClient,
+):
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Japan mobile default",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    ).json()
+    matching = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "JP mobile good",
+            "url": "http://user:hiddenpass@jp-mobile.example:8080",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [
+                {"tag": "mobile", "color": "#0ea5e9"},
+                {"tag": "warmup", "color": None},
+            ],
+        },
+    ).json()
+    app_client.post(
+        "/api/proxies",
+        json={
+            "name": "US mobile excluded",
+            "url": "http://user:hiddenpass@us-mobile.example:8080",
+            "provider": "ProxyJP",
+            "country_code": "US",
+            "tags": [{"tag": "mobile", "color": None}],
+        },
+    )
+    first = app_client.post("/api/profiles", json={"name": "Random Assign A"}).json()
+    second = app_client.post("/api/profiles", json={"name": "Random Assign B"}).json()
+
+    resp = app_client.post(
+        "/api/proxies/assign/random",
+        json={
+            "profile_ids": [first["id"], second["id"], "missing"],
+            "provider_preset_id": preset["id"],
+            "tags": ["warmup"],
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["strategy"] == "random"
+    assert data["candidate_count"] == 1
+    assert data["provider_preset_id"] == preset["id"]
+    assert data["provider"] == "ProxyJP"
+    assert data["country_code"] == "JP"
+    assert data["tags"] == ["mobile", "warmup"]
+    assert data["total"] == 3
+    assert data["succeeded"] == 2
+    assert data["failed"] == 1
+    assert "hiddenpass" not in str(data)
+    assert data["results"] == [
+        {
+            "profile_id": first["id"],
+            "ok": True,
+            "error": None,
+            "proxy_id": matching["id"],
+            "proxy": {**matching, "url": "http://jp-mobile.example:8080"},
+        },
+        {
+            "profile_id": second["id"],
+            "ok": True,
+            "error": None,
+            "proxy_id": matching["id"],
+            "proxy": {**matching, "url": "http://jp-mobile.example:8080"},
+        },
+        {
+            "profile_id": "missing",
+            "ok": False,
+            "error": "Profile not found",
+            "proxy_id": None,
+            "proxy": None,
+        },
+    ]
+
+    stored_first = db.get_profile(first["id"])
+    stored_second = db.get_profile(second["id"])
+    assert stored_first is not None
+    assert stored_second is not None
+    assert stored_first["proxy"] == "http://user:hiddenpass@jp-mobile.example:8080"
+    assert stored_second["proxy"] == "http://user:hiddenpass@jp-mobile.example:8080"
+
+
+def test_random_proxy_assignment_rejects_missing_selection(app_client: TestClient):
+    profile = app_client.post("/api/profiles", json={"name": "No candidate"}).json()
+    app_client.post(
+        "/api/proxies",
+        json={
+            "name": "US only",
+            "url": "http://user:hiddenpass@us.example:8080",
+            "country_code": "US",
+            "tags": [{"tag": "stable", "color": None}],
+        },
+    )
+
+    resp = app_client.post(
+        "/api/proxies/assign/random",
+        json={
+            "profile_ids": [profile["id"]],
+            "country_code": "JP",
+            "tags": ["mobile"],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "No proxy assets match selection"
+    assert "hiddenpass" not in str(resp.json())
+    assert db.get_profile(profile["id"])["proxy"] is None
+
+
 def test_save_profile_current_proxy_as_asset_without_leaking_credentials(app_client: TestClient):
     profile = app_client.post(
         "/api/profiles",

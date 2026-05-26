@@ -10,6 +10,7 @@ import asyncio
 import hmac
 import logging
 import os
+import random
 import struct
 import shutil
 import uuid
@@ -55,6 +56,9 @@ from .models import (
     ProxyProviderPresetCreate,
     ProxyProviderPresetResponse,
     ProxyProviderPresetUpdate,
+    ProxyRandomAssignRequest,
+    ProxyRandomAssignResponse,
+    ProxyRandomAssignResult,
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
@@ -499,6 +503,61 @@ def _tag_payloads(tags: list[dict] | None) -> list[dict]:
     return [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in (tags or [])]
 
 
+def _normalize_filter_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _normalize_country_code(value: str | None) -> str | None:
+    normalized = _normalize_filter_value(value)
+    return normalized.upper() if normalized else None
+
+
+def _normalize_tag(value: str | None) -> str | None:
+    normalized = _normalize_filter_value(value)
+    return normalized.lower() if normalized else None
+
+
+def _merge_proxy_selection_tags(
+    preset_tags: list[dict] | None,
+    request_tags: list[str] | None,
+) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    tag_sources = [*(preset_tags or []), *({"tag": tag} for tag in (request_tags or []))]
+    for tag in tag_sources:
+        raw = tag.get("tag") if isinstance(tag, dict) else None
+        normalized = _normalize_tag(raw)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        merged.append(normalized)
+    return merged
+
+
+def _proxy_matches_selection(
+    proxy: dict,
+    *,
+    provider: str | None,
+    country_code: str | None,
+    tags: list[str],
+) -> bool:
+    if provider and _normalize_filter_value(proxy.get("provider")) != provider:
+        return False
+    if country_code and _normalize_country_code(proxy.get("country_code")) != country_code:
+        return False
+    if tags:
+        proxy_tags = {
+            normalized
+            for tag in proxy.get("tags", [])
+            if (normalized := _normalize_tag(tag.get("tag") if isinstance(tag, dict) else None))
+        }
+        return all(tag in proxy_tags for tag in tags)
+    return True
+
+
 def _template_response(template: dict) -> ProfileTemplateResponse:
     return ProfileTemplateResponse(**template)
 
@@ -662,6 +721,78 @@ async def assign_proxy_to_profiles(proxy_id: str, req: ProxyAssignRequest):
     return ProxyAssignResponse(
         proxy_id=proxy_id,
         proxy=_proxy_response(proxy),
+        total=len(req.profile_ids),
+        succeeded=succeeded,
+        failed=len(req.profile_ids) - succeeded,
+        results=results,
+    )
+
+
+@app.post("/api/proxies/assign/random", response_model=ProxyRandomAssignResponse)
+async def assign_random_proxy_to_profiles(req: ProxyRandomAssignRequest):
+    preset = None
+    if req.provider_preset_id:
+        preset = db.get_proxy_provider_preset(req.provider_preset_id)
+        if not preset:
+            raise HTTPException(status_code=404, detail="Proxy provider preset not found")
+
+    provider = _normalize_filter_value(req.provider) or _normalize_filter_value(
+        preset.get("provider") if preset else None
+    )
+    country_code = _normalize_country_code(req.country_code) or _normalize_country_code(
+        preset.get("country_code") if preset else None
+    )
+    tags = _merge_proxy_selection_tags(
+        preset.get("tags") if preset else None,
+        req.tags,
+    )
+    candidates = [
+        proxy
+        for proxy in db.list_proxies()
+        if _proxy_matches_selection(
+            proxy,
+            provider=provider,
+            country_code=country_code,
+            tags=tags,
+        )
+    ]
+
+    if not candidates:
+        raise HTTPException(status_code=400, detail="No proxy assets match selection")
+
+    results: list[ProxyRandomAssignResult] = []
+    for profile_id in req.profile_ids:
+        chosen = random.choice(candidates)
+        profile = db.update_profile(profile_id, proxy=str(chosen["url"]))
+        if not profile:
+            results.append(
+                ProxyRandomAssignResult(
+                    profile_id=profile_id,
+                    ok=False,
+                    error="Profile not found",
+                    proxy_id=None,
+                    proxy=None,
+                )
+            )
+            continue
+        results.append(
+            ProxyRandomAssignResult(
+                profile_id=profile_id,
+                ok=True,
+                error=None,
+                proxy_id=str(chosen["id"]),
+                proxy=_proxy_response(chosen),
+            )
+        )
+
+    succeeded = sum(1 for result in results if result.ok)
+    return ProxyRandomAssignResponse(
+        strategy="random",
+        provider_preset_id=req.provider_preset_id,
+        provider=provider,
+        country_code=country_code,
+        tags=tags,
+        candidate_count=len(candidates),
         total=len(req.profile_ids),
         succeeded=succeeded,
         failed=len(req.profile_ids) - succeeded,

@@ -4792,3 +4792,58 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 65. 2026-05-26 Proxy 国家/标签候选过滤与随机分配后端 API 小闭环
+
+背景：
+
+- 继续 Module 09 Proxy Template 和批量运营前置能力。
+- 本轮只做后端契约：按 provider preset / country / tags 筛选 proxy 候选，并随机分配给多个 profiles。
+- 不做前端入口，不修改现有单 proxy assign，不碰 runtime、VNC、CDP、批量启动/停止/删除。
+
+已完成：
+
+- `backend/models.py`
+  - 新增 `ProxyRandomAssignRequest` / `ProxyRandomAssignResult` / `ProxyRandomAssignResponse`。
+  - 请求支持 `profile_ids`、`provider_preset_id`、`provider`、`country_code`、`tags`。
+- `backend/main.py`
+  - 新增 `POST /api/proxies/assign/random`。
+  - `provider_preset_id` 注入 preset 的 provider/country/tags。
+  - `country_code` trim + uppercase 后匹配。
+  - tags 使用 preset tags + request tags 去重合并，当前语义为全部 tag 同时匹配。
+  - 每个有效 profile 从候选 proxy 中随机选择一个，并写入 raw proxy URL。
+  - missing profile 行级失败，不阻断其他 profile。
+  - 候选为空返回 `400 No proxy assets match selection`，不修改 profile。
+- `backend/tests/test_proxies.py`
+  - 覆盖 provider preset + country + tag 候选过滤。
+  - 覆盖 random assignment 的部分成功。
+  - 覆盖响应不泄漏 proxy credentials，但数据库写入 raw proxy URL。
+  - 覆盖候选为空返回 400 且 profile 原值不变。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选后端候选过滤 API、后端 random assignment API、provider preset 后端策略联动。
+  - 前端运营入口继续保持未完成。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "random_proxy_assignment"
+# 2 passed, 15 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 17 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_proxy_provider_presets.py -q
+# 24 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 257 passed
+```
+
+边界：
+
+- 没有修改前端。
+- 没有修改 Profile CSV import 合约。
+- 没有修改 Proxy check/assign/GeoIP 既有行为。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
