@@ -9,11 +9,13 @@ vi.mock("../lib/api", async (importOriginal) => {
     ...actual,
     api: {
       listProxies: vi.fn(),
+      bulkCheckProxies: vi.fn(),
     },
   };
 });
 
 const mockListProxies = api.listProxies as ReturnType<typeof vi.fn>;
+const mockBulkCheckProxies = api.bulkCheckProxies as ReturnType<typeof vi.fn>;
 
 function proxy(overrides: Partial<ProxyAsset>): ProxyAsset {
   return {
@@ -42,6 +44,7 @@ function proxy(overrides: Partial<ProxyAsset>): ProxyAsset {
 
 beforeEach(() => {
   mockListProxies.mockReset();
+  mockBulkCheckProxies.mockReset();
 });
 
 describe("ProxyManagerPage", () => {
@@ -111,7 +114,7 @@ describe("ProxyManagerPage", () => {
 
     const region = await screen.findByRole("region", { name: "Proxy assets table" });
     expect(region.className).toContain("overflow-auto");
-    expect(within(region).getByRole("table", { name: "Proxy assets" }).className).toContain("min-w-[920px]");
+    expect(within(region).getByRole("table", { name: "Proxy assets" }).className).toContain("min-w-[980px]");
   });
 
   it("filters proxy assets locally by search without leaking credentials", async () => {
@@ -269,6 +272,146 @@ describe("ProxyManagerPage", () => {
     expect(within(page).getByText("2 of 2 visible")).toBeTruthy();
     expect(within(page).getByRole("table", { name: "Proxy assets" })).toBeTruthy();
     expect(within(page).queryByRole("status", { name: "No proxy assets match filters" })).toBeNull();
+    expect(mockListProxies).toHaveBeenCalledTimes(1);
+  });
+
+  it("bulk checks selected proxy assets and updates row health without leaking credentials", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-1",
+        name: "Credential Pool",
+        url: "http://user:hiddenpass@proxy.example:8080",
+        last_check_status: null,
+      }),
+      proxy({
+        id: "proxy-2",
+        name: "Broken JP Pool",
+        url: "socks5://secret:topsecret@jp.proxy.example:1080",
+        country_code: "JP",
+        provider: "ProxyJP",
+        tags: [{ tag: "needs-review", color: "#ef4444" }],
+        last_check_status: null,
+      }),
+    ]);
+    mockBulkCheckProxies.mockResolvedValue({
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [
+        {
+          proxy_id: "proxy-1",
+          ok: true,
+          error: null,
+          proxy: proxy({
+            id: "proxy-1",
+            name: "Credential Pool",
+            url: "http://user:hiddenpass@proxy.example:8080",
+            last_check_status: "good",
+            last_check_ip: "203.0.113.11",
+            last_check_country_code: "US",
+            last_check_error: null,
+            last_check_at: "2026-05-26T06:00:00Z",
+          }),
+        },
+        {
+          proxy_id: "proxy-2",
+          ok: false,
+          error: "cannot connect via socks5://secret:topsecret@jp.proxy.example:1080",
+          proxy: proxy({
+            id: "proxy-2",
+            name: "Broken JP Pool",
+            url: "socks5://secret:topsecret@jp.proxy.example:1080",
+            country_code: "JP",
+            provider: "ProxyJP",
+            tags: [{ tag: "needs-review", color: "#ef4444" }],
+            last_check_status: "error",
+            last_check_error: "cannot connect via socks5://secret:topsecret@jp.proxy.example:1080",
+            last_check_at: "2026-05-26T06:01:00Z",
+          }),
+        },
+      ],
+    });
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByLabelText("Select Broken JP Pool"));
+    expect(within(page).getByText("2 selected")).toBeTruthy();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Check selected proxies" }));
+
+    await waitFor(() => expect(mockBulkCheckProxies).toHaveBeenCalledWith(["proxy-1", "proxy-2"]));
+    expect(await within(page).findByText("Bulk check complete: 1 succeeded, 1 failed")).toBeTruthy();
+    expect(within(page).getByText("good")).toBeTruthy();
+    expect(within(page).getByText("error")).toBeTruthy();
+    expect(within(page).getByText("cannot connect via socks5://jp.proxy.example:1080")).toBeTruthy();
+    expect(within(page).getByText("1 good")).toBeTruthy();
+    expect(within(page).getByText("1 needs review")).toBeTruthy();
+
+    const titleText = Array.from(page.querySelectorAll("[title]"))
+      .map((element) => element.getAttribute("title") ?? "")
+      .join(" ");
+    expect(`${page.textContent} ${titleText}`).not.toContain("hiddenpass");
+    expect(`${page.textContent} ${titleText}`).not.toContain("topsecret");
+    expect(`${page.textContent} ${titleText}`).not.toContain("user:");
+    expect(`${page.textContent} ${titleText}`).not.toContain("secret:");
+    expect(within(page).queryByRole("button", { name: /delete/i })).toBeNull();
+    expect(within(page).queryByRole("button", { name: /assign/i })).toBeNull();
+  });
+
+  it("selects all visible filtered proxy assets for bulk checking", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "US Stable", country_code: "US", provider: "ProxyCo" }),
+      proxy({ id: "proxy-2", name: "JP Stable", country_code: "JP", provider: "ProxyJP" }),
+      proxy({ id: "proxy-3", name: "JP Backup", country_code: "JP", provider: "ProxyJP" }),
+    ]);
+    mockBulkCheckProxies.mockResolvedValue({
+      total: 2,
+      succeeded: 2,
+      failed: 0,
+      results: [
+        { proxy_id: "proxy-2", ok: true, error: null, proxy: null },
+        { proxy_id: "proxy-3", ok: true, error: null, proxy: null },
+      ],
+    });
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.change(within(page).getByLabelText("Country filter"), { target: { value: "JP" } });
+    fireEvent.click(within(page).getByLabelText("Select all visible proxy assets"));
+
+    expect(within(page).getByText("2 selected")).toBeTruthy();
+    fireEvent.click(within(page).getByRole("button", { name: "Check selected proxies" }));
+
+    await waitFor(() => expect(mockBulkCheckProxies).toHaveBeenCalledWith(["proxy-2", "proxy-3"]));
+    expect(await within(page).findByText("Bulk check complete: 2 succeeded, 0 failed")).toBeTruthy();
+  });
+
+  it("shows a credential-safe error when bulk proxy checking fails", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-1",
+        name: "Credential Pool",
+        url: "http://user:hiddenpass@proxy.example:8080",
+      }),
+    ]);
+    mockBulkCheckProxies.mockRejectedValueOnce(
+      new Error("cannot check http://user:hiddenpass@proxy.example:8080"),
+    );
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Check selected proxies" }));
+
+    expect((await within(page).findByRole("alert")).textContent).toContain(
+      "Bulk check failed: cannot check http://proxy.example:8080",
+    );
+    expect(page.textContent).not.toContain("hiddenpass");
+    expect(mockBulkCheckProxies).toHaveBeenCalledTimes(1);
     expect(mockListProxies).toHaveBeenCalledTimes(1);
   });
 

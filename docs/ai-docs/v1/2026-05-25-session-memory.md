@@ -3003,3 +3003,75 @@ git diff --check
 - 新建 / 编辑 / 删除 proxy UI。
 - CSV 粘贴导入。
 - `profiles.proxy` 到 `proxy_id` 的数据模型迁移。
+
+## 43. 2026-05-26 Proxy Manager 批量检测 UI 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，在搜索与筛选完成后补齐 Proxy Manager 表格里的批量检测入口。
+- 本轮只接线已选 proxy asset 的 `bulkCheckProxies()`，不做单个检测、新建、编辑、删除、分配到 profile 或 CSV 导入。
+
+已完成：
+
+- `frontend/src/components/ProxyManagerPage.tsx`
+  - 新增选择列、单行选择、`Select all visible proxy assets` 和 `selected` 计数。
+  - 新增 `Check selected`，调用 `api.bulkCheckProxies(selectedIds)`。
+  - 用响应中的 `results[].proxy` 局部刷新对应行 health。
+  - 成功时展示 `Bulk check complete: X succeeded, Y failed`。
+  - 异常时展示脱敏后的 `Bulk check failed: ...`。
+  - 保持 create/update/delete/assign/CSV 等高风险 action 不出现。
+  - 表格仍限制在自身容器横向滚动，移动端 body 不被撑宽。
+- `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖多选后批量检测并刷新 row health。
+  - 覆盖 `Select all visible` 只选择当前筛选后的可见 proxy。
+  - 覆盖批量检测失败提示不泄露 proxy 凭据。
+  - 覆盖页面仍不出现 delete / assign action。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 勾选 `支持搜索、筛选、批量检测`。
+  - 追加本小闭环记录。
+  - 仍不勾选 04 模块完成状态，因为分配入口、CSV、新建/编辑/删除等仍未做。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run
+# 12 passed, 138 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8094/`，隔离数据库 `/tmp/cloakbrowser-proxy-manager-bulk-check-data-8094`。
+- 桌面 `1440x900`：
+  - `Select all visible` 后 `Check selected` 可用。
+  - 批量检测后展示 `Bulk check complete: 2 succeeded, 1 failed`。
+  - 正文和 `[title]` 属性均不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+  - `document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- 移动 `390x844`：
+  - 批量检测交互可用。
+  - 批量检测后展示 `Bulk check complete: 2 succeeded, 1 failed`。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 表格区域 `overflowX=auto`，正文和 `[title]` 属性均无 proxy 凭据泄露。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-bulk-check-screens/desktop-bulk-check-results.png`
+- `/tmp/cloakbrowser-proxy-manager-bulk-check-screens/mobile-bulk-check-results.png`
+
+仍未做：
+
+- Proxy Manager 单个检测 UI。
+- Proxy Manager 分配入口。
+- 新建 / 编辑 / 删除 proxy UI。
+- CSV 粘贴导入。
+- `profiles.proxy` 到 `proxy_id` 的数据模型迁移。

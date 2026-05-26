@@ -46,7 +46,7 @@
   - [ ] 前端 Proxy Manager 分配入口。
 - [x] 支持从 profile 当前 proxy 保存为 proxy asset。
 - [x] 前端新增 Proxy Manager 页面。
-- [ ] 支持搜索、筛选、批量检测。
+- [x] 支持搜索、筛选、批量检测。
 - [x] 支持按国家、provider、tag 筛选。
 - [ ] 支持 CSV 粘贴导入第一版。
 
@@ -674,3 +674,74 @@ git diff --check
 - `/tmp/cloakbrowser-proxy-manager-filters-screens/desktop-empty-state.png`
 - `/tmp/cloakbrowser-proxy-manager-filters-screens/mobile-full-list.png`
 - `/tmp/cloakbrowser-proxy-manager-filters-screens/mobile-filtered-search.png`
+
+## 2026-05-26 Proxy Manager 批量检测 UI 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于已完成的搜索与筛选，把后端 `POST /api/proxies/bulk/check` 接入到 Proxy Manager 表格。
+- 本小闭环只做已选 proxy asset 的批量检测，不进入单个检测、新建、编辑、删除、分配到 profile 或 CSV 导入。
+- 交互边界：`Select all visible` 只选择当前筛选后的可见 proxy，批量检测响应中的部分失败不视作整批失败，错误与检测结果继续保持 credential-safe。
+
+已完成：
+
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - 新增表格选择列、单行选择和 `Select all visible proxy assets`。
+  - 新增 `selected` 计数和 `Check selected` 操作；未选择或检测中时按钮 disabled。
+  - 调用 `api.bulkCheckProxies(selectedIds)`，并用响应中的 `results[].proxy` 局部刷新对应行健康状态。
+  - 成功后展示 `Bulk check complete: X succeeded, Y failed`。
+  - request 抛错时展示脱敏后的 `Bulk check failed: ...`。
+  - 保持高风险 create/update/delete/assign/CSV action 不出现。
+  - 表格继续在自身容器内横向滚动，避免移动端 body 横向撑破。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖选择多个 proxy 后触发批量检测并刷新 row health。
+  - 覆盖 `Select all visible` 只选择筛选后的可见 proxy。
+  - 覆盖批量检测失败提示不泄露 proxy 凭据。
+  - 覆盖页面仍不出现 delete / assign 等高风险 action。
+
+范围说明：
+
+- 前端 Proxy Manager 分配入口未做，因此顶层 `支持将 proxy 分配到 profile` 暂不勾选完成。
+- Proxy Manager 单个检测 UI 未做。
+- 新建 / 编辑 / 删除 proxy UI 未做。
+- CSV 粘贴导入未做。
+- `profiles.proxy` 到 `proxy_id` 的数据模型迁移未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run
+# 12 passed, 138 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8094/`，隔离数据库 `/tmp/cloakbrowser-proxy-manager-bulk-check-data-8094`。
+- QA seed 包含 3 条 proxy assets，其中 JP proxy 的检测异常包含 raw credentials，用于验证 UI 脱敏。
+- 桌面 `1440x900`：
+  - Proxy Manager 可进入，`Select all visible` 后 `Check selected` 可用。
+  - 批量检测后展示 `Bulk check complete: 2 succeeded, 1 failed`。
+  - 正文和 `[title]` 属性均不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+  - `document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- 移动 `390x844`：
+  - `Select all visible` 与 `Check selected` 可用。
+  - 批量检测后展示 `Bulk check complete: 2 succeeded, 1 failed`。
+  - 表格在自身容器横向滚动，body 未横向撑破：`document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 正文和 `[title]` 属性均无 proxy 凭据泄露。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-bulk-check-screens/desktop-bulk-check-results.png`
+- `/tmp/cloakbrowser-proxy-manager-bulk-check-screens/mobile-bulk-check-results.png`

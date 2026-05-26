@@ -10,6 +10,10 @@ export function ProxyManagerPage() {
   const [proxies, setProxies] = useState<ProxyAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProxyIds, setSelectedProxyIds] = useState<Set<string>>(() => new Set());
+  const [bulkChecking, setBulkChecking] = useState(false);
+  const [bulkCheckNotice, setBulkCheckNotice] = useState<string | null>(null);
+  const [bulkCheckError, setBulkCheckError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState(FILTER_ALL);
   const [providerFilter, setProviderFilter] = useState(FILTER_ALL);
@@ -20,7 +24,12 @@ export function ProxyManagerPage() {
     setLoading(true);
     setError(null);
     try {
-      setProxies(await api.listProxies());
+      const nextProxies = await api.listProxies();
+      setProxies(nextProxies);
+      setSelectedProxyIds((current) => {
+        const nextIds = new Set(nextProxies.map((proxy) => proxy.id));
+        return new Set([...current].filter((id) => nextIds.has(id)));
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to load proxy assets");
     } finally {
@@ -74,6 +83,61 @@ export function ProxyManagerPage() {
     setTagFilter(FILTER_ALL);
   }, []);
 
+  const visibleProxyIds = useMemo(() => filteredProxies.map((proxy) => proxy.id), [filteredProxies]);
+  const selectedCount = selectedProxyIds.size;
+  const allVisibleSelected = visibleProxyIds.length > 0
+    && visibleProxyIds.every((id) => selectedProxyIds.has(id));
+
+  const toggleProxySelection = useCallback((proxyId: string) => {
+    setSelectedProxyIds((current) => {
+      const next = new Set(current);
+      if (next.has(proxyId)) {
+        next.delete(proxyId);
+      } else {
+        next.add(proxyId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllVisibleSelection = useCallback(() => {
+    setSelectedProxyIds((current) => {
+      const next = new Set(current);
+      if (visibleProxyIds.length > 0 && visibleProxyIds.every((id) => next.has(id))) {
+        visibleProxyIds.forEach((id) => next.delete(id));
+      } else {
+        visibleProxyIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [visibleProxyIds]);
+
+  const checkSelectedProxies = useCallback(async () => {
+    if (selectedProxyIds.size === 0 || bulkChecking) return;
+
+    const proxyIds = [...selectedProxyIds];
+    setBulkChecking(true);
+    setBulkCheckNotice(null);
+    setBulkCheckError(null);
+
+    try {
+      const response = await api.bulkCheckProxies(proxyIds);
+      const updatedById = new Map(
+        response.results
+          .filter((result) => result.proxy)
+          .map((result) => [result.proxy_id, result.proxy as ProxyAsset]),
+      );
+
+      setProxies((current) => current.map((proxy) => updatedById.get(proxy.id) ?? proxy));
+      setBulkCheckNotice(`Bulk check complete: ${response.succeeded} succeeded, ${response.failed} failed`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to check selected proxies";
+      setBulkCheckError(`Bulk check failed: ${redactUrlCredentials(message)}`);
+    } finally {
+      setBulkChecking(false);
+    }
+  }, [bulkChecking, selectedProxyIds]);
+
   return (
     <section
       role="region"
@@ -119,21 +183,36 @@ export function ProxyManagerPage() {
               <span className="rounded-[999px] border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
                 {filteredProxies.length} of {stats.total} visible
               </span>
+              <span className="rounded-[999px] border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                {selectedCount} selected
+              </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
               URLs are rendered credential-safe. Add, edit, check, assign, and CSV import remain disabled in this view.
             </p>
           </div>
-          <button
-            type="button"
-            className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
-            onClick={() => void loadProxies()}
-            disabled={loading}
-            aria-label={loading ? "Loading proxy assets" : "Retry loading proxy assets"}
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={() => void checkSelectedProxies()}
+              disabled={selectedCount === 0 || bulkChecking}
+              aria-label="Check selected proxies"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${bulkChecking ? "animate-spin" : ""}`} />
+              {bulkChecking ? "Checking" : "Check selected"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={() => void loadProxies()}
+              disabled={loading}
+              aria-label={loading ? "Loading proxy assets" : "Retry loading proxy assets"}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         <ProxyFilterBar
@@ -158,6 +237,18 @@ export function ProxyManagerPage() {
           </div>
         )}
 
+        {bulkCheckNotice && (
+          <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
+            {bulkCheckNotice}
+          </div>
+        )}
+
+        {bulkCheckError && (
+          <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+            {bulkCheckError}
+          </div>
+        )}
+
         {loading && proxies.length === 0 ? (
           <div className="flex min-h-[320px] flex-1 items-center justify-center text-sm text-slate-500">
             Loading proxy assets...
@@ -174,10 +265,21 @@ export function ProxyManagerPage() {
           >
             <table
               aria-label="Proxy assets"
-              className="min-w-[920px] w-full table-fixed border-separate border-spacing-0 bg-white text-left text-xs text-slate-700"
+              className="min-w-[980px] w-full table-fixed border-separate border-spacing-0 bg-white text-left text-xs text-slate-700"
             >
               <thead className="sticky top-0 z-10 bg-[#fbfdff]/95 backdrop-blur">
                 <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
+                  <th className="w-[48px] px-3 py-2">
+                    <label className="flex h-5 w-5 items-center justify-center">
+                      <input
+                        type="checkbox"
+                        className="choice-checkbox m-0"
+                        checked={allVisibleSelected}
+                        onChange={toggleAllVisibleSelection}
+                        aria-label="Select all visible proxy assets"
+                      />
+                    </label>
+                  </th>
                   <HeaderCell className="w-[260px]">Proxy</HeaderCell>
                   <HeaderCell className="w-[150px]">Location</HeaderCell>
                   <HeaderCell className="w-[150px]">Provider</HeaderCell>
@@ -188,7 +290,12 @@ export function ProxyManagerPage() {
               </thead>
               <tbody>
                 {filteredProxies.map((proxy) => (
-                  <ProxyRow key={proxy.id} proxy={proxy} />
+                  <ProxyRow
+                    key={proxy.id}
+                    proxy={proxy}
+                    selected={selectedProxyIds.has(proxy.id)}
+                    onToggleSelection={toggleProxySelection}
+                  />
                 ))}
               </tbody>
             </table>
@@ -311,7 +418,15 @@ function FilterSelect({
   );
 }
 
-function ProxyRow({ proxy }: { proxy: ProxyAsset }) {
+function ProxyRow({
+  proxy,
+  selected,
+  onToggleSelection,
+}: {
+  proxy: ProxyAsset;
+  selected: boolean;
+  onToggleSelection: (proxyId: string) => void;
+}) {
   const safeUrl = redactUrlCredentials(proxy.url);
   const safeCheckError = proxy.last_check_error
     ? redactUrlCredentials(proxy.last_check_error)
@@ -325,6 +440,17 @@ function ProxyRow({ proxy }: { proxy: ProxyAsset }) {
 
   return (
     <tr className="group shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors hover:bg-blue-50/30">
+      <td className="px-3 py-3 align-top">
+        <label className="flex h-5 w-5 items-center justify-center">
+          <input
+            type="checkbox"
+            className="choice-checkbox m-0"
+            checked={selected}
+            onChange={() => onToggleSelection(proxy.id)}
+            aria-label={`Select ${proxy.name}`}
+          />
+        </label>
+      </td>
       <td className="px-3 py-3 align-top">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold text-slate-950" title={proxy.name}>
