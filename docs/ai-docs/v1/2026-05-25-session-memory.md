@@ -3382,3 +3382,70 @@ git diff --check
 - 没有改 App 删除事实源。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 48. 2026-05-26 Viewer 顶部 EnvironmentStrip 视觉升级小闭环
+
+背景：
+
+- Jeff 反馈当前页面整体风格已接近 SS，但部分交互反馈生硬，需要继续做 UI/UE 质感和动效 polish，同时加快推进。
+- 04 Proxy Manager 已完成；05 Project Mileage 会话 Broker 仍要求契约确认，因此继续推进 11 UI 视觉系统。
+- 本轮只处理 Viewer 顶部环境条，不改 VNC、Automation REST API、clipboard sync 或后端 runtime 事实流。
+
+子 agent：
+
+- `Faraday` 只读审计 Viewer strip 改动，指出短 ID 易混淆、窄屏换行挤压 VNC、fullscreen 只覆盖 canvas 导致工具条消失。
+- `Boyle` 只读寻找下一轮动效 polish 候选，建议优先处理 ProfileTable 选中反馈、BulkActionBar 出现/忙碌反馈、ProfileFilters active/focus、loading skeleton、section segmented control active 过渡。
+
+已完成：
+
+- `frontend/src/components/ProfileViewer.tsx`
+  - 顶部 toolbar 升级为 `Viewer environment` region。
+  - 增加 connection、profile handle、Automation、Clipboard 状态 pill。
+  - 右侧动作为 `Viewer actions` toolbar，icon button 增加 hover、active、focus-visible、disabled 和 copied 状态反馈。
+  - profile handle 改为首尾短 ID，并保留完整 `title`。
+  - 顶条改为单行 compact strip，左侧状态横向滚动，右侧动作不换行。
+  - Fullscreen target 改为外层 viewer frame，fullscreen 下保留环境条和退出入口。
+- `frontend/src/components/ProfileViewer.test.tsx`
+  - 新增 EnvironmentStrip 状态与 action 可访问性测试。
+  - 新增窄宽度 compact 行为和 fullscreen target 回归测试。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md`
+  - 勾选 `Viewer 顶部 EnvironmentStrip 视觉升级`。
+  - 勾选浏览器检查 `Viewer 工具条不遮挡 VNC`。
+  - 追加本小闭环验证记录。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileViewer.test.tsx
+# 红灯：2 failed, 4 passed
+
+cd frontend && npm test -- --run src/components/ProfileViewer.test.tsx
+# 1 passed, 6 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 151 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:5177/`。
+- 临时 harness 位于 `/tmp/cloak-viewer-strip-qa`，渲染真实 `ProfileViewer`，noVNC RFB mock 只触发 connect；视觉 CSS 使用本轮生产 build CSS。
+- 桌面 `1440x900` JS 验证：`hasConnected=true`、`hasAutomation=true`、`hasClipboard=true`、`scrollWidth=1440`、`innerWidth=1440`、`stripHeight=45`、`toolbar=true`。
+- 移动 `390x844` JS 验证：`hasConnected=true`、`hasAutomation=true`、`hasClipboard=true`、`scrollWidth=390`、`innerWidth=390`、`stripHeight=45`、`overflow=false`、`toolbar=true`。
+- 新浏览器会话 `agent-browser errors` 无输出；console 只有 Vite/React dev 信息和现有 clipboard debug log。
+
+截图：
+
+- `/tmp/cloakbrowser-viewer-strip-screens/desktop-viewer-environment-strip.png`
+- `/tmp/cloakbrowser-viewer-strip-screens/mobile-viewer-environment-strip.png`
+
+边界：
+
+- 没有修改后端或 runtime。
+- 没有改变 VNC websocket、clipboard bridge、Automation REST API 契约。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

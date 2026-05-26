@@ -107,6 +107,81 @@ describe("ProfileViewer VNC connection", () => {
 });
 
 describe("ProfileViewer Automation API toolbar action", () => {
+  it("renders a responsive viewer environment strip with runtime and integration status", async () => {
+    render(
+      <ProfileViewer
+        profileId="profile-1234567890"
+        automationUrl="/api/profiles/profile-1234567890/automation"
+        clipboardSync={true}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    const strip = screen.getByRole("region", { name: "Viewer environment" });
+    expect(strip).toBeTruthy();
+    const profileChip = screen.getByText("Profile profile-...7890");
+    expect(profileChip).toBeTruthy();
+    expect(profileChip.getAttribute("title")).toBe("profile-1234567890");
+    expect(screen.getByText("Connecting")).toBeTruthy();
+    expect(screen.getByText("Automation ready")).toBeTruthy();
+    expect(screen.getByText("Clipboard sync on")).toBeTruthy();
+    expect(screen.getByRole("toolbar", { name: "Viewer actions" })).toBeTruthy();
+
+    await waitFor(() => expect(rfbInstances[0]?.listeners.connect).toBeTruthy());
+
+    act(() => {
+      rfbInstances[0].listeners.connect();
+    });
+
+    expect(await screen.findByText("Connected")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy Automation API endpoint URL" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Disable clipboard sync" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Fullscreen" })).toBeTruthy();
+  });
+
+  it("keeps viewer actions compact and fullscreens the whole viewer frame", async () => {
+    const requestFullscreen = vi.fn(function requestFullscreen(this: HTMLElement) {
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: this,
+      });
+      document.dispatchEvent(new Event("fullscreenchange"));
+      return Promise.resolve();
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(
+      <div style={{ width: 360, height: 520 }}>
+        <ProfileViewer
+          profileId="viewer-fullscreen-check"
+          automationUrl="/api/profiles/viewer-fullscreen-check/automation"
+          clipboardSync={false}
+          onDisconnect={vi.fn()}
+        />
+      </div>,
+    );
+
+    const strip = screen.getByRole("region", { name: "Viewer environment" });
+    const toolbar = screen.getByRole("toolbar", { name: "Viewer actions" });
+
+    expect(strip.className).toContain("flex-nowrap");
+    expect(toolbar.className).toContain("flex-nowrap");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fullscreen" }));
+
+    await waitFor(() => expect(requestFullscreen).toHaveBeenCalledTimes(1));
+    const fullscreenTarget = requestFullscreen.mock.instances[0] as HTMLElement;
+    expect(fullscreenTarget.contains(strip)).toBe(true);
+    expect(fullscreenTarget.contains(toolbar)).toBe(true);
+  });
+
   it("keeps the automation action visible but disabled when a running profile has no Automation API URL", () => {
     render(
       <ProfileViewer

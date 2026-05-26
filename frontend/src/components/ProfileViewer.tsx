@@ -15,7 +15,13 @@ const AUTOMATION_UNAVAILABLE_LABEL = "Automation API unavailable until profile i
 const AUTOMATION_UNAVAILABLE_TITLE =
   "Launch the profile to expose its Automation API endpoint.";
 
+function formatProfileHandle(profileId: string) {
+  if (profileId.length <= 13) return profileId;
+  return `${profileId.slice(0, 8)}...${profileId.slice(-4)}`;
+}
+
 export function ProfileViewer({ profileId, automationUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
+  const viewerFrameRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<any>(null);
   const [connected, setConnected] = useState(false);
@@ -23,6 +29,7 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
   const [fullscreen, setFullscreen] = useState(false);
   const [clipboardSync, setClipboardSync] = useState(initialClipboardSync);
   const [automationCopied, setAutomationCopied] = useState(false);
+  const shortProfileId = formatProfileHandle(profileId);
 
   useEffect(() => {
     let rfb: any = null;
@@ -201,9 +208,9 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
   }, [profileId, clipboardSync, connected]);
 
   const toggleFullscreen = () => {
-    if (!containerRef.current) return;
+    if (!viewerFrameRef.current) return;
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen();
+      viewerFrameRef.current.requestFullscreen();
       setFullscreen(true);
     } else {
       document.exitFullscreen();
@@ -243,16 +250,43 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
   }
 
   return (
-    <div className="relative h-full flex flex-col">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-border bg-surface-1 px-3 py-1.5">
-        <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "bg-yellow-400 animate-pulse"}`} />
-          <span className="text-xs font-medium text-slate-600">
-            {connected ? "Connected" : "Connecting..."}
+    <div ref={viewerFrameRef} className="relative flex h-full min-w-0 flex-col bg-white">
+      <div
+        role="region"
+        aria-label="Viewer environment"
+        className="flex flex-nowrap items-center justify-between gap-2 overflow-hidden border-b border-slate-200 bg-white/95 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur"
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-[999px] border px-2 py-1 text-xs font-semibold transition-colors ${
+            connected
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${connected ? "bg-emerald-500" : "animate-pulse bg-amber-500"}`} />
+            {connected ? "Connected" : "Connecting"}
+          </span>
+          <span
+            className="shrink-0 rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-600 shadow-hairline"
+            title={profileId}
+          >
+            Profile {shortProfileId}
+          </span>
+          <span className={`shrink-0 rounded-[999px] border px-2 py-1 text-[11px] font-semibold transition-colors ${
+            automationUrl
+              ? "border-blue-200 bg-blue-50 text-blue-700"
+              : "border-slate-200 bg-white text-slate-500"
+          }`}>
+            {automationUrl ? "Automation ready" : "Automation unavailable"}
+          </span>
+          <span className={`shrink-0 rounded-[999px] border px-2 py-1 text-[11px] font-semibold transition-colors ${
+            clipboardSync
+              ? "border-blue-200 bg-blue-50 text-blue-700"
+              : "border-slate-200 bg-white text-slate-500"
+          }`}>
+            {clipboardSync ? "Clipboard sync on" : "Clipboard sync off"}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div role="toolbar" aria-label="Viewer actions" className="flex shrink-0 flex-nowrap items-center gap-1">
           <button
             onClick={() => {
               if (automationUrl) {
@@ -263,10 +297,12 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
                 }).catch((err) => console.warn("[automation] copy failed:", err));
               }
             }}
-            className={`p-1 ${
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-[7px] border transition-[background-color,border-color,color,box-shadow,transform] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
               automationUrl
-                ? automationCopied ? "text-emerald-600" : "text-slate-500 hover:text-slate-900"
-                : "text-slate-300 cursor-not-allowed"
+                ? automationCopied
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
             }`}
             title={
               automationUrl
@@ -284,16 +320,22 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
           </button>
           <button
             onClick={() => { console.log("[clipboard] toggle:", !clipboardSync); setClipboardSync(!clipboardSync); }}
-            className={`p-1 ${clipboardSync ? "text-accent" : "text-slate-500 hover:text-slate-900"}`}
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-[7px] border transition-[background-color,border-color,color,box-shadow,transform] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
+              clipboardSync
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+            } disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300`}
             title={clipboardSync ? "Disable clipboard sync" : "Enable clipboard sync"}
+            aria-label={clipboardSync ? "Disable clipboard sync" : "Enable clipboard sync"}
             disabled={!connected}
           >
             <ClipboardCopy className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={toggleFullscreen}
-            className="p-1 text-slate-500 hover:text-slate-900"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] border border-slate-200 bg-white text-slate-600 transition-[background-color,border-color,color,box-shadow,transform] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
             title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+            aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
             {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </button>
