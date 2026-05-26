@@ -370,3 +370,69 @@ def test_proxy_assign_not_found_and_empty_profiles(app_client: TestClient):
 
     assert app_client.post("/api/proxies/missing/assign", json={"profile_ids": ["profile"]}).status_code == 404
     assert app_client.post(f"/api/proxies/{proxy['id']}/assign", json={"profile_ids": []}).status_code == 422
+
+
+def test_save_profile_current_proxy_as_asset_without_leaking_credentials(app_client: TestClient):
+    profile = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Profile Proxy Source",
+            "proxy": "http://user:hiddenpass@profile-proxy.example:8080",
+        },
+    ).json()
+
+    resp = app_client.post(
+        f"/api/profiles/{profile['id']}/proxy-asset",
+        json={
+            "name": "Saved from profile",
+            "provider": "ProfilePool",
+            "tags": [{"tag": "saved", "color": "#2563eb"}],
+            "notes": "Migrated from profile current proxy",
+        },
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["name"] == "Saved from profile"
+    assert data["url"] == "http://profile-proxy.example:8080"
+    assert data["provider"] == "ProfilePool"
+    assert data["tags"] == [{"tag": "saved", "color": "#2563eb"}]
+    assert data["notes"] == "Migrated from profile current proxy"
+    assert "hiddenpass" not in str(data)
+
+    stored = db.get_proxy(data["id"])
+    assert stored is not None
+    assert stored["url"] == "http://user:hiddenpass@profile-proxy.example:8080"
+
+
+def test_save_profile_current_proxy_as_asset_rejects_missing_or_invalid_proxy_without_leaking_credentials(
+    app_client: TestClient,
+):
+    no_proxy = app_client.post("/api/profiles", json={"name": "No proxy"}).json()
+    missing_proxy = app_client.post(
+        f"/api/profiles/{no_proxy['id']}/proxy-asset",
+        json={"name": "Missing"},
+    )
+    assert missing_proxy.status_code == 400
+    assert missing_proxy.json()["detail"] == "Profile has no proxy"
+
+    invalid = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Invalid profile proxy",
+            "proxy": "ftp://user:hiddenpass@profile-proxy.example:21",
+        },
+    ).json()
+    invalid_resp = app_client.post(
+        f"/api/profiles/{invalid['id']}/proxy-asset",
+        json={"name": "Invalid"},
+    )
+    assert invalid_resp.status_code == 400
+    assert "Invalid proxy scheme" in invalid_resp.json()["detail"]
+    assert "hiddenpass" not in str(invalid_resp.json())
+
+    not_found = app_client.post(
+        "/api/profiles/missing/proxy-asset",
+        json={"name": "Missing profile"},
+    )
+    assert not_found.status_code == 404

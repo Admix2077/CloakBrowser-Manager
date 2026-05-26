@@ -148,6 +148,16 @@ class ProxyAssignResponse(BaseModel):
     results: list[ProxyAssignResult]
 
 
+class ProxyFromProfileCreate(BaseModel):
+    name: str = Field(min_length=1)
+    country_code: str | None = None
+    city: str | None = None
+    asn: str | None = None
+    provider: str | None = None
+    tags: list[TagCreate] = Field(default_factory=list)
+    notes: str | None = None
+
+
 class ProfileResponse(BaseModel):
     id: str
     name: str

@@ -51,6 +51,7 @@ from .models import (
     ProxyBulkCheckResponse,
     ProxyBulkCheckResult,
     ProxyCreate,
+    ProxyFromProfileCreate,
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
@@ -665,6 +666,24 @@ async def create_profile(req: ProfileCreate):
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
+
+
+@app.post("/api/profiles/{profile_id}/proxy-asset", response_model=ProxyResponse, status_code=201)
+async def save_profile_proxy_as_asset(profile_id: str, req: ProxyFromProfileCreate):
+    profile = db.get_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    if not profile.get("proxy"):
+        raise HTTPException(status_code=400, detail="Profile has no proxy")
+
+    data = req.model_dump()
+    data["url"] = str(profile["proxy"])
+    data["tags"] = _tag_payloads(data.get("tags"))
+    try:
+        proxy = db.create_proxy(**data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _proxy_response(proxy)
 
 
 @app.get("/api/profiles/{profile_id}", response_model=ProfileResponse)
