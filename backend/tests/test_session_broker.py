@@ -461,3 +461,83 @@ def test_runtime_session_terminate_rejects_missing_session(
     )
 
     assert resp.status_code == 404
+
+
+def test_runtime_session_renew_requires_runtime_service_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+
+    resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/renew",
+        json={"lease_seconds": 1800},
+    )
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runtime service token required"
+
+
+def test_runtime_session_renew_extends_active_session_and_keeps_short_lived_viewer_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+    stored_before = db.get_runtime_session(session["id"])
+    assert stored_before is not None
+    assert stored_before["viewer_token_hash"]
+
+    renew = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/renew",
+        headers=runtime_headers,
+        json={"lease_seconds": 1800},
+    )
+
+    assert renew.status_code == 200
+    data = renew.json()
+    assert data["id"] == session["id"]
+    assert data["status"] == "active"
+    assert data["lease_expires_at"] > stored_before["lease_expires_at"]
+    assert "viewer_token_hash" not in data
+
+    stored_after = db.get_runtime_session(session["id"])
+    assert stored_after is not None
+    assert stored_after["viewer_token_hash"] == stored_before["viewer_token_hash"]
+    assert stored_after["viewer_token_expires_at"] == stored_before["viewer_token_expires_at"]
+
+
+def test_runtime_session_renew_rejects_missing_or_terminated_session(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    missing = app_client.post(
+        "/api/runtime/sessions/missing/renew",
+        headers=runtime_headers,
+        json={"lease_seconds": 1800},
+    )
+    assert missing.status_code == 404
+
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    terminate = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/terminate",
+        headers=runtime_headers,
+    )
+    assert terminate.status_code == 200
+
+    renew = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/renew",
+        headers=runtime_headers,
+        json={"lease_seconds": 1800},
+    )
+
+    assert renew.status_code == 409
+    assert renew.json()["detail"] == "Runtime session is not active"

@@ -36,7 +36,7 @@
 最新已提交小闭环：
 
 - `087097a add proxy provider preset manager` 是本轮开始前最新 commit。
-- 本轮完成 05 的 CloakBrowser 侧最小 runtime session API、runtime viewer token 和 runtime terminate 小闭环：
+- 本轮完成 05 的 CloakBrowser 侧最小 runtime session API、runtime viewer token、runtime terminate 和 runtime renew 小闭环：
   - `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token`。
   - `runtime_sessions` 表和最小 CRUD。
   - `POST /api/runtime/sessions`。
@@ -44,17 +44,19 @@
   - `POST /api/runtime/sessions/{id}/viewer-token`。
   - `WebSocket /api/runtime/sessions/{id}/vnc`。
   - `POST /api/runtime/sessions/{id}/terminate`。
+  - `POST /api/runtime/sessions/{id}/renew`。
   - 从 profile 创建 runtime session。
   - 从 template 创建 runtime session 并复制 template 指纹字段。
   - runtime response 不包含 wallet/order/billing 字段，也不暴露内部 `viewer_token_hash`。
   - viewer token 过期或错误时不能连接 runtime VNC。
   - terminate 后 session 标记为 `terminated`，viewer token 被撤销，runtime VNC 失效。
+  - renew 后 active session lease 延长，短生命周期 viewer token 保持自身 TTL。
 - 05 模块整体仍保持未完成；不要勾选顶层 05。
 
 下一步建议：
 
-1. 继续 05 时优先做 renew 小闭环。
-2. 随后再做 runtime audit。
+1. 继续 05 时优先做 runtime audit 小闭环。
+2. 随后再准备 Project Mileage Payload/App 跨仓契约联动。
 3. Project Mileage 跨仓联动仍需 Payload 侧授权、扣费、续期契约确认后再进入。
 
 ## 推荐执行顺序

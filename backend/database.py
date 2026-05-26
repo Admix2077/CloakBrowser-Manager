@@ -544,6 +544,25 @@ def terminate_runtime_session(session_id: str) -> dict[str, Any] | None:
     return get_runtime_session(session_id)
 
 
+def renew_runtime_session(session_id: str, lease_seconds: int) -> dict[str, Any] | None:
+    now = _now()
+    lease_expires_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(seconds=lease_seconds)
+    ).isoformat()
+    with get_db() as conn:
+        cursor = conn.execute(
+            """UPDATE runtime_sessions
+            SET lease_expires_at = ?, updated_at = ?
+            WHERE id = ?""",
+            (lease_expires_at, now, session_id),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_runtime_session(session_id)
+
+
 def _proxy_from_row(row: sqlite3.Row) -> dict[str, Any]:
     proxy = dict(row)
     proxy["tags"] = _decode_tags(proxy.get("tags"))

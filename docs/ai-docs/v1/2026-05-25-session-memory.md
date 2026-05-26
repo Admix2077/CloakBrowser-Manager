@@ -5156,7 +5156,58 @@ git diff --check
 
 仍未完成：
 
-- `POST /api/runtime/sessions/{id}/renew`。
+- runtime audit。
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+
+边界：
+
+- 没有修改 Project Mileage app/payload。
+- 没有把钱包、订单、用户权限判断写入 CloakBrowser。
+- 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
+
+## 72. 2026-05-27 Runtime session renew 小闭环
+
+背景：
+
+- 在 `f9ae0f4 add runtime session terminate` 后继续推进 05。
+- renew 是 Project Mileage 远程工作台续时/续费后的 runtime 侧必要能力，但钱包、订单和权限确认仍必须由 Payload 完成后再调用 CloakBrowser。
+- 子 agent 只读审计建议：renew 只更新 runtime lease，不默认撤销已有 viewer token；viewer token 已有独立短 TTL，terminate 才是强制失效动作。已按该建议调整测试和实现。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 renew TDD 覆盖。
+  - 确认新增测试初始红灯：renew API 返回 405。
+  - 覆盖无 runtime service token 不能 renew。
+  - 覆盖 active session renew 后延长 lease。
+  - 覆盖 renew response 不暴露 `viewer_token_hash`。
+  - 覆盖 renew 不撤销已有短生命周期 viewer token。
+  - 覆盖不存在 session 返回 404。
+  - 覆盖 terminated session 不能 renew，返回 409。
+- `backend/models.py`
+  - 新增 `RuntimeSessionRenew`，`lease_seconds` 范围与创建 session 一致：`1..86400`。
+- `backend/database.py`
+  - 新增 `renew_runtime_session()`。
+  - `lease_expires_at` 按服务器当前时间重新计算为 `now + lease_seconds`，不在旧 lease 上累加。
+- `backend/main.py`
+  - 新增 `POST /api/runtime/sessions/{session_id}/renew`。
+  - 复用 `_runtime_session_is_live()` 拒绝 terminated 或已过期 session。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 17 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 274 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
 - runtime audit。
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
 

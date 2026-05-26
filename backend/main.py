@@ -80,6 +80,7 @@ from .models import (
     ProfileTemplateUpdate,
     ProfileUpdate,
     RuntimeSessionCreate,
+    RuntimeSessionRenew,
     RuntimeSessionResponse,
     RuntimeViewerTokenCreate,
     RuntimeViewerTokenResponse,
@@ -1029,6 +1030,20 @@ async def terminate_runtime_session(session_id: str, request: Request):
     if not session:
         raise HTTPException(status_code=404, detail="Runtime session not found")
     return _runtime_session_response(session)
+
+
+@app.post("/api/runtime/sessions/{session_id}/renew", response_model=RuntimeSessionResponse)
+async def renew_runtime_session(session_id: str, req: RuntimeSessionRenew, request: Request):
+    _require_runtime_service_token(request)
+    session = db.get_runtime_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Runtime session not found")
+    if not _runtime_session_is_live(session):
+        raise HTTPException(status_code=409, detail="Runtime session is not active")
+    renewed = db.renew_runtime_session(session_id, req.lease_seconds)
+    if not renewed:
+        raise HTTPException(status_code=404, detail="Runtime session not found")
+    return _runtime_session_response(renewed)
 
 
 @app.post("/api/proxies/{proxy_id}/check", response_model=ProxyResponse)

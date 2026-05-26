@@ -447,6 +447,10 @@ class RuntimeViewerTokenResponse(BaseModel):
     expires_at: str
 
 
+class RuntimeSessionRenew(BaseModel):
+    lease_seconds: int = Field(ge=1, le=86_400)
+
+
 class StatusResponse(BaseModel):
     running_count: int
     binary_version: str
