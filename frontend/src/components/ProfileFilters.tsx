@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import type { ReactNode } from "react";
 import type { ProfileFilterOptions, ProfileFilterState } from "../lib/filters";
 
 interface ProfileFiltersProps {
@@ -21,14 +22,19 @@ export function ProfileFilters({
   };
   const labelled = (label: string) => labelPrefix ? `${labelPrefix} ${label}` : label;
   const showVisibleLabels = layout === "toolbar";
+  const isToolbar = layout === "toolbar";
 
   return (
     <div
-      role={layout === "toolbar" ? "toolbar" : undefined}
-      aria-label={layout === "toolbar" ? "Profile filters" : undefined}
-      className={layout === "toolbar" ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}
+      role={isToolbar ? "toolbar" : undefined}
+      aria-label={isToolbar ? "Profile filters" : undefined}
+      className={isToolbar ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}
     >
-      <div className={layout === "toolbar" ? "col-span-2 xl:col-span-1" : ""}>
+      <FilterControl
+        filter="search"
+        active={value.search.trim().length > 0}
+        className={isToolbar ? "col-span-2 xl:col-span-1" : ""}
+      >
         <FilterLabel htmlFor={filterId(labelled("Search profiles"))} visible={showVisibleLabels}>
           {showVisibleLabels ? "Search" : labelled("Search profiles")}
         </FilterLabel>
@@ -41,17 +47,18 @@ export function ProfileFilters({
             placeholder="Search profiles..."
             value={value.search}
             onChange={(event) => update("search", event.target.value)}
-            className="input h-9 rounded-[6px] border-slate-200 bg-white pl-8 text-xs shadow-none ring-0 hover:border-slate-300 focus:shadow-none"
+            className="input h-9 rounded-[7px] border-slate-200 bg-white pl-8 text-xs shadow-none ring-0 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
           />
         </div>
-      </div>
+      </FilterControl>
 
-      <div className={layout === "toolbar" ? "contents" : "grid grid-cols-2 gap-2"}>
+      <div className={isToolbar ? "contents" : "grid grid-cols-2 gap-2"}>
         <FilterSelect
           label={labelled("Runtime status")}
           visibleLabel="Runtime"
           showVisibleLabel={showVisibleLabels}
           value={value.status}
+          active={value.status !== "all"}
           onChange={(nextValue) => update("status", nextValue as ProfileFilterState["status"])}
           options={[
             ["all", "All runtime"],
@@ -64,6 +71,7 @@ export function ProfileFilters({
           visibleLabel="Health"
           showVisibleLabel={showVisibleLabels}
           value={value.health}
+          active={value.health !== "all"}
           onChange={(nextValue) => update("health", nextValue as ProfileFilterState["health"])}
           options={[
             ["all", "All health"],
@@ -78,6 +86,7 @@ export function ProfileFilters({
           visibleLabel="Proxy"
           showVisibleLabel={showVisibleLabels}
           value={value.proxy}
+          active={value.proxy !== "all"}
           onChange={(nextValue) => update("proxy", nextValue as ProfileFilterState["proxy"])}
           options={[
             ["all", "All proxy"],
@@ -90,6 +99,7 @@ export function ProfileFilters({
           visibleLabel="Country"
           showVisibleLabel={showVisibleLabels}
           value={value.country}
+          active={value.country !== "all"}
           onChange={(nextValue) => update("country", nextValue)}
           options={[
             ["all", "All countries"],
@@ -101,6 +111,7 @@ export function ProfileFilters({
           visibleLabel="Tag"
           showVisibleLabel={showVisibleLabels}
           value={value.tag}
+          active={value.tag !== "all"}
           onChange={(nextValue) => update("tag", nextValue)}
           options={[
             ["all", "All tags"],
@@ -112,6 +123,7 @@ export function ProfileFilters({
           visibleLabel="Sort"
           showVisibleLabel={showVisibleLabels}
           value={value.sortBy}
+          active={value.sortBy !== "health"}
           onChange={(nextValue) => update("sortBy", nextValue as ProfileFilterState["sortBy"])}
           options={[
             ["health", "Risk first"],
@@ -126,27 +138,54 @@ export function ProfileFilters({
   );
 }
 
+function FilterControl({
+  filter,
+  active,
+  className = "",
+  children,
+}: {
+  filter: string;
+  active: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-filter-control={filter}
+      data-active={active ? "true" : "false"}
+      className={`${className} rounded-[9px] transition-colors data-[active=true]:bg-blue-50/45 data-[active=true]:ring-1 data-[active=true]:ring-blue-500/10`}
+    >
+      {children}
+    </div>
+  );
+}
+
 interface FilterSelectProps {
   label: string;
   visibleLabel: string;
   showVisibleLabel: boolean;
   value: string;
+  active: boolean;
   options: readonly (readonly [string, string])[];
   onChange: (value: string) => void;
 }
 
-function FilterSelect({ label, visibleLabel, showVisibleLabel, value, options, onChange }: FilterSelectProps) {
+function FilterSelect({ label, visibleLabel, showVisibleLabel, value, active, options, onChange }: FilterSelectProps) {
   const id = filterId(label);
 
   return (
-    <div>
+    <FilterControl filter={visibleLabel.toLowerCase()} active={active}>
       <FilterLabel htmlFor={id} visible={showVisibleLabel}>{showVisibleLabel ? visibleLabel : label}</FilterLabel>
       <select
         id={id}
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full rounded-[6px] border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+        className={`h-9 w-full rounded-[7px] border bg-white px-2.5 text-xs font-medium outline-none transition-[border-color,background-color,box-shadow] hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500/15 ${
+          active
+            ? "border-blue-200 text-blue-900 shadow-[inset_3px_0_0_rgba(37,99,235,0.36)]"
+            : "border-slate-200 text-slate-700"
+        }`}
       >
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>
@@ -154,7 +193,7 @@ function FilterSelect({ label, visibleLabel, showVisibleLabel, value, options, o
           </option>
         ))}
       </select>
-    </div>
+    </FilterControl>
   );
 }
 

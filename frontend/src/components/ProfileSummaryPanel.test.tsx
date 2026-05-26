@@ -102,6 +102,9 @@ describe("ProfileSummaryPanel", () => {
     expect(within(summary).getByRole("region", { name: "GeoIP" })).toBeTruthy();
     expect(within(summary).getByRole("region", { name: "Proxy" })).toBeTruthy();
     expect(within(summary).getByRole("region", { name: "Device" })).toBeTruthy();
+    expect(within(summary).getByRole("region", { name: "Health" }).getAttribute("data-priority")).toBe("primary");
+    expect(within(summary).getByRole("region", { name: "Runtime" }).getAttribute("data-priority")).toBe("primary");
+    expect(within(summary).getByRole("region", { name: "GeoIP" }).getAttribute("data-priority")).toBe("secondary");
     expect(screen.getByText("Seller US")).toBeTruthy();
     expect(screen.getByText("Inspector")).toBeTruthy();
     expect(screen.getAllByText("不可用").length).toBeGreaterThan(0);

@@ -1978,3 +1978,116 @@ git diff --check
 - 本轮不推进 04 Proxy Manager 前端页面。
 - 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip。
 - 03 模块仍保持完成状态；本记录作为用户反馈驱动的 UI polish 小闭环。
+
+## 2026-05-26 Profile 运营台控件质感六次精修 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，复选框等控件仍显 low。
+- 本轮仍暂停 04 Proxy Manager 功能推进，只在已完成的 Profile 运营台上做最小可验证 UI polish。
+- 使用 `ui-ux-pro-max` 重新确认 B2B data-dense operations dashboard 方向。
+- 派发只读子 agent 审计当前 Profile 运营台与 `/home/jeff/code/reference-repos/saas_kit/ai-mksaas-template`，结论是继续局部提升 checkbox / bulk action / table row / toolbar / inspector，不做大重构，不复制 `saas_kit` 的 auth、db、payment、schema。
+
+本轮实现：
+
+- [x] `frontend/src/components/ProfileFilters.tsx`
+  - toolbar search / select 增加 `data-filter-control` 与 `data-active`，让 active filter 有明确视觉反馈。
+  - 保留全部原筛选键、label、`role="toolbar"` 和响应式网格。
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - selection checkbox 增加 `data-control="selection-checkbox"`，强化 18px 控件、solid checked state、hover / focus / disabled 细节。
+  - desktop row 的 selected / previewed 状态改为更清晰的 inset 状态线与低噪声背景。
+  - `Open` action 保持常显并增加更精细的 hover shadow。
+  - 未改 `PROFILE_TABLE_ROW_HEIGHT = 64`、`PROFILE_CARD_ROW_HEIGHT = 188`、120 条虚拟滚动阈值、`min-w-[840px]` 和 select-all 完整 filtered set 语义。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - 保留 `sticky top-0 h-11` 与 table header `top-11` 配合。
+  - summary / commands 分组从浅灰胶囊调整为更像数据表批处理 header 的白色 surface。
+  - `Check health` 继续作为一级真实动作。
+  - Launch / Stop / Tag / Delete 在 Profile 运营台 UI 中锁定为 disabled，不触发 mutation，不打开 tag form 或 delete confirm。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、Open profile 按钮和 section icon 继续精修。
+  - Health / Runtime 增加 `data-priority="primary"`，GeoIP / Proxy / Device 为 secondary，让右侧 inspector 的运营优先级更明确。
+  - proxy 可见文本和 `title` 继续走脱敏路径，不暴露账号密码。
+- [x] `frontend/src/App.tsx`
+  - 页面背景、filter band、table panel、summary tile 做轻量 token 收口，减少卡片堆叠和碎阴影。
+- [x] `frontend/src/components/ProfileFilters.test.tsx`
+  - TDD 新增 active filter 视觉语义测试，并先确认红灯。
+- [x] `frontend/src/components/ProfileSummaryPanel.test.tsx`
+  - TDD 新增 inspector section priority 语义测试，并先确认红灯。
+- [x] `frontend/src/components/ProfileTable.test.tsx`
+  - TDD 新增 selection checkbox `data-control` 与高风险批量动作 disabled 语义测试，并先确认红灯。
+
+保持不变：
+
+- 桌面 `Actions` / `Open` 首屏仍可见。
+- 移动端 body 不横向撑破；窄屏继续只渲染 card list，不重复 desktop table。
+- 表格自身横向滚动仍由 `Profile operations table` region 承载。
+- 批量 `Check health` 仍是真实动作。
+- 批量 launch / stop / tag / delete 的底层 hook/API 能力保留，但 Profile 运营台当前 UI 不暴露这些高风险 mutation。
+- 主表超过 120 条、左侧超过 80 条的固定行高虚拟滚动语义不变。
+- proxy 可见文本和 `title` 继续不暴露用户名/密码。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileFilters.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx
+# 4 failed, 37 passed
+# 红灯：缺少 active filter data attribute、inspector priority、selection checkbox data-control、高风险批量动作 disabled 锁定
+
+cd frontend && npm test -- --run src/components/ProfileFilters.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx
+# 3 passed, 41 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 50 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileList.test.tsx src/components/ProfileForm.test.tsx
+# 3 passed, 33 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 127 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:5173/`，通过 Vite proxy 访问本机后端 `127.0.0.1:8080`，QA 数据 162 个 profiles。
+- 桌面 `1440x900`：
+  - dense table 可见，`Actions` / `Open` 首屏可见。
+  - `document.documentElement.scrollWidth === window.innerWidth === 1440`，body 未横向撑破。
+  - 选择首行后 bulk toolbar 显示 `1 selected`，`Check health` 为一级动作。
+  - Launch / Stop / Tag / Delete 可见但 disabled，不触发高风险 mutation。
+  - 点击 `Check health` 后所选行 `Last checked` 更新时间，问题计数同步变化。
+  - 主表滚动到中段后 table region 内早期 row 离开 DOM，可见 `Polish QA Profile 120`，窗口内 `Open` 按钮约 26 个，虚拟滚动语义保持。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 首屏约 22 张 card，不全量渲染 162 个 profiles。
+  - 选择首张 card 后 bulk toolbar 和 card selection toolbar 可见。
+  - 高风险批量动作保持 disabled。
+  - 点击 `Check health` 后 `Last checked` 更新时间，selection 保留，body 仍不横向撑破。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-bulk-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-check-health.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-virtual-scroll.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/mobile-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/mobile-card-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/mobile-check-health.png`
+
+范围说明：
+
+- 本轮不做服务端分页、无限滚动或 Profile 数据架构变更。
+- 本轮不推进 04 Proxy Manager 前端页面。
+- 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip。
+- 03 模块仍保持完成状态；本记录作为用户反馈驱动的 UI polish 小闭环。

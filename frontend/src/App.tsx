@@ -337,7 +337,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   }
 
   return (
-    <div className="flex h-screen bg-[#f6f8fb] text-slate-900">
+    <div className="flex h-screen bg-[#f6f7f9] text-slate-900">
       {/* Sidebar */}
       {sidebarOpen && (
         <>
@@ -446,7 +446,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
                 </div>
               </section>
-              <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
                 <ProfileFilters
                   value={filters}
                   options={filterOptions}
@@ -455,7 +455,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 />
               </section>
               <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.035)] lg:min-h-0">
+                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] lg:min-h-0">
                   <ProfileTable
                     profiles={filteredProfiles}
                     healthByProfileId={healthByProfileId}
@@ -539,13 +539,13 @@ function SummaryTile({
 }) {
   const toneClassName = {
     neutral: "border-slate-200 bg-white text-slate-700 before:bg-slate-300",
-    success: "border-emerald-200 bg-emerald-50/70 text-emerald-700 before:bg-emerald-500",
-    warning: "border-amber-200 bg-amber-50/75 text-amber-800 before:bg-amber-500",
-    danger: "border-red-200 bg-red-50/75 text-red-700 before:bg-red-500",
+    success: "border-emerald-200 bg-emerald-50/80 text-emerald-700 before:bg-emerald-500",
+    warning: "border-amber-200 bg-amber-50/80 text-amber-800 before:bg-amber-500",
+    danger: "border-red-200 bg-red-50/80 text-red-700 before:bg-red-500",
   }[tone];
 
   return (
-    <div className={`relative min-w-[92px] overflow-hidden rounded-lg border px-3 py-2 shadow-hairline before:absolute before:inset-x-0 before:top-0 before:h-0.5 ${toneClassName}`}>
+    <div className={`relative min-w-[92px] overflow-hidden rounded-lg border px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.8)] before:absolute before:inset-x-0 before:top-0 before:h-0.5 ${toneClassName}`}>
       <div className="text-lg font-semibold leading-5 tabular-nums">{value}</div>
       <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] opacity-75">
         {label}

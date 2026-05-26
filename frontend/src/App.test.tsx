@@ -457,154 +457,77 @@ describe("App operations console", () => {
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("runs a bulk launch for the currently selected stopped profiles", async () => {
+  it("keeps high-risk bulk actions disabled while leaving health check available", async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
     fireEvent.click(screen.getByLabelText("Select Beta Broken"));
     fireEvent.click(screen.getByLabelText("Select Alpha Good"));
+
+    expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
-
-    await waitFor(() => {
-      expect(mockLaunchProfiles).toHaveBeenCalledWith(["beta", "alpha"]);
-    });
-    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(false);
-  });
-
-  it("requires confirmation and bulk deletes selected stopped profiles", async () => {
-    render(<App />);
-
-    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
-    fireEvent.click(screen.getByLabelText("Select Beta Broken"));
-    fireEvent.click(screen.getByLabelText("Select Alpha Good"));
-
     fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
-    expect(screen.getByText("Browser data will be permanently removed.")).toBeTruthy();
-    expect(mockDeleteProfiles).not.toHaveBeenCalled();
-
-    fireEvent.change(screen.getByLabelText("Type DELETE to confirm bulk deletion"), { target: { value: "DELETE" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm bulk delete" }));
-
-    await waitFor(() => {
-      expect(mockDeleteProfiles).toHaveBeenCalledWith(["beta", "alpha"]);
-    });
-    expect(screen.queryByText("2 selected")).toBeNull();
-  });
-
-  it("only passes stopped profiles to confirmed bulk delete and keeps running selected", async () => {
-    mockDeleteProfiles.mockResolvedValue({
-      requestedCount: 1,
-      deletableCount: 1,
-      deletedCount: 1,
-      skippedRunningCount: 0,
-      failedCount: 0,
-      deletedIds: ["stopped"],
-    });
-    mockUseProfiles.mockReturnValue({
-      profiles: [
-        profile({ id: "running", name: "Running Profile", status: "running" }),
-        profile({ id: "stopped", name: "Stopped Profile", status: "stopped" }),
-      ],
-      healthByProfileId: {
-        running: health("running", {
-          status: "good",
-          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
-        }),
-        stopped: health("stopped", { status: "good" }),
-      },
-      loading: false,
-      error: null,
-      create: vi.fn(),
-      update: vi.fn(),
-      remove: vi.fn(),
-      launch: vi.fn(),
-      stop: vi.fn(),
-      checkHealth: mockCheckHealth,
-      launchProfiles: mockLaunchProfiles,
-      stopProfiles: mockStopProfiles,
-      addTagsToProfiles: mockAddTagsToProfiles,
-      deleteProfiles: mockDeleteProfiles,
-    });
-
-    render(<App />);
-
-    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
-    fireEvent.click(screen.getByLabelText("Select Running Profile"));
-    fireEvent.click(screen.getByLabelText("Select Stopped Profile"));
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
-    expect(screen.getByText("1 running profile will be skipped. Stop it first if it also needs deletion.")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Type DELETE to confirm bulk deletion"), { target: { value: "DELETE" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm bulk delete" }));
-
-    await waitFor(() => {
-      expect(mockDeleteProfiles).toHaveBeenCalledWith(["stopped"]);
-    });
-    expect(screen.getByText("1 selected")).toBeTruthy();
-  });
-
-  it("runs a bulk stop for the currently selected running profiles", async () => {
-    mockUseProfiles.mockReturnValue({
-      profiles: [
-        profile({ id: "running", name: "Running Profile", status: "running" }),
-        profile({ id: "stopped", name: "Stopped Profile", status: "stopped" }),
-      ],
-      healthByProfileId: {
-        running: health("running", {
-          status: "good",
-          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
-        }),
-        stopped: health("stopped", { status: "good" }),
-      },
-      loading: false,
-      error: null,
-      create: vi.fn(),
-      update: vi.fn(),
-      remove: vi.fn(),
-      launch: vi.fn(),
-      stop: vi.fn(),
-      checkHealth: mockCheckHealth,
-      launchProfiles: mockLaunchProfiles,
-      stopProfiles: mockStopProfiles,
-      addTagsToProfiles: mockAddTagsToProfiles,
-      deleteProfiles: mockDeleteProfiles,
-    });
-
-    render(<App />);
-
-    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
-    fireEvent.click(screen.getByLabelText("Select Running Profile"));
-    fireEvent.click(screen.getByLabelText("Select Stopped Profile"));
-
     fireEvent.click(screen.getByRole("button", { name: "Stop selected" }));
-
-    await waitFor(() => {
-      expect(mockStopProfiles).toHaveBeenCalledWith(["running"]);
-    });
-    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
+    expect(mockLaunchProfiles).not.toHaveBeenCalled();
+    expect(mockStopProfiles).not.toHaveBeenCalled();
+    expect(mockAddTagsToProfiles).not.toHaveBeenCalled();
+    expect(mockDeleteProfiles).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Bulk tag name")).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Confirm bulk profile deletion" })).toBeNull();
   });
 
-  it("adds a bulk tag to the currently selected profiles", async () => {
+  it("keeps high-risk bulk actions disabled for mixed running and stopped selections", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [
+        profile({ id: "running", name: "Running Profile", status: "running" }),
+        profile({ id: "stopped", name: "Stopped Profile", status: "stopped" }),
+      ],
+      healthByProfileId: {
+        running: health("running", {
+          status: "good",
+          runtime: { status: "running", vnc_ws_port: 6100, automation_url: "/api/profiles/running/automation" },
+        }),
+        stopped: health("stopped", { status: "good" }),
+      },
+      loading: false,
+      error: null,
+      create: vi.fn(),
+      update: vi.fn(),
+      remove: vi.fn(),
+      launch: vi.fn(),
+      stop: vi.fn(),
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
-    fireEvent.click(screen.getByLabelText("Select Beta Broken"));
-    fireEvent.click(screen.getByLabelText("Select Alpha Good"));
+    fireEvent.click(screen.getByLabelText("Select Running Profile"));
+    fireEvent.click(screen.getByLabelText("Select Stopped Profile"));
 
+    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop selected" }));
     fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
-    fireEvent.change(screen.getByLabelText("Bulk tag name"), { target: { value: "ops" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply tag" }));
-
-    await waitFor(() => {
-      expect(mockAddTagsToProfiles).toHaveBeenCalledWith(
-        ["beta", "alpha"],
-        [{ tag: "ops", color: "#6366f1" }],
-      );
-    });
-    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    expect(mockLaunchProfiles).not.toHaveBeenCalled();
+    expect(mockStopProfiles).not.toHaveBeenCalled();
+    expect(mockAddTagsToProfiles).not.toHaveBeenCalled();
+    expect(mockDeleteProfiles).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Confirm bulk profile deletion" })).toBeNull();
   });
 
   it("uses sidebar quick views to drive the main operations table", async () => {

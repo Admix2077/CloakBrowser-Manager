@@ -22,7 +22,7 @@ export function ProfileSummaryPanel({
       <aside
         role="complementary"
         aria-label="Profile summary"
-        className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-500"
+        className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
@@ -55,14 +55,14 @@ export function ProfileSummaryPanel({
     <aside
       role="complementary"
       aria-label="Profile summary"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.035)]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.85)]"
     >
-      <div className="border-b border-slate-200 bg-slate-50/60 p-4">
+      <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
             Previewing
           </span>
-          <span className="rounded-[6px] border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500">
+          <span className="rounded-[6px] border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)]">
             Inspector
           </span>
         </div>
@@ -77,7 +77,7 @@ export function ProfileSummaryPanel({
         </div>
         <button
           type="button"
-          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-[6px] border border-slate-200 bg-white text-xs font-medium text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-[6px] border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           onClick={() => onOpenProfile(profile.id)}
           aria-label={`Open ${profile.name}`}
         >
@@ -87,7 +87,7 @@ export function ProfileSummaryPanel({
       </div>
 
       <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto bg-white">
-        <SummarySection icon={<ShieldAlert className="h-3.5 w-3.5" />} title="Health">
+        <SummarySection icon={<ShieldAlert className="h-3.5 w-3.5" />} title="Health" priority="primary">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-slate-500">Status</span>
             <HealthBadge health={health} compact />
@@ -100,7 +100,7 @@ export function ProfileSummaryPanel({
           <SummaryRow label="Last checked" value={formatTimestamp(checkedAt)} />
         </SummarySection>
 
-        <SummarySection icon={<Monitor className="h-3.5 w-3.5" />} title="Runtime">
+        <SummarySection icon={<Monitor className="h-3.5 w-3.5" />} title="Runtime" priority="primary">
           <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
             <StatusIndicator status={profile.status} />
             <span>{profile.status}</span>
@@ -109,7 +109,7 @@ export function ProfileSummaryPanel({
           <SummaryRow label="Automation" value={profile.automation_url ? "available" : "-"} />
         </SummarySection>
 
-        <SummarySection icon={<Globe2 className="h-3.5 w-3.5" />} title="GeoIP">
+        <SummarySection icon={<Globe2 className="h-3.5 w-3.5" />} title="GeoIP" priority="secondary">
           <SummaryRow label="IP" value={ip ?? "-"} mono />
           <SummaryRow label="Country" value={country ?? "-"} />
           <SummaryRow label="Timezone" value={timezone ?? "-"} />
@@ -120,11 +120,11 @@ export function ProfileSummaryPanel({
           </div>
         </SummarySection>
 
-        <SummarySection icon={<Network className="h-3.5 w-3.5" />} title="Proxy">
+        <SummarySection icon={<Network className="h-3.5 w-3.5" />} title="Proxy" priority="secondary">
           <SummaryRow label="Endpoint" value={proxyLabel} mono title={proxyLabel} />
         </SummarySection>
 
-        <SummarySection icon={<Cpu className="h-3.5 w-3.5" />} title="Device">
+        <SummarySection icon={<Cpu className="h-3.5 w-3.5" />} title="Device" priority="secondary">
           <SummaryRow label="Platform" value={profile.platform} />
           <SummaryRow label="Screen" value={`${profile.screen_width} x ${profile.screen_height}`} />
           <SummaryRow
@@ -141,19 +141,30 @@ export function ProfileSummaryPanel({
 function SummarySection({
   icon,
   title,
+  priority,
   children,
 }: {
   icon: ReactNode;
   title: string;
+  priority: "primary" | "secondary";
   children: ReactNode;
 }) {
   return (
     <section
       aria-label={title}
-      className="bg-white px-4 py-3.5"
+      data-priority={priority}
+      className={`bg-white px-4 py-3.5 ${
+        priority === "primary" ? "shadow-[inset_3px_0_0_rgba(37,99,235,0.24)]" : ""
+      }`}
     >
-      <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded-[5px] border border-slate-200 bg-slate-50 text-slate-400">
+      <div className={`mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] ${
+        priority === "primary" ? "text-slate-700" : "text-slate-500"
+      }`}>
+        <span className={`flex h-5 w-5 items-center justify-center rounded-[5px] border ${
+          priority === "primary"
+            ? "border-blue-100 bg-blue-50 text-blue-600"
+            : "border-slate-200 bg-slate-50 text-slate-400"
+        }`}>
           {icon}
         </span>
         {title}

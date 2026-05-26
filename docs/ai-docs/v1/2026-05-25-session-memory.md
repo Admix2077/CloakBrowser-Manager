@@ -2651,3 +2651,111 @@ stash@{0}: wip proxy manager api tests before profile ui polish
 ```
 
 后续继续 04 Proxy Manager 前端小闭环时，需要先恢复该 stash 或重新写对应测试。
+
+## 39. 2026-05-26 Profile 运营台控件质感六次精修 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，复选框等控件仍显 low。
+- 本轮仍暂停 04 Proxy Manager 功能推进，只做 Profile 运营台最小 UI polish。
+- 使用 `ui-ux-pro-max` 确认 B2B data-dense operations dashboard 方向。
+- 派发两个只读子 agent：
+  - 一个审计当前 Profile 运营台 UI 风险，结论是局部改 checkbox / bulk action / table row / toolbar / inspector，不能动虚拟滚动、行高、批量动作数据流。
+  - 一个审计 `/home/jeff/code/reference-repos/saas_kit/ai-mksaas-template`，结论是只借鉴 data table、action bar、checkbox、inspector 的视觉原则，禁止复制 auth / db / payment / schema。
+
+已完成：
+
+- `frontend/src/components/ProfileFilters.tsx`
+  - toolbar search / select 增加 `data-filter-control` 和 `data-active`。
+  - active search、runtime、tag 等筛选有更明确的边框 / 左侧 accent / soft background。
+- `frontend/src/components/ProfileTable.tsx`
+  - selection checkbox 增加 `data-control="selection-checkbox"`。
+  - checkbox 视觉强化为 18px 控件、solid checked state、低噪声 hover / focus / disabled。
+  - desktop row 的 selected / previewed 状态改为 inset 状态线和低噪声背景。
+  - `Open` action 常显，hover / focus 更清楚。
+- `frontend/src/components/BulkActionBar.tsx`
+  - 保持 `sticky top-0 h-11`。
+  - summary / commands 分组变成更稳定的白色 data-table surface。
+  - `Check health` 仍是一级真实动作。
+  - Launch / Stop / Tag / Delete 在 Profile 运营台 UI 中锁定为 disabled，不触发 mutation，不打开 tag form 或 delete confirm。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、Open profile 按钮、section icon 精修。
+  - Health / Runtime 增加 `data-priority="primary"`，GeoIP / Proxy / Device 为 secondary。
+- `frontend/src/App.tsx`
+  - 页面背景、filter band、table panel、summary tile 做轻量 token 收口。
+- 测试：
+  - `ProfileFilters.test.tsx` 新增 active toolbar control 断言。
+  - `ProfileSummaryPanel.test.tsx` 新增 section priority 断言。
+  - `ProfileTable.test.tsx` 和 `App.test.tsx` 新增 checkbox `data-control` 与高风险批量动作 disabled 断言。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileFilters.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx
+# 4 failed, 37 passed
+# 红灯：缺少 active filter data attribute、inspector priority、selection checkbox data-control、高风险批量动作 disabled 锁定
+
+cd frontend && npm test -- --run src/components/ProfileFilters.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx
+# 3 passed, 41 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 50 passed
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileList.test.tsx src/components/ProfileForm.test.tsx
+# 3 passed, 33 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 127 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:5173/`。
+- 桌面 `1440x900`：
+  - dense table 可见，`Actions` / `Open` 首屏可见。
+  - 选择首行后 bulk toolbar 显示 `1 selected`。
+  - Launch / Stop / Tag / Delete 可见但 disabled，不触发高风险 mutation。
+  - 点击 `Check health` 后所选行 `Last checked` 更新时间，问题计数同步变化。
+  - 主表滚动到中段后 table region 内早期 row 离开 DOM，可见 `Polish QA Profile 120`，窗口内 `Open` 按钮约 26 个。
+  - `document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 首屏约 22 张 card，不全量渲染 162 个 profiles。
+  - 选择首张 card 后 bulk toolbar 和 card selection toolbar 可见。
+  - 高风险批量动作保持 disabled。
+  - 点击 `Check health` 后 `Last checked` 更新时间，selection 保留。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-bulk-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-check-health.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/desktop-virtual-scroll.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/mobile-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/mobile-card-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v7-screens/mobile-check-health.png`
+
+仍未做：
+
+- 04 Proxy Manager 前端页面未推进。
+- 服务端分页 / 无限滚动未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- ProfileForm 页签和 Viewer EnvironmentStrip 未改。
+
+注意：
+
+- 工作树仍保留无关的 Proxy Manager API client 未提交改动：
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/lib/api.test.ts`
+- 本轮 commit 时不要把这两个文件混入 UI polish commit。

@@ -331,9 +331,9 @@ function ProfileDesktopTable({
         <col style={{ width: 64 }} />
         <col style={{ width: 80 }} />
       </colgroup>
-      <thead className={`sticky z-10 bg-white/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
-        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.2)]">
-          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-white/95 px-1.5 py-1.5 font-semibold">
+      <thead className={`sticky z-10 bg-[#fbfdff]/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
+        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
+          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-[#fbfdff]/95 px-1.5 py-1.5 font-semibold">
             <SelectionCheckbox
               label="Select all visible profiles"
               checked={allVisibleSelected}
@@ -569,7 +569,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="h-9 truncate border-b border-slate-200 bg-white/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+    <th className="h-9 truncate border-b border-slate-200 bg-[#fbfdff]/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
       {children}
     </th>
   );
@@ -599,11 +599,12 @@ function SelectionCheckbox({
 
   return (
     <label
+      data-control="selection-checkbox"
       data-state={state}
-      className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-transparent align-middle transition-[background-color,border-color,box-shadow] duration-150 ${
+      className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center rounded-[7px] border align-middle transition-[background-color,border-color,box-shadow] duration-150 ${
         disabled
-          ? "cursor-not-allowed opacity-50"
-          : "cursor-pointer hover:border-slate-200 hover:bg-slate-100/70"
+          ? "cursor-not-allowed border-transparent opacity-50"
+          : "cursor-pointer border-slate-200/0 hover:border-slate-200 hover:bg-slate-100/70 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
       }`}
     >
       <input
@@ -620,8 +621,8 @@ function SelectionCheckbox({
         aria-hidden="true"
         className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/30 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
           checked || indeterminate
-            ? "border-blue-600 bg-blue-600 text-white"
-            : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50/70"
+            ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.22),inset_0_1px_0_rgba(255,255,255,0.18)]"
+            : "border-slate-300 bg-white text-transparent shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_1px_1px_rgba(15,23,42,0.04)] group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50/70"
         }`}
       >
         {indeterminate ? (
@@ -784,19 +785,17 @@ function ProfileTableRow({
   return (
     <tr
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
-      className={`group transition-colors duration-150 focus-within:bg-blue-50/50 ${
+      className={`group transition-[background-color,box-shadow] duration-150 focus-within:bg-blue-50/50 ${
         selected
-          ? "bg-blue-50/60 hover:bg-blue-50/80"
+          ? "bg-blue-50/75 shadow-[inset_3px_0_0_#2563eb,inset_0_1px_0_rgba(37,99,235,0.06),inset_0_-1px_0_rgba(37,99,235,0.06)] hover:bg-blue-50"
           : previewed
-            ? "bg-slate-50/80 hover:bg-slate-100/70"
-            : "odd:bg-white even:bg-slate-50/35 hover:bg-slate-100/55"
+            ? "bg-slate-50/90 shadow-[inset_3px_0_0_#94a3b8] hover:bg-slate-100/70"
+            : "odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/60"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
     >
       <td
-        className={`border-b border-slate-100 border-l-2 px-1.5 py-2 ${
-          selected ? "border-l-blue-600" : previewed ? "border-l-slate-400" : "border-l-transparent"
-        }`}
+        className="border-b border-slate-100 px-1.5 py-2"
       >
         <SelectionCheckbox
           label={`Select ${profile.name}`}
@@ -858,7 +857,7 @@ function ProfileTableRow({
       <td className="border-b border-slate-100 px-2 py-2">
         <button
           type="button"
-          className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 group-hover:border-slate-300"
+          className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 group-hover:border-slate-300 group-hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >

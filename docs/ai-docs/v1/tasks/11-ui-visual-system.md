@@ -133,3 +133,17 @@ cd frontend && npm run build
 - `App` 主区 filter band 和 table panel 继续降噪，保持主区 table + 右侧 inspector 信息架构。
 
 验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感五次降噪 polish 小闭环`。
+
+## 2026-05-26 Profile 运营台控件质感六次精修 polish
+
+本轮继续根据 Jeff 对 checkbox / bulk action / table row / toolbar / inspector 质感的反馈做最小 UI polish：
+
+- 使用 `ui-ux-pro-max` 确认 data-dense operations console 方向。
+- 子 agent 只读审计当前实现与 `/home/jeff/code/reference-repos/saas_kit/ai-mksaas-template`，只吸收 data table、action bar、checkbox、inspector 的视觉原则，不复制业务代码，不迁入 auth / db / payment / schema。
+- `ProfileFilters` 增加 active filter 视觉语义，避免 toolbar 像普通表单控件堆叠。
+- `ProfileTable` 强化 checkbox 控件、selected / previewed row 状态线、Open action hover 质感，同时保留固定行高虚拟滚动。
+- `BulkActionBar` 保持顶置 sticky 形态，summary / commands 分组改为更稳定的白色 data-table surface；`Check health` 真实可用，Launch / Stop / Tag / Delete 锁定为 disabled。
+- `ProfileSummaryPanel` 增加 section priority 语义，Health / Runtime 更像 operational inspector 的优先信息。
+- `App` 主区 surface / shadow / tile token 继续收口，减少卡片堆叠感。
+
+验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感六次精修 polish 小闭环`。

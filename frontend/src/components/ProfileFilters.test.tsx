@@ -78,4 +78,25 @@ describe("ProfileFilters", () => {
 
     expect(screen.getByRole("toolbar", { name: "Profile filters" })).toBeTruthy();
   });
+
+  it("marks active toolbar controls for faster operations scanning", () => {
+    render(
+      <ProfileFilters
+        value={{
+          ...value,
+          search: "seller",
+          status: "running",
+          tag: "warmup",
+        }}
+        options={options}
+        onChange={vi.fn()}
+        layout="toolbar"
+      />,
+    );
+
+    expect(screen.getByLabelText("Search profiles").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("true");
+    expect(screen.getByLabelText("Runtime status").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("true");
+    expect(screen.getByLabelText("Tag filter").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("true");
+    expect(screen.getByLabelText("Country filter").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("false");
+  });
 });

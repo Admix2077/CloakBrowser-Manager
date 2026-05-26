@@ -180,6 +180,7 @@ describe("ProfileTable", () => {
     const selectedRowCheckbox = screen.getByLabelText("Select Good US") as HTMLInputElement;
     const uncheckedRowCheckbox = screen.getByLabelText("Select Broken Proxy") as HTMLInputElement;
     expect(selectedRowCheckbox.checked).toBe(true);
+    expect(selectedRowCheckbox.closest("label")?.getAttribute("data-control")).toBe("selection-checkbox");
     expect(selectedRowCheckbox.closest("label")?.getAttribute("data-state")).toBe("checked");
     expect(uncheckedRowCheckbox.checked).toBe(false);
     expect(uncheckedRowCheckbox.closest("label")?.getAttribute("data-state")).toBe("unchecked");
@@ -286,6 +287,8 @@ describe("ProfileTable", () => {
     const onCheckHealth = vi.fn();
     const onLaunchSelected = vi.fn();
     const onStopSelected = vi.fn();
+    const onTagSelected = vi.fn();
+    const onDeleteSelected = vi.fn();
 
     render(
       <ProfileTable
@@ -297,6 +300,8 @@ describe("ProfileTable", () => {
         onCheckSelectedHealth={onCheckHealth}
         onLaunchSelectedProfiles={onLaunchSelected}
         onStopSelectedProfiles={onStopSelected}
+        onAddTagsToSelectedProfiles={onTagSelected}
+        onDeleteSelectedProfiles={onDeleteSelected}
       />,
     );
 
@@ -313,14 +318,18 @@ describe("ProfileTable", () => {
     expect(screen.getByRole("button", { name: "Check health" }).textContent).toContain("Check health");
     fireEvent.click(screen.getByRole("button", { name: "Check health" }));
     expect(onCheckHealth).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
-    expect(onLaunchSelected).toHaveBeenCalledWith(["error"]);
-    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(onLaunchSelected).not.toHaveBeenCalled();
+    expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Stop selected" }));
-    expect(onStopSelected).toHaveBeenCalledWith(["good"]);
+    expect(onStopSelected).not.toHaveBeenCalled();
     expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
+    expect(onTagSelected).not.toHaveBeenCalled();
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    expect(onDeleteSelected).not.toHaveBeenCalled();
   });
 
   it("clears selected profiles from the bulk action bar with Escape", () => {
@@ -341,7 +350,7 @@ describe("ProfileTable", () => {
     expect(onClearSelection).toHaveBeenCalledTimes(1);
   });
 
-  it("requires typed confirmation before deleting selected stopped profiles", () => {
+  it("keeps high-risk bulk deletion disabled even when stopped profiles are selected", () => {
     const onDeleteSelected = vi.fn();
 
     render(
@@ -356,58 +365,8 @@ describe("ProfileTable", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
 
-    expect(screen.getByText("Delete 1 stopped profile?")).toBeTruthy();
-    expect(screen.getByText("1 running profile will be skipped. Stop it first if it also needs deletion.")).toBeTruthy();
-    expect(screen.getByText("Browser data will be permanently removed.")).toBeTruthy();
-    expect((screen.getByRole("button", { name: "Confirm bulk delete" }) as HTMLButtonElement).disabled).toBe(true);
-
-    fireEvent.change(screen.getByLabelText("Type DELETE to confirm bulk deletion"), { target: { value: "delete" } });
-    expect((screen.getByRole("button", { name: "Confirm bulk delete" }) as HTMLButtonElement).disabled).toBe(true);
-
-    fireEvent.change(screen.getByLabelText("Type DELETE to confirm bulk deletion"), { target: { value: "DELETE" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm bulk delete" }));
-
-    expect(onDeleteSelected).toHaveBeenCalledWith(["error"]);
-  });
-
-  it("closes bulk delete confirmation with Escape without deleting profiles", () => {
-    const onDeleteSelected = vi.fn();
-
-    render(
-      <ProfileTable
-        profiles={profiles}
-        healthByProfileId={healthByProfileId}
-        onSelect={vi.fn()}
-        selectedProfileIds={new Set(["error"])}
-        onDeleteSelectedProfiles={onDeleteSelected}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
-    fireEvent.keyDown(screen.getByLabelText("Type DELETE to confirm bulk deletion"), { key: "Escape" });
-
     expect(onDeleteSelected).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog", { name: "Confirm bulk profile deletion" })).toBeNull();
-  });
-
-  it("cancels bulk delete confirmation without deleting profiles", () => {
-    const onDeleteSelected = vi.fn();
-
-    render(
-      <ProfileTable
-        profiles={profiles}
-        healthByProfileId={healthByProfileId}
-        onSelect={vi.fn()}
-        selectedProfileIds={new Set(["error"])}
-        onDeleteSelectedProfiles={onDeleteSelected}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Delete selected" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel bulk delete" }));
-
-    expect(onDeleteSelected).not.toHaveBeenCalled();
-    expect(screen.queryByText("Browser data will be permanently removed.")).toBeNull();
   });
 
   it("keeps bulk delete disabled when only running profiles are selected", () => {
@@ -422,10 +381,10 @@ describe("ProfileTable", () => {
     );
 
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole("button", { name: "Delete selected" }).getAttribute("title")).toBe("Stop running profiles before bulk deletion");
+    expect(screen.getByRole("button", { name: "Delete selected" }).getAttribute("title")).toBe("Bulk delete is disabled in this console");
   });
 
-  it("opens a bulk tag form and submits a new tag for selected profiles", () => {
+  it("keeps bulk tag disabled and does not open the tag form", () => {
     const onTagSelected = vi.fn();
 
     render(
@@ -439,21 +398,15 @@ describe("ProfileTable", () => {
       />,
     );
 
-    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
-    expect(document.activeElement).toBe(screen.getByLabelText("Bulk tag name"));
-    fireEvent.change(screen.getByLabelText("Bulk tag name"), { target: { value: "ops" } });
-    fireEvent.click(screen.getByRole("button", { name: "Apply tag" }));
-
-    expect(onTagSelected).toHaveBeenCalledWith(
-      ["good", "error"],
-      [{ tag: "ops", color: "#6366f1" }],
-    );
-    expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByLabelText("Bulk tag name")).toBeNull();
+    expect(onTagSelected).not.toHaveBeenCalled();
   });
 
-  it("closes the bulk tag form with Escape without applying a tag", () => {
+  it("keeps disabled bulk tag from opening a form while Escape still clears selection", () => {
     const onTagSelected = vi.fn();
+    const onClearSelection = vi.fn();
 
     render(
       <ProfileTable
@@ -461,17 +414,18 @@ describe("ProfileTable", () => {
         healthByProfileId={healthByProfileId}
         onSelect={vi.fn()}
         selectedProfileIds={new Set(["good", "error"])}
+        onClearSelection={onClearSelection}
         onAddTagsToSelectedProfiles={onTagSelected}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Tag selected" }));
-    fireEvent.change(screen.getByLabelText("Bulk tag name"), { target: { value: "ops" } });
-    fireEvent.keyDown(screen.getByLabelText("Bulk tag name"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Tag selected" }), { key: "Escape" });
 
     expect(onTagSelected).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Bulk tag name")).toBeNull();
     expect(screen.getByRole("button", { name: "Tag selected" })).toBeTruthy();
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
   });
 
   it("disables the bulk tag action while tags are applying", () => {
