@@ -1091,6 +1091,61 @@ def test_automation_task_responses_redact_open_url_steps(app_client: TestClient)
     assert "super-secret" not in str(cancel_resp.json())
 
 
+def test_automation_task_responses_redact_wait_for_selector_steps(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskWaitForSelectorRedactProfile"})
+    pid = create.json()["id"]
+    selector = "#ready-token-super-secret"
+    steps = [
+        {
+            "type": "wait_for_selector",
+            "selector": selector,
+            "page_ref": "0",
+            "state": "attached",
+            "timeout_ms": 5000,
+            "note": "do-not-echo",
+        },
+    ]
+    expected_steps = [
+        {
+            "type": "wait_for_selector",
+            "page_ref": "0",
+            "state": "attached",
+            "timeout_ms": 5000,
+        },
+    ]
+
+    create_resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+    task_id = create_resp.json()["id"]
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["steps"] == expected_steps
+    assert selector not in str(create_resp.json())
+    assert "super-secret" not in str(create_resp.json())
+    assert "do-not-echo" not in str(create_resp.json())
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    assert selector not in str(get_resp.json())
+    assert "super-secret" not in str(get_resp.json())
+    assert "do-not-echo" not in str(get_resp.json())
+
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["steps"] == expected_steps
+    assert selector not in str(list_resp.json())
+    assert "super-secret" not in str(list_resp.json())
+    assert "do-not-echo" not in str(list_resp.json())
+
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == expected_steps
+    assert selector not in str(cancel_resp.json())
+    assert "super-secret" not in str(cancel_resp.json())
+    assert "do-not-echo" not in str(cancel_resp.json())
+
+
 def test_automation_task_responses_redact_persisted_result_steps(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskResultRedactProfile"})
     pid = create.json()["id"]
@@ -1336,6 +1391,166 @@ def test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload(
     assert data["steps"] == [{"type": "open_url"}]
     assert data["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "failed"}]}
     assert data["error"] == "Invalid open_url step"
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    selector = "#ready-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "wait_for_selector",
+                    "selector": selector,
+                    "page_ref": "0",
+                    "state": "hidden",
+                    "timeout_ms": 2500,
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.wait_for_selector.assert_awaited_once_with(selector, state="hidden", timeout=2500)
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "wait_for_selector", "page_ref": "0", "state": "hidden", "timeout_ms": 2500}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "succeeded"}]}
+    assert selector not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_wait_for_selector_step_marks_failed_for_invalid_selector_without_leaking_payload(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorInvalidProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    secret_note = "#ready-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "wait_for_selector", "selector": "", "note": secret_note}],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "wait_for_selector"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "failed"}]}
+    assert data["error"] == "Invalid wait_for_selector step"
+    assert secret_note not in str(data)
+    assert "super-secret" not in str(data)
+    page.wait_for_selector.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_wait_for_selector_step_marks_failed_for_invalid_state(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorInvalidStateProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    secret_note = "#ready-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "wait_for_selector", "selector": "#ready", "state": "shown", "note": secret_note}],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "wait_for_selector"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "failed"}]}
+    assert data["error"] == "Invalid wait_for_selector step"
+    assert secret_note not in str(data)
+    assert "super-secret" not in str(data)
+    page.wait_for_selector.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_wait_for_selector_step_marks_failed_for_bool_timeout(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorBoolTimeoutProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait_for_selector", "selector": "#ready", "timeout_ms": True}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "wait_for_selector"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "failed"}]}
+    assert data["error"] == "Invalid wait_for_selector step"
+    page.wait_for_selector.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_wait_for_selector_step_uses_defaults(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorDefaultsProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait_for_selector", "selector": "#ready"}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.wait_for_selector.assert_awaited_once_with("#ready", state="visible", timeout=30_000)
+    data = resp.json()
+    assert data["steps"] == [{"type": "wait_for_selector"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "succeeded"}]}
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_wait_for_selector_step_failure_uses_redacted_error(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorFailureProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    selector = "#ready-token-super-secret"
+    page.wait_for_selector.side_effect = RuntimeError(f"selector failed: {selector}")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait_for_selector", "selector": selector}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "wait_for_selector"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "failed"}]}
+    assert data["error"] == "Wait for selector step failed"
+    assert selector not in str(data)
     assert "super-secret" not in str(data)
     main.browser_mgr.running.pop(pid, None)
 
