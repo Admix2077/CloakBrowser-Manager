@@ -41,6 +41,7 @@ from .models import (
     AutomationClickRequest,
     AutomationEvaluateRequest,
     AutomationEvaluateResponse,
+    AutomationFillRequest,
     AutomationGotoRequest,
     AutomationInfoResponse,
     AutomationPageResponse,
@@ -1975,6 +1976,24 @@ async def automation_click(
         await page.click(body.selector, timeout=body.timeout_ms)
     except Exception as exc:
         logger.warning("Automation click failed for %s page %d: %s", profile_id, page_index, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await _automation_page_summary(running, page_index, page)
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/fill",
+    response_model=AutomationPageResponse,
+)
+async def automation_fill(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationFillRequest,
+):
+    running, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.fill(body.selector, body.value, timeout=body.timeout_ms)
+    except Exception as exc:
+        logger.warning("Automation fill failed for %s page %d: %s", profile_id, page_index, exc)
         raise HTTPException(status_code=400, detail=str(exc))
     return await _automation_page_summary(running, page_index, page)
 

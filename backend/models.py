@@ -499,6 +499,12 @@ class AutomationClickRequest(BaseModel):
     timeout_ms: int = Field(default=30_000, ge=1, le=300_000)
 
 
+class AutomationFillRequest(BaseModel):
+    selector: str = Field(min_length=1, max_length=10_000)
+    value: str = Field(max_length=1_048_576)
+    timeout_ms: int = Field(default=30_000, ge=1, le=300_000)
+
+
 class AutomationEvaluateRequest(BaseModel):
     expression: str = Field(min_length=1, max_length=200_000)
 
