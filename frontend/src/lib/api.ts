@@ -137,6 +137,21 @@ export interface ProfileImportPreviewResponse {
   rows: ProfileImportPreviewRow[];
 }
 
+export interface ProfileImportResult {
+  line_number: number;
+  ok: boolean;
+  errors: string[];
+  source: Record<string, string>;
+  profile: Profile | null;
+}
+
+export interface ProfileImportResponse {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ProfileImportResult[];
+}
+
 export interface ProxyAsset {
   id: string;
   name: string;
@@ -319,6 +334,12 @@ export const api = {
 
   previewProfileImport: (csvText: string) =>
     request<ProfileImportPreviewResponse>("/api/profiles/import/preview", {
+      method: "POST",
+      body: JSON.stringify({ csv_text: csvText }),
+    }),
+
+  importProfiles: (csvText: string) =>
+    request<ProfileImportResponse>("/api/profiles/import", {
       method: "POST",
       body: JSON.stringify({ csv_text: csvText }),
     }),

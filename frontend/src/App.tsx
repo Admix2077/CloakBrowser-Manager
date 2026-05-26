@@ -656,7 +656,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         </div>
       </div>
       {profileImportDialogOpen && (
-        <ProfileCsvPreviewDialog onClose={() => setProfileImportDialogOpen(false)} />
+        <ProfileCsvPreviewDialog
+          onClose={() => setProfileImportDialogOpen(false)}
+          onImported={refresh}
+        />
       )}
     </div>
   );

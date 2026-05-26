@@ -26,6 +26,7 @@ vi.mock("./lib/api", () => ({
     logout: vi.fn(),
     listProfileTemplates: vi.fn(),
     previewProfileImport: vi.fn(),
+    importProfiles: vi.fn(),
   },
   setOnUnauthorized: vi.fn(),
 }));
@@ -67,6 +68,7 @@ const mockApi = api as {
   logout: ReturnType<typeof vi.fn>;
   listProfileTemplates: ReturnType<typeof vi.fn>;
   previewProfileImport: ReturnType<typeof vi.fn>;
+  importProfiles: ReturnType<typeof vi.fn>;
 };
 
 const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
@@ -151,6 +153,13 @@ beforeEach(() => {
     valid: 0,
     invalid: 0,
     rows: [],
+  });
+  mockApi.importProfiles.mockReset();
+  mockApi.importProfiles.mockResolvedValue({
+    total: 0,
+    succeeded: 0,
+    failed: 0,
+    results: [],
   });
   mockCreate.mockReset();
   mockCreate.mockResolvedValue(profile({ id: "created", name: "Created Profile" }));
@@ -826,6 +835,110 @@ describe("App operations console", () => {
     expect(within(dialog).getByText("macos")).toBeTruthy();
     expect(within(dialog).getByText("ja-JP")).toBeTruthy();
     expect(within(dialog).getByText("asia")).toBeTruthy();
+    expect(within(dialog).getByText("name is required")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+    expect(renderedEvidence).not.toContain("hiddenpass");
+    expect(renderedEvidence).not.toContain("user:");
+  });
+
+  it("imports valid profile CSV rows through the batch API and refreshes profiles", async () => {
+    const csvText = [
+      "name,proxy,tags,notes,template,platform,locale,timezone",
+      "Imported JP,http://user:hiddenpass@jp.proxy.example:8080,asia|warmup,Warmup row,Mac warmup,macos,ja-JP,Asia/Tokyo",
+      ",http://user:hiddenpass@bad.proxy.example:8080,bad,,Missing,ios,en-US,America/Chicago",
+    ].join("\n");
+    mockApi.previewProfileImport.mockResolvedValue({
+      total: 2,
+      valid: 1,
+      invalid: 1,
+      rows: [
+        {
+          line_number: 2,
+          ok: true,
+          errors: [],
+          source: { name: "Imported JP", proxy: "http://jp.proxy.example:8080" },
+          profile: {
+            name: "Imported JP",
+            template_id: null,
+            proxy: "http://jp.proxy.example:8080",
+            timezone: "Asia/Tokyo",
+            locale: "ja-JP",
+            platform: "macos",
+            screen_width: 1440,
+            screen_height: 900,
+            gpu_vendor: null,
+            gpu_renderer: null,
+            hardware_concurrency: null,
+            color_scheme: "light",
+            humanize: true,
+            human_preset: "careful",
+            launch_args: [],
+            geoip: false,
+            notes: "Warmup row",
+            tags: [{ tag: "asia", color: null }],
+          },
+        },
+        {
+          line_number: 3,
+          ok: false,
+          errors: ["name is required"],
+          source: { proxy: "http://bad.proxy.example:8080" },
+          profile: null,
+        },
+      ],
+    });
+    mockApi.importProfiles.mockResolvedValue({
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [
+        {
+          line_number: 2,
+          ok: true,
+          errors: [],
+          source: { name: "Imported JP", proxy: "http://jp.proxy.example:8080" },
+          profile: profile({
+            id: "imported-jp",
+            name: "Imported JP",
+            proxy: "http://user:hiddenpass@jp.proxy.example:8080",
+            timezone: "Asia/Tokyo",
+            locale: "ja-JP",
+            platform: "macos",
+            tags: [{ tag: "asia", color: null }],
+          }),
+        },
+        {
+          line_number: 3,
+          ok: false,
+          errors: ["name is required"],
+          source: { proxy: "http://bad.proxy.example:8080" },
+          profile: null,
+        },
+      ],
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import profile CSV preview" });
+    fireEvent.change(within(dialog).getByLabelText("Profile CSV content"), {
+      target: { value: csvText },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Preview CSV" }));
+
+    await waitFor(() => expect(mockApi.previewProfileImport).toHaveBeenCalledWith(csvText));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Create valid profiles" }));
+
+    await waitFor(() => expect(mockApi.importProfiles).toHaveBeenCalledWith(csvText));
+    expect(mockCreate).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+    expect(await within(dialog).findByText("Imported 1 profile(s), 1 failed")).toBeTruthy();
     expect(within(dialog).getByText("name is required")).toBeTruthy();
 
     const renderedEvidence = [

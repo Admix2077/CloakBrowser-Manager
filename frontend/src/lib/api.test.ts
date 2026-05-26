@@ -66,6 +66,26 @@ describe("api.previewProfileImport", () => {
   });
 });
 
+describe("api.importProfiles", () => {
+  it("sends pasted CSV text to the profile import endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+    }));
+
+    await api.importProfiles("name,platform\nImported,linux");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/import");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      csv_text: "name,platform\nImported,linux",
+    });
+  });
+});
+
 // ── updateProfile ───────────────────────────────────────────────────────────
 
 describe("api.updateProfile", () => {

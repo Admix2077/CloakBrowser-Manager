@@ -396,3 +396,73 @@ cd frontend && npm run build
 - 前端 `Import valid rows` / `Create valid profiles` 提交入口。
 - 导入后的前端刷新、成功/失败反馈和重复提交保护。
 - 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。
+
+## 2026-05-26 Profile CSV 批量创建前端提交小闭环
+
+背景：
+
+- 后端 `POST /api/profiles/import` 完成后，继续把 Profile CSV preview 弹窗升级为可提交有效行的导入入口。
+- 本轮只把现有弹窗接入后端 batch import API，不改 ProfileTable、BulkActionBar 或 runtime。
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProfileImportResult` / `ProfileImportResponse`。
+  - 新增 `api.importProfiles(csvText)`，调用 `/api/profiles/import`。
+- [x] `frontend/src/components/ProfileCsvPreviewDialog.tsx`
+  - Preview 后若存在有效行，显示 `Create valid profiles`。
+  - 点击后调用 `api.importProfiles`，进入 creating 状态并防重复提交。
+  - 成功后展示 `Imported N profile(s), M failed`。
+  - 导入结果优先显示后端 `results`，失败行继续保留 errors。
+  - 保留最近一次成功 preview 的原始 CSV 用于提交，UI 中 textarea 仍显示脱敏 CSV，避免 proxy 凭证丢失或泄漏。
+- [x] `frontend/src/App.tsx`
+  - 传入 `onImported={refresh}`，导入后刷新 profile list。
+- [x] `frontend/src/lib/api.test.ts`
+  - 覆盖 `api.importProfiles` 调用 `/api/profiles/import`。
+- [x] `frontend/src/App.test.tsx`
+  - 覆盖 preview 后点击 `Create valid profiles`。
+  - 断言调用 batch import API，不调用单条 `create`。
+  - 断言导入后调用 `refresh`，成功/失败汇总可见，失败原因保留且不泄漏 credentials。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "importProfiles"
+# 红灯：1 failed
+# 失败点：api.importProfiles is not a function
+
+cd frontend && npm test -- --run src/lib/api.test.ts -t "importProfiles"
+# 1 passed, 22 skipped
+
+cd frontend && npm test -- --run src/App.test.tsx -t "imports valid profile CSV"
+# 1 passed, 25 skipped
+
+cd frontend && npm test -- --run
+# 13 passed, 171 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 重启本地 QA 服务 `http://127.0.0.1:8095/`，让服务加载最新后端和 `frontend/dist`。
+- 通过 API 创建 QA 模板 `CSV Import UI Mac`。
+- 桌面 `1440x960`：
+  - 打开 `Import profile CSV preview` 弹窗。
+  - 粘贴 2 行 CSV 后点击 `Preview CSV`，显示 `2 total / 1 ready / 1 blocked`。
+  - 点击 `Create valid profiles` 后显示 `Imported 1 profile(s), 1 failed`。
+  - 左侧列表和主统计从 `5 profiles` 刷新为 `6 profiles`，并出现 `UI Batch Import`。
+  - 失败行继续显示 `name is required`、`Template not found`、`platform must be one of...`。
+  - 页面正文不包含 `hiddenpass` 或 `user:`。
+- 移动 `390x844`：
+  - 弹窗可见，导入结果提示保留。
+  - `body.scrollWidth=390`、`body.clientWidth=390`，body 未被横向撑破。
+- Playwright MCP console：当前交互后 0 errors、0 warnings。
+- 截图：
+  - `/tmp/cloakbrowser-profile-csv-import-screens/desktop.png`
+  - `/tmp/cloakbrowser-profile-csv-import-screens/mobile.png`
+
+未覆盖范围：
+
+- 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。

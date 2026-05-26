@@ -1,7 +1,13 @@
 import { AlertCircle, CheckCircle2, FileSpreadsheet, RefreshCw, SearchCheck, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { api, type ProfileImportPreviewResponse, type ProfileImportPreviewRow } from "../lib/api";
+import {
+  api,
+  type ProfileImportResponse,
+  type ProfileImportResult,
+  type ProfileImportPreviewResponse,
+  type ProfileImportPreviewRow,
+} from "../lib/api";
 import { redactUrlCredentials } from "../lib/profileDisplay";
 import { TagBadge } from "./Badge";
 
@@ -9,24 +15,34 @@ const PROFILE_CSV_SAMPLE = "name,proxy,tags,notes,template,platform,locale,timez
 
 interface ProfileCsvPreviewDialogProps {
   onClose: () => void;
+  onImported?: () => Promise<unknown> | unknown;
 }
 
-export function ProfileCsvPreviewDialog({ onClose }: ProfileCsvPreviewDialogProps) {
+export function ProfileCsvPreviewDialog({ onClose, onImported }: ProfileCsvPreviewDialogProps) {
   const [csvText, setCsvText] = useState("");
   const [preview, setPreview] = useState<ProfileImportPreviewResponse | null>(null);
+  const [lastPreviewCsvText, setLastPreviewCsvText] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<ProfileImportResponse | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const rows = preview?.rows.slice(0, 60) ?? [];
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const rows = (importResult?.results ?? preview?.rows ?? []).slice(0, 60);
   const canPreview = csvText.trim().length > 0 && !previewing;
+  const canImport = Boolean(lastPreviewCsvText && preview && preview.valid > 0 && !previewing && !importing);
 
   const previewCsv = async () => {
     if (!canPreview) return;
     setPreviewing(true);
     setError(null);
+    setImportNotice(null);
+    setImportResult(null);
     try {
+      const rawCsvText = csvText;
       const nextPreview = await api.previewProfileImport(csvText);
       setPreview(nextPreview);
-      setCsvText(redactUrlCredentials(csvText));
+      setLastPreviewCsvText(rawCsvText);
+      setCsvText(redactUrlCredentials(rawCsvText));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to preview profile CSV";
       setError(redactUrlCredentials(message));
@@ -35,11 +51,29 @@ export function ProfileCsvPreviewDialog({ onClose }: ProfileCsvPreviewDialogProp
     }
   };
 
+  const importValidRows = async () => {
+    if (!lastPreviewCsvText || !canImport) return;
+    setImporting(true);
+    setError(null);
+    setImportNotice(null);
+    try {
+      const result = await api.importProfiles(lastPreviewCsvText);
+      setImportResult(result);
+      setImportNotice(`Imported ${result.succeeded} profile(s), ${result.failed} failed`);
+      await onImported?.();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to import profile CSV";
+      setError(redactUrlCredentials(message));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const summary = useMemo(() => ({
-    total: preview?.total ?? 0,
-    valid: preview?.valid ?? 0,
-    invalid: preview?.invalid ?? 0,
-  }), [preview]);
+    total: importResult?.total ?? preview?.total ?? 0,
+    valid: importResult?.succeeded ?? preview?.valid ?? 0,
+    invalid: importResult?.failed ?? preview?.invalid ?? 0,
+  }), [importResult, preview]);
 
   return (
     <div className="animate-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-sm">
@@ -84,6 +118,10 @@ export function ProfileCsvPreviewDialog({ onClose }: ProfileCsvPreviewDialogProp
               onChange={(event) => {
                 setCsvText(event.target.value);
                 setError(null);
+                setImportNotice(null);
+                setImportResult(null);
+                setPreview(null);
+                setLastPreviewCsvText(null);
               }}
               placeholder={`${PROFILE_CSV_SAMPLE}\nRetail JP,http://proxy.example:8080,asia|warmup,Tokyo account,Mac warmup,macos,ja-JP,Asia/Tokyo`}
               spellCheck={false}
@@ -112,6 +150,12 @@ export function ProfileCsvPreviewDialog({ onClose }: ProfileCsvPreviewDialogProp
         {error && (
           <div className="animate-notice-in border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
             {error}
+          </div>
+        )}
+
+        {importNotice && (
+          <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700" role="status">
+            {importNotice}
           </div>
         )}
 
@@ -153,22 +197,35 @@ export function ProfileCsvPreviewDialog({ onClose }: ProfileCsvPreviewDialogProp
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-[#fbfdff] px-4 py-3">
           <div className="text-xs text-slate-500">
-            Preview only. Valid rows are not submitted until the batch create step is implemented.
+            Create submits valid rows only. Blocked rows stay visible with their backend validation errors.
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               className="btn-secondary h-8 text-xs"
               onClick={onClose}
-              disabled={previewing}
+              disabled={previewing || importing}
             >
               Close
             </button>
             <button
               type="button"
+              className="btn-secondary inline-flex h-8 min-w-[146px] items-center justify-center gap-1.5 text-xs"
+              onClick={() => void importValidRows()}
+              disabled={!canImport}
+            >
+              {importing ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {importing ? "Creating" : "Create valid profiles"}
+            </button>
+            <button
+              type="button"
               className="btn-primary inline-flex h-8 min-w-[116px] items-center justify-center gap-1.5 text-xs"
               onClick={() => void previewCsv()}
-              disabled={!canPreview}
+              disabled={!canPreview || importing}
             >
               {previewing ? (
                 <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -206,7 +263,7 @@ function ImportCountPill({
   );
 }
 
-function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow }) {
+function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | ProfileImportResult }) {
   const profile = row.profile;
   const safeProxy = redactUrlCredentials(profile?.proxy ?? row.source.proxy ?? "-");
   const name = profile?.name ?? row.source.name ?? "-";
@@ -214,6 +271,7 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow }) {
   const locale = profile?.locale ?? row.source.locale ?? "-";
   const timezone = profile?.timezone ?? row.source.timezone ?? "-";
   const tags = profile?.tags ?? [];
+  const templateId = profile && "template_id" in profile ? profile.template_id : null;
 
   return (
     <tr className={`shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors ${
@@ -226,9 +284,9 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow }) {
         <span className="block truncate text-sm font-semibold text-slate-900" title={redactUrlCredentials(name)}>
           {redactUrlCredentials(name)}
         </span>
-        {profile?.template_id && (
-          <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500" title={profile.template_id}>
-            {profile.template_id}
+        {templateId && (
+          <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500" title={templateId}>
+            {templateId}
           </span>
         )}
       </td>
