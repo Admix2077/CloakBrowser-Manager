@@ -3460,6 +3460,82 @@ git diff --check
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
 
+## 50. 2026-05-26 App shell loading 与 section 切换反馈小闭环
+
+背景：
+
+- Jeff 反馈页面已有 SS 风格，但交互反馈仍偏生硬。
+- 上一轮 Profile 运营台选中与批量操作微反馈已提交为 `33dcb7d add profile operations motion feedback`。
+- 本轮只处理 App shell loading skeleton 与 Profiles / Proxy Manager section 切换反馈，不改 API、hooks、Proxy Manager 内部加载逻辑或后端服务。
+
+子 agent：
+
+- `Hilbert` 只读审计 App shell 中切换/加载反馈位置。
+- 建议用 `role=status`、`aria-label="Loading operations console"`、`data-console-section` 和 `animate-console-section-in` 做最小 TDD 小闭环。
+- 提醒 class 断言不要过脆，因此测试保留语义断言为主，class 断言只覆盖关键反馈类。
+
+已完成：
+
+- `frontend/src/App.tsx`
+  - 新增本地 `LoadingShell`。
+  - 替换 auth checking 与 profiles loading 两处纯文本 `Loading...`。
+  - loading shell 使用 `role="status"`、`aria-label="Loading operations console"`、3 条 skeleton row。
+  - Profiles / Proxy Manager segmented control 增加 `transition-[background-color,color,box-shadow,transform]`、`active:translate-y-px`、`focus-visible`。
+  - profiles / proxies 内容区增加 `data-console-section` 与 `animate-console-section-in`。
+- `frontend/src/styles/globals.css`
+  - 新增 `animate-app-skeleton` 与 `animate-console-section-in`。
+  - 新增 `cloak-skeleton-pulse` 与 `cloak-console-section-in` keyframes。
+  - 继续受全局 `prefers-reduced-motion: reduce` 降级。
+- `frontend/src/App.test.tsx`
+  - 新增 auth checking loading skeleton 测试。
+  - 新增 profiles loading skeleton 测试。
+  - 在 section 切换测试中覆盖 segmented control 和 content wrapper 反馈类。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md`
+  - 追加本小闭环记录和验证证据。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx
+# 红灯：3 failed, 18 passed
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 passed, 21 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 153 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`。
+- 桌面 `1440x900`：
+  - Profiles 视图 JS 验证：`profileSectionMotion=true`、`scrollWidth=1440`、`innerWidth=1440`。
+  - 切到 Proxy Manager 后 JS 验证：`proxySectionMotion=true`、`hasProxyRegion=true`、`scrollWidth=1440`、`innerWidth=1440`。
+- 移动 `390x844`：
+  - Profiles 视图 JS 验证：`profileSectionMotion=true`、`scrollWidth=390`、`innerWidth=390`、`overflow=false`。
+- `agent-browser console` 无输出；`agent-browser errors` 无输出。
+
+截图：
+
+- `/tmp/cloakbrowser-profile-motion-screens/desktop-profiles-section-motion.png`
+- `/tmp/cloakbrowser-profile-motion-screens/desktop-proxy-section-motion.png`
+- `/tmp/cloakbrowser-profile-motion-screens/mobile-profiles-section-motion.png`
+
+边界：
+
+- 没有修改后端或 runtime。
+- 没有修改 Proxy Manager API 或内部加载状态机。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
 ## 48. 2026-05-26 Viewer 顶部 EnvironmentStrip 视觉升级小闭环
 
 背景：

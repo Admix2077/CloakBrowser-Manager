@@ -333,3 +333,67 @@ git diff --check
 - 没有解锁高风险批量操作。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 2026-05-26 App shell loading 与 section 切换反馈小闭环
+
+背景：
+
+- Jeff 反馈页面切换和加载反馈偏生硬。
+- 本小闭环只处理 App shell loading skeleton 与 Profiles / Proxy Manager 切换反馈，不改 API、hook、Proxy Manager 内部加载逻辑或 8095 服务。
+- 派发只读子 agent `Hilbert` 审计 App shell 中的切换/加载反馈位置和最小 TDD 断言。
+
+已完成：
+
+- [x] `frontend/src/App.tsx`
+  - 新增 `LoadingShell`，替换 auth checking 和 profiles loading 两处纯文本 `Loading...`。
+  - loading shell 使用 `role="status"`、`aria-label="Loading operations console"` 和固定 skeleton row。
+  - Profiles / Proxy Manager segmented control 增加 `transition-[background-color,color,box-shadow,transform]`、`active:translate-y-px`、`focus-visible`。
+  - profiles / proxies 内容区增加 `data-console-section` 与 `animate-console-section-in`。
+- [x] `frontend/src/styles/globals.css`
+  - 新增 `animate-app-skeleton` 与 `animate-console-section-in`。
+  - 新增 `cloak-skeleton-pulse` 与 `cloak-console-section-in` keyframes，继续受全局 reduced-motion 规则约束。
+- [x] `frontend/src/App.test.tsx`
+  - 覆盖 auth checking loading skeleton。
+  - 覆盖 profiles loading skeleton。
+  - 覆盖 segmented control 切换反馈和内容区切换 wrapper。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx
+# 红灯：3 failed, 18 passed
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 passed, 21 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 153 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x900`：
+  - Profiles 视图 JS 验证：`profileSectionMotion=true`、`scrollWidth=1440`、`innerWidth=1440`。
+  - 切到 Proxy Manager 后 JS 验证：`proxySectionMotion=true`、`hasProxyRegion=true`、`scrollWidth=1440`、`innerWidth=1440`。
+- 移动 `390x844`：
+  - Profiles 视图 JS 验证：`profileSectionMotion=true`、`scrollWidth=390`、`innerWidth=390`、`overflow=false`。
+- `agent-browser console` 无输出；`agent-browser errors` 无输出。
+- 截图：
+  - `/tmp/cloakbrowser-profile-motion-screens/desktop-profiles-section-motion.png`
+  - `/tmp/cloakbrowser-profile-motion-screens/desktop-proxy-section-motion.png`
+  - `/tmp/cloakbrowser-profile-motion-screens/mobile-profiles-section-motion.png`
+
+边界：
+
+- 没有修改后端或 runtime。
+- 没有修改 Proxy Manager API 或内部加载状态机。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

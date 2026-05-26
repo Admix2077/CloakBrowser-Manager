@@ -37,6 +37,36 @@ function profileFiltersEqual(a: ProfileFilterState, b: ProfileFilterState): bool
     && a.sortBy === b.sortBy;
 }
 
+function LoadingShell() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-surface-0 px-4">
+      <div
+        role="status"
+        aria-label="Loading operations console"
+        className="animate-app-skeleton w-[min(520px,100%)] rounded-lg border border-slate-200 bg-white p-4 shadow-[0_16px_48px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      >
+        <div className="flex items-center gap-3">
+          <span data-skeleton className="h-9 w-9 shrink-0 rounded-lg bg-slate-200" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div data-skeleton className="h-3 w-36 rounded-full bg-slate-200" />
+            <div data-skeleton className="h-2.5 w-52 max-w-full rounded-full bg-slate-100" />
+          </div>
+        </div>
+        <div className="mt-4 space-y-2">
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              aria-label="Loading skeleton row"
+              data-skeleton
+              className="h-8 rounded-md bg-slate-100"
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [authRequired, setAuthRequired] = useState(false);
@@ -62,11 +92,7 @@ export default function App() {
   }, []);
 
   if (authState === "checking") {
-    return (
-      <div className="flex h-screen items-center justify-center bg-surface-0">
-        <div className="text-sm text-slate-500">Loading...</div>
-      </div>
-    );
+    return <LoadingShell />;
   }
 
   if (authState === "error") {
@@ -341,11 +367,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   }, [deleteProfiles, selectedId]);
 
   if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-surface-0">
-        <div className="text-sm text-slate-500">Loading...</div>
-      </div>
-    );
+    return <LoadingShell />;
   }
 
   return (
@@ -394,7 +416,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 type="button"
                 aria-pressed={section === "profiles"}
                 onClick={() => setSection("profiles")}
-                className={`inline-flex h-7 items-center rounded-[6px] px-2.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                className={`inline-flex h-7 items-center rounded-[6px] px-2.5 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-150 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
                   section === "profiles"
                     ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
                     : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
@@ -406,7 +428,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 type="button"
                 aria-pressed={section === "proxies"}
                 onClick={() => setSection("proxies")}
-                className={`inline-flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                className={`inline-flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-150 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
                   section === "proxies"
                     ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
                     : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
@@ -480,11 +502,13 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {section === "proxies" && (
-            <ProxyManagerPage profiles={profiles} onProfilesAssigned={refresh} />
+            <div data-console-section="proxies" className="animate-console-section-in h-full min-h-0">
+              <ProxyManagerPage profiles={profiles} onProfilesAssigned={refresh} />
+            </div>
           )}
 
           {section === "profiles" && view === "empty" && (
-            <div className="flex h-full min-h-0 flex-col gap-3 p-3 sm:p-4 lg:p-5">
+            <div data-console-section="profiles" className="animate-console-section-in flex h-full min-h-0 flex-col gap-3 p-3 sm:p-4 lg:p-5">
               <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
                   <h2 className="text-xl font-semibold tracking-tight text-slate-950">Profile operations</h2>

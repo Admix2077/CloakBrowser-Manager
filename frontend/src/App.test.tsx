@@ -202,13 +202,54 @@ function tableProfileNames(): string[] {
 }
 
 describe("App operations console", () => {
+  it("renders a structured loading skeleton while auth status is pending", () => {
+    mockApi.authStatus.mockReturnValue(new Promise(() => undefined));
+
+    render(<App />);
+
+    const status = screen.getByRole("status", { name: "Loading operations console" });
+    expect(status).toBeTruthy();
+    expect(status.className).toContain("animate-app-skeleton");
+    expect(screen.getAllByLabelText("Loading skeleton row").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("renders a structured loading skeleton while profiles are loading", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [],
+      healthByProfileId: {},
+      loading: true,
+      error: null,
+      create: mockCreate,
+      update: mockUpdate,
+      remove: mockRemove,
+      launch: mockLaunch,
+      stop: mockStop,
+      refresh: mockRefresh,
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("status", { name: "Loading operations console" })).toBeTruthy();
+    expect(screen.getAllByLabelText("Loading skeleton row").length).toBeGreaterThanOrEqual(3);
+  });
+
   it("switches between profile operations and the Proxy Manager section", async () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Profiles" }).className).toContain("active:translate-y-px");
+    expect(screen.getByRole("button", { name: "Proxy Manager" }).className).toContain("transition-[background-color,color,box-shadow,transform]");
+    expect(screen.getByRole("table").closest("[data-console-section]")?.className).toContain("animate-console-section-in");
+
     fireEvent.click(screen.getByRole("button", { name: "Proxy Manager" }));
 
     expect(screen.getByRole("region", { name: "Proxy Manager" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Proxy Manager" }).closest("[data-console-section]")?.className).toContain("animate-console-section-in");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: "New Profile" })).toBeNull();
 
