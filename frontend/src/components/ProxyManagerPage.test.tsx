@@ -10,6 +10,9 @@ vi.mock("../lib/api", async (importOriginal) => {
     api: {
       listProxies: vi.fn(),
       listProxyProviderPresets: vi.fn(),
+      createProxyProviderPreset: vi.fn(),
+      updateProxyProviderPreset: vi.fn(),
+      deleteProxyProviderPreset: vi.fn(),
       createProxy: vi.fn(),
       bulkCheckProxies: vi.fn(),
       assignProxyToProfiles: vi.fn(),
@@ -20,6 +23,9 @@ vi.mock("../lib/api", async (importOriginal) => {
 
 const mockListProxies = api.listProxies as ReturnType<typeof vi.fn>;
 const mockListProxyProviderPresets = api.listProxyProviderPresets as ReturnType<typeof vi.fn>;
+const mockCreateProxyProviderPreset = api.createProxyProviderPreset as ReturnType<typeof vi.fn>;
+const mockUpdateProxyProviderPreset = api.updateProxyProviderPreset as ReturnType<typeof vi.fn>;
+const mockDeleteProxyProviderPreset = api.deleteProxyProviderPreset as ReturnType<typeof vi.fn>;
 const mockCreateProxy = api.createProxy as ReturnType<typeof vi.fn>;
 const mockBulkCheckProxies = api.bulkCheckProxies as ReturnType<typeof vi.fn>;
 const mockAssignProxyToProfiles = api.assignProxyToProfiles as ReturnType<typeof vi.fn>;
@@ -95,6 +101,9 @@ beforeEach(() => {
   mockListProxies.mockReset();
   mockListProxyProviderPresets.mockReset();
   mockListProxyProviderPresets.mockResolvedValue([]);
+  mockCreateProxyProviderPreset.mockReset();
+  mockUpdateProxyProviderPreset.mockReset();
+  mockDeleteProxyProviderPreset.mockReset();
   mockCreateProxy.mockReset();
   mockBulkCheckProxies.mockReset();
   mockAssignProxyToProfiles.mockReset();
@@ -129,7 +138,7 @@ describe("ProxyManagerPage", () => {
     const page = await screen.findByRole("region", { name: "Proxy Manager" });
     expect(within(page).getByRole("heading", { name: "Proxy Manager" })).toBeTruthy();
     expect(within(page).getByText("Proxy inventory with credential-redacted checks and profile assignment controls.")).toBeTruthy();
-    expect(within(page).getByText("URL credentials are hidden in the UI. Bulk check, profile assignment, and CSV import are active; add, edit, and delete remain disabled.")).toBeTruthy();
+    expect(within(page).getByText("URL credentials are hidden in the UI. Bulk check, profile assignment, provider presets, and CSV import are active; proxy asset add, edit, and delete remain disabled.")).toBeTruthy();
     expect(page.textContent).not.toContain("credential-safe");
     expect(within(page).getByText("2 proxies")).toBeTruthy();
     expect(within(page).getByText("1 good")).toBeTruthy();
@@ -762,6 +771,125 @@ describe("ProxyManagerPage", () => {
     ].join(" ");
     expect(renderedEvidence).not.toContain("hiddenpass");
     expect(renderedEvidence).not.toContain("user:");
+  });
+
+  it("creates proxy provider presets from the manager dialog without sensitive provider fields", async () => {
+    const createdPreset = {
+      id: "preset-new",
+      name: "Japan mobile default",
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: [
+        { tag: "mobile", color: null },
+        { tag: "warmup", color: null },
+      ],
+      notes: "Tokyo exits",
+      created_at: "2026-05-26T00:00:00Z",
+      updated_at: "2026-05-26T00:00:00Z",
+    };
+    mockListProxies.mockResolvedValue([]);
+    mockCreateProxyProviderPreset.mockResolvedValue(createdPreset);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Manage presets" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Manage provider presets" });
+    expect(dialog.textContent).not.toMatch(/api key|password|billing|account/i);
+
+    fireEvent.change(within(dialog).getByLabelText("Preset name"), {
+      target: { value: "Japan mobile default" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Preset provider"), {
+      target: { value: "ProxyJP" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Preset country"), {
+      target: { value: "jp" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Preset tags"), {
+      target: { value: "mobile, warmup" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Preset notes"), {
+      target: { value: "Tokyo exits" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save preset" }));
+
+    await waitFor(() => expect(mockCreateProxyProviderPreset).toHaveBeenCalledWith({
+      name: "Japan mobile default",
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: [
+        { tag: "mobile", color: null },
+        { tag: "warmup", color: null },
+      ],
+      notes: "Tokyo exits",
+    }));
+    expect(await within(dialog).findByText("Saved provider preset Japan mobile default")).toBeTruthy();
+    expect(within(dialog).getByText("Japan mobile default")).toBeTruthy();
+    expect(within(dialog).getByText("ProxyJP")).toBeTruthy();
+    expect(within(dialog).getByText("mobile")).toBeTruthy();
+  });
+
+  it("updates and deletes proxy provider presets from the manager dialog", async () => {
+    mockListProxies.mockResolvedValue([]);
+    mockListProxyProviderPresets.mockResolvedValue([
+      {
+        id: "preset-jp",
+        name: "Japan mobile default",
+        provider: "ProxyJP",
+        country_code: "JP",
+        tags: [{ tag: "mobile", color: "#0ea5e9" }],
+        notes: "Tokyo exits",
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+    mockUpdateProxyProviderPreset.mockResolvedValue({
+      id: "preset-jp",
+      name: "Japan warmup default",
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: [{ tag: "warmup", color: null }],
+      notes: "Updated exits",
+      created_at: "2026-05-26T00:00:00Z",
+      updated_at: "2026-05-26T00:10:00Z",
+    });
+    mockDeleteProxyProviderPreset.mockResolvedValue({ ok: true });
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    await waitFor(() => expect(mockListProxyProviderPresets).toHaveBeenCalledTimes(1));
+    fireEvent.click(within(page).getByRole("button", { name: "Manage presets" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Manage provider presets" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Edit Japan mobile default" }));
+    fireEvent.change(within(dialog).getByLabelText("Preset name"), {
+      target: { value: "Japan warmup default" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Preset tags"), {
+      target: { value: "warmup" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Preset notes"), {
+      target: { value: "Updated exits" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(mockUpdateProxyProviderPreset).toHaveBeenCalledWith("preset-jp", {
+      name: "Japan warmup default",
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: [{ tag: "warmup", color: null }],
+      notes: "Updated exits",
+    }));
+    expect(await within(dialog).findByText("Saved provider preset Japan warmup default")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete Japan warmup default" }));
+
+    await waitFor(() => expect(mockDeleteProxyProviderPreset).toHaveBeenCalledWith("preset-jp"));
+    expect(await within(dialog).findByText("Deleted provider preset Japan warmup default")).toBeTruthy();
+    expect(within(dialog).queryByText("Japan warmup default")).toBeNull();
   });
 
   it("imports valid pasted CSV rows through createProxy and skips invalid rows", async () => {

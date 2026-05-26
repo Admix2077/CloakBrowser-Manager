@@ -23,11 +23,11 @@
 
 ### Proxy Template
 
-- [ ] 支持 proxy provider preset。
+- [x] 支持 proxy provider preset。
   - [x] 后端事实源 CRUD API。
   - [x] 前端接入/选择（Proxy CSV import preset 默认值）。
   - [x] 后端与国家/标签选择、随机分配策略联动。
-  - [ ] 前端完整管理入口。
+  - [x] 前端完整管理入口。
 - [x] 支持按国家/标签选择 proxy。
   - [x] 后端候选过滤 API。
   - [x] 前端运营入口。
@@ -830,3 +830,72 @@ cd frontend && npm run build
 - 随机分配并发限制和审计。
 - Profile operations 主表里的批量 proxy 设置入口。
 - 批量启动/停止/GeoIP/tag/delete。
+
+## 2026-05-26 Proxy Provider Preset 前端完整管理入口小闭环
+
+背景：
+
+- Module 09 的 `proxy provider preset` 已具备后端事实源、CSV import 前端消费和随机分配后端策略联动。
+- 本轮补齐 Proxy Manager 内的完整管理入口，方便运营者维护 provider/country/tags/notes 默认值。
+- 不修改后端、不接 Project Mileage、不把 provider API key/password/billing/account 等字段做进 CloakBrowser UI。
+
+已完成：
+
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - Toolbar 新增 `Manage presets`。
+  - 新增 `Manage provider presets` 弹窗，支持创建、编辑、删除 provider preset。
+  - 表单只暴露 `name`、`provider`、`country_code`、`tags`、`notes`。
+  - 创建/编辑后同步 `providerPresets`，CSV import 的 `Provider preset` 下拉即时更新。
+  - 删除当前 preset 后从管理列表和 import 下拉移除，并清理当前 import 选中值。
+  - 保存和删除错误继续通过 `redactUrlCredentials` 脱敏。
+  - 移动端弹窗 body 改为内部滚动，避免窄屏裁切底部操作按钮；页面本体仍不横向撑破。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖 provider preset create。
+  - 覆盖 provider preset update/delete。
+  - 覆盖管理弹窗不出现 `api key/password/billing/account` 等敏感 provider 字段文案。
+- [x] `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `支持 proxy provider preset`。
+  - 勾选 `前端完整管理入口`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx -t "proxy provider presets"
+# 1 test file passed, 2 tests passed | 20 skipped
+
+cd frontend && npm test -- --run
+# 13 test files passed, 184 tests passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 本地 QA 服务：`http://127.0.0.1:8095/`，运行时 `invisible-playwright`。
+- 桌面 `1440x960`：
+  - 进入 `Proxy Manager`。
+  - 打开 `Manage presets`。
+  - 创建 `QA UI Preset Temp`，页面显示 `Saved provider preset QA UI Preset Temp`。
+  - 打开 `Import CSV`，`Provider preset` 下拉出现新 preset。
+  - 选择新 preset 并粘贴仅含 `name,url` 的 CSV，preview 自动补入 `ProxyQA`、`US`、`ui, temp`。
+  - 编辑为 `QA UI Preset Updated`，页面显示 `Saved provider preset QA UI Preset Updated`。
+  - 删除临时 preset，页面显示 `Deleted provider preset QA UI Preset Updated`。
+  - 再打开 `Import CSV`，临时 preset 已从下拉移除，只保留既有 `QA Japan Mobile`。
+- 移动 `390x844`：
+  - `Manage provider presets` 弹窗在窄屏下使用内部滚动。
+  - `document.body.scrollWidth=390`、`viewportWidth=390`，页面本体未横向撑破。
+- Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-provider-presets-desktop.png`
+  - `/home/jeff/code/cloakbrowser-provider-presets-mobile.png`
+
+未覆盖范围：
+
+- Provider preset 删除确认/撤销；当前任务只要求完整管理入口，批量删除二次确认仍留在批量运营任务中。
+- Provider preset API 错误分支的 UI 自动化测试。
+- Profile operations 主表里的批量 proxy 设置入口。
+- 批量启动/停止/health check/GeoIP/tag/proxy/delete。

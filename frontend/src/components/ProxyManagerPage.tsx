@@ -1,6 +1,6 @@
-import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, RefreshCw, Search, Shuffle, Upload, UserPlus, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, Pencil, RefreshCw, Search, Settings2, Shuffle, Trash2, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyRandomAssignRequestData } from "../lib/api";
+import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyProviderPresetCreateData, type ProxyRandomAssignRequestData } from "../lib/api";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
@@ -28,12 +28,27 @@ interface ProxyCsvImportFailure {
   message: string;
 }
 
+interface ProviderPresetFormState {
+  name: string;
+  provider: string;
+  country_code: string;
+  tags: string;
+  notes: string;
+}
+
 export function ProxyManagerPage({
   profiles = [],
   onProfilesAssigned,
 }: ProxyManagerPageProps = {}) {
   const [proxies, setProxies] = useState<ProxyAsset[]>([]);
   const [providerPresets, setProviderPresets] = useState<ProxyProviderPreset[]>([]);
+  const [providerPresetDialogOpen, setProviderPresetDialogOpen] = useState(false);
+  const [providerPresetForm, setProviderPresetForm] = useState<ProviderPresetFormState>(() => emptyProviderPresetForm());
+  const [editingProviderPresetId, setEditingProviderPresetId] = useState<string | null>(null);
+  const [providerPresetSaving, setProviderPresetSaving] = useState(false);
+  const [providerPresetDeletingId, setProviderPresetDeletingId] = useState<string | null>(null);
+  const [providerPresetNotice, setProviderPresetNotice] = useState<string | null>(null);
+  const [providerPresetError, setProviderPresetError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedProxyIds, setSelectedProxyIds] = useState<Set<string>>(() => new Set());
@@ -432,6 +447,85 @@ export function ProxyManagerPage({
   );
   const blockedImportCount = importPreview.rows.length - validImportRows.length;
 
+  const openProviderPresetDialog = useCallback(() => {
+    setProviderPresetDialogOpen(true);
+    setProviderPresetError(null);
+  }, []);
+
+  const closeProviderPresetDialog = useCallback(() => {
+    if (providerPresetSaving || providerPresetDeletingId) return;
+    setProviderPresetDialogOpen(false);
+    setProviderPresetError(null);
+  }, [providerPresetDeletingId, providerPresetSaving]);
+
+  const resetProviderPresetForm = useCallback(() => {
+    setEditingProviderPresetId(null);
+    setProviderPresetForm(emptyProviderPresetForm());
+    setProviderPresetError(null);
+  }, []);
+
+  const editProviderPreset = useCallback((preset: ProxyProviderPreset) => {
+    setEditingProviderPresetId(preset.id);
+    setProviderPresetForm(providerPresetToForm(preset));
+    setProviderPresetError(null);
+  }, []);
+
+  const saveProviderPreset = useCallback(async () => {
+    if (providerPresetSaving) return;
+
+    let payload: ProxyProviderPresetCreateData;
+    try {
+      payload = buildProviderPresetPayload(providerPresetForm);
+    } catch (err) {
+      setProviderPresetError(err instanceof Error ? err.message : "Unable to save provider preset");
+      return;
+    }
+
+    setProviderPresetSaving(true);
+    setProviderPresetError(null);
+    setProviderPresetNotice(null);
+
+    try {
+      const savedPreset = editingProviderPresetId
+        ? await api.updateProxyProviderPreset(editingProviderPresetId, payload)
+        : await api.createProxyProviderPreset(payload);
+
+      setProviderPresets((current) => upsertProviderPreset(current, savedPreset));
+      setProviderPresetNotice(`Saved provider preset ${savedPreset.name}`);
+      setEditingProviderPresetId(savedPreset.id);
+      setProviderPresetForm(providerPresetToForm(savedPreset));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to save provider preset";
+      setProviderPresetError(`Save failed: ${redactUrlCredentials(message)}`);
+    } finally {
+      setProviderPresetSaving(false);
+    }
+  }, [editingProviderPresetId, providerPresetForm, providerPresetSaving]);
+
+  const deleteProviderPreset = useCallback(async (preset: ProxyProviderPreset) => {
+    if (providerPresetDeletingId || providerPresetSaving) return;
+
+    setProviderPresetDeletingId(preset.id);
+    setProviderPresetError(null);
+    setProviderPresetNotice(null);
+
+    try {
+      await api.deleteProxyProviderPreset(preset.id);
+      setProviderPresets((current) => current.filter((item) => item.id !== preset.id));
+      setSelectedImportPresetId((current) => current === preset.id ? "" : current);
+      if (editingProviderPresetId === preset.id) {
+        setEditingProviderPresetId(null);
+        setProviderPresetForm(emptyProviderPresetForm());
+      }
+      setProviderPresetNotice(`Deleted provider preset ${preset.name}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to delete provider preset";
+      setProviderPresetError(`Delete failed: ${redactUrlCredentials(message)}`);
+    } finally {
+      setProviderPresetDeletingId(null);
+    }
+  }, [editingProviderPresetId, providerPresetDeletingId, providerPresetSaving]);
+
   const openImportDialog = useCallback(() => {
     setImportText("");
     setImportSourceText("");
@@ -555,10 +649,20 @@ export function ProxyManagerPage({
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              URL credentials are hidden in the UI. Bulk check, profile assignment, and CSV import are active; add, edit, and delete remain disabled.
+              URL credentials are hidden in the UI. Bulk check, profile assignment, provider presets, and CSV import are active; proxy asset add, edit, and delete remain disabled.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={openProviderPresetDialog}
+              disabled={providerPresetSaving}
+              aria-label="Manage presets"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              Manage presets
+            </button>
             <button
               type="button"
               className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
@@ -755,6 +859,23 @@ export function ProxyManagerPage({
           onClose={closeRandomAssignDialog}
         />
       )}
+      {providerPresetDialogOpen && (
+        <ProxyProviderPresetDialog
+          presets={providerPresets}
+          form={providerPresetForm}
+          editingPresetId={editingProviderPresetId}
+          saving={providerPresetSaving}
+          deletingId={providerPresetDeletingId}
+          notice={providerPresetNotice}
+          error={providerPresetError}
+          onFormChange={setProviderPresetForm}
+          onReset={resetProviderPresetForm}
+          onEdit={editProviderPreset}
+          onSave={() => void saveProviderPreset()}
+          onDelete={(preset) => void deleteProviderPreset(preset)}
+          onClose={closeProviderPresetDialog}
+        />
+      )}
       {importDialogOpen && (
         <ProxyCsvImportDialog
           text={importText}
@@ -897,6 +1018,312 @@ function FilterSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function ProxyProviderPresetDialog({
+  presets,
+  form,
+  editingPresetId,
+  saving,
+  deletingId,
+  notice,
+  error,
+  onFormChange,
+  onReset,
+  onEdit,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  presets: ProxyProviderPreset[];
+  form: ProviderPresetFormState;
+  editingPresetId: string | null;
+  saving: boolean;
+  deletingId: string | null;
+  notice: string | null;
+  error: string | null;
+  onFormChange: (form: ProviderPresetFormState) => void;
+  onReset: () => void;
+  onEdit: (preset: ProxyProviderPreset) => void;
+  onSave: () => void;
+  onDelete: (preset: ProxyProviderPreset) => void;
+  onClose: () => void;
+}) {
+  const editingPreset = presets.find((preset) => preset.id === editingPresetId) ?? null;
+  const busy = saving || Boolean(deletingId);
+  const saveLabel = editingPreset ? "Save changes" : "Save preset";
+  const canSave = form.name.trim().length > 0 && !busy;
+
+  return (
+    <div className="animate-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-label="Manage provider presets"
+        aria-modal="true"
+        className="animate-dialog-in flex max-h-[calc(100vh-24px)] w-[min(900px,calc(100vw-24px))] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-blue-100 bg-blue-50 text-blue-700">
+                <Settings2 className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-slate-950">Manage provider presets</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Save reusable provider, country, tag, and notes defaults for proxy import workflows.
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="icon-action h-7 w-7"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close manage provider presets dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {notice && (
+          <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700" role="status">
+            {notice}
+          </div>
+        )}
+
+        {error && (
+          <div className="animate-notice-in border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className="grid min-h-0 flex-1 gap-0 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_340px] lg:overflow-hidden">
+          <div className="min-h-[240px] overflow-auto border-b border-slate-200 bg-white p-3 lg:border-b-0 lg:border-r">
+            {presets.length === 0 ? (
+              <div
+                role="status"
+                aria-label="No provider presets yet"
+                className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-500"
+              >
+                No provider presets yet.
+              </div>
+            ) : (
+              <div role="list" aria-label="Provider presets" className="grid gap-2">
+                {presets.map((preset) => (
+                  <ProviderPresetRow
+                    key={preset.id}
+                    preset={preset}
+                    selected={preset.id === editingPresetId}
+                    deleting={deletingId === preset.id}
+                    disabled={busy && deletingId !== preset.id}
+                    onEdit={() => onEdit(preset)}
+                    onDelete={() => onDelete(preset)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid content-start gap-3 bg-[#fbfdff] p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-950">
+                  {editingPreset ? "Edit preset" : "New preset"}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  These values fill empty fields during CSV import.
+                </p>
+              </div>
+              {editingPreset && (
+                <button
+                  type="button"
+                  className="btn-secondary h-8 text-xs"
+                  onClick={onReset}
+                  disabled={busy}
+                >
+                  New
+                </button>
+              )}
+            </div>
+
+            <label className="min-w-0">
+              <span className="label">Name</span>
+              <input
+                aria-label="Preset name"
+                className="input"
+                value={form.name}
+                onChange={(event) => onFormChange({ ...form, name: event.target.value })}
+                disabled={busy}
+                placeholder="Japan mobile default"
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="label">Provider</span>
+              <input
+                aria-label="Preset provider"
+                className="input"
+                value={form.provider}
+                onChange={(event) => onFormChange({ ...form, provider: event.target.value })}
+                disabled={busy}
+                placeholder="ProxyJP"
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="label">Country</span>
+              <input
+                aria-label="Preset country"
+                className="input uppercase"
+                value={form.country_code}
+                onChange={(event) => onFormChange({ ...form, country_code: event.target.value })}
+                disabled={busy}
+                placeholder="JP"
+                maxLength={8}
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="label">Tags</span>
+              <input
+                aria-label="Preset tags"
+                className="input"
+                value={form.tags}
+                onChange={(event) => onFormChange({ ...form, tags: event.target.value })}
+                disabled={busy}
+                placeholder="mobile, warmup"
+              />
+            </label>
+            <label className="min-w-0">
+              <span className="label">Notes</span>
+              <textarea
+                aria-label="Preset notes"
+                className="input min-h-[84px] resize-y text-sm leading-5"
+                value={form.notes}
+                onChange={(event) => onFormChange({ ...form, notes: event.target.value })}
+                disabled={busy}
+                placeholder="Tokyo exits"
+              />
+            </label>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 pt-3">
+              <button
+                type="button"
+                className="btn-secondary h-8 text-xs"
+                onClick={onClose}
+                disabled={busy}
+              >
+                Done
+              </button>
+              <button
+                type="button"
+                className="btn-primary inline-flex h-8 min-w-[112px] items-center justify-center gap-1.5 text-xs"
+                onClick={onSave}
+                disabled={!canSave}
+              >
+                {saving ? (
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Settings2 className="h-3.5 w-3.5" />
+                )}
+                {saving ? "Saving" : saveLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProviderPresetRow({
+  preset,
+  selected,
+  deleting,
+  disabled,
+  onEdit,
+  onDelete,
+}: {
+  preset: ProxyProviderPreset;
+  selected: boolean;
+  deleting: boolean;
+  disabled: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const tagText = preset.tags.map((tag) => tag.tag).join(", ") || "-";
+  const summary = [preset.provider, preset.country_code, tagText !== "-" ? tagText : null]
+    .filter(Boolean)
+    .join(" / ") || "No defaults";
+
+  return (
+    <div
+      role="listitem"
+      className={`rounded-lg border bg-white p-3 shadow-hairline transition-colors ${
+        selected ? "border-blue-300 ring-2 ring-blue-500/10" : "border-slate-200 hover:border-blue-200"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-slate-950" title={preset.name}>
+            {preset.name}
+          </div>
+          <div className="mt-1 truncate text-xs text-slate-500" title={summary}>
+            {summary}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            className="icon-action h-7 w-7"
+            onClick={onEdit}
+            disabled={disabled || deleting}
+            aria-label={`Edit ${preset.name}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            className="icon-action h-7 w-7 text-red-500 hover:border-red-200 hover:text-red-700"
+            onClick={onDelete}
+            disabled={disabled || deleting}
+            aria-label={`Delete ${preset.name}`}
+          >
+            {deleting ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {preset.provider && (
+          <span className="token-chip max-w-[160px] truncate" title={preset.provider}>
+            {preset.provider}
+          </span>
+        )}
+        {preset.country_code && (
+          <span className="token-chip max-w-[72px] truncate" title={preset.country_code}>
+            {preset.country_code}
+          </span>
+        )}
+        {preset.tags.map((tag) => (
+          <span key={`${preset.id}-${tag.tag}`} className="token-chip max-w-[128px] truncate" title={tag.tag}>
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: tag.color ?? "#94a3b8" }}
+            />
+            {tag.tag}
+          </span>
+        ))}
+      </div>
+      {preset.notes && (
+        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500" title={preset.notes}>
+          {preset.notes}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1804,6 +2231,58 @@ function ProxySummaryTile({
       </div>
     </div>
   );
+}
+
+function emptyProviderPresetForm(): ProviderPresetFormState {
+  return {
+    name: "",
+    provider: "",
+    country_code: "",
+    tags: "",
+    notes: "",
+  };
+}
+
+function providerPresetToForm(preset: ProxyProviderPreset): ProviderPresetFormState {
+  return {
+    name: preset.name,
+    provider: preset.provider ?? "",
+    country_code: preset.country_code ?? "",
+    tags: preset.tags.map((tag) => tag.tag).join(", "),
+    notes: preset.notes ?? "",
+  };
+}
+
+function buildProviderPresetPayload(form: ProviderPresetFormState): ProxyProviderPresetCreateData {
+  const name = form.name.trim();
+  if (!name) {
+    throw new Error("Preset name is required");
+  }
+
+  return {
+    name,
+    provider: optionalTrimmed(form.provider),
+    country_code: optionalTrimmed(form.country_code)?.toUpperCase() ?? null,
+    tags: parseCsvTags(form.tags),
+    notes: optionalTrimmed(form.notes),
+  };
+}
+
+function upsertProviderPreset(
+  presets: ProxyProviderPreset[],
+  nextPreset: ProxyProviderPreset,
+): ProxyProviderPreset[] {
+  const exists = presets.some((preset) => preset.id === nextPreset.id);
+  const next = exists
+    ? presets.map((preset) => preset.id === nextPreset.id ? nextPreset : preset)
+    : [...presets, nextPreset];
+
+  return [...next].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function optionalTrimmed(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed || null;
 }
 
 function parseProxyCsvImport(text: string, preset: ProxyProviderPreset | null = null): ProxyCsvImportPreview {

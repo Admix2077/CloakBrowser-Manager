@@ -4928,3 +4928,75 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 67. 2026-05-26 Proxy Provider Preset 前端完整管理入口小闭环
+
+背景：
+
+- Module 09 的 `proxy provider preset` 已完成后端 CRUD、CSV import 前端消费、后端候选过滤与随机分配策略联动。
+- 本轮补齐 Proxy Manager 内的 provider preset 前端完整管理入口。
+- 用户要求继续保持 CloakBrowser 独立成熟化，不进入 Project Mileage 跨仓实现。
+
+已完成：
+
+- `frontend/src/components/ProxyManagerPage.tsx`
+  - Toolbar 新增 `Manage presets`。
+  - 新增 `Manage provider presets` 弹窗。
+  - 支持创建、编辑、删除 provider preset。
+  - 表单字段收敛为 `name/provider/country_code/tags/notes`。
+  - 不提供 provider API key、password、billing、account 等字段或文案。
+  - 创建/编辑/删除后同步 `providerPresets`，CSV import 下拉即时更新。
+  - 删除当前 import 选中的 preset 时清空选中值。
+  - 保存/删除错误信息继续通过 `redactUrlCredentials` 脱敏。
+  - 移动端弹窗 body 改为内部滚动，避免底部操作按钮被裁切；页面本体不横向撑破。
+- `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖 provider preset create。
+  - 覆盖 provider preset update/delete。
+  - 覆盖管理弹窗不出现 `api key/password/billing/account` 等敏感 provider 字段文案。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `支持 proxy provider preset`。
+  - 勾选 `前端完整管理入口`。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx -t "proxy provider presets"
+# 1 test file passed, 2 tests passed | 20 skipped
+
+cd frontend && npm test -- --run
+# 13 test files passed, 184 tests passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 本地 QA 服务：`http://127.0.0.1:8095/`，runtime `invisible-playwright`。
+- 桌面 `1440x960`：
+  - 打开 `Proxy Manager` -> `Manage presets`。
+  - 创建 `QA UI Preset Temp` 成功。
+  - `Import CSV` 的 `Provider preset` 下拉即时出现新 preset。
+  - 选择新 preset 并粘贴仅含 `name,url` 的 CSV，preview 自动补入 `ProxyQA`、`US`、`ui, temp`。
+  - 编辑为 `QA UI Preset Updated` 成功。
+  - 删除临时 preset 成功。
+  - 再打开 `Import CSV`，临时 preset 已从下拉移除。
+- 移动 `390x844`：
+  - 管理弹窗内部可滚动。
+  - `body.scrollWidth=390`、`viewportWidth=390`。
+- Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-provider-presets-desktop.png`
+  - `/home/jeff/code/cloakbrowser-provider-presets-mobile.png`
+
+边界：
+
+- 没有修改后端。
+- 没有修改 random assignment 为提交 `provider_preset_id`，前端仍按 country/provider/tag selection 调用。
+- 没有修改 single proxy assign、bulk check、credential redaction、proxy table 横向滚动语义。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
