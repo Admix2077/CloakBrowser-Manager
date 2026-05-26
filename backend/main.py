@@ -1483,6 +1483,15 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
                 and 1 <= step["timeout_ms"] <= 300_000
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
+        if step_type == "click":
+            if isinstance(step.get("page_ref"), str):
+                redacted["page_ref"] = step["page_ref"]
+            if (
+                isinstance(step.get("timeout_ms"), int)
+                and not isinstance(step.get("timeout_ms"), bool)
+                and 1 <= step["timeout_ms"] <= 300_000
+            ):
+                redacted["timeout_ms"] = step["timeout_ms"]
         if step_type == "scroll":
             if isinstance(step.get("page_ref"), str):
                 redacted["page_ref"] = step["page_ref"]
@@ -1637,7 +1646,7 @@ async def run_automation_task(task_id: str):
     for index, step in enumerate(running_task["steps"]):
         step_type = step.get("type")
         if step_type != "wait":
-            if step_type not in {"open_url", "scroll"}:
+            if step_type not in {"click", "open_url", "scroll"}:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(
                     task_id,
@@ -1645,6 +1654,34 @@ async def run_automation_task(task_id: str):
                     "Unsupported automation step type",
                 )
                 return _automation_task_finished_response(failed, status_code=400)
+
+            if step_type == "click":
+                selector = _automation_step_str(step, "selector")
+                raw_timeout_ms = step.get("timeout_ms", 30_000)
+                page_ref = _automation_step_str(step, "page_ref", "0") or "0"
+                if (
+                    selector is None
+                    or not selector
+                    or len(selector) > 10_000
+                    or not isinstance(raw_timeout_ms, int)
+                    or isinstance(raw_timeout_ms, bool)
+                    or raw_timeout_ms < 1
+                    or raw_timeout_ms > 300_000
+                ):
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Invalid click step")
+                    return _automation_task_finished_response(failed, status_code=400)
+                try:
+                    _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
+                    await page.click(selector, timeout=raw_timeout_ms)
+                except HTTPException:
+                    raise
+                except Exception:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Click step failed")
+                    return _automation_task_finished_response(failed, status_code=400)
+                step_results.append(_automation_task_step_result(index, step, "succeeded"))
+                continue
 
             if step_type == "scroll":
                 delta_x = _automation_step_int(step, "delta_x", 0)

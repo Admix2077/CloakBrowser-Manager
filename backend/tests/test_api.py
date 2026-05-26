@@ -1340,6 +1340,110 @@ def test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_click_step_clicks_existing_page_without_leaking_selector(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunClickProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    selector = "#submit-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "click",
+                    "selector": selector,
+                    "page_ref": "0",
+                    "timeout_ms": 2500,
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.click.assert_awaited_once_with(selector, timeout=2500)
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "click", "page_ref": "0", "timeout_ms": 2500}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "click", "status": "succeeded"}]}
+    assert selector not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_click_step_marks_failed_for_invalid_selector_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunClickInvalidProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    secret_selector = "#submit-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "click", "selector": "", "value": secret_selector}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "click"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "click", "status": "failed"}]}
+    assert data["error"] == "Invalid click step"
+    assert secret_selector not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_click_step_marks_failed_for_bool_timeout(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunClickBoolTimeoutProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "click", "selector": "#submit", "timeout_ms": True}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "click"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "click", "status": "failed"}]}
+    assert data["error"] == "Invalid click step"
+    page.click.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_click_step_failure_uses_redacted_error(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunClickFailureProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    selector = "#submit-token-super-secret"
+    page.click.side_effect = RuntimeError(f"selector failed: {selector}")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "click", "selector": selector}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "click"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "click", "status": "failed"}]}
+    assert data["error"] == "Click step failed"
+    assert selector not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_run_scroll_step_scrolls_existing_page(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunScrollProfile"})
     pid = create.json()["id"]

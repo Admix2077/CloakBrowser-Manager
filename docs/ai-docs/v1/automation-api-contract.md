@@ -453,15 +453,17 @@ POST /api/tasks/{id}/run
   - 失败：`queued -> running -> failed`。
 - 当前支持的 step：
   - `open_url`：`{"type": "open_url", "url": "https://example.com", "page_ref": "0", "wait_until": "load", "timeout_ms": 30000}`。
+  - `click`：`{"type": "click", "selector": "#submit", "page_ref": "0", "timeout_ms": 30000}`。
   - `scroll`：`{"type": "scroll", "page_ref": "0", "delta_x": 0, "delta_y": 600}`。
   - `wait`：`{"type": "wait", "ms": 1..300000}`，内部执行 `asyncio.sleep(ms / 1000)`。
 - 当前不支持的 step 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `wait.ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `open_url.url`、`wait_until` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
+- 当前非法 `click.selector` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
-- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。
+- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token 或业务敏感 URL，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前不实现后台队列、并发限制、失败重试、running cancel、click/fill/evaluate/screenshot step。
+- 当前不实现后台队列、并发限制、失败重试、running cancel、fill/evaluate/screenshot step。
 
 ## Script Runner 接入建议
 
@@ -479,7 +481,7 @@ POST /api/tasks/{id}/run
 
 Script Runner 的 task result/log 不应默认复制 console log、network URL、evaluate result、screenshot 或 clipboard 内容。需要展示时，应按白名单和长度上限返回。
 
-当前 `POST /api/tasks/{id}/run` 已实现第一版 `open_url`、`scroll` 和 `wait` step。后续接入 page 级 step 时继续复用现有 Automation REST helper，但不得把 URL query/fragment、`fill.value`、`keyboard_type.text`、`evaluate.expression/result`、screenshot 内容、clipboard 内容、console text、network URL/query/header/body 直接写入 task result/log。
+当前 `POST /api/tasks/{id}/run` 已实现第一版 `open_url`、`click`、`scroll` 和 `wait` step。后续接入 page 级 step 时继续复用现有 Automation REST helper，但不得把 URL query/fragment、`click.selector`、`fill.value`、`keyboard_type.text`、`evaluate.expression/result`、screenshot 内容、clipboard 内容、console text、network URL/query/header/body 直接写入 task result/log。
 
 ## 安全边界
 

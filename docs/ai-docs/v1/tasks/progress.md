@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner click step 小闭环：
+  - `POST /api/tasks/{id}/run` 已支持 `click` step。
+  - `click` 支持必填 `selector`，长度 `1..10000`；可选 `page_ref`，默认 `"0"`；可选 `timeout_ms`，默认 `30000`，范围 `1..300000`，且拒绝 `bool`。
+  - 执行时复用已运行 profile 的既有 page 和 `page.click(selector, timeout=timeout_ms)`，不自动启动 profile，不创建新 page。
+  - 非法 selector 或 timeout 进入 `failed` 并返回固定低敏错误 `Invalid click step`；执行异常进入 `failed` 并返回固定低敏错误 `Click step failed`。
+  - task 对外响应对 `click` step 做白名单脱敏，只回显 `type/page_ref/timeout_ms`，不回显 selector。
+  - `result.steps[]` 只记录 `index/type/status`，不复制 selector、完整 step payload 或异常原文。
+  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、fill/evaluate/screenshot step。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task result 响应脱敏加固小闭环：
   - create/get/list/cancel/run 的所有对外 `AutomationTaskResponse.result` 统一走白名单脱敏。
   - 对外只保留 `result.steps[]` 的 `index/type/status`。
