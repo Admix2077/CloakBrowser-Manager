@@ -16,6 +16,7 @@
 - wait for selector。
 - click。
 - fill。
+- keyboard type。
 - evaluate。
 - screenshot。
 - clipboard get/set。
@@ -28,7 +29,7 @@
 - [x] 新增 wait for selector。
 - [x] 新增 click。
 - [x] 新增 fill。
-- [ ] 新增 keyboard input。
+- [x] 新增 keyboard input。
 - [ ] 新增 scroll。
 - [ ] 新增 console logs。
 - [ ] 新增 network summary。
@@ -153,4 +154,26 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 61 passed
+```
+
+## 2026-05-27 Automation keyboard type 小闭环
+
+当前状态：
+
+- 已补齐 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/keyboard/type`。
+- 该接口只操作运行中 profile 的既有 Playwright page，不引入 Chromium CDP。
+- 请求体包含：
+  - `text`：待输入文本，长度 `1..1048576`。
+  - `delay_ms`：每个字符之间的延迟，`0..10000`，默认 `0`。
+- 成功后返回现有 `AutomationPageResponse`。
+- Playwright keyboard type 失败沿用现有 automation 模式返回 `400`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_keyboard_type_types_text_and_returns_page -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 62 passed
 ```

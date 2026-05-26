@@ -44,6 +44,7 @@ from .models import (
     AutomationFillRequest,
     AutomationGotoRequest,
     AutomationInfoResponse,
+    AutomationKeyboardTypeRequest,
     AutomationPageResponse,
     AutomationPagesResponse,
     AutomationScreenshotRequest,
@@ -1994,6 +1995,29 @@ async def automation_fill(
         await page.fill(body.selector, body.value, timeout=body.timeout_ms)
     except Exception as exc:
         logger.warning("Automation fill failed for %s page %d: %s", profile_id, page_index, exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await _automation_page_summary(running, page_index, page)
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/keyboard/type",
+    response_model=AutomationPageResponse,
+)
+async def automation_keyboard_type(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationKeyboardTypeRequest,
+):
+    running, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.keyboard.type(body.text, delay=body.delay_ms)
+    except Exception as exc:
+        logger.warning(
+            "Automation keyboard type failed for %s page %d: %s",
+            profile_id,
+            page_index,
+            exc,
+        )
         raise HTTPException(status_code=400, detail=str(exc))
     return await _automation_page_summary(running, page_index, page)
 

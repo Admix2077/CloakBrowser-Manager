@@ -537,6 +537,8 @@ def _automation_page(url: str = "about:blank", title: str = "Blank") -> MagicMoc
     page.wait_for_selector = AsyncMock()
     page.click = AsyncMock()
     page.fill = AsyncMock()
+    page.keyboard = MagicMock()
+    page.keyboard.type = AsyncMock()
     page.screenshot = AsyncMock(return_value=b"png-bytes")
     page.close = AsyncMock()
     return page
@@ -719,6 +721,27 @@ def test_automation_fill_fills_selector_and_returns_page(app_client: TestClient)
 
     assert resp.status_code == 200
     page.fill.assert_awaited_once_with("#email", "user@example.com", timeout=2500)
+    data = resp.json()
+    assert data["index"] == 0
+    assert data["url"] == "https://example.com/"
+    assert data["title"] == "Example"
+    assert isinstance(data["page_id"], str)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_keyboard_type_types_text_and_returns_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationKeyboardType"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/keyboard/type",
+        json={"text": "hello world", "delay_ms": 25},
+    )
+
+    assert resp.status_code == 200
+    page.keyboard.type.assert_awaited_once_with("hello world", delay=25)
     data = resp.json()
     assert data["index"] == 0
     assert data["url"] == "https://example.com/"

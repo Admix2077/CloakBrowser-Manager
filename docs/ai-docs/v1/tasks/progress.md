@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 keyboard type 小闭环：
+  - 新增 `AutomationKeyboardTypeRequest`。
+  - 新增 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/keyboard/type`。
+  - 复用既有运行中 profile / page 查找与 `AutomationPageResponse`。
+  - 不依赖 Chromium CDP；继续基于 Firefox/invisible_playwright 的 Playwright page API。
+  - 目标红灯：`405 Method Not Allowed`。
+  - 目标绿灯：`test_automation_keyboard_type_types_text_and_returns_page` 通过。
 - 本轮继续 07 Automation API 与脚本运行器，完成 fill 小闭环：
   - 新增 `AutomationFillRequest`。
   - 新增 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/fill`。
@@ -86,7 +93,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，小步补齐 keyboard input 和 scroll。
+1. 继续 CloakBrowser 独立侧 07 Automation API，小步补齐 scroll。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

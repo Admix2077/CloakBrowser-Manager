@@ -505,6 +505,11 @@ class AutomationFillRequest(BaseModel):
     timeout_ms: int = Field(default=30_000, ge=1, le=300_000)
 
 
+class AutomationKeyboardTypeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1_048_576)
+    delay_ms: int = Field(default=0, ge=0, le=10_000)
+
+
 class AutomationEvaluateRequest(BaseModel):
     expression: str = Field(min_length=1, max_length=200_000)
 
