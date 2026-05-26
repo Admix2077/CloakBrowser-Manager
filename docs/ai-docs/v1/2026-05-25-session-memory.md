@@ -2018,3 +2018,61 @@ git diff --check
 - 服务端分页未做；当前继续用固定高度虚拟滚动覆盖数百 profile。
 - Profile 详情 / VNC viewer 还未改为抽屉式连续运营形态。
 - 04 Proxy Manager 尚未开始。
+
+## 30. 2026-05-26 Proxy asset 表与 CRUD API 小闭环
+
+背景：
+
+- 03 Profile 运营台已完成，按 `tasks/progress.md` 进入 04 Proxy Manager。
+- 本轮遵循 TDD：先写 `backend/tests/test_proxies.py` 并确认失败，再实现后端最小 CRUD。
+- 本小闭环只做 proxy asset 后端存储和 CRUD API，不做检测、批量检测、前端页面、CSV 导入或 profile 分配。
+
+本轮实现：
+
+- `backend/database.py`
+  - 新增 `proxies` 表。
+  - 新增 `create_proxy()`、`list_proxies()`、`get_proxy()`、`update_proxy()`、`delete_proxy()`。
+  - 字段覆盖 name、url、country_code、city、asn、provider、tags、notes、last_check_*、created_at、updated_at。
+  - 入库前 normalize + validate，`host:port` 会保存为 `http://host:port`；无效 proxy 不保存。
+- `backend/proxies.py`
+  - 新增 proxy asset helper。
+  - 复用 `backend/browser_manager.py` 里的 `_normalize_proxy()`、`_validate_proxy()`、`_redact_proxy_url()`。
+- `backend/models.py`
+  - 新增 `ProxyCreate`、`ProxyUpdate`、`ProxyResponse`。
+- `backend/main.py`
+  - 新增 `GET /api/proxies`。
+  - 新增 `POST /api/proxies`。
+  - 新增 `GET /api/proxies/{proxy_id}`。
+  - 新增 `PUT /api/proxies/{proxy_id}`。
+  - 新增 `DELETE /api/proxies/{proxy_id}`。
+  - API 响应默认脱敏 `url`，例如 `socks5://user:hiddenpass@jp.proxy.example:1080` 返回 `socks5://jp.proxy.example:1080`。
+  - 创建/更新无效 proxy 返回 400，错误响应不泄露密码。
+- `backend/tests/test_proxies.py`
+  - 覆盖表创建、数据库 CRUD、tags 往返、URL 规范化、无效 URL 拒绝、API CRUD、API 脱敏、404。
+  - 覆盖删除 proxy asset 不删除仍使用同一 proxy 字符串的 profile。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 勾选 `proxies` 表、proxy CRUD、URL 保存/脱敏、无效 proxy 不保存、列表不明文展示密码、删除 proxy 不删除 profile。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 7 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 15 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 224 passed
+
+git diff --check
+# passed
+```
+
+仍未做：
+
+- `POST /api/proxies/{id}/check`。
+- `POST /api/proxies/bulk/check`。
+- 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入。
+- 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

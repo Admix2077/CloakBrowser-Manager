@@ -7,6 +7,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+class TagCreate(BaseModel):
+    tag: str
+    color: str | None = None  # hex color
+
+
 class ProfileCreate(BaseModel):
     name: str
     fingerprint_seed: int | None = None  # random if not set
@@ -57,14 +62,52 @@ class ProfileUpdate(BaseModel):
     tags: list[TagCreate] | None = None
 
 
-class TagCreate(BaseModel):
-    tag: str
-    color: str | None = None  # hex color
-
-
 class TagResponse(BaseModel):
     tag: str
     color: str | None = None
+
+
+class ProxyCreate(BaseModel):
+    name: str = Field(min_length=1)
+    url: str = Field(min_length=1)
+    country_code: str | None = None
+    city: str | None = None
+    asn: str | None = None
+    provider: str | None = None
+    tags: list[TagCreate] = Field(default_factory=list)
+    notes: str | None = None
+
+
+class ProxyUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    url: str | None = Field(default=None, min_length=1)
+    country_code: str | None = Field(default=None)
+    city: str | None = Field(default=None)
+    asn: str | None = Field(default=None)
+    provider: str | None = Field(default=None)
+    tags: list[TagCreate] | None = None
+    notes: str | None = Field(default=None)
+
+
+class ProxyResponse(BaseModel):
+    id: str
+    name: str
+    url: str
+    country_code: str | None = None
+    city: str | None = None
+    asn: str | None = None
+    provider: str | None = None
+    tags: list[TagResponse] = []
+    notes: str | None = None
+    last_check_status: str | None = None
+    last_check_ip: str | None = None
+    last_check_country_code: str | None = None
+    last_check_timezone: str | None = None
+    last_check_locale: str | None = None
+    last_check_source: str | None = None
+    last_check_at: str | None = None
+    created_at: str
+    updated_at: str
 
 
 class ProfileResponse(BaseModel):

@@ -44,6 +44,9 @@ from .models import (
     ClipboardRequest,
     LaunchResponse,
     LoginRequest,
+    ProxyCreate,
+    ProxyResponse,
+    ProxyUpdate,
     ProfileCreate,
     ProfileResponse,
     ProfileStatusResponse,
@@ -51,6 +54,7 @@ from .models import (
     StatusResponse,
     TagResponse,
 )
+from .proxies import redact_proxy_asset_url
 
 logger = logging.getLogger("invisible_browser.manager")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -447,6 +451,63 @@ async def auth_logout(request: Request, response: Response):
 
 
 # ── Profile CRUD ──────────────────────────────────────────────────────────────
+
+
+def _proxy_response(proxy: dict) -> ProxyResponse:
+    safe = dict(proxy)
+    safe["url"] = redact_proxy_asset_url(str(safe["url"]))
+    safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
+    return ProxyResponse(**safe)
+
+
+def _tag_payloads(tags: list[dict] | None) -> list[dict]:
+    return [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in (tags or [])]
+
+
+@app.get("/api/proxies", response_model=list[ProxyResponse])
+async def list_proxies():
+    return [_proxy_response(proxy) for proxy in db.list_proxies()]
+
+
+@app.post("/api/proxies", response_model=ProxyResponse, status_code=201)
+async def create_proxy(req: ProxyCreate):
+    data = req.model_dump()
+    data["tags"] = _tag_payloads(data.get("tags"))
+    try:
+        proxy = db.create_proxy(**data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _proxy_response(proxy)
+
+
+@app.get("/api/proxies/{proxy_id}", response_model=ProxyResponse)
+async def get_proxy(proxy_id: str):
+    proxy = db.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    return _proxy_response(proxy)
+
+
+@app.put("/api/proxies/{proxy_id}", response_model=ProxyResponse)
+async def update_proxy(proxy_id: str, req: ProxyUpdate):
+    data = req.model_dump(exclude_unset=True)
+    if "tags" in data and data["tags"] is not None:
+        data["tags"] = _tag_payloads(data["tags"])
+    try:
+        proxy = db.update_proxy(proxy_id, **data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    return _proxy_response(proxy)
+
+
+@app.delete("/api/proxies/{proxy_id}")
+async def delete_proxy(proxy_id: str):
+    deleted = db.delete_proxy(proxy_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    return {"ok": True}
 
 
 @app.get("/api/profiles", response_model=list[ProfileResponse])

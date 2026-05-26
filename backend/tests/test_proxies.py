@@ -1,0 +1,157 @@
+"""Tests for proxy asset storage and CRUD API."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from starlette.testclient import TestClient
+
+from backend import database as db
+
+
+def test_init_db_creates_proxies_table(tmp_db: Path):
+    with db.get_db() as conn:
+        tables = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    names = {row["name"] for row in tables}
+    assert "proxies" in names
+
+
+def test_create_list_update_and_delete_proxy_asset(tmp_db: Path):
+    proxy = db.create_proxy(
+        name="US residential",
+        url="http://user:hiddenpass@proxy.example:8080",
+        country_code="US",
+        city="New York",
+        asn="AS64500",
+        provider="ProxyCo",
+        tags=[{"tag": "warmup", "color": "#2563eb"}],
+        notes="Primary pool",
+    )
+
+    assert proxy["name"] == "US residential"
+    assert proxy["url"] == "http://user:hiddenpass@proxy.example:8080"
+    assert proxy["country_code"] == "US"
+    assert proxy["city"] == "New York"
+    assert proxy["asn"] == "AS64500"
+    assert proxy["provider"] == "ProxyCo"
+    assert proxy["tags"] == [{"tag": "warmup", "color": "#2563eb"}]
+    assert proxy["notes"] == "Primary pool"
+    assert proxy["last_check_status"] is None
+    assert proxy["created_at"] is not None
+    assert proxy["updated_at"] is not None
+
+    listed = db.list_proxies()
+    assert [item["id"] for item in listed] == [proxy["id"]]
+
+    updated = db.update_proxy(
+        proxy["id"],
+        name="US residential updated",
+        provider="BetterProxy",
+        tags=[{"tag": "client-a", "color": None}],
+    )
+    assert updated is not None
+    assert updated["name"] == "US residential updated"
+    assert updated["provider"] == "BetterProxy"
+    assert updated["url"] == "http://user:hiddenpass@proxy.example:8080"
+    assert updated["tags"] == [{"tag": "client-a", "color": None}]
+
+    assert db.delete_proxy(proxy["id"]) is True
+    assert db.get_proxy(proxy["id"]) is None
+    assert db.delete_proxy(proxy["id"]) is False
+
+
+def test_delete_proxy_asset_does_not_delete_profiles(tmp_db: Path):
+    proxy = db.create_proxy(name="Keep profiles", url="http://proxy.example:8080")
+    profile = db.create_profile(name="Profile using same proxy text", proxy=proxy["url"])
+
+    assert db.delete_proxy(proxy["id"]) is True
+
+    remaining_profile = db.get_profile(profile["id"])
+    assert remaining_profile is not None
+    assert remaining_profile["proxy"] == "http://proxy.example:8080"
+
+
+def test_create_proxy_normalizes_and_rejects_invalid_urls(tmp_db: Path):
+    proxy = db.create_proxy(name="Host port", url="proxy.example:8080")
+    assert proxy["url"] == "http://proxy.example:8080"
+
+    with pytest.raises(ValueError, match="Invalid proxy scheme"):
+        db.create_proxy(name="Invalid", url="ftp://user:hiddenpass@proxy.example:21")
+
+    assert [item["name"] for item in db.list_proxies()] == ["Host port"]
+
+
+def test_proxy_crud_api(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Japan mobile",
+            "url": "socks5://user:hiddenpass@jp.proxy.example:1080",
+            "country_code": "JP",
+            "city": "Tokyo",
+            "asn": "AS64501",
+            "provider": "MobileProxy",
+            "tags": [{"tag": "jp", "color": "#0ea5e9"}],
+            "notes": "Tokyo exit",
+        },
+    )
+    assert create.status_code == 201
+    data = create.json()
+    assert data["id"]
+    assert data["name"] == "Japan mobile"
+    assert data["url"] == "socks5://jp.proxy.example:1080"
+    assert "hiddenpass" not in str(data)
+    assert data["last_check_status"] is None
+
+    listed = app_client.get("/api/proxies")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == [data["id"]]
+    assert "hiddenpass" not in str(listed.json())
+
+    get = app_client.get(f"/api/proxies/{data['id']}")
+    assert get.status_code == 200
+    assert get.json()["provider"] == "MobileProxy"
+    assert get.json()["url"] == "socks5://jp.proxy.example:1080"
+    assert "hiddenpass" not in str(get.json())
+
+    update = app_client.put(
+        f"/api/proxies/{data['id']}",
+        json={
+            "name": "Japan mobile updated",
+            "tags": [{"tag": "priority", "color": None}],
+        },
+    )
+    assert update.status_code == 200
+    assert update.json()["name"] == "Japan mobile updated"
+    assert update.json()["url"] == "socks5://jp.proxy.example:1080"
+    assert update.json()["tags"] == [{"tag": "priority", "color": None}]
+
+    delete = app_client.delete(f"/api/proxies/{data['id']}")
+    assert delete.status_code == 200
+    assert delete.json() == {"ok": True}
+    assert app_client.get(f"/api/proxies/{data['id']}").status_code == 404
+
+
+def test_proxy_api_rejects_invalid_url_without_leaking_credentials(app_client: TestClient):
+    resp = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Invalid secret",
+            "url": "ftp://user:hiddenpass@proxy.example:21",
+        },
+    )
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert "Invalid proxy scheme" in body["detail"]
+    assert "hiddenpass" not in str(body)
+    assert app_client.get("/api/proxies").json() == []
+
+
+def test_proxy_api_not_found(app_client: TestClient):
+    assert app_client.get("/api/proxies/missing").status_code == 404
+    assert app_client.put("/api/proxies/missing", json={"name": "x"}).status_code == 404
+    assert app_client.delete("/api/proxies/missing").status_code == 404

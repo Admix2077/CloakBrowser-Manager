@@ -11,6 +11,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from .proxies import normalize_proxy_asset_url
+
 DATA_DIR = Path("/data")
 DB_PATH = DATA_DIR / "profiles.db"
 
@@ -70,6 +72,27 @@ def init_db():
                 color TEXT,
                 PRIMARY KEY (profile_id, tag)
             );
+
+            CREATE TABLE IF NOT EXISTS proxies (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                url TEXT NOT NULL,
+                country_code TEXT,
+                city TEXT,
+                asn TEXT,
+                provider TEXT,
+                tags TEXT DEFAULT '[]',
+                notes TEXT,
+                last_check_status TEXT,
+                last_check_ip TEXT,
+                last_check_country_code TEXT,
+                last_check_timezone TEXT,
+                last_check_locale TEXT,
+                last_check_source TEXT,
+                last_check_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
         """)
         conn.commit()
 
@@ -109,6 +132,18 @@ def init_db():
 
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _decode_tags(raw: Any) -> list[dict[str, Any]]:
+    if not raw:
+        return []
+    try:
+        tags = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(tags, list):
+        return []
+    return [tag for tag in tags if isinstance(tag, dict)]
 
 
 def create_profile(
@@ -280,5 +315,111 @@ def update_profile_geoip_result(
 def delete_profile(profile_id: str) -> bool:
     with get_db() as conn:
         cursor = conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def _proxy_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    proxy = dict(row)
+    proxy["tags"] = _decode_tags(proxy.get("tags"))
+    return proxy
+
+
+def create_proxy(
+    name: str,
+    url: str,
+    **fields: Any,
+) -> dict[str, Any]:
+    proxy_id = str(uuid.uuid4())
+    now = _now()
+    normalized_url = normalize_proxy_asset_url(url)
+    tags = fields.get("tags") or []
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO proxies (
+                id, name, url, country_code, city, asn, provider, tags, notes,
+                last_check_status, last_check_ip, last_check_country_code,
+                last_check_timezone, last_check_locale, last_check_source,
+                last_check_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                proxy_id,
+                name,
+                normalized_url,
+                fields.get("country_code"),
+                fields.get("city"),
+                fields.get("asn"),
+                fields.get("provider"),
+                json.dumps(tags),
+                fields.get("notes"),
+                fields.get("last_check_status"),
+                fields.get("last_check_ip"),
+                fields.get("last_check_country_code"),
+                fields.get("last_check_timezone"),
+                fields.get("last_check_locale"),
+                fields.get("last_check_source"),
+                fields.get("last_check_at"),
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+
+    return get_proxy(proxy_id)  # type: ignore[return-value]
+
+
+def list_proxies() -> list[dict[str, Any]]:
+    with get_db() as conn:
+        rows = conn.execute("SELECT * FROM proxies ORDER BY created_at DESC").fetchall()
+    return [_proxy_from_row(row) for row in rows]
+
+
+def get_proxy(proxy_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM proxies WHERE id = ?", (proxy_id,)).fetchone()
+    if not row:
+        return None
+    return _proxy_from_row(row)
+
+
+def update_proxy(proxy_id: str, **fields: Any) -> dict[str, Any] | None:
+    if not get_proxy(proxy_id):
+        return None
+
+    update_cols = []
+    update_vals = []
+    if "url" in fields:
+        fields["url"] = normalize_proxy_asset_url(fields["url"])
+    if "tags" in fields:
+        fields["tags"] = json.dumps(fields["tags"] or [])
+
+    for col in (
+        "name", "url", "country_code", "city", "asn", "provider", "tags", "notes",
+        "last_check_status", "last_check_ip", "last_check_country_code",
+        "last_check_timezone", "last_check_locale", "last_check_source",
+        "last_check_at",
+    ):
+        if col in fields:
+            update_cols.append(f"{col} = ?")
+            update_vals.append(fields[col])
+
+    if update_cols:
+        update_cols.append("updated_at = ?")
+        update_vals.append(_now())
+        update_vals.append(proxy_id)
+        with get_db() as conn:
+            conn.execute(
+                f"UPDATE proxies SET {', '.join(update_cols)} WHERE id = ?",
+                update_vals,
+            )
+            conn.commit()
+
+    return get_proxy(proxy_id)
+
+
+def delete_proxy(proxy_id: str) -> bool:
+    with get_db() as conn:
+        cursor = conn.execute("DELETE FROM proxies WHERE id = ?", (proxy_id,))
         conn.commit()
         return cursor.rowcount > 0
