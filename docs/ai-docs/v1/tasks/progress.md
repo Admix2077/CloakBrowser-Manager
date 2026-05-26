@@ -35,6 +35,15 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner scroll step 小闭环：
+  - `POST /api/tasks/{id}/run` 已支持 `scroll` step。
+  - `scroll` 支持可选 `page_ref`，默认 `"0"`。
+  - `delta_x` 和 `delta_y` 必须是整数，范围 `-100000..100000`，默认 `0`。
+  - 执行时复用已运行 profile 的既有 page 和 `window.scrollBy(deltaX, deltaY)`，不自动启动 profile，不创建新 page。
+  - 非法 delta 进入 `failed` 并返回 `400`。
+  - task 对外响应对 `scroll` step 做白名单脱敏，只回显 `type/page_ref/delta_x/delta_y`。
+  - `result.steps[]` 只记录 `index/type/status`，不复制完整 step payload。
+  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/evaluate/screenshot step。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task 响应脱敏收口小闭环：
   - create/get/list/cancel/run 的所有对外 `AutomationTaskResponse.steps` 统一走白名单脱敏。
   - `wait` step 仅回显 `type/ms`。

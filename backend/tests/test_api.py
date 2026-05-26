@@ -1299,6 +1299,66 @@ def test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_scroll_step_scrolls_existing_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunScrollProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "scroll",
+                    "page_ref": "0",
+                    "delta_x": 10,
+                    "delta_y": 600,
+                    "note": "do-not-echo",
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.evaluate.assert_awaited_once_with(
+        "([deltaX, deltaY]) => window.scrollBy(deltaX, deltaY)",
+        [10, 600],
+    )
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "scroll", "page_ref": "0", "delta_x": 10, "delta_y": 600}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "scroll", "status": "succeeded"}]}
+    assert "do-not-echo" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_scroll_step_marks_failed_for_invalid_delta_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunScrollInvalidProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "scroll", "delta_x": 0, "delta_y": 100001, "note": "do-not-echo"}],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "scroll", "delta_x": 0}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "scroll", "status": "failed"}]}
+    assert data["error"] == "Invalid scroll step"
+    assert "do-not-echo" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def _mock_running_profile(pid: str) -> MagicMock:
     """Create a mock RunningProfile and register it in browser_mgr."""
     mock = MagicMock(spec=RunningProfile)

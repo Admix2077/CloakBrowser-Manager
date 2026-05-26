@@ -55,7 +55,7 @@
   - [x] wait。
   - [ ] click。
   - [ ] fill。
-  - [ ] scroll。
+  - [x] scroll。
   - [ ] evaluate。
   - [ ] screenshot。
 - [ ] 支持并发限制。
@@ -219,6 +219,35 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 73 passed
+```
+
+## 2026-05-27 Automation Script Runner scroll step 小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已支持 `scroll` step。
+- step 格式：
+  - `type`: `scroll`。
+  - `page_ref`: 可选，默认 `"0"`，可传 page index 或 page id。
+  - `delta_x`: 可选整数，范围 `-100000..100000`，默认 `0`。
+  - `delta_y`: 可选整数，范围 `-100000..100000`，默认 `0`。
+- 执行时复用已运行 profile 的既有 page 和 `window.scrollBy(deltaX, deltaY)`，不自动启动 profile，不创建新 page。
+- 成功后 task 按既有状态机进入 `succeeded`；非法 delta 进入 `failed` 并返回 `400`。
+- task 对外响应对 `scroll` step 做白名单脱敏：只回显 `type/page_ref/delta_x/delta_y`。
+- `result.steps[]` 只记录 `index/type/status`，不复制完整 step payload。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/evaluate/screenshot step。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page backend/tests/test_api.py::test_run_scroll_step_marks_failed_for_invalid_delta_without_leaking_payload -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page backend/tests/test_api.py::test_run_scroll_step_marks_failed_for_invalid_delta_without_leaking_payload backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 83 passed
 ```
 
 ## 2026-05-27 Automation Script Runner open_url step 小闭环

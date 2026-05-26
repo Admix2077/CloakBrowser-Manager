@@ -1483,6 +1483,21 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
                 and 1 <= step["timeout_ms"] <= 300_000
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
+        if step_type == "scroll":
+            if isinstance(step.get("page_ref"), str):
+                redacted["page_ref"] = step["page_ref"]
+            if (
+                isinstance(step.get("delta_x"), int)
+                and not isinstance(step.get("delta_x"), bool)
+                and -100_000 <= step["delta_x"] <= 100_000
+            ):
+                redacted["delta_x"] = step["delta_x"]
+            if (
+                isinstance(step.get("delta_y"), int)
+                and not isinstance(step.get("delta_y"), bool)
+                and -100_000 <= step["delta_y"] <= 100_000
+            ):
+                redacted["delta_y"] = step["delta_y"]
         redacted_steps.append(redacted)
     return redacted_steps
 
@@ -1599,7 +1614,7 @@ async def run_automation_task(task_id: str):
     for index, step in enumerate(running_task["steps"]):
         step_type = step.get("type")
         if step_type != "wait":
-            if step_type != "open_url":
+            if step_type not in {"open_url", "scroll"}:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(
                     task_id,
@@ -1607,6 +1622,29 @@ async def run_automation_task(task_id: str):
                     "Unsupported automation step type",
                 )
                 return _automation_task_finished_response(failed, status_code=400)
+
+            if step_type == "scroll":
+                delta_x = _automation_step_int(step, "delta_x", 0)
+                delta_y = _automation_step_int(step, "delta_y", 0)
+                page_ref = _automation_step_str(step, "page_ref", "0") or "0"
+                if delta_x < -100_000 or delta_x > 100_000 or delta_y < -100_000 or delta_y > 100_000:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Invalid scroll step")
+                    return _automation_task_finished_response(failed, status_code=400)
+                try:
+                    _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
+                    await page.evaluate(
+                        "([deltaX, deltaY]) => window.scrollBy(deltaX, deltaY)",
+                        [delta_x, delta_y],
+                    )
+                except HTTPException:
+                    raise
+                except Exception:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Scroll step failed")
+                    return _automation_task_finished_response(failed, status_code=400)
+                step_results.append(_automation_task_step_result(index, step, "succeeded"))
+                continue
 
             url = _automation_step_str(step, "url")
             wait_until = _automation_step_str(step, "wait_until", "load")
