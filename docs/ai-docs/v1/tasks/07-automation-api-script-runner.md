@@ -26,7 +26,7 @@
 
 ## 任务清单
 
-- [ ] 补齐 Automation API 文档。
+- [x] 补齐 Automation API 文档。
 - [x] 新增 page create。
 - [x] 新增 page close。
 - [x] 新增 wait for selector。
@@ -90,6 +90,14 @@ cd frontend && npm run build
 - [ ] 脚本失败能看到失败 step 和错误。
 - [ ] 运行中 profile 才能执行脚本。
 - [ ] 脚本不能绕过权限直接读取敏感配置。
+
+## API 契约文档
+
+当前 Automation REST API 契约已整理到：
+
+- `../automation-api-contract.md`
+
+该文档覆盖现有 endpoint、请求/响应字段、Script Runner step 复用建议，以及 console logs / network summary 的敏感信息边界。
 
 ## 2026-05-27 Automation wait-for-selector 小闭环
 

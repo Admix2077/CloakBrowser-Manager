@@ -1,0 +1,365 @@
+# Automation API 契约
+
+日期：2026-05-27
+
+## 目标
+
+本文固定 CloakBrowser 当前 Automation REST API 的可用契约，供后续 Script Runner、运营台和 Project Mileage 远程账号工作台间接接入时参考。
+
+Automation API 只操作已经运行中的 profile browser context。它不负责 Project Mileage 的用户权限、订单、钱包、扣费、续期或账号归属判断；这些业务事实必须留在 Project Mileage Payload。
+
+## 通用规则
+
+- 所有接口基于 `Firefox / invisible_playwright` 的 Playwright page API，不依赖 Chromium CDP。
+- 所有 page 级接口都要求 profile 已运行，否则返回 `404 Profile not running`。
+- `page_ref` 可以是 page index，也可以是 pages list 返回的 `page_id`。
+- Playwright 操作失败统一返回 `400`，page 不存在返回 `404`。
+- 成功的 page 操作默认返回 `AutomationPageResponse`：
+
+```json
+{
+  "page_id": "uuid",
+  "index": 0,
+  "url": "https://example.com/",
+  "title": "Example"
+}
+```
+
+## 已有接口
+
+### 获取 Automation 信息
+
+```http
+GET /api/profiles/{profile_id}/automation
+```
+
+返回：
+
+```json
+{
+  "profile_id": "profile-id",
+  "engine": "invisible_playwright",
+  "status": "running",
+  "pages_url": "/api/profiles/profile-id/automation/pages"
+}
+```
+
+### Page 列表
+
+```http
+GET /api/profiles/{profile_id}/automation/pages
+```
+
+返回：
+
+```json
+{
+  "pages": [
+    {
+      "page_id": "uuid",
+      "index": 0,
+      "url": "about:blank",
+      "title": "Blank"
+    }
+  ]
+}
+```
+
+### 新建 Page
+
+```http
+POST /api/profiles/{profile_id}/automation/pages
+```
+
+成功返回新 page 的 `AutomationPageResponse`，状态码 `201`。
+
+### 关闭 Page
+
+```http
+DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}
+```
+
+返回：
+
+```json
+{"ok": true}
+```
+
+### 跳转 URL
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/goto
+```
+
+请求：
+
+```json
+{
+  "url": "https://example.com",
+  "wait_until": "load",
+  "timeout_ms": 30000
+}
+```
+
+字段：
+
+- `wait_until`: `commit | domcontentloaded | load | networkidle`，默认 `load`。
+- `timeout_ms`: `1..300000`，默认 `30000`。
+
+### 等待 Selector
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/wait-for-selector
+```
+
+请求：
+
+```json
+{
+  "selector": "#ready",
+  "state": "visible",
+  "timeout_ms": 30000
+}
+```
+
+字段：
+
+- `selector`: 长度 `1..10000`。
+- `state`: `attached | detached | visible | hidden`，默认 `visible`。
+- `timeout_ms`: `1..300000`，默认 `30000`。
+
+### Click
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/click
+```
+
+请求：
+
+```json
+{
+  "selector": "#submit",
+  "timeout_ms": 30000
+}
+```
+
+### Fill
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/fill
+```
+
+请求：
+
+```json
+{
+  "selector": "#email",
+  "value": "user@example.com",
+  "timeout_ms": 30000
+}
+```
+
+字段：
+
+- `value`: 长度上限 `1048576`。
+
+### Keyboard Type
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/keyboard/type
+```
+
+请求：
+
+```json
+{
+  "text": "hello world",
+  "delay_ms": 0
+}
+```
+
+字段：
+
+- `text`: 长度 `1..1048576`。
+- `delay_ms`: `0..10000`，默认 `0`。
+
+### Scroll
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/scroll
+```
+
+请求：
+
+```json
+{
+  "delta_x": 0,
+  "delta_y": 600
+}
+```
+
+字段：
+
+- `delta_x`: `-100000..100000`，默认 `0`。
+- `delta_y`: `-100000..100000`，默认 `0`。
+
+实现使用页面内 `window.scrollBy(deltaX, deltaY)`，不依赖鼠标滚轮底层实现。
+
+### Evaluate
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/evaluate
+```
+
+请求：
+
+```json
+{
+  "expression": "document.title"
+}
+```
+
+字段：
+
+- `expression`: 长度 `1..200000`。
+
+返回：
+
+```json
+{
+  "result": "Example"
+}
+```
+
+### Screenshot
+
+```http
+POST /api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot
+```
+
+请求：
+
+```json
+{
+  "full_page": false
+}
+```
+
+返回 `image/png`。
+
+### Console Logs
+
+```http
+GET /api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs
+```
+
+返回：
+
+```json
+{
+  "logs": [
+    {
+      "type": "log",
+      "text": "ready",
+      "location": {
+        "url": "https://example.com/app.js",
+        "lineNumber": 4,
+        "columnNumber": 2
+      }
+    }
+  ]
+}
+```
+
+边界：
+
+- 通过 `page.on("console", ...)` 捕获。
+- 只保存在运行中 page 对象的进程内内存字段。
+- 每个 page 最多保留最近 200 条。
+- 不新增 DB 表，不写 `audit_events`，不把 console 文本写入 logger。
+- profile stop 后缓存随 page 对象释放。
+
+### Network Summary
+
+```http
+GET /api/profiles/{profile_id}/automation/pages/{page_ref}/network-summary
+```
+
+返回：
+
+```json
+{
+  "events": [
+    {
+      "event": "request",
+      "method": "GET",
+      "url": "https://example.com/api/items",
+      "resource_type": "xhr",
+      "status": null,
+      "failure": null
+    }
+  ]
+}
+```
+
+边界：
+
+- 通过 `page.on("request" | "response" | "requestfailed", ...)` 捕获。
+- 只保存在运行中 page 对象的进程内内存字段。
+- 每个 page 最多保留最近 200 条。
+- URL 只保留 scheme、host、port 和 path。
+- URL 必须丢弃 username、password、query、fragment、params。
+- 不采集 headers、cookie、Authorization、request body、response body。
+- 不新增 DB 表，不写 `audit_events`，不把 network URL 或失败详情写入 logger。
+- `requestfailed` 只返回固定 `failure: "request_failed"`。
+
+## Clipboard
+
+已有独立 clipboard API：
+
+```http
+POST /api/profiles/{profile_id}/clipboard
+GET /api/profiles/{profile_id}/clipboard
+```
+
+`POST` 请求：
+
+```json
+{
+  "text": "clipboard text"
+}
+```
+
+`text` 长度上限为 `1048576`。
+
+## Script Runner 接入建议
+
+第一版 Script Runner 可以直接复用以下 endpoint 作为 step：
+
+- `open_url` -> `goto`
+- `wait` -> runner 内部 sleep
+- `wait_for_selector` -> `wait-for-selector`
+- `click` -> `click`
+- `fill` -> `fill`
+- `keyboard_type` -> `keyboard/type`
+- `scroll` -> `scroll`
+- `evaluate` -> `evaluate`
+- `screenshot` -> `screenshot`
+
+Script Runner 的 task result/log 不应默认复制 console log、network URL、evaluate result、screenshot 或 clipboard 内容。需要展示时，应按白名单和长度上限返回。
+
+## 安全边界
+
+- Automation API 是高权限运行时接口，不应直接暴露给 Project Mileage App 前端。
+- Project Mileage App 只能通过 Payload 安全 DTO 间接接入，不能直接调用 CloakBrowser runtime API。
+- CloakBrowser 不判断 Project Mileage 用户是否有权操作账号，不扣费，不续期，不创建订单成功态。
+- 不读取或提交 `.env`、secret、cookie、token、数据库 dump 或 `_archive`。
+- 不把 proxy password、cookie、Authorization、viewer token、runtime service token、URL query、headers、body 写入 DB、audit metadata 或普通日志。
+
+## 验证命令
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+. .venv/bin/activate && python -m pytest backend/tests -q
+git diff --check
+```
