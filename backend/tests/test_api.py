@@ -1177,6 +1177,73 @@ def test_run_automation_task_marks_failed_for_invalid_wait_ms(app_client: TestCl
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_open_url_step_navigates_existing_page_without_leaking_query(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunOpenUrlProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("about:blank", "Before")
+    _automation_running_profile(pid, [page])
+    target_url = "https://example.com/app?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "open_url",
+                    "url": target_url,
+                    "page_ref": "0",
+                    "wait_until": "domcontentloaded",
+                    "timeout_ms": 5000,
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.goto.assert_awaited_once_with(
+        target_url,
+        wait_until="domcontentloaded",
+        timeout=5000,
+    )
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [
+        {
+            "type": "open_url",
+            "page_ref": "0",
+            "wait_until": "domcontentloaded",
+            "timeout_ms": 5000,
+        },
+    ]
+    assert data["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "succeeded"}]}
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunOpenUrlInvalidProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    invalid_url = "not-a-url?token=super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "open_url", "url": invalid_url}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "open_url"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "failed"}]}
+    assert data["error"] == "Invalid open_url step"
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def _mock_running_profile(pid: str) -> MagicMock:
     """Create a mock RunningProfile and register it in browser_mgr."""
     mock = MagicMock(spec=RunningProfile)

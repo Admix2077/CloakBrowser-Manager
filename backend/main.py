@@ -1472,6 +1472,17 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
         redacted = {"type": step_type}
         if step_type == "wait" and isinstance(step.get("ms"), int) and not isinstance(step.get("ms"), bool):
             redacted["ms"] = step["ms"]
+        if step_type == "open_url":
+            if isinstance(step.get("page_ref"), str):
+                redacted["page_ref"] = step["page_ref"]
+            if step.get("wait_until") in {"commit", "domcontentloaded", "load", "networkidle"}:
+                redacted["wait_until"] = step["wait_until"]
+            if (
+                isinstance(step.get("timeout_ms"), int)
+                and not isinstance(step.get("timeout_ms"), bool)
+                and 1 <= step["timeout_ms"] <= 300_000
+            ):
+                redacted["timeout_ms"] = step["timeout_ms"]
         redacted_steps.append(redacted)
     return redacted_steps
 
@@ -1513,6 +1524,23 @@ def _fail_automation_task(task_id: str, step_results: list[dict], error: str) ->
     if failed is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
     return failed
+
+
+def _automation_step_str(step: dict, key: str, default: str | None = None) -> str | None:
+    value = step.get(key, default)
+    return value if isinstance(value, str) else default
+
+
+def _automation_step_int(step: dict, key: str, default: int) -> int:
+    value = step.get(key, default)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    return default
+
+
+def _is_supported_automation_url(raw_url: str) -> bool:
+    parsed = urlparse(raw_url)
+    return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
 
 
 @app.post("/api/tasks", response_model=AutomationTaskResponse, status_code=201)
@@ -1574,13 +1602,43 @@ async def run_automation_task(task_id: str):
     for index, step in enumerate(running_task["steps"]):
         step_type = step.get("type")
         if step_type != "wait":
-            step_results.append(_automation_task_step_result(index, step, "failed"))
-            failed = _fail_automation_task(
-                task_id,
-                step_results,
-                "Unsupported automation step type",
-            )
-            return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+            if step_type != "open_url":
+                step_results.append(_automation_task_step_result(index, step, "failed"))
+                failed = _fail_automation_task(
+                    task_id,
+                    step_results,
+                    "Unsupported automation step type",
+                )
+                return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+
+            url = _automation_step_str(step, "url")
+            wait_until = _automation_step_str(step, "wait_until", "load")
+            timeout_ms = _automation_step_int(step, "timeout_ms", 30_000)
+            page_ref = _automation_step_str(step, "page_ref", "0") or "0"
+            if (
+                url is None
+                or wait_until not in {"commit", "domcontentloaded", "load", "networkidle"}
+                or timeout_ms < 1
+                or timeout_ms > 300_000
+                or not _is_supported_automation_url(url)
+            ):
+                step_results.append(_automation_task_step_result(index, step, "failed"))
+                failed = _fail_automation_task(task_id, step_results, "Invalid open_url step")
+                return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+
+            try:
+                running, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
+                await _automation_apply_page_headers(running, page)
+                await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
+            except HTTPException:
+                raise
+            except Exception:
+                step_results.append(_automation_task_step_result(index, step, "failed"))
+                failed = _fail_automation_task(task_id, step_results, "Open URL step failed")
+                return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+
+            step_results.append(_automation_task_step_result(index, step, "succeeded"))
+            continue
 
         wait_ms = step.get("ms")
         if not isinstance(wait_ms, int) or isinstance(wait_ms, bool) or wait_ms < 1 or wait_ms > 300_000:

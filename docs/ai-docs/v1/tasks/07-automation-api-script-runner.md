@@ -51,7 +51,7 @@
 - [x] 新增 `GET /api/tasks/{id}`。
 - [x] 新增 `POST /api/tasks/{id}/cancel`。
 - [ ] 支持第一版 step：
-  - [ ] open_url。
+  - [x] open_url。
   - [x] wait。
   - [ ] click。
   - [ ] fill。
@@ -194,6 +194,33 @@ cd frontend && npm run build
 # 73 passed
 ```
 
+## 2026-05-27 Automation Script Runner open_url step 小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已支持 `open_url` step。
+- step 格式：
+  - `type`: `open_url`。
+  - `url`: 必填，只支持 `http` 和 `https` URL。
+  - `page_ref`: 可选，默认 `"0"`，可传 page index 或 page id。
+  - `wait_until`: 可选，`commit | domcontentloaded | load | networkidle`，默认 `load`。
+  - `timeout_ms`: 可选，`1..300000`，默认 `30000`。
+- 执行时复用已运行 profile 的既有 page 和 `page.goto()`，不自动启动 profile，不创建新 page。
+- 成功后 task 按既有状态机进入 `succeeded`；非法 URL 或非法参数进入 `failed` 并返回 `400`。
+- `run` 响应对 `open_url` step 做白名单脱敏：只回显 `type/page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment。
+- `result.steps[]` 只记录 `index`、`type`、`status`，不复制 URL、console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_automation_task_rejects_non_queued_status backend/tests/test_api.py::test_run_automation_task_requires_running_profile backend/tests/test_api.py::test_run_automation_task_fails_unknown_step_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload -q
+# 7 passed
+```
+
 ## 2026-05-27 Automation Script Runner wait step 小闭环
 
 当前状态：
@@ -212,7 +239,7 @@ cd frontend && npm run build
 - run 不自动启动 profile，不读取 proxy/cookie/token/secret，不写 Project Mileage 钱包、订单、权限或续期逻辑。
 - 当前 `run` 响应会对 `steps` 做白名单脱敏：只回显 step `type`，并仅对 `wait` 回显安全的 `ms`；未知 step 的其他字段不会出现在 run 响应中。
 - `result.steps[]` 只记录 `index`、`type`、`status`，不复制 console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
-- 当前仍未实现后台队列、并发限制、失败重试、running cancel、open_url/click/fill/scroll/evaluate/screenshot step。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
 
 验证记录：
 
