@@ -1,14 +1,31 @@
-import { Database, Globe2, Network, RefreshCw, Search, UserPlus, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, RefreshCw, Search, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { api, type Profile, type ProxyAsset } from "../lib/api";
+import { api, type Profile, type ProxyAsset, type ProxyCreateData } from "../lib/api";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
 const FILTER_ALL = "__all_proxy_filter__";
+const CSV_SAMPLE = "name,url,country_code,city,asn,provider,tags,notes";
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];
   onProfilesAssigned?: () => Promise<unknown> | unknown;
+}
+
+interface ProxyCsvImportRow {
+  rowNumber: number;
+  data: ProxyCreateData;
+  issues: string[];
+}
+
+interface ProxyCsvImportPreview {
+  rows: ProxyCsvImportRow[];
+  parseError: string | null;
+}
+
+interface ProxyCsvImportFailure {
+  rowNumber: number;
+  message: string;
 }
 
 export function ProxyManagerPage({
@@ -28,6 +45,13 @@ export function ProxyManagerPage({
   const [assigning, setAssigning] = useState(false);
   const [assignNotice, setAssignNotice] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importFailures, setImportFailures] = useState<ProxyCsvImportFailure[]>([]);
+  const [recentlyImportedProxyIds, setRecentlyImportedProxyIds] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState(FILTER_ALL);
   const [providerFilter, setProviderFilter] = useState(FILTER_ALL);
@@ -54,6 +78,16 @@ export function ProxyManagerPage({
   useEffect(() => {
     void loadProxies();
   }, [loadProxies]);
+
+  useEffect(() => {
+    if (recentlyImportedProxyIds.size === 0) return;
+
+    const timer = window.setTimeout(() => {
+      setRecentlyImportedProxyIds(new Set());
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [recentlyImportedProxyIds]);
 
   const stats = useMemo(() => {
     const good = proxies.filter((proxy) => proxy.last_check_status === "good").length;
@@ -251,6 +285,84 @@ export function ProxyManagerPage({
     }
   }, [assigning, onProfilesAssigned, selectedAssignProfileIds, selectedProxy]);
 
+  const importPreview = useMemo(() => parseProxyCsvImport(importText), [importText]);
+  const validImportRows = useMemo(
+    () => importPreview.rows.filter((row) => row.issues.length === 0),
+    [importPreview.rows],
+  );
+  const blockedImportCount = importPreview.rows.length - validImportRows.length;
+
+  const openImportDialog = useCallback(() => {
+    setImportText("");
+    setImportNotice(null);
+    setImportError(null);
+    setImportFailures([]);
+    setImportDialogOpen(true);
+  }, []);
+
+  const closeImportDialog = useCallback(() => {
+    if (importing) return;
+    setImportDialogOpen(false);
+    setImportError(null);
+  }, [importing]);
+
+  const importValidCsvRows = useCallback(async () => {
+    if (importing) return;
+
+    if (importPreview.parseError) {
+      setImportError(importPreview.parseError);
+      setImportFailures([]);
+      return;
+    }
+
+    const invalidFailures = importPreview.rows
+      .filter((row) => row.issues.length > 0)
+      .map((row) => ({
+        rowNumber: row.rowNumber,
+        message: row.issues.join(", "),
+      }));
+
+    if (validImportRows.length === 0) {
+      setImportError("No valid proxy rows to import");
+      setImportFailures(invalidFailures);
+      return;
+    }
+
+    setImporting(true);
+    setImportError(null);
+    setImportNotice(null);
+    setImportFailures([]);
+
+    let createdCount = 0;
+    const failures: ProxyCsvImportFailure[] = [...invalidFailures];
+    const createdIds: string[] = [];
+
+    for (const row of validImportRows) {
+      try {
+        const createdProxy = await api.createProxy(row.data);
+        createdCount += 1;
+        createdIds.push(createdProxy.id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unable to create proxy asset";
+        failures.push({
+          rowNumber: row.rowNumber,
+          message: redactUrlCredentials(message),
+        });
+      }
+    }
+
+    const notice = `Imported ${createdCount} proxy asset(s), ${failures.length} failed`;
+    setImportNotice(notice);
+    setImportFailures(failures.sort((a, b) => a.rowNumber - b.rowNumber));
+
+    if (createdCount > 0) {
+      setRecentlyImportedProxyIds(new Set(createdIds));
+      await loadProxies();
+    }
+
+    setImporting(false);
+  }, [importPreview, importing, loadProxies, validImportRows]);
+
   return (
     <section
       role="region"
@@ -301,10 +413,20 @@ export function ProxyManagerPage({
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              URLs are rendered credential-safe. Bulk check and profile assignment are active; add, edit, delete, and CSV import remain disabled.
+              URLs are rendered credential-safe. Bulk check, profile assignment, and CSV import are active; add, edit, and delete remain disabled.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={openImportDialog}
+              disabled={importing}
+              aria-label="Import CSV"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Import CSV
+            </button>
             <button
               type="button"
               className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
@@ -374,8 +496,14 @@ export function ProxyManagerPage({
         )}
 
         {assignNotice && (
-          <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
+          <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
             {assignNotice}
+          </div>
+        )}
+
+        {importNotice && (
+          <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
+            {importNotice}
           </div>
         )}
 
@@ -424,6 +552,7 @@ export function ProxyManagerPage({
                     key={proxy.id}
                     proxy={proxy}
                     selected={selectedProxyIds.has(proxy.id)}
+                    highlighted={recentlyImportedProxyIds.has(proxy.id)}
                     onToggleSelection={toggleProxySelection}
                   />
                 ))}
@@ -447,6 +576,26 @@ export function ProxyManagerPage({
           onToggleVisible={toggleVisibleAssignmentProfiles}
           onAssign={() => void assignSelectedProxyToProfiles()}
           onClose={closeAssignDialog}
+        />
+      )}
+      {importDialogOpen && (
+        <ProxyCsvImportDialog
+          text={importText}
+          preview={importPreview}
+          validCount={validImportRows.length}
+          blockedCount={blockedImportCount}
+          importing={importing}
+          notice={importNotice}
+          error={importError}
+          failures={importFailures}
+          onTextChange={(value) => {
+            setImportText(value);
+            setImportError(null);
+            setImportFailures([]);
+            setImportNotice(null);
+          }}
+          onImport={() => void importValidCsvRows()}
+          onClose={closeImportDialog}
         />
       )}
     </section>
@@ -562,6 +711,262 @@ function FilterSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function ProxyCsvImportDialog({
+  text,
+  preview,
+  validCount,
+  blockedCount,
+  importing,
+  notice,
+  error,
+  failures,
+  onTextChange,
+  onImport,
+  onClose,
+}: {
+  text: string;
+  preview: ProxyCsvImportPreview;
+  validCount: number;
+  blockedCount: number;
+  importing: boolean;
+  notice: string | null;
+  error: string | null;
+  failures: ProxyCsvImportFailure[];
+  onTextChange: (value: string) => void;
+  onImport: () => void;
+  onClose: () => void;
+}) {
+  const previewRows = preview.rows.slice(0, 60);
+  const canImport = validCount > 0 && !preview.parseError && !importing;
+
+  return (
+    <div className="animate-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-label="Import proxy CSV"
+        aria-modal="true"
+        className="animate-dialog-in flex max-h-[calc(100vh-24px)] w-[min(880px,calc(100vw-24px))] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-blue-100 bg-blue-50 text-blue-700">
+                <FileSpreadsheet className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-slate-950">Import proxy CSV</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Paste rows, preview validation, then create valid proxy assets through the existing API.
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="icon-action h-7 w-7"
+            onClick={onClose}
+            disabled={importing}
+            aria-label="Close import proxy CSV dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid gap-3 border-b border-slate-200 bg-white px-4 py-3 lg:grid-cols-[minmax(0,1fr)_220px]">
+          <label className="min-w-0">
+            <span className="label">CSV content</span>
+            <textarea
+              aria-label="Proxy CSV content"
+              className="input min-h-[152px] resize-y font-mono text-xs leading-5"
+              value={text}
+              onChange={(event) => onTextChange(event.target.value)}
+              placeholder={`${CSV_SAMPLE}\nUS Pool,http://proxy.example:8080,US,Los Angeles,AS12345,ProxyCo,stable|primary,Primary pool`}
+              spellCheck={false}
+            />
+          </label>
+          <div className="grid content-start gap-2">
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                Supported fields
+              </div>
+              <p className="mt-2 break-words font-mono text-[11px] leading-5 text-slate-600">
+                {CSV_SAMPLE}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Tags split by comma, semicolon, or pipe. Name and URL are required.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <ImportCountPill label="ready" value={validCount} tone="success" />
+              <ImportCountPill label="blocked" value={blockedCount} tone={blockedCount > 0 ? "warning" : "neutral"} />
+            </div>
+          </div>
+        </div>
+
+        {(preview.parseError || error) && (
+          <div className="animate-notice-in border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+            {preview.parseError ?? error}
+          </div>
+        )}
+
+        {notice && (
+          <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700" role="status">
+            {notice}
+          </div>
+        )}
+
+        {failures.length > 0 && (
+          <div className="animate-notice-in border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900" role="alert">
+            <div className="font-semibold">Import issues</div>
+            <ul className="mt-1 grid gap-1">
+              {failures.slice(0, 8).map((failure) => (
+                <li key={`${failure.rowNumber}-${failure.message}`}>
+                  Row {failure.rowNumber}: {failure.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="min-h-[240px] flex-1 overflow-auto bg-white p-2">
+          {previewRows.length === 0 ? (
+            <div
+              role="status"
+              aria-label="No CSV rows ready for preview"
+              className="flex min-h-[220px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-500"
+            >
+              Paste a CSV header and rows to preview proxy assets before import.
+            </div>
+          ) : (
+            <div className="overflow-auto rounded-lg border border-slate-200">
+              <table
+                aria-label="Proxy CSV preview"
+                className="min-w-[760px] w-full table-fixed border-separate border-spacing-0 bg-white text-left text-xs text-slate-700"
+              >
+                <thead className="sticky top-0 z-10 bg-[#fbfdff]">
+                  <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
+                    <HeaderCell className="w-[86px]">Row</HeaderCell>
+                    <HeaderCell className="w-[180px]">Name</HeaderCell>
+                    <HeaderCell className="w-[240px]">Endpoint</HeaderCell>
+                    <HeaderCell className="w-[130px]">Provider</HeaderCell>
+                    <HeaderCell className="w-[130px]">Tags</HeaderCell>
+                    <HeaderCell className="w-[150px]">Status</HeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((row) => (
+                    <ProxyCsvPreviewRow key={`${row.rowNumber}-${row.data.name}-${row.data.url}`} row={row} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="text-xs text-slate-500">
+            Import creates valid rows only. Invalid rows stay visible and are not submitted.
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary h-8 text-xs"
+              onClick={onClose}
+              disabled={importing}
+            >
+              Done
+            </button>
+            <button
+              type="button"
+              className="btn-primary inline-flex h-8 min-w-[132px] items-center justify-center gap-1.5 text-xs"
+              onClick={onImport}
+              disabled={!canImport}
+            >
+              {importing ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="h-3.5 w-3.5" />
+              )}
+              {importing ? "Importing" : "Import valid rows"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImportCountPill({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "neutral" | "success" | "warning";
+}) {
+  const className = {
+    neutral: "border-slate-200 bg-white text-slate-600",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+  }[tone];
+
+  return (
+    <span className={`inline-flex items-center justify-center rounded-md border px-2.5 py-1.5 text-xs font-semibold ${className}`}>
+      {value} {label}
+    </span>
+  );
+}
+
+function ProxyCsvPreviewRow({ row }: { row: ProxyCsvImportRow }) {
+  const hasIssues = row.issues.length > 0;
+  const safeUrl = row.data.url ? redactUrlCredentials(row.data.url) : "-";
+  const tags = row.data.tags?.map((tag) => tag.tag).join(", ") || "-";
+
+  return (
+    <tr className={`shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors ${
+      hasIssues ? "bg-amber-50/40" : "hover:bg-blue-50/30"
+    }`}>
+      <td className="px-3 py-2 align-top font-mono text-[11px] text-slate-500">
+        Row {row.rowNumber}
+      </td>
+      <td className="px-3 py-2 align-top">
+        <span className="block truncate text-sm font-semibold text-slate-900" title={row.data.name || "-"}>
+          {row.data.name || "-"}
+        </span>
+      </td>
+      <td className="px-3 py-2 align-top">
+        <span className="block truncate font-mono text-[11px] text-slate-600" title={safeUrl}>
+          {safeUrl}
+        </span>
+      </td>
+      <td className="px-3 py-2 align-top">
+        <span className="block truncate text-sm text-slate-700" title={row.data.provider ?? "-"}>
+          {row.data.provider ?? "-"}
+        </span>
+      </td>
+      <td className="px-3 py-2 align-top">
+        <span className="block truncate text-xs text-slate-500" title={tags}>
+          {tags}
+        </span>
+      </td>
+      <td className="px-3 py-2 align-top">
+        {hasIssues ? (
+          <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+            <AlertCircle className="h-3 w-3" />
+            {row.issues.join(", ")}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
+            <CheckCircle2 className="h-3 w-3" />
+            Ready
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }
 
@@ -778,10 +1183,12 @@ function AssignmentProfileRow({
 function ProxyRow({
   proxy,
   selected,
+  highlighted,
   onToggleSelection,
 }: {
   proxy: ProxyAsset;
   selected: boolean;
+  highlighted: boolean;
   onToggleSelection: (proxyId: string) => void;
 }) {
   const safeUrl = redactUrlCredentials(proxy.url);
@@ -796,7 +1203,9 @@ function ProxyRow({
   ].filter(Boolean).join(" · ");
 
   return (
-    <tr className="group shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors hover:bg-blue-50/30">
+    <tr className={`group shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors hover:bg-blue-50/30 ${
+      highlighted ? "animate-proxy-row-enter bg-emerald-50/40" : ""
+    }`}>
       <td className="px-3 py-3 align-top">
         <label className="flex h-5 w-5 items-center justify-center">
           <input
@@ -984,6 +1393,155 @@ function ProxySummaryTile({
       </div>
     </div>
   );
+}
+
+function parseProxyCsvImport(text: string): ProxyCsvImportPreview {
+  if (!text.trim()) {
+    return { rows: [], parseError: null };
+  }
+
+  let records: string[][];
+  try {
+    records = parseCsvRecords(text);
+  } catch (err) {
+    return {
+      rows: [],
+      parseError: err instanceof Error ? err.message : "Unable to parse CSV",
+    };
+  }
+
+  const nonEmptyRecords = records
+    .map((cells, index) => ({ cells, rowNumber: index + 1 }))
+    .filter((record) => record.cells.some((cell) => cell.trim()));
+
+  if (nonEmptyRecords.length === 0) {
+    return { rows: [], parseError: null };
+  }
+
+  const headerRecord = nonEmptyRecords[0];
+  if (!headerRecord) {
+    return { rows: [], parseError: null };
+  }
+
+  const headers = headerRecord.cells.map(normalizeCsvHeader);
+  const missingHeaders = ["name", "url"].filter((header) => !headers.includes(header));
+
+  if (missingHeaders.length > 0) {
+    return {
+      rows: [],
+      parseError: `CSV header must include ${missingHeaders.join(" and ")}`,
+    };
+  }
+
+  const rows = nonEmptyRecords.slice(1).map((record) => {
+    const getField = (field: string) => {
+      const index = headers.indexOf(field);
+      return index >= 0 ? (record.cells[index] ?? "").trim() : "";
+    };
+
+    const name = getField("name");
+    const url = getField("url");
+    const countryCode = getField("country_code");
+    const city = getField("city");
+    const asn = getField("asn");
+    const provider = getField("provider");
+    const notes = getField("notes");
+    const tags = parseCsvTags(getField("tags"));
+
+    const issues: string[] = [];
+    if (!name) issues.push("Missing name");
+    if (!url) issues.push("Missing url");
+
+    const data: ProxyCreateData = {
+      name,
+      url,
+      ...(countryCode ? { country_code: countryCode } : {}),
+      ...(city ? { city } : {}),
+      ...(asn ? { asn } : {}),
+      ...(provider ? { provider } : {}),
+      ...(tags.length > 0 ? { tags } : {}),
+      ...(notes ? { notes } : {}),
+    };
+
+    return {
+      rowNumber: record.rowNumber,
+      data,
+      issues,
+    };
+  });
+
+  return { rows, parseError: null };
+}
+
+function parseCsvRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let record: string[] = [];
+  let field = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (inQuotes) {
+      if (char === "\"") {
+        if (text[index + 1] === "\"") {
+          field += "\"";
+          index += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inQuotes = true;
+      continue;
+    }
+
+    if (char === ",") {
+      record.push(field);
+      field = "";
+      continue;
+    }
+
+    if (char === "\n") {
+      record.push(field);
+      records.push(record);
+      record = [];
+      field = "";
+      continue;
+    }
+
+    if (char !== "\r") {
+      field += char;
+    }
+  }
+
+  if (inQuotes) {
+    throw new Error("CSV has an unclosed quoted field");
+  }
+
+  record.push(field);
+  records.push(record);
+  return records;
+}
+
+function normalizeCsvHeader(header: string): string {
+  const normalized = header.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (normalized === "endpoint" || normalized === "proxy" || normalized === "proxy_url") return "url";
+  if (normalized === "country") return "country_code";
+  return normalized;
+}
+
+function parseCsvTags(value: string): { tag: string; color: string | null }[] {
+  return value
+    .split(/[|;,]/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .map((tag) => ({ tag, color: null }));
 }
 
 function getProxyStatusTone(status: string | null): ProxyStatusTone {

@@ -20,7 +20,7 @@
 - [x] 01 契约边界与事实源：`01-contract-and-boundaries.md`
 - [x] 02 指纹健康引擎：`02-health-engine.md`
 - [x] 03 Profile 运营台：`03-profile-operations-console.md`
-- [ ] 04 Proxy Manager：`04-proxy-manager.md`
+- [x] 04 Proxy Manager：`04-proxy-manager.md`
 - [ ] 05 Project Mileage 会话 Broker：`05-session-broker-project-mileage.md`
 - [ ] 06 远程工作台与 VNC 会话：`06-vnc-remote-workspace.md`
 - [ ] 07 Automation API 与脚本运行器：`07-automation-api-script-runner.md`

@@ -48,7 +48,7 @@
 - [x] 前端新增 Proxy Manager 页面。
 - [x] 支持搜索、筛选、批量检测。
 - [x] 支持按国家、provider、tag 筛选。
-- [ ] 支持 CSV 粘贴导入第一版。
+- [x] 支持 CSV 粘贴导入第一版。
 
 ## 验证命令
 
@@ -839,3 +839,85 @@ git diff --check
 - `/tmp/cloakbrowser-proxy-manager-assign-final-screens/desktop-assign-success.png`
 - `/tmp/cloakbrowser-proxy-manager-assign-final-screens/mobile-assign-dialog-search.png`
 - `/tmp/cloakbrowser-proxy-manager-assign-final-screens/mobile-assign-success.png`
+
+## 2026-05-26 Proxy Manager CSV 粘贴导入第一版小闭环
+
+背景：
+
+- 继续 04 Proxy Manager；当前仅剩 `支持 CSV 粘贴导入第一版` 未完成。
+- 本轮不新增后端 bulk import API，不改数据库模型；前端解析、预览后逐行复用现有 `api.createProxy()`。
+- 同步处理 Jeff 反馈的交互生硬问题：补充 import dialog、notice、按钮、choice 控件和导入新增行的克制动效。
+
+已完成：
+
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - 新增 `Import CSV` 入口。
+  - 新增 `Import proxy CSV` dialog，支持粘贴 CSV、预览行、统计 `ready / blocked`。
+  - CSV 第一版支持字段：`name`、`url`、`country_code`、`city`、`asn`、`provider`、`tags`、`notes`。
+  - `name` 与 `url` 必填；无效行在预览里标记 `Missing name` / `Missing url`，不会提交。
+  - 有效行顺序调用 `api.createProxy(row)`，部分失败继续导入后续行。
+  - 成功后刷新 proxy 列表，新增行短暂高亮；失败原因保留在 dialog 中并做 URL credential-safe 展示。
+  - CSV 输入框本身保留用户粘贴原文；预览、错误、表格和 `[title]` 继续使用脱敏展示。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖 CSV dialog 打开、header 解析、有效/无效行预览。
+  - 覆盖只对有效行调用 `createProxy()`，无效行不提交。
+  - 覆盖导入成功后刷新 `listProxies()`。
+  - 覆盖部分成功/失败时展示 `Imported X proxy asset(s), Y failed` 和逐行失败原因。
+  - 覆盖预览、错误和 title 不泄露 proxy 凭据。
+- [x] `frontend/src/styles/globals.css`
+  - 增加 dialog / notice / proxy row enter 动效。
+  - 按钮补充 active 位移反馈，choice card / checkbox 补充轻量 hover / active 反馈。
+  - 继续受全局 `prefers-reduced-motion` 降级约束。
+
+范围说明：
+
+- 本轮不做后端 bulk import API。
+- 本轮不做新建 / 编辑 / 删除 proxy UI。
+- 本轮不做单个检测 UI。
+- 本轮不迁移 `profiles.proxy` 到 `proxy_id`。
+- 04 文档顶部任务清单和验收标准已完成；上述增强项作为后续 V1.5 / 09 批量运营或新任务处理，不阻塞 04 模块完成。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 红灯：2 failed, 16 passed
+# 缺少 Import CSV 入口
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 passed, 18 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 148 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，当前服务 PID `1322090`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x900`：
+  - 进入 Proxy Manager，打开 `Import CSV`。
+  - 粘贴 1 条有效、1 条缺 URL 的 CSV。
+  - 预览显示 `1 ready`、`1 blocked`、`Missing url`。
+  - 点击 `Import valid rows` 后列表出现 `CSV Desktop Good`，提示 `Imported 1 proxy asset(s), 1 failed`。
+  - 预览和列表只显示 `http://csv-desktop.proxy.example:8080`，不显示 URL 用户名密码。
+- 移动 `390x844`：
+  - 打开 `Import CSV`，粘贴 1 条有效 CSV。
+  - 预览可操作，导入后列表包含 `CSV Mobile Good`。
+  - JS 验证：`hasMobileRow=true`、`hasNotice=true`、`scrollWidth=390`、`width=390`、正文和 `[title]` 无 `mobilepass` / `mobile-user:`。
+- `agent-browser console --clear` 无相关前端错误；`agent-browser errors --clear` 无输出。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-csv-import-screens/desktop-csv-import-success.png`
+- `/tmp/cloakbrowser-proxy-manager-csv-import-screens/mobile-csv-import-preview.png`
+- `/tmp/cloakbrowser-proxy-manager-csv-import-screens/mobile-csv-import-success.png`

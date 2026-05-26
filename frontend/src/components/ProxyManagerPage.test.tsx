@@ -9,6 +9,7 @@ vi.mock("../lib/api", async (importOriginal) => {
     ...actual,
     api: {
       listProxies: vi.fn(),
+      createProxy: vi.fn(),
       bulkCheckProxies: vi.fn(),
       assignProxyToProfiles: vi.fn(),
     },
@@ -16,6 +17,7 @@ vi.mock("../lib/api", async (importOriginal) => {
 });
 
 const mockListProxies = api.listProxies as ReturnType<typeof vi.fn>;
+const mockCreateProxy = api.createProxy as ReturnType<typeof vi.fn>;
 const mockBulkCheckProxies = api.bulkCheckProxies as ReturnType<typeof vi.fn>;
 const mockAssignProxyToProfiles = api.assignProxyToProfiles as ReturnType<typeof vi.fn>;
 
@@ -87,6 +89,7 @@ function profile(overrides: Partial<Profile>): Profile {
 
 beforeEach(() => {
   mockListProxies.mockReset();
+  mockCreateProxy.mockReset();
   mockBulkCheckProxies.mockReset();
   mockAssignProxyToProfiles.mockReset();
 });
@@ -668,6 +671,117 @@ describe("ProxyManagerPage", () => {
     );
     expect(`${document.body.textContent}`).not.toContain("hiddenpass");
     expect(mockAssignProxyToProfiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("imports valid pasted CSV rows through createProxy and skips invalid rows", async () => {
+    const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
+    const importedProxy = proxy({
+      id: "proxy-imported",
+      name: "Imported JP",
+      url: "http://jp.proxy.example:8080",
+      country_code: "JP",
+      city: "Tokyo",
+      asn: "AS64512",
+      provider: "ProxyJP",
+      tags: [
+        { tag: "asia", color: null },
+        { tag: "stable", color: null },
+      ],
+      notes: "Primary imported pool",
+    });
+    mockListProxies
+      .mockResolvedValueOnce([existingProxy])
+      .mockResolvedValueOnce([existingProxy, importedProxy]);
+    mockCreateProxy.mockResolvedValue(importedProxy);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    fireEvent.change(within(dialog).getByLabelText("Proxy CSV content"), {
+      target: {
+        value: [
+          "name,url,country_code,city,asn,provider,tags,notes",
+          "Imported JP,http://user:hiddenpass@jp.proxy.example:8080,JP,Tokyo,AS64512,ProxyJP,asia|stable,Primary imported pool",
+          "Missing Url,,US,New York,AS64513,ProxyUS,broken,Missing endpoint",
+        ].join("\n"),
+      },
+    });
+
+    expect(within(dialog).getByText("1 ready")).toBeTruthy();
+    expect(within(dialog).getByText("1 blocked")).toBeTruthy();
+    expect(within(dialog).getByText("Missing url")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import valid rows" }));
+
+    await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledTimes(1));
+    expect(mockCreateProxy).toHaveBeenCalledWith({
+      name: "Imported JP",
+      url: "http://user:hiddenpass@jp.proxy.example:8080",
+      country_code: "JP",
+      city: "Tokyo",
+      asn: "AS64512",
+      provider: "ProxyJP",
+      tags: [
+        { tag: "asia", color: null },
+        { tag: "stable", color: null },
+      ],
+      notes: "Primary imported pool",
+    });
+    await waitFor(() => expect(mockListProxies).toHaveBeenCalledTimes(2));
+    expect(await within(dialog).findByText("Imported 1 proxy asset(s), 1 failed")).toBeTruthy();
+    expect(within(within(page).getByRole("table", { name: "Proxy assets" })).getByText("Imported JP")).toBeTruthy();
+
+    const renderedEvidence = [
+      within(page).getByRole("table", { name: "Proxy assets" }).textContent,
+      within(dialog).getByRole("table", { name: "Proxy CSV preview" }).textContent,
+      within(dialog).getByText("Row 3: Missing url").textContent,
+      ...Array.from(page.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+    expect(renderedEvidence).not.toContain("hiddenpass");
+    expect(renderedEvidence).not.toContain("user:");
+  });
+
+  it("keeps CSV import failures visible and credential-safe after partial success", async () => {
+    const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
+    const importedProxy = proxy({ id: "proxy-imported", name: "Imported Good" });
+    mockListProxies
+      .mockResolvedValueOnce([existingProxy])
+      .mockResolvedValueOnce([existingProxy, importedProxy]);
+    mockCreateProxy
+      .mockResolvedValueOnce(importedProxy)
+      .mockRejectedValueOnce(new Error("cannot save http://user:hiddenpass@bad.proxy.example:8080"));
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    fireEvent.change(within(dialog).getByLabelText("Proxy CSV content"), {
+      target: {
+        value: [
+          "name,url,provider,tags",
+          "Imported Good,http://good.proxy.example:8080,ProxyCo,stable",
+          "Imported Bad,http://user:hiddenpass@bad.proxy.example:8080,ProxyCo,bad",
+        ].join("\n"),
+      },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import valid rows" }));
+
+    await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledTimes(2));
+    expect(await within(dialog).findByText("Imported 1 proxy asset(s), 1 failed")).toBeTruthy();
+    expect(within(dialog).getByText("Row 3: cannot save http://bad.proxy.example:8080")).toBeTruthy();
+    const renderedEvidence = [
+      within(dialog).getByRole("table", { name: "Proxy CSV preview" }).textContent,
+      within(dialog).getByRole("alert").textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+    expect(renderedEvidence).not.toContain("hiddenpass");
+    expect(renderedEvidence).not.toContain("user:");
+    expect(await within(within(page).getByRole("table", { name: "Proxy assets" })).findByText("Imported Good")).toBeTruthy();
   });
 
   it("surfaces a retry action when proxy assets fail to load", async () => {
