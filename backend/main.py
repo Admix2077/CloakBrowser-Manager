@@ -575,6 +575,17 @@ def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     return RuntimeSessionResponse(**session)
 
 
+def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None = None) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="runtime_service",
+        runtime_session_id=str(session["id"]),
+        profile_id=str(session["profile_id"]),
+        external_session_id=str(session["external_session_id"]),
+        metadata=metadata,
+    )
+
+
 def _runtime_service_token_from_request(request: Request) -> str | None:
     token = request.headers.get("X-Runtime-Service-Token")
     return token or None
@@ -976,6 +987,14 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         lease_seconds=req.lease_seconds,
         status="active",
     )
+    _audit_runtime_event(
+        "runtime.session.created",
+        session,
+        {
+            "profile_source": "profile_id" if req.profile_id else "template_id",
+            "lease_seconds": req.lease_seconds,
+        },
+    )
     return _runtime_session_response(session)
 
 
@@ -985,6 +1004,7 @@ async def get_runtime_session(session_id: str, request: Request):
     session = db.get_runtime_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Runtime session not found")
+    _audit_runtime_event("runtime.session.read", session)
     return _runtime_session_response(session)
 
 
@@ -1014,6 +1034,14 @@ async def create_runtime_viewer_token(
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Runtime session not found")
+    _audit_runtime_event(
+        "runtime.viewer_token.created",
+        updated,
+        {
+            "ttl_seconds": req.ttl_seconds,
+            "viewer_token_expires_at": expires_at,
+        },
+    )
 
     viewer_url = f"/api/runtime/sessions/{session_id}/vnc?viewer_token={viewer_token}"
     return RuntimeViewerTokenResponse(
@@ -1029,6 +1057,7 @@ async def terminate_runtime_session(session_id: str, request: Request):
     session = db.terminate_runtime_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Runtime session not found")
+    _audit_runtime_event("runtime.session.terminated", session)
     return _runtime_session_response(session)
 
 
@@ -1043,6 +1072,14 @@ async def renew_runtime_session(session_id: str, req: RuntimeSessionRenew, reque
     renewed = db.renew_runtime_session(session_id, req.lease_seconds)
     if not renewed:
         raise HTTPException(status_code=404, detail="Runtime session not found")
+    _audit_runtime_event(
+        "runtime.session.renewed",
+        renewed,
+        {
+            "lease_seconds": req.lease_seconds,
+            "lease_expires_at": renewed["lease_expires_at"],
+        },
+    )
     return _runtime_session_response(renewed)
 
 

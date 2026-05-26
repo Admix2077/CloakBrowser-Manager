@@ -5165,6 +5165,77 @@ git diff --check
 - 没有把钱包、订单、用户权限判断写入 CloakBrowser。
 - 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
 
+## 73. 2026-05-27 Runtime audit 小闭环
+
+背景：
+
+- 在 `7dd5537 add runtime session renew` 后继续推进 05。
+- 子 agent 只读审计建议：第一轮只审计通过 `RUNTIME_SERVICE_TOKEN` 的成功 runtime service API 动作；失败事件和 WebSocket connect attempt 容易把 URL query、viewer token 或原始请求头带入审计，建议后续单独做 reason code 小闭环。
+- 主 agent 采纳该策略，并选择通用 `audit_events` 表，保持后续 10 审计模块可复用，不把审计锁死在 runtime session 专用表。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 audit TDD 覆盖。
+  - 确认新增测试初始红灯：`create_audit_event()` / `list_audit_events()` 不存在。
+  - 覆盖 runtime service 成功动作写入审计事件：
+    - `runtime.session.created`
+    - `runtime.session.read`
+    - `runtime.viewer_token.created`
+    - `runtime.session.renewed`
+    - `runtime.session.terminated`
+  - 覆盖 audit 事件带 `actor_type=runtime_service`、runtime session id、profile id、external session id 和低敏 metadata。
+  - 覆盖 audit 不记录 viewer token 明文、viewer URL、viewer token hash、runtime service token、wallet/order/billing 字段。
+  - 覆盖未授权 runtime request 不写 audit，避免把伪造请求体或认证失败请求头落库。
+  - 覆盖 audit metadata sanitizer 会移除 viewer token、hash、runtime service token、proxy URL/password 和 cookie。
+  - 额外补强：即使 proxy URL 带密码出现在普通字符串字段中，也会被脱敏为不含用户名密码的 URL。
+- `backend/database.py`
+  - 新增通用 `audit_events` 表。
+  - 新增 `create_audit_event()`。
+  - 新增 `get_audit_event()`。
+  - 新增 `list_audit_events()`。
+  - 新增 audit metadata 脱敏规则，按 key 删除敏感字段，并对字符串中的 proxy URL 做密码遮蔽。
+- `backend/main.py`
+  - 新增 `_audit_runtime_event()`。
+  - `POST /api/runtime/sessions` 成功后写 `runtime.session.created`。
+  - `GET /api/runtime/sessions/{session_id}` 成功后写 `runtime.session.read`。
+  - `POST /api/runtime/sessions/{session_id}/viewer-token` 成功后写 `runtime.viewer_token.created`，metadata 只记录 `ttl_seconds` 和 `viewer_token_expires_at`。
+  - `POST /api/runtime/sessions/{session_id}/renew` 成功后写 `runtime.session.renewed`。
+  - `POST /api/runtime/sessions/{session_id}/terminate` 成功后写 `runtime.session.terminated`。
+- 文档：
+  - `docs/ai-docs/v1/tasks/05-session-broker-project-mileage.md`
+  - `docs/ai-docs/v1/tasks/10-audit-security-rbac.md`
+  - `docs/ai-docs/v1/tasks/progress.md`
+  - `docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md`
+  - `docs/ai-docs/v1/goal-prompt.md`
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_service_actions_write_redacted_audit_events backend/tests/test_session_broker.py::test_runtime_audit_ignores_unauthenticated_runtime_requests backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 20 passed
+```
+
+仍未完成：
+
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+- runtime VNC connect/disconnect audit。
+- 更完整的失败事件审计与 reason code 分类。
+- profile/proxy/health/bulk/automation 等非 runtime service API 审计。
+
+边界：
+
+- 没有修改 Project Mileage app/payload。
+- 没有把钱包、订单、用户权限判断写入 CloakBrowser。
+- 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
+- 没有把 viewer token、viewer URL、viewer token hash、runtime service token、proxy password 或 cookie 写入 audit metadata。
+
 ## 72. 2026-05-27 Runtime session renew 小闭环
 
 背景：

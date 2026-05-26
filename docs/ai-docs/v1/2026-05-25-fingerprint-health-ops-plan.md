@@ -69,19 +69,21 @@
 /home/jeff/code/cloakbrowser-invisible-manager
 ```
 
-当前关键提交：
+runtime audit 小闭环前的基线提交：
 
 ```text
-087097a add proxy provider preset manager
+7dd5537 add runtime session renew
 ```
 
 当前接力状态：
 
-- 已完成 05 Session Broker 的 CloakBrowser 侧最小 runtime session API、runtime viewer token、runtime terminate 和 runtime renew 小闭环。
+- 已完成 05 Session Broker 的 CloakBrowser 侧最小 runtime session API、runtime viewer token、runtime terminate、runtime renew 和 runtime audit 小闭环。
 - 已新增并通过 `backend/tests/test_session_broker.py`。
 - 已实现 `RUNTIME_SERVICE_TOKEN`、`runtime_sessions` 表、`POST /api/runtime/sessions`、`GET /api/runtime/sessions/{id}`、`POST /api/runtime/sessions/{id}/viewer-token`、`WebSocket /api/runtime/sessions/{id}/vnc`、`POST /api/runtime/sessions/{id}/terminate` 和 `POST /api/runtime/sessions/{id}/renew`。
+- 已实现通用 `audit_events` 表，并让 runtime service API 成功动作写 audit。
 - Runtime session API 响应不包含 Project Mileage 钱包/订单/计费字段，也不暴露内部 `viewer_token_hash`。
-- 05 模块整体仍未完成，顶层进度不要勾选 05；audit、Payload 授权扣费联动仍待后续小闭环。
+- Runtime audit metadata 不记录 viewer token、viewer URL、viewer token hash、runtime service token、proxy password 或 cookie。
+- 05 模块整体仍未完成，顶层进度不要勾选 05；Payload 授权扣费联动、runtime VNC connect/disconnect audit 和失败事件 reason code 审计仍待后续小闭环。
 - 新会话如果继续 05，应先运行：
 
 ```bash
@@ -106,8 +108,8 @@
 
 最近已验证：
 
-- 后端测试最近完整基线：`274 passed`（完成 runtime renew 后记录）。
-- Session Broker 目标测试：`17 passed`。
+- 后端测试最近完整基线：`277 passed`（完成 runtime audit 后记录）。
+- Session Broker 目标测试：`20 passed`。
 - 前端测试最新基线：`13 test files passed, 184 tests passed`。
 - 前端 build：通过。
 - BrowserScan 复验：`Browser fingerprint authenticity: 100%`。

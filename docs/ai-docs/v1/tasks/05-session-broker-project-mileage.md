@@ -60,7 +60,9 @@ Project Mileage App：
 - [x] session 创建时如果 profile 未运行，启动 profile。
 - [x] session 终止时撤销 viewer token 并让 runtime VNC 访问失效。
 - [x] viewer token 过期后不能进入 VNC。
-- [ ] 所有 service API 写 audit。
+- [x] 所有 service API 写 audit：
+  - 当前小闭环覆盖 create/get/viewer-token/renew/terminate 的成功事件。
+  - 未授权失败事件和 VNC connect/disconnect audit 留到后续更细审计小闭环，避免写入 query token 或原始请求敏感信息。
 - [ ] Payload 侧确认授权、扣费、续期后再调用 runtime API。
 
 ## 验证
@@ -85,6 +87,7 @@ cd /home/jeff/code/project-mileage-v3-app && pnpm test <remote-workspace-tests>
 - [x] 过期 token 无法连接。
 - [x] 终止 session 后 VNC 访问失效。
 - [x] Runtime session 不包含用户钱包逻辑。
+- [x] Runtime service API 成功动作写 audit，且 audit metadata 不包含 viewer token、viewer URL、viewer token hash、runtime service token、proxy password 或 cookie。
 
 ## 2026-05-26 历史接力状态：CloakBrowser 侧最小 runtime session API 红灯测试草稿
 
@@ -263,6 +266,60 @@ git diff --check
 
 - runtime audit。
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+
+## 2026-05-27 Runtime audit 小闭环
+
+当前状态：
+
+- 已完成 CloakBrowser 侧 runtime service API 最小审计小闭环。
+- 本轮只审计已经通过 `RUNTIME_SERVICE_TOKEN` 的成功控制面动作：create、get、viewer-token、renew、terminate。
+- 未授权失败事件和 runtime VNC connect/disconnect 审计暂不进入本小闭环；后续如果要做，只能记录固定 reason code、close code、origin 是否通过等低敏摘要，不能记录 URL query、viewer token 或原始请求头。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 audit TDD 覆盖。
+  - 确认新增测试初始红灯：`create_audit_event()` / `list_audit_events()` 不存在。
+  - 覆盖 runtime service 成功动作写入审计事件：
+    - `runtime.session.created`
+    - `runtime.session.read`
+    - `runtime.viewer_token.created`
+    - `runtime.session.renewed`
+    - `runtime.session.terminated`
+  - 覆盖 audit 事件携带 `actor_type=runtime_service`、runtime session id、profile id、external session id 和低敏 metadata。
+  - 覆盖 audit 不记录 viewer token 明文、viewer URL、viewer token hash、runtime service token、wallet/order/billing 字段。
+  - 覆盖未授权 runtime request 不写 audit，避免把伪造请求体或认证失败请求头落库。
+  - 覆盖 audit metadata sanitizer 会移除 viewer token、hash、runtime service token、proxy URL/password 和 cookie。
+- `backend/database.py`
+  - 新增通用 `audit_events` 表。
+  - 新增 `create_audit_event()`。
+  - 新增 `get_audit_event()`。
+  - 新增 `list_audit_events()`。
+  - 新增 audit metadata 脱敏规则。
+- `backend/main.py`
+  - 新增 `_audit_runtime_event()`。
+  - `POST /api/runtime/sessions` 成功后写 `runtime.session.created`。
+  - `GET /api/runtime/sessions/{session_id}` 成功后写 `runtime.session.read`。
+  - `POST /api/runtime/sessions/{session_id}/viewer-token` 成功后写 `runtime.viewer_token.created`，metadata 只记录 `ttl_seconds` 和 `viewer_token_expires_at`。
+  - `POST /api/runtime/sessions/{session_id}/renew` 成功后写 `runtime.session.renewed`。
+  - `POST /api/runtime/sessions/{session_id}/terminate` 成功后写 `runtime.session.terminated`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_service_actions_write_redacted_audit_events backend/tests/test_session_broker.py::test_runtime_audit_ignores_unauthenticated_runtime_requests backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 20 passed
+```
+
+仍未完成：
+
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+- runtime VNC connect/disconnect audit。
+- 更完整的失败事件审计与 reason code 分类。
+- profile/proxy/health/bulk/automation 等非 runtime service API 审计。
 
 ## 2026-05-27 Runtime session terminate 小闭环
 

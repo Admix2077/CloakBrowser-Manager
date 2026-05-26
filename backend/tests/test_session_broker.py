@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -57,6 +58,10 @@ def _create_runtime_session(
         )
     assert resp.status_code == 201
     return resp.json()
+
+
+def _audit_event_types() -> list[str]:
+    return [event["event_type"] for event in db.list_audit_events()]
 
 
 def test_runtime_session_create_requires_service_token(
@@ -541,3 +546,137 @@ def test_runtime_session_renew_rejects_missing_or_terminated_session(
 
     assert renew.status_code == 409
     assert renew.json()["detail"] == "Runtime session is not active"
+
+
+def test_runtime_service_actions_write_redacted_audit_events(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-audit",
+    )
+
+    get_resp = app_client.get(
+        f"/api/runtime/sessions/{session['id']}",
+        headers=runtime_headers,
+    )
+    assert get_resp.status_code == 200
+
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+    stored_with_token = db.get_runtime_session(session["id"])
+    assert stored_with_token is not None
+
+    renew = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/renew",
+        headers=runtime_headers,
+        json={"lease_seconds": 1800},
+    )
+    assert renew.status_code == 200
+
+    terminate = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/terminate",
+        headers=runtime_headers,
+    )
+    assert terminate.status_code == 200
+
+    events = db.list_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "runtime.session.created",
+        "runtime.session.read",
+        "runtime.viewer_token.created",
+        "runtime.session.renewed",
+        "runtime.session.terminated",
+    ]
+    assert all(event["actor_type"] == "runtime_service" for event in events)
+    assert all(event["runtime_session_id"] == session["id"] for event in events)
+    assert all(event["profile_id"] == profile_id for event in events)
+    assert all(event["external_session_id"] == "pm-session-audit" for event in events)
+    assert events[0]["metadata"] == {
+        "profile_source": "profile_id",
+        "lease_seconds": 900,
+    }
+    assert events[2]["metadata"] == {
+        "ttl_seconds": 60,
+        "viewer_token_expires_at": token_resp.json()["expires_at"],
+    }
+    assert events[3]["metadata"] == {
+        "lease_seconds": 1800,
+        "lease_expires_at": renew.json()["lease_expires_at"],
+    }
+
+    serialized_events = json.dumps(events, sort_keys=True)
+    assert token_resp.json()["viewer_token"] not in serialized_events
+    assert stored_with_token["viewer_token_hash"] not in serialized_events
+    assert runtime_headers["X-Runtime-Service-Token"] not in serialized_events
+    assert "viewer_url" not in serialized_events
+    assert "wallet" not in serialized_events
+    assert "order" not in serialized_events
+    assert "billing" not in serialized_events
+
+
+def test_runtime_audit_ignores_unauthenticated_runtime_requests(
+    app_client: TestClient,
+):
+    profile_id = _create_profile(app_client)
+
+    resp = app_client.post(
+        "/api/runtime/sessions",
+        headers={"X-Runtime-Service-Token": "wrong-runtime-secret"},
+        json={
+            "external_session_id": "pm-session-not-audited",
+            "profile_id": profile_id,
+            "lease_seconds": 900,
+            "viewer_token": "plain-viewer-token",
+            "cookie": "session-cookie",
+        },
+    )
+
+    assert resp.status_code == 401
+    assert _audit_event_types() == []
+
+
+def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
+    db.create_audit_event(
+        event_type="runtime.test",
+        actor_type="runtime_service",
+        runtime_session_id="session-1",
+        profile_id="profile-1",
+        external_session_id="external-1",
+        metadata={
+            "safe": "kept",
+            "viewer_token": "plain-viewer-token",
+            "viewer_token_hash": "hashed-viewer-token",
+            "runtime_service_token": "runtime-secret",
+            "proxy_url": "http://user:proxy-pass@example.test:8080",
+            "message": "proxy http://user:message-pass@example.test:8080 failed",
+            "nested": {
+                "cookie": "session-cookie",
+                "safe_nested": "also-kept",
+            },
+        },
+    )
+
+    events = db.list_audit_events()
+    assert len(events) == 1
+    assert events[0]["metadata"] == {
+        "safe": "kept",
+        "message": "proxy http://example.test:8080 failed",
+        "nested": {"safe_nested": "also-kept"},
+    }
+    serialized_events = json.dumps(events, sort_keys=True)
+    assert "plain-viewer-token" not in serialized_events
+    assert "hashed-viewer-token" not in serialized_events
+    assert "runtime-secret" not in serialized_events
+    assert "proxy-pass" not in serialized_events
+    assert "user:" not in serialized_events
+    assert "message-pass" not in serialized_events
+    assert "session-cookie" not in serialized_events

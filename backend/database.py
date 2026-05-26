@@ -5,13 +5,14 @@ from __future__ import annotations
 import datetime
 import json
 import random
+import re
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from .proxies import normalize_proxy_asset_url
+from .proxies import normalize_proxy_asset_url, redact_proxy_asset_url
 
 DATA_DIR = Path("/data")
 DB_PATH = DATA_DIR / "profiles.db"
@@ -134,6 +135,17 @@ def init_db():
                 viewer_token_expires_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_events (
+                id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                actor_type TEXT NOT NULL,
+                runtime_session_id TEXT,
+                profile_id TEXT,
+                external_session_id TEXT,
+                metadata TEXT DEFAULT '{}',
+                created_at TEXT NOT NULL
             );
         """)
         conn.commit()
@@ -561,6 +573,118 @@ def renew_runtime_session(session_id: str, lease_seconds: int) -> dict[str, Any]
         if cursor.rowcount == 0:
             return None
     return get_runtime_session(session_id)
+
+
+_AUDIT_SENSITIVE_KEYS = {
+    "authorization",
+    "auth_token",
+    "cookie",
+    "cookies",
+    "proxy_url",
+    "runtime_service_token",
+    "service_token",
+    "token",
+    "viewer_token",
+    "viewer_token_hash",
+    "viewer_url",
+}
+
+_AUDIT_SENSITIVE_KEY_PARTS = ("cookie", "password", "secret")
+_AUDIT_PROXY_URL_RE = re.compile(r"\b(?:http|https|socks5)://[^\s\"'<>]+", re.IGNORECASE)
+
+
+def _is_sensitive_audit_key(key: str) -> bool:
+    normalized = key.lower()
+    return (
+        normalized in _AUDIT_SENSITIVE_KEYS
+        or normalized.endswith("_token")
+        or normalized.endswith("_token_hash")
+        or any(
+            part in normalized for part in _AUDIT_SENSITIVE_KEY_PARTS
+        )
+    )
+
+
+def _sanitize_audit_metadata(value: Any) -> Any:
+    if isinstance(value, dict):
+        sanitized = {}
+        for key, item in value.items():
+            if _is_sensitive_audit_key(str(key)):
+                continue
+            sanitized[key] = _sanitize_audit_metadata(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize_audit_metadata(item) for item in value]
+    if isinstance(value, str):
+        return _AUDIT_PROXY_URL_RE.sub(
+            lambda match: redact_proxy_asset_url(match.group(0)),
+            value,
+        )
+    return value
+
+
+def create_audit_event(
+    *,
+    event_type: str,
+    actor_type: str,
+    runtime_session_id: str | None = None,
+    profile_id: str | None = None,
+    external_session_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    event_id = str(uuid.uuid4())
+    now = _now()
+    sanitized_metadata = _sanitize_audit_metadata(metadata or {})
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO audit_events (
+                id, event_type, actor_type, runtime_session_id, profile_id,
+                external_session_id, metadata, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                event_id,
+                event_type,
+                actor_type,
+                runtime_session_id,
+                profile_id,
+                external_session_id,
+                json.dumps(sanitized_metadata, sort_keys=True),
+                now,
+            ),
+        )
+        conn.commit()
+    event = get_audit_event(event_id)
+    if event is None:
+        raise RuntimeError("Audit event was not persisted")
+    return event
+
+
+def _audit_event_from_row(row: sqlite3.Row) -> dict[str, Any]:
+    event = dict(row)
+    try:
+        metadata = json.loads(event.get("metadata") or "{}")
+    except (TypeError, ValueError):
+        metadata = {}
+    event["metadata"] = metadata if isinstance(metadata, dict) else {}
+    return event
+
+
+def get_audit_event(event_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        row = conn.execute("SELECT * FROM audit_events WHERE id = ?", (event_id,)).fetchone()
+    return _audit_event_from_row(row) if row else None
+
+
+def list_audit_events(runtime_session_id: str | None = None) -> list[dict[str, Any]]:
+    with get_db() as conn:
+        if runtime_session_id:
+            rows = conn.execute(
+                "SELECT * FROM audit_events WHERE runtime_session_id = ? ORDER BY created_at ASC",
+                (runtime_session_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM audit_events ORDER BY created_at ASC").fetchall()
+    return [_audit_event_from_row(row) for row in rows]
 
 
 def _proxy_from_row(row: sqlite3.Row) -> dict[str, Any]:

@@ -6,13 +6,13 @@
 
 当前接力版本：2026-05-27。
 
-最新已提交 CloakBrowser commit：
+runtime audit 小闭环前的基线 CloakBrowser commit：
 
 ```text
-087097a add proxy provider preset manager
+7dd5537 add runtime session renew
 ```
 
-当前 05 已完成最小 runtime session API、runtime viewer token、runtime terminate 和 runtime renew 小闭环，涉及文件：
+当前 05 已完成最小 runtime session API、runtime viewer token、runtime terminate、runtime renew 和 runtime audit 小闭环，涉及文件：
 
 ```text
 backend/database.py
@@ -36,14 +36,17 @@ docs/ai-docs/v1/tasks/progress.md
 - `WebSocket /api/runtime/sessions/{id}/vnc`。
 - `POST /api/runtime/sessions/{id}/terminate`。
 - `POST /api/runtime/sessions/{id}/renew`。
+- 通用 `audit_events` 表。
+- runtime service API 成功动作写 audit。
 - 从 profile 创建 runtime session。
 - 从 template 创建 runtime session。
 - runtime response 不包含 wallet/order/billing 字段，也不暴露 `viewer_token_hash`。
 - viewer token 错误或过期时不能连接 runtime VNC。
 - terminate 后 session 标记为 `terminated`，viewer token 被撤销，runtime VNC 失效。
 - renew 后 active session lease 延长，短生命周期 viewer token 保持自身 TTL。
+- audit metadata 不记录 viewer token、viewer URL、viewer token hash、runtime service token、proxy password 或 cookie。
 
-05 模块整体仍未完成，`tasks/progress.md` 顶层 05 不要勾选；audit、Payload 授权扣费联动仍待后续小闭环。
+05 模块整体仍未完成，`tasks/progress.md` 顶层 05 不要勾选；Payload 授权扣费联动、runtime VNC connect/disconnect audit 和失败事件 reason code 审计仍待后续小闭环。
 
 ## Goal
 
@@ -100,6 +103,6 @@ git status --short --branch
 
 `test_session_broker.py` 当前应通过。随后继续按 TDD 推进 05 的后续小闭环：
 
-1. runtime audit。
+1. runtime VNC connect/disconnect audit 或失败事件 reason code 审计。
 
 后续小闭环不要改 Project Mileage app/payload，不要实现钱包、订单、用户权限判断，不要 push。

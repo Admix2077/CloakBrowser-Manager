@@ -16,20 +16,24 @@
 ### Sensitive Data
 
 - [ ] proxy password 列表遮蔽。
-- [ ] audit metadata 不记录敏感字段。
+- [x] audit metadata 不记录敏感字段：
+  - 当前已覆盖 runtime service audit metadata。
+  - 已禁止 viewer token、viewer URL、viewer token hash、runtime service token、proxy URL/password、cookie 等进入 audit metadata。
 - [ ] API response 不返回 AUTH_TOKEN。
 - [ ] cookie 导出不写日志。
 - [ ] VNC token hash 存储，不存明文。
 
 ### Audit
 
-- [ ] 新增 audit_events 表。
+- [x] 新增 audit_events 表。
 - [ ] profile mutation 写 audit。
 - [ ] proxy mutation 写 audit。
 - [ ] health check 写 audit。
 - [ ] bulk action 写 audit。
 - [ ] automation task 写 audit。
-- [ ] runtime session 写 audit。
+- [x] runtime session 写 audit：
+  - 当前已覆盖 runtime service API 成功动作。
+  - VNC connect/disconnect、失败事件 reason code 仍待后续小闭环。
 
 ### RBAC 远期设计
 
