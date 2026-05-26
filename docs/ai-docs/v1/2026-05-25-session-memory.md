@@ -4157,3 +4157,53 @@ cd frontend && npm run build
 - 没有修改前端 UI、runtime、Docker 或 Project Mileage 仓库。
 - 没有把模板变更联动写回既有 profile，避免意外批量污染。
 - 没有 push 到任何远端仓库。
+
+## 56. 2026-05-26 Profile 创建应用模板后端契约小闭环
+
+背景：
+
+- 在 `profile_templates` 后端事实源基础上，继续推进 `09 模板、批量创建与批量运营`。
+- 本轮只做后端契约：`POST /api/profiles` 可接收 `template_id` 并复制模板字段。
+- 前端创建页模板下拉和保存模板入口还未做，因此 `09-templates-bulk-ops.md` 顶部 `创建 profile 时可选择模板` 暂不勾选。
+
+已完成：
+
+- `backend/tests/test_templates.py`
+  - 先写红灯测试，初始失败点为 `template_id` 被忽略、missing template 仍创建成功。
+  - 覆盖从模板创建 profile。
+  - 覆盖显式 profile 字段覆盖模板字段。
+  - 覆盖 missing template 返回 404。
+- `backend/models.py`
+  - `ProfileCreate` 新增可选 `template_id`。
+- `backend/main.py`
+  - 创建 profile 时如果传入 `template_id`，读取模板并复制 platform、screen、GPU、hardware concurrency、color scheme、humanize、human preset、launch args、geoip。
+  - 使用 `model_fields_set` 区分显式字段和 Pydantic 默认值，避免默认 `windows` 覆盖模板中的 `macos/linux`。
+  - 缺失模板返回 `404 Profile template not found`。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 记录后端契约小闭环和剩余前端范围。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 红灯：2 failed, 6 passed
+# 失败点：template_id 被忽略，missing template 仍创建成功
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 8 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 240 passed
+```
+
+未覆盖范围：
+
+- 前端创建 profile 时选择模板。
+- 前端 API 类型暴露 `template_id`。
+- 保存当前 profile 为模板。
+
+边界：
+
+- 没有修改前端 UI、runtime、Docker 或 Project Mileage 仓库。
+- 没有把 Project Mileage 钱包、订单、权限逻辑写进 CloakBrowser。
+- 没有 push 到任何远端仓库。

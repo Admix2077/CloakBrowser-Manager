@@ -150,6 +150,88 @@ def test_profile_template_crud_api(app_client: TestClient):
     assert app_client.get(f"/api/profile-templates/{data['id']}").status_code == 404
 
 
+def test_create_profile_from_template_copies_template_fields(app_client: TestClient):
+    template = app_client.post(
+        "/api/profile-templates",
+        json={
+            "name": "Mac warmup",
+            "platform": "macos",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "gpu_vendor": "Apple",
+            "gpu_renderer": "Apple M2",
+            "hardware_concurrency": 8,
+            "color_scheme": "light",
+            "humanize": True,
+            "human_preset": "careful",
+            "launch_args": ["--private-window"],
+            "geoip": False,
+        },
+    ).json()
+
+    create = app_client.post(
+        "/api/profiles",
+        json={"name": "From template", "template_id": template["id"]},
+    )
+
+    assert create.status_code == 201
+    profile = create.json()
+    assert profile["name"] == "From template"
+    assert profile["platform"] == "macos"
+    assert profile["screen_width"] == 1440
+    assert profile["screen_height"] == 900
+    assert profile["gpu_vendor"] == "Apple"
+    assert profile["gpu_renderer"] == "Apple M2"
+    assert profile["hardware_concurrency"] == 8
+    assert profile["color_scheme"] == "light"
+    assert profile["humanize"] is True
+    assert profile["human_preset"] == "careful"
+    assert profile["launch_args"] == ["--private-window"]
+    assert profile["geoip"] is False
+
+
+def test_create_profile_template_fields_can_be_overridden(app_client: TestClient):
+    template = app_client.post(
+        "/api/profile-templates",
+        json={
+            "name": "Default Linux",
+            "platform": "linux",
+            "screen_width": 1366,
+            "screen_height": 768,
+            "launch_args": ["--template"],
+        },
+    ).json()
+
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Override template",
+            "template_id": template["id"],
+            "platform": "windows",
+            "screen_width": 1920,
+            "screen_height": 1080,
+            "launch_args": ["--profile"],
+        },
+    )
+
+    assert create.status_code == 201
+    profile = create.json()
+    assert profile["platform"] == "windows"
+    assert profile["screen_width"] == 1920
+    assert profile["screen_height"] == 1080
+    assert profile["launch_args"] == ["--profile"]
+
+
+def test_create_profile_from_missing_template_returns_404(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={"name": "Missing template", "template_id": "missing"},
+    )
+
+    assert create.status_code == 404
+    assert create.json()["detail"] == "Profile template not found"
+
+
 def test_profile_template_api_not_found(app_client: TestClient):
     assert app_client.get("/api/profile-templates/missing").status_code == 404
     assert app_client.put("/api/profile-templates/missing", json={"name": "x"}).status_code == 404

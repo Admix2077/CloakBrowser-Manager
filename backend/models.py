@@ -14,6 +14,7 @@ class TagCreate(BaseModel):
 
 class ProfileCreate(BaseModel):
     name: str
+    template_id: str | None = None
     fingerprint_seed: int | None = None  # random if not set
     proxy: str | None = None  # "http://user:pass@host:port" or null
     timezone: str | None = None  # "America/New_York"

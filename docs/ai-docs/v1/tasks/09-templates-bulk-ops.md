@@ -110,3 +110,45 @@ cd frontend && npm run build
 - 前端模板列表/保存入口。
 - 创建 profile 时选择模板并应用字段。
 - CSV 批量导入、批量启动/停止/GeoIP/tag/proxy/export/delete。
+
+## 2026-05-26 Profile 创建应用模板后端契约小闭环
+
+背景：
+
+- 在 `profile_templates` 后端事实源基础上，继续推进 `创建 profile 时可选择模板`。
+- 本轮只做后端契约：`POST /api/profiles` 可接收 `template_id` 并复制模板字段。
+- 前端创建页模板下拉和保存模板入口另起小闭环，因此顶部 `创建 profile 时可选择模板` 暂不勾选。
+
+已完成：
+
+- [x] `backend/models.py`
+  - `ProfileCreate` 新增可选 `template_id`。
+- [x] `backend/main.py`
+  - 创建 profile 时如果传入 `template_id`，先读取模板。
+  - 复制 platform、screen、GPU、hardware concurrency、color scheme、humanize、human preset、launch args、geoip。
+  - 用户显式传入的 profile 字段覆盖模板字段。
+  - 缺失模板返回 `404 Profile template not found`，不会静默创建默认 profile。
+- [x] `backend/tests/test_templates.py`
+  - 覆盖从模板创建 profile。
+  - 覆盖显式字段覆盖模板字段。
+  - 覆盖 missing template 返回 404。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 红灯：2 failed, 6 passed
+# 失败点：template_id 被忽略，missing template 仍创建成功
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 8 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 240 passed
+```
+
+未覆盖范围：
+
+- 前端创建 profile 时选择模板。
+- 前端 API 类型暴露 `template_id`。
+- 保存当前 profile 为模板。

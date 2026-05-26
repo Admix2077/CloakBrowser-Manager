@@ -696,6 +696,27 @@ async def list_profiles():
 @app.post("/api/profiles", response_model=ProfileResponse, status_code=201)
 async def create_profile(req: ProfileCreate):
     data = req.model_dump()
+    explicit_fields = set(req.model_fields_set)
+    template_id = data.pop("template_id", None)
+    if template_id:
+        template = db.get_profile_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Profile template not found")
+        for field in (
+            "platform",
+            "screen_width",
+            "screen_height",
+            "gpu_vendor",
+            "gpu_renderer",
+            "hardware_concurrency",
+            "color_scheme",
+            "humanize",
+            "human_preset",
+            "launch_args",
+            "geoip",
+        ):
+            if field not in explicit_fields:
+                data[field] = template[field]
     tags = data.pop("tags", None)
     if tags:
         data["tags"] = [t.model_dump() if hasattr(t, "model_dump") else t for t in tags]
