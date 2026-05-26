@@ -42,6 +42,8 @@
 - [x] proxy URL 保存时保留原始配置，但 UI 默认遮蔽用户名密码。
 - [x] 检测时复用 GeoIP resolver。
 - [ ] 支持将 proxy 分配到 profile。
+  - [x] 后端 `POST /api/proxies/{id}/assign` 将 proxy asset 分配给 profiles。
+  - [ ] 前端 Proxy Manager 分配入口。
 - [ ] 支持从 profile 当前 proxy 保存为 proxy asset。
 - [ ] 前端新增 Proxy Manager 页面。
 - [ ] 支持搜索、筛选、批量检测。
@@ -273,4 +275,79 @@ git diff --check
 - 按国家、provider、tag 筛选未做。
 - CSV 粘贴导入未做。
 - 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset 未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 2026-05-26 Proxy 分配到 Profile 后端 API 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，在 proxy asset 已可保存、检测和批量检测后，补齐后端层面的 proxy 分配能力。
+- 本小闭环只做后端 `POST /api/proxies/{id}/assign`，不做前端 Proxy Manager 分配入口，不调整通用 profile CRUD 响应，不迁移 `profiles.proxy` 为 `proxy_id`。
+- 关键边界：前端只提交 `proxy_id` 和 `profile_ids`，后端内部把 proxy asset 的原始 URL 写入 `profiles.proxy`；API 响应只返回脱敏后的 proxy asset 和逐项结果，不返回完整 `ProfileResponse`，避免暴露 proxy 密码。
+
+红灯确认：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 2 failed, 11 passed
+# POST /api/proxies/{id}/assign 当前 405
+```
+
+已完成：
+
+- [x] `backend/tests/test_proxies.py`
+  - 覆盖带凭据 proxy asset 分配给多个 profile。
+  - 覆盖同批存在 missing profile 时部分失败，HTTP 仍返回 200。
+  - 覆盖响应不包含 `hiddenpass`，但 DB 中 `profiles.proxy` 写入 raw proxy URL，保持 launch / health 兼容。
+  - 覆盖 missing proxy 返回 404。
+  - 覆盖 `profile_ids=[]` 返回 422。
+- [x] `backend/models.py`
+  - 新增 `ProxyAssignRequest`。
+  - 新增 `ProxyAssignResult`。
+  - 新增 `ProxyAssignResponse`。
+- [x] `backend/main.py`
+  - 新增 `POST /api/proxies/{proxy_id}/assign`。
+  - 查不到 proxy asset 时返回 404。
+  - 对每个 profile 调用 `db.update_profile(profile_id, proxy=raw_url)`。
+  - 响应按 `total/succeeded/failed/results` 汇总，并通过 `_proxy_response(proxy)` 返回脱敏 proxy asset。
+
+接口响应形态：
+
+```json
+{
+  "proxy_id": "...",
+  "proxy": {"id": "...", "name": "...", "url": "http://assign.example:8080"},
+  "total": 3,
+  "succeeded": 2,
+  "failed": 1,
+  "results": [
+    {"profile_id": "...", "ok": true, "error": null},
+    {"profile_id": "missing", "ok": false, "error": "Profile not found"}
+  ]
+}
+```
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 13 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 21 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_api.py -q
+# 70 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 230 passed
+```
+
+范围说明：
+
+- 前端 Proxy Manager 分配入口未做，因此顶层 `支持将 proxy 分配到 profile` 暂不勾选完成。
+- 从 profile 当前 proxy 保存为 proxy asset 未做。
+- 前端 Proxy Manager 页面、搜索筛选、批量检测交互未做。
+- 按国家、provider、tag 筛选未做。
+- CSV 粘贴导入未做。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

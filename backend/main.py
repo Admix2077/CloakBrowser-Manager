@@ -44,6 +44,9 @@ from .models import (
     ClipboardRequest,
     LaunchResponse,
     LoginRequest,
+    ProxyAssignRequest,
+    ProxyAssignResponse,
+    ProxyAssignResult,
     ProxyBulkCheckRequest,
     ProxyBulkCheckResponse,
     ProxyBulkCheckResult,
@@ -552,6 +555,38 @@ async def delete_proxy(proxy_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Proxy not found")
     return {"ok": True}
+
+
+@app.post("/api/proxies/{proxy_id}/assign", response_model=ProxyAssignResponse)
+async def assign_proxy_to_profiles(proxy_id: str, req: ProxyAssignRequest):
+    proxy = db.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+
+    results: list[ProxyAssignResult] = []
+    raw_url = str(proxy["url"])
+    for profile_id in req.profile_ids:
+        profile = db.update_profile(profile_id, proxy=raw_url)
+        if not profile:
+            results.append(
+                ProxyAssignResult(
+                    profile_id=profile_id,
+                    ok=False,
+                    error="Profile not found",
+                )
+            )
+            continue
+        results.append(ProxyAssignResult(profile_id=profile_id, ok=True, error=None))
+
+    succeeded = sum(1 for result in results if result.ok)
+    return ProxyAssignResponse(
+        proxy_id=proxy_id,
+        proxy=_proxy_response(proxy),
+        total=len(req.profile_ids),
+        succeeded=succeeded,
+        failed=len(req.profile_ids) - succeeded,
+        results=results,
+    )
 
 
 @app.post("/api/proxies/bulk/check", response_model=ProxyBulkCheckResponse)

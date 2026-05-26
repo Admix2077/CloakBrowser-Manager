@@ -319,3 +319,54 @@ def test_proxy_bulk_check_requires_at_least_one_proxy_id(app_client: TestClient)
     resp = app_client.post("/api/proxies/bulk/check", json={"proxy_ids": []})
 
     assert resp.status_code == 422
+
+
+def test_proxy_assigns_raw_url_to_profiles_without_leaking_credentials(app_client: TestClient):
+    proxy = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Assignable",
+            "url": "http://user:hiddenpass@assign.example:8080",
+        },
+    ).json()
+    first = app_client.post("/api/profiles", json={"name": "Assign A"}).json()
+    second = app_client.post(
+        "/api/profiles",
+        json={"name": "Assign B", "proxy": "http://old.example:8080"},
+    ).json()
+
+    resp = app_client.post(
+        f"/api/proxies/{proxy['id']}/assign",
+        json={"profile_ids": [first["id"], second["id"], "missing"]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["proxy_id"] == proxy["id"]
+    assert data["proxy"]["url"] == "http://assign.example:8080"
+    assert data["total"] == 3
+    assert data["succeeded"] == 2
+    assert data["failed"] == 1
+    assert "hiddenpass" not in str(data)
+    assert data["results"] == [
+        {"profile_id": first["id"], "ok": True, "error": None},
+        {"profile_id": second["id"], "ok": True, "error": None},
+        {"profile_id": "missing", "ok": False, "error": "Profile not found"},
+    ]
+
+    stored_first = db.get_profile(first["id"])
+    stored_second = db.get_profile(second["id"])
+    assert stored_first is not None
+    assert stored_second is not None
+    assert stored_first["proxy"] == "http://user:hiddenpass@assign.example:8080"
+    assert stored_second["proxy"] == "http://user:hiddenpass@assign.example:8080"
+
+
+def test_proxy_assign_not_found_and_empty_profiles(app_client: TestClient):
+    proxy = app_client.post(
+        "/api/proxies",
+        json={"name": "Assignable", "url": "http://assign.example:8080"},
+    ).json()
+
+    assert app_client.post("/api/proxies/missing/assign", json={"profile_ids": ["profile"]}).status_code == 404
+    assert app_client.post(f"/api/proxies/{proxy['id']}/assign", json={"profile_ids": []}).status_code == 422

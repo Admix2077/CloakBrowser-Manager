@@ -129,6 +129,25 @@ class ProxyBulkCheckResponse(BaseModel):
     results: list[ProxyBulkCheckResult]
 
 
+class ProxyAssignRequest(BaseModel):
+    profile_ids: list[str] = Field(min_length=1)
+
+
+class ProxyAssignResult(BaseModel):
+    profile_id: str
+    ok: bool
+    error: str | None = None
+
+
+class ProxyAssignResponse(BaseModel):
+    proxy_id: str
+    proxy: ProxyResponse
+    total: int
+    succeeded: int
+    failed: int
+    results: list[ProxyAssignResult]
+
+
 class ProfileResponse(BaseModel):
     id: str
     name: str

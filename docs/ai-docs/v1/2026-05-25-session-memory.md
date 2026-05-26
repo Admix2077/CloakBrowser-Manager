@@ -2260,3 +2260,55 @@ git diff --check
 - 将 proxy 分配到 profile。
 - 从 profile 当前 proxy 保存为 proxy asset。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 34. 2026-05-26 Proxy 分配到 Profile 后端 API 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，补齐后端层面的 proxy asset 分配到 profile 能力。
+- 本小闭环只做 `POST /api/proxies/{id}/assign`，不做前端 Proxy Manager 分配入口，不迁移 `profiles.proxy` 为 `proxy_id`。
+- 关键边界：assignment API 不返回完整 `ProfileResponse`，避免把 profile 中保存的 raw proxy URL 暴露给前端。
+
+本轮实现：
+
+- `backend/tests/test_proxies.py`
+  - 新增带凭据 proxy asset 分配给多个 profile 的测试。
+  - 断言响应中不包含 `hiddenpass`。
+  - 断言 DB 中 `profiles.proxy` 写入 raw proxy URL，保持 launch / health 继续可用。
+  - 覆盖同批 missing profile 部分失败，HTTP 仍返回 200。
+  - 覆盖 missing proxy 返回 404。
+  - 覆盖 `profile_ids=[]` 返回 422。
+- `backend/models.py`
+  - 新增 `ProxyAssignRequest`、`ProxyAssignResult`、`ProxyAssignResponse`。
+- `backend/main.py`
+  - 新增 `POST /api/proxies/{proxy_id}/assign`。
+  - 后端内部读取 proxy asset 原始 `url` 并调用 `db.update_profile(profile_id, proxy=raw_url)`。
+  - 响应只返回脱敏后的 `ProxyResponse` 和逐项 assignment result。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 在 `支持将 proxy 分配到 profile` 下新增并勾选后端 assignment API 子项。
+  - 顶层 `支持将 proxy 分配到 profile` 暂不勾选，因为前端分配入口未做。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 13 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 21 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_api.py -q
+# 70 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 230 passed
+```
+
+仍未做：
+
+- 前端 Proxy Manager 分配入口。
+- 从 profile 当前 proxy 保存为 proxy asset。
+- 前端 Proxy Manager 页面、搜索筛选、批量检测交互。
+- 按国家、provider、tag 筛选。
+- CSV 粘贴导入。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
