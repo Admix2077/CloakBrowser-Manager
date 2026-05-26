@@ -18,7 +18,7 @@ export function getHealthLabel(status: HealthStatus | undefined): string {
 export function getHealthAriaLabel(health: ProfileHealthResponse | null | undefined): string {
   switch (health?.status) {
     case "good":
-      return "健康检查通过，可继续启动或使用";
+      return "健康检查通过，可尝试启动或使用";
     case "warning":
       return "存在需关注项，建议检查后继续";
     case "error":

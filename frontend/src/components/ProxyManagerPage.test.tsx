@@ -95,7 +95,7 @@ beforeEach(() => {
 });
 
 describe("ProxyManagerPage", () => {
-  it("renders a proxy asset table with credential-safe endpoint labels", async () => {
+  it("renders a proxy asset table with redacted endpoint labels", async () => {
     mockListProxies.mockResolvedValue([
       proxy({
         id: "proxy-1",
@@ -121,6 +121,9 @@ describe("ProxyManagerPage", () => {
 
     const page = await screen.findByRole("region", { name: "Proxy Manager" });
     expect(within(page).getByRole("heading", { name: "Proxy Manager" })).toBeTruthy();
+    expect(within(page).getByText("Proxy inventory with credential-redacted checks and profile assignment controls.")).toBeTruthy();
+    expect(within(page).getByText("URL credentials are hidden in the UI. Bulk check, profile assignment, and CSV import are active; add, edit, and delete remain disabled.")).toBeTruthy();
+    expect(page.textContent).not.toContain("credential-safe");
     expect(within(page).getByText("2 proxies")).toBeTruthy();
     expect(within(page).getByText("1 good")).toBeTruthy();
     expect(within(page).getByText("1 needs review")).toBeTruthy();
@@ -434,7 +437,7 @@ describe("ProxyManagerPage", () => {
     expect(await within(page).findByText("Bulk check complete: 2 succeeded, 0 failed")).toBeTruthy();
   });
 
-  it("shows a credential-safe error when bulk proxy checking fails", async () => {
+  it("shows a redacted error when bulk proxy checking fails", async () => {
     mockListProxies.mockResolvedValue([
       proxy({
         id: "proxy-1",
@@ -642,7 +645,7 @@ describe("ProxyManagerPage", () => {
     await waitFor(() => expect(mockAssignProxyToProfiles).toHaveBeenCalledWith("proxy-1", ["beta"]));
   });
 
-  it("shows a credential-safe assign error when proxy assignment fails", async () => {
+  it("shows a redacted assign error when proxy assignment fails", async () => {
     mockListProxies.mockResolvedValue([
       proxy({
         id: "proxy-1",
@@ -744,7 +747,7 @@ describe("ProxyManagerPage", () => {
     expect(renderedEvidence).not.toContain("user:");
   });
 
-  it("keeps CSV import failures visible and credential-safe after partial success", async () => {
+  it("keeps CSV import failures visible and redacted after partial success", async () => {
     const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
     const importedProxy = proxy({ id: "proxy-imported", name: "Imported Good" });
     mockListProxies

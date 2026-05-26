@@ -114,7 +114,7 @@ function bulkProfile(index: number): Profile {
   };
 }
 
-describe("ProfileList invisible_playwright identity display", () => {
+describe("ProfileList phase-one identity display", () => {
   it("does not display stored platform as an active fingerprint label", () => {
     render(
       <ProfileList

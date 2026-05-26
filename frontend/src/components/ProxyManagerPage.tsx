@@ -378,7 +378,7 @@ export function ProxyManagerPage({
             <div className="min-w-0">
               <h2 className="text-xl font-semibold tracking-tight text-slate-950">Proxy Manager</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Proxy inventory with credential-safe checks and profile assignment controls.
+                Proxy inventory with credential-redacted checks and profile assignment controls.
               </p>
             </div>
           </div>
@@ -413,7 +413,7 @@ export function ProxyManagerPage({
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              URLs are rendered credential-safe. Bulk check, profile assignment, and CSV import are active; add, edit, and delete remain disabled.
+              URL credentials are hidden in the UI. Bulk check, profile assignment, and CSV import are active; add, edit, and delete remain disabled.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

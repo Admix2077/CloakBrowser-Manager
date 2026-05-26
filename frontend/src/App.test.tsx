@@ -253,6 +253,7 @@ describe("App operations console", () => {
     fireEvent.click(screen.getByRole("button", { name: "Proxy Manager" }));
 
     expect(screen.getByRole("region", { name: "Proxy Manager" })).toBeTruthy();
+    expect(screen.getByText("Proxy inventory · redacted URLs · assignment controls")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Proxy Manager" }).closest("[data-console-section]")?.className).toContain("animate-console-section-in");
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: "New Profile" })).toBeNull();

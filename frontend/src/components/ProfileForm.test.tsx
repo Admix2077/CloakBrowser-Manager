@@ -36,7 +36,7 @@ const humanizedProfile: Profile = {
 };
 
 describe("ProfileForm launch arguments", () => {
-  it("describes launch args as invisible_playwright Firefox arguments", () => {
+  it("describes launch args as Firefox browser engine arguments", () => {
     render(
       <ProfileForm
         profile={null}
@@ -48,13 +48,13 @@ describe("ProfileForm launch arguments", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
 
     expect(screen.getByText("Firefox Launch Args")).toBeTruthy();
-    expect(screen.getByText(/Custom Firefox arguments passed to invisible_playwright/)).toBeTruthy();
+    expect(screen.getByText(/Custom Firefox arguments passed to the browser engine/)).toBeTruthy();
     expect(screen.getByText(/Only Firefox-compatible launch arguments are applied/)).toBeTruthy();
     expect(screen.getByPlaceholderText("--private-window")).toBeTruthy();
   });
 });
 
-describe("ProfileForm invisible_playwright phase-one fields", () => {
+describe("ProfileForm phase-one field boundaries", () => {
   it("does not expose unsupported identity controls as editable settings", () => {
     render(
       <ProfileForm

@@ -474,7 +474,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <p className="text-xs text-slate-500">
                 {section === "profiles"
                   ? `${consoleStats.total} profiles · ${consoleStats.running} running · ${consoleStats.issues} need review`
-                  : "Proxy inventory · credential-safe URLs · assignment controls"}
+                  : "Proxy inventory · redacted URLs · assignment controls"}
               </p>
             </div>
             {section === "profiles" && selected && (

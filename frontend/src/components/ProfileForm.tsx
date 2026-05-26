@@ -563,7 +563,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
           <div className="border-b border-slate-200 py-4">
           <h4 className="section-title">Firefox Launch Args</h4>
           <p className="text-xs text-slate-500 mb-2">
-            Custom Firefox arguments passed to invisible_playwright at launch. Only Firefox-compatible launch arguments are applied.
+            Custom Firefox arguments passed to the browser engine at launch. Only Firefox-compatible launch arguments are applied.
           </p>
           {(form.launch_args ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">

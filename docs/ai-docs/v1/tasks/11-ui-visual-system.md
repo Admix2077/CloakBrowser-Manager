@@ -48,7 +48,7 @@
   - Advanced。
 - [x] Viewer 顶部 EnvironmentStrip 视觉升级。
 - [x] 375px、768px、1024px、1440px 响应式检查。
-- [ ] 文案避免“保证安全”“保证不封号”等不可验证承诺。
+- [x] 文案避免“保证安全”“保证不封号”等不可验证承诺。
 
 ## 验证
 
@@ -728,4 +728,81 @@ git diff --check
 
 - 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
 - 没有改变 profile 保存 API、删除事实流、tags / launch args 提交语义。
+- 没有推送到任何远端仓库。
+
+## 2026-05-26 UI 不可验证承诺文案清扫小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的 `文案避免“保证安全”“保证不封号”等不可验证承诺`。
+- 本轮只处理前端用户可见文案和对应测试，不改变脱敏逻辑、API、后端或 runtime。
+- 子 agent `Raman` 只读审计 `frontend/src`，未发现明确高风险承诺，例如“保证安全”“不封号”“undetectable”“anti-ban”“guaranteed safe”“never banned”等。
+
+已完成：
+
+- [x] `frontend/src/App.tsx`
+  - Proxy Manager 顶栏说明从 `credential-safe URLs` 改为 `redacted URLs`，避免 `safe` 造成过度承诺感。
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - `credential-safe checks` 改为 `credential-redacted checks`。
+  - `URLs are rendered credential-safe` 改为 `URL credentials are hidden in the UI`，更准确描述脱敏事实。
+- [x] `frontend/src/components/ProfileForm.tsx`
+  - `invisible_playwright` 用户可见文案改为 `browser engine`，避免把内部引擎名作为运营台文案暴露。
+- [x] `frontend/src/lib/health.ts`
+  - 健康 good 状态 aria 文案从 `可继续启动或使用` 调整为 `可尝试启动或使用`，避免绝对化动作承诺。
+- [x] 测试覆盖：
+  - `App.test.tsx` 覆盖 Proxy Manager 顶栏 `redacted URLs` 文案。
+  - `ProxyManagerPage.test.tsx` 覆盖 redacted endpoint/说明文案，并断言页面不再包含 `credential-safe`。
+  - `ProfileForm.test.tsx` 覆盖 launch args 使用 `browser engine` 文案。
+  - `HealthBadge.test.tsx` 覆盖健康 good 状态 aria 文案。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProxyManagerPage.test.tsx -t "redacted|switches between profile operations"
+# 红灯：2 failed
+# 失败点：当前 UI 仍显示 credential-safe 文案
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProxyManagerPage.test.tsx -t "redacted|switches between profile operations"
+# 2 passed, 5 passed, 36 skipped
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProxyManagerPage.test.tsx src/components/ProfileForm.test.tsx src/components/HealthBadge.test.tsx -t "redacted|switches between profile operations|launch args|health badge"
+# 3 passed, 6 passed, 49 skipped
+
+cd frontend && npm test -- --run
+# 13 passed, 166 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+搜索审计：
+
+```bash
+rg -n -i "保证|不封号|封号|无法检测|不可检测|检测不到|防封|安全保证|绝对安全|undetect|anti[- ]?ban|guaranteed safe|guarantee|never banned|ban-proof|risk-free|zero risk|cannot be detected|untraceable|anonymous|credential-safe|可继续启动|invisible_playwright" frontend/src
+```
+
+结果：
+
+- 用户 UI 中未命中上述高风险承诺。
+- 剩余命中只在测试断言 `not.toContain("credential-safe")` 中，用于防回归，不是用户可见产品文案。
+
+浏览器 UI/UE 验证：
+
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x960`：
+  - Proxy Manager JS 验证：`hasRedactedTop=true`、`hasCredentialSafe=false`、`hasHiddenCredentialsCopy=true`、`scrollWidth=1440`、`clientWidth=1440`。
+  - ProfileForm Advanced JS 验证：存在 `Custom Firefox arguments passed to the browser engine at launch.`，不存在 `invisible_playwright` 用户可见文案。
+  - Profile table / rail 可见健康 good 状态文案：`健康检查通过，可尝试启动或使用`。
+- `agent-browser errors` 无输出；`agent-browser console` 无输出。
+- 截图：
+  - `/tmp/cloakbrowser-copy-polish-screens/desktop-proxy-copy.png`
+  - `/tmp/cloakbrowser-copy-polish-screens/desktop-profile-form-copy.png`
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有改变 URL 凭证脱敏实现，只改用户可见说明文案。
 - 没有推送到任何远端仓库。

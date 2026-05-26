@@ -20,7 +20,7 @@ describe("HealthBadge", () => {
     render(<HealthBadge health={health("good")} />);
 
     expect(screen.getByText("可继续")).toBeTruthy();
-    expect(screen.getByLabelText("健康检查通过，可继续启动或使用")).toBeTruthy();
+    expect(screen.getByLabelText("健康检查通过，可尝试启动或使用")).toBeTruthy();
     expect(screen.getByText("可继续").closest("[data-badge-type]")?.getAttribute("data-badge-type")).toBe("health");
   });
 
