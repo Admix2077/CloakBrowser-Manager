@@ -306,6 +306,50 @@ class ProfileImportResponse(BaseModel):
     results: list[ProfileImportResult] = Field(default_factory=list)
 
 
+class ProfileExportRequest(BaseModel):
+    profile_ids: list[str] = Field(min_length=1)
+
+
+class ProfileConfigExport(BaseModel):
+    name: str
+    fingerprint_seed: int
+    proxy: str | None = None
+    timezone: str | None = None
+    locale: str | None = None
+    platform: str = "windows"
+    user_agent: str | None = None
+    screen_width: int = 1920
+    screen_height: int = 1080
+    gpu_vendor: str | None = None
+    gpu_renderer: str | None = None
+    hardware_concurrency: int | None = None
+    humanize: bool = False
+    human_preset: str = "default"
+    headless: bool = False
+    geoip: bool = True
+    clipboard_sync: bool = True
+    auto_launch: bool = False
+    color_scheme: str | None = None
+    launch_args: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
+
+
+class ProfileExportResult(BaseModel):
+    profile_id: str
+    ok: bool
+    error: str | None = None
+    config: ProfileConfigExport | None = None
+
+
+class ProfileExportResponse(BaseModel):
+    schema_version: int = 1
+    total: int
+    exported: int
+    failed: int
+    results: list[ProfileExportResult] = Field(default_factory=list)
+
+
 class LaunchResponse(BaseModel):
     profile_id: str
     status: str = "running"

@@ -216,3 +216,77 @@ def test_profile_csv_import_rejects_headerless_csv_without_creating_profiles(app
     assert resp.status_code == 422
     assert resp.json()["detail"] == "CSV header with profile columns is required"
     assert db.list_profiles() == []
+
+
+def test_bulk_export_profile_configs_returns_partial_results(app_client: TestClient):
+    first = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Export A",
+            "proxy": "http://user:hiddenpass@export-a.example:8080",
+            "platform": "macos",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "gpu_vendor": "Apple",
+            "gpu_renderer": "Apple M2",
+            "hardware_concurrency": 8,
+            "humanize": True,
+            "human_preset": "careful",
+            "color_scheme": "light",
+            "launch_args": ["--private-window"],
+            "notes": "Export notes",
+            "tags": [{"tag": "export", "color": "#2563eb"}],
+        },
+    ).json()
+    second = app_client.post("/api/profiles", json={"name": "Export B"}).json()
+
+    resp = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [first["id"], "missing", second["id"]]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["schema_version"] == 1
+    assert data["total"] == 3
+    assert data["exported"] == 2
+    assert data["failed"] == 1
+
+    first_result, missing_result, second_result = data["results"]
+    assert first_result["profile_id"] == first["id"]
+    assert first_result["ok"] is True
+    assert first_result["error"] is None
+    assert first_result["config"]["name"] == "Export A"
+    assert first_result["config"]["proxy"] == "http://user:hiddenpass@export-a.example:8080"
+    assert first_result["config"]["platform"] == "macos"
+    assert first_result["config"]["screen_width"] == 1440
+    assert first_result["config"]["screen_height"] == 900
+    assert first_result["config"]["gpu_vendor"] == "Apple"
+    assert first_result["config"]["gpu_renderer"] == "Apple M2"
+    assert first_result["config"]["hardware_concurrency"] == 8
+    assert first_result["config"]["humanize"] is True
+    assert first_result["config"]["human_preset"] == "careful"
+    assert first_result["config"]["color_scheme"] == "light"
+    assert first_result["config"]["launch_args"] == ["--private-window"]
+    assert first_result["config"]["notes"] == "Export notes"
+    assert first_result["config"]["tags"] == [{"tag": "export", "color": "#2563eb"}]
+    assert "status" not in first_result["config"]
+    assert "automation_url" not in first_result["config"]
+    assert "vnc_ws_port" not in first_result["config"]
+    assert "user_data_dir" not in first_result["config"]
+
+    assert missing_result == {
+        "profile_id": "missing",
+        "ok": False,
+        "error": "Profile not found",
+        "config": None,
+    }
+    assert second_result["profile_id"] == second["id"]
+    assert second_result["ok"] is True
+    assert second_result["config"]["name"] == "Export B"
+
+
+def test_bulk_export_profile_configs_requires_at_least_one_profile_id(app_client: TestClient):
+    resp = app_client.post("/api/profiles/export", json={"profile_ids": []})
+
+    assert resp.status_code == 422

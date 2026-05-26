@@ -55,6 +55,10 @@ from .models import (
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
+    ProfileConfigExport,
+    ProfileExportRequest,
+    ProfileExportResponse,
+    ProfileExportResult,
     ProfileImportResponse,
     ProfileImportPreviewRequest,
     ProfileImportPreviewResponse,
@@ -790,6 +794,41 @@ async def import_profiles(req: ProfileImportPreviewRequest):
         total=len(results),
         succeeded=succeeded,
         failed=len(results) - succeeded,
+        results=results,
+    )
+
+
+@app.post("/api/profiles/export", response_model=ProfileExportResponse)
+async def export_profiles(req: ProfileExportRequest):
+    results: list[ProfileExportResult] = []
+    for profile_id in req.profile_ids:
+        profile = db.get_profile(profile_id)
+        if not profile:
+            results.append(
+                ProfileExportResult(
+                    profile_id=profile_id,
+                    ok=False,
+                    error="Profile not found",
+                    config=None,
+                )
+            )
+            continue
+
+        profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
+        results.append(
+            ProfileExportResult(
+                profile_id=profile_id,
+                ok=True,
+                error=None,
+                config=ProfileConfigExport(**profile),
+            )
+        )
+
+    exported = sum(1 for result in results if result.ok)
+    return ProfileExportResponse(
+        total=len(results),
+        exported=exported,
+        failed=len(results) - exported,
         results=results,
     )
 

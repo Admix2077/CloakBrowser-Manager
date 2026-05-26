@@ -51,7 +51,7 @@
 - [ ] 批量刷新 GeoIP。
 - [ ] 批量设置 tag。
 - [ ] 批量设置 proxy。
-- [ ] 批量导出 profile config。
+- [x] 批量导出 profile config（后端 API；前端下载入口另起闭环）。
 - [ ] 批量删除必须二次确认。
 
 ## 验证
@@ -264,6 +264,53 @@ cd frontend && npm run build
 - 无效行前端标红。
 - 真正批量创建 profile 与部分成功写入。
 - 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。
+
+## 2026-05-26 Profile Config 批量导出后端 API 小闭环
+
+背景：
+
+- 在 CSV 批量导入闭环后，继续推进低风险、只读的批量运营能力。
+- 本轮只做后端 `POST /api/profiles/export`，用于导出可重建 profile 的 config JSON；不写服务端文件，不做前端下载入口，不启动浏览器。
+
+已完成：
+
+- [x] `backend/tests/test_bulk.py`
+  - 先写红灯测试：`/api/profiles/export` 尚不存在，返回 `405`。
+  - 覆盖多 profile 按输入顺序返回部分成功/失败。
+  - 覆盖 missing profile 不阻断其他导出项。
+  - 覆盖成功 config 包含可重建字段：name、fingerprint_seed、proxy、platform、screen、GPU、hardware concurrency、humanize、human preset、color scheme、launch args、notes、tags。
+  - 覆盖成功 config 不包含运行态/本机路径字段：`status`、`automation_url`、`vnc_ws_port`、`user_data_dir`。
+  - 覆盖空 `profile_ids` 返回 `422`。
+- [x] `backend/models.py`
+  - 新增 `ProfileExportRequest` / `ProfileConfigExport` / `ProfileExportResult` / `ProfileExportResponse`。
+  - `ProfileConfigExport` 使用专用模型，不复用 `ProfileResponse`，避免导出运行态字段。
+- [x] `backend/main.py`
+  - 新增 `POST /api/profiles/export`。
+  - 返回 `schema_version=1`、`total/exported/failed/results`。
+  - 成功项返回 config；失败项只返回 `Profile not found`。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 红灯：2 failed, 6 passed
+# 失败点：/api/profiles/export 尚不存在，返回 405
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 8 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_templates.py -q
+# 16 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 248 passed
+```
+
+未覆盖范围：
+
+- 前端 `Export config` 下载入口。
+- 前端生成本地 JSON 文件名。
+- 批量启动/停止/health check/GeoIP/tag/proxy/delete。
 
 ## 2026-05-26 Profile CSV 导入预览前端 UI 小闭环
 

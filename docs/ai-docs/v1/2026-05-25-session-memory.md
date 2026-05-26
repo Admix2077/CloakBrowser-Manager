@@ -4335,6 +4335,60 @@ cd frontend && npm run build
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
 
+## 62. 2026-05-26 Profile Config 批量导出后端 API 小闭环
+
+背景：
+
+- 继续推进 09 批量运营能力，选择低风险、只读的 profile config export。
+- 子 agent 只读审计建议：`POST /api/profiles/export`，返回可重建 profile 的 config JSON；proxy 原文属于敏感备份能力，可以保留，但排除本机路径、运行态、VNC、automation、last_geoip。
+
+已完成：
+
+- `backend/tests/test_bulk.py`
+  - 先写红灯测试，确认 `/api/profiles/export` 不存在时返回 `405`。
+  - 覆盖多 profile 按输入顺序返回部分成功/失败。
+  - 覆盖 missing profile 不阻断其他导出项。
+  - 覆盖导出 config 包含可重建字段，并排除 `status`、`automation_url`、`vnc_ws_port`、`user_data_dir`。
+  - 覆盖空 `profile_ids` 返回 `422`。
+- `backend/models.py`
+  - 新增 `ProfileExportRequest` / `ProfileConfigExport` / `ProfileExportResult` / `ProfileExportResponse`。
+- `backend/main.py`
+  - 新增 `POST /api/profiles/export`。
+  - 返回 `schema_version=1`、`total/exported/failed/results`。
+  - 失败项只返回 `Profile not found`，不带 profile 数据。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `批量导出 profile config（后端 API；前端下载入口另起闭环）`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 红灯：2 failed, 6 passed
+# 失败点：/api/profiles/export 尚不存在，返回 405
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 8 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_templates.py -q
+# 16 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 248 passed
+```
+
+未覆盖范围：
+
+- 前端 `Export config` 下载入口。
+- 批量启动/停止/health check/GeoIP/tag/proxy/delete。
+
+边界：
+
+- 没有修改前端 UI。
+- 没有写导出文件到服务端磁盘。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
 ## 60. 2026-05-26 Profile CSV 批量创建后端 API 小闭环
 
 背景：
