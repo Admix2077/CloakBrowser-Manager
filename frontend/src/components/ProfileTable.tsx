@@ -672,7 +672,7 @@ function ProfileCard({
         selected
           ? "animate-profile-selection border-blue-200 border-l-blue-600 bg-blue-50/60"
           : previewed
-            ? "border-slate-300 border-l-slate-500 bg-slate-50/90"
+            ? "animate-profile-preview border-slate-300 border-l-slate-500 bg-slate-50/90"
             : "border-slate-200 border-l-transparent"
       }`}
       style={{ height: PROFILE_CARD_ROW_HEIGHT - 8 }}
@@ -794,7 +794,7 @@ function ProfileTableRow({
         selected
           ? "animate-profile-selection bg-blue-50/75 shadow-[inset_3px_0_0_#2563eb,inset_0_1px_0_rgba(37,99,235,0.06),inset_0_-1px_0_rgba(37,99,235,0.06)] hover:bg-blue-50"
           : previewed
-            ? "bg-slate-50/90 shadow-[inset_3px_0_0_#94a3b8] hover:bg-slate-100/70"
+            ? "animate-profile-preview bg-slate-50/90 shadow-[inset_3px_0_0_#94a3b8] hover:bg-slate-100/70"
             : "odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/60"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}

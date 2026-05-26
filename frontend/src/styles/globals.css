@@ -139,6 +139,14 @@
     animation: cloak-profile-selection 220ms ease-out;
   }
 
+  .animate-profile-preview {
+    animation: cloak-profile-preview 170ms ease-out;
+  }
+
+  .animate-inspector-in {
+    animation: cloak-inspector-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   .animate-bulk-action-in {
     animation: cloak-bulk-action-in 170ms cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -203,6 +211,28 @@
   }
   100% {
     filter: saturate(1);
+  }
+}
+
+@keyframes cloak-profile-preview {
+  0% {
+    opacity: 0.92;
+    filter: saturate(1.06);
+  }
+  100% {
+    opacity: 1;
+    filter: saturate(1);
+  }
+}
+
+@keyframes cloak-inspector-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

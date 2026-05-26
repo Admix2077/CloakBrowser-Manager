@@ -235,7 +235,9 @@ describe("ProfileTable", () => {
     const selectedRow = screen.getByRole("button", { name: "Preview Good US" }).closest("tr");
     expect(selectedRow?.getAttribute("data-state")).toBe("selected");
     expect(selectedRow?.className).toContain("animate-profile-selection");
-    expect(screen.getByRole("button", { name: "Preview Broken Proxy" }).closest("tr")?.getAttribute("data-state")).toBe("previewed");
+    const previewedRow = screen.getByRole("button", { name: "Preview Broken Proxy" }).closest("tr");
+    expect(previewedRow?.getAttribute("data-state")).toBe("previewed");
+    expect(previewedRow?.className).toContain("animate-profile-preview");
     expect(screen.getByRole("button", { name: "Open Good US" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Broken Proxy" })).toBeTruthy();
   });
@@ -743,7 +745,9 @@ describe("ProfileTable", () => {
       />,
     );
 
-    expect(screen.getByRole("listitem", { name: "Profile card Credential Proxy" }).getAttribute("data-state")).toBe("previewed");
+    const previewedCard = screen.getByRole("listitem", { name: "Profile card Credential Proxy" });
+    expect(previewedCard.getAttribute("data-state")).toBe("previewed");
+    expect(previewedCard.className).toContain("animate-profile-preview");
     expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
     expect(document.body.innerHTML).not.toContain("user:hiddenpass");
 

@@ -3383,6 +3383,72 @@ git diff --check
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
 
+## 50. 2026-05-26 Profile 运营台动效反馈 polish 小闭环
+
+背景：
+
+- Jeff 反馈当前页面整体风格已接近 SS，但部分交互没有动效，反馈生硬。
+- 本轮继续推进 `11 UI 视觉系统与体验升级`，只处理 Profile 运营台高频交互的非布局型 motion，不改变业务语义、筛选、排序、批量动作、API 或虚拟滚动高度。
+
+已完成：
+
+- `frontend/src/styles/globals.css`
+  - 新增 `animate-profile-preview` 和 `animate-inspector-in`。
+  - 继续受全局 `prefers-reduced-motion: reduce` 降级。
+- `frontend/src/components/ProfileTable.tsx`
+  - previewed desktop row 增加 `animate-profile-preview`。
+  - previewed mobile card 增加 `animate-profile-preview`。
+  - 未使用 translate/scale 改变 table row/card 空间占用，保留固定高度虚拟滚动语义。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - profile inspector 内容包裹层增加 `animate-inspector-in`。
+  - 不 key 整个 aside，保留 `role="complementary"` 语义。
+- `frontend/src/components/ProfileList.tsx`
+  - quick view button 增加 hover/active/focus 的 transform-aware transition。
+  - selected shortcut 增加 `animate-profile-selection` 和左侧状态线。
+  - 未对虚拟列表 item 使用 hover translate 或 margin 变化。
+- 相关测试覆盖：
+  - preview row/card motion class。
+  - inspector content motion class。
+  - active quick view 与 selected shortcut motion class。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md` 追加本小闭环验证证据。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 红灯：4 failed, 41 passed
+# 失败点：preview row/card、inspector content、quick view/selected shortcut 尚无 motion class
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx
+# 3 passed, 45 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 158 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser`，QA 地址 `http://127.0.0.1:8095/`。
+- 桌面 `1440x960`：
+  - 点击 `Preview Beta Running Candidate` 后 JS 验证：`previewed=previewed`、`previewMotion=true`、`inspectorMotion=true`、`quickMotion=true`、`bodyOverflow=false`。
+- 移动 `390x844`：
+  - 点击移动 card 的 `Preview Beta Running Candidate` 后 JS 复验：`previewed=previewed`、`previewMotion=true`。
+  - JS 验证：`bodyOverflow=false`、`width=390`、`scrollWidth=390`。
+
+截图：
+
+- `/tmp/cloakbrowser-motion-polish-screens/desktop-profile-motion-polish.png`
+- `/tmp/cloakbrowser-motion-polish-screens/mobile-profile-motion-polish.png`
+
+边界：
+
+- 没有修改后端、Docker 或 runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。
+
 ## 49. 2026-05-26 Profile 运营台 Badge 系统小闭环
 
 背景：

@@ -97,6 +97,7 @@ describe("ProfileSummaryPanel", () => {
 
     expect(screen.getByRole("complementary", { name: "Profile summary" })).toBeTruthy();
     const summary = screen.getByRole("complementary", { name: "Profile summary" });
+    expect(within(summary).getByTestId("inspector-profile-content").className).toContain("animate-inspector-in");
     expect(within(summary).getByRole("region", { name: "Health" })).toBeTruthy();
     expect(within(summary).getByRole("region", { name: "Runtime" })).toBeTruthy();
     expect(within(summary).getByRole("region", { name: "GeoIP" })).toBeTruthy();

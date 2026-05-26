@@ -58,88 +58,94 @@ export function ProfileSummaryPanel({
       aria-label="Profile summary"
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.85)]"
     >
-      <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-            Previewing
-          </span>
-          <span className="rounded-[6px] border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)]">
-            Inspector
-          </span>
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-slate-950" title={profile.name}>
-              {profile.name}
-            </h2>
-            <p className="mt-1 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</p>
+      <div
+        key={profile.id}
+        data-testid="inspector-profile-content"
+        className="animate-inspector-in flex min-h-0 flex-1 flex-col"
+      >
+        <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Previewing
+            </span>
+            <span className="rounded-[6px] border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.04)]">
+              Inspector
+            </span>
           </div>
-          <HealthBadge health={health} compact />
-        </div>
-        <button
-          type="button"
-          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-[6px] border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          onClick={() => onOpenProfile(profile.id)}
-          aria-label={`Open ${profile.name}`}
-        >
-          <ArrowRight className="h-3.5 w-3.5" />
-          Open profile
-        </button>
-      </div>
-
-      <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto bg-white">
-        <SummarySection icon={<ShieldAlert className="h-3.5 w-3.5" />} title="Health" priority="primary">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-slate-500">Status</span>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-semibold text-slate-950" title={profile.name}>
+                {profile.name}
+              </h2>
+              <p className="mt-1 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</p>
+            </div>
             <HealthBadge health={health} compact />
           </div>
-          {warningSummary && (
-            <p className="mt-2 rounded-[6px] border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-              {warningSummary}
-            </p>
-          )}
-          <SummaryRow label="Last checked" value={formatTimestamp(checkedAt)} />
-        </SummarySection>
+          <button
+            type="button"
+            className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-[6px] border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            onClick={() => onOpenProfile(profile.id)}
+            aria-label={`Open ${profile.name}`}
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+            Open profile
+          </button>
+        </div>
 
-        <SummarySection icon={<Monitor className="h-3.5 w-3.5" />} title="Runtime" priority="primary">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-            <StatusIndicator status={profile.status} />
-            <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
-              {profile.status}
-            </Badge>
-          </div>
-          <SummaryRow label="VNC" value={profile.vnc_ws_port ? `:${profile.vnc_ws_port}` : "-"} />
-          <SummaryRow label="Automation" value={profile.automation_url ? "available" : "-"} />
-        </SummarySection>
+        <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto bg-white">
+          <SummarySection icon={<ShieldAlert className="h-3.5 w-3.5" />} title="Health" priority="primary">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">Status</span>
+              <HealthBadge health={health} compact />
+            </div>
+            {warningSummary && (
+              <p className="mt-2 rounded-[6px] border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                {warningSummary}
+              </p>
+            )}
+            <SummaryRow label="Last checked" value={formatTimestamp(checkedAt)} />
+          </SummarySection>
 
-        <SummarySection icon={<Globe2 className="h-3.5 w-3.5" />} title="GeoIP" priority="secondary">
-          <SummaryRow label="IP" value={ip ?? "-"} mono />
-          <SummaryRow
-            label="Country"
-            value={country ? <CountryBadge country={country} /> : "-"}
-            title={country ?? "-"}
-          />
-          <SummaryRow label="Timezone" value={timezone ?? "-"} />
-          <SummaryRow label="Locale" value={locale ?? "-"} />
-          <div className="mt-2 flex flex-wrap gap-1">
-            <OverridePill label="Timezone override" active={timezoneOverride} />
-            <OverridePill label="Locale override" active={localeOverride} />
-          </div>
-        </SummarySection>
+          <SummarySection icon={<Monitor className="h-3.5 w-3.5" />} title="Runtime" priority="primary">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <StatusIndicator status={profile.status} />
+              <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
+                {profile.status}
+              </Badge>
+            </div>
+            <SummaryRow label="VNC" value={profile.vnc_ws_port ? `:${profile.vnc_ws_port}` : "-"} />
+            <SummaryRow label="Automation" value={profile.automation_url ? "available" : "-"} />
+          </SummarySection>
 
-        <SummarySection icon={<Network className="h-3.5 w-3.5" />} title="Proxy" priority="secondary">
-          <SummaryRow label="Endpoint" value={proxyLabel} mono title={proxyLabel} />
-        </SummarySection>
+          <SummarySection icon={<Globe2 className="h-3.5 w-3.5" />} title="GeoIP" priority="secondary">
+            <SummaryRow label="IP" value={ip ?? "-"} mono />
+            <SummaryRow
+              label="Country"
+              value={country ? <CountryBadge country={country} /> : "-"}
+              title={country ?? "-"}
+            />
+            <SummaryRow label="Timezone" value={timezone ?? "-"} />
+            <SummaryRow label="Locale" value={locale ?? "-"} />
+            <div className="mt-2 flex flex-wrap gap-1">
+              <OverridePill label="Timezone override" active={timezoneOverride} />
+              <OverridePill label="Locale override" active={localeOverride} />
+            </div>
+          </SummarySection>
 
-        <SummarySection icon={<Cpu className="h-3.5 w-3.5" />} title="Device" priority="secondary">
-          <SummaryRow label="Platform" value={profile.platform} />
-          <SummaryRow label="Screen" value={`${profile.screen_width} x ${profile.screen_height}`} />
-          <SummaryRow
-            label="Cores"
-            value={profile.hardware_concurrency ? `${profile.hardware_concurrency} cores` : "-"}
-          />
-          <SummaryRow label="GPU" value={profile.gpu_renderer ?? profile.gpu_vendor ?? "-"} title={profile.gpu_renderer ?? profile.gpu_vendor ?? undefined} />
-        </SummarySection>
+          <SummarySection icon={<Network className="h-3.5 w-3.5" />} title="Proxy" priority="secondary">
+            <SummaryRow label="Endpoint" value={proxyLabel} mono title={proxyLabel} />
+          </SummarySection>
+
+          <SummarySection icon={<Cpu className="h-3.5 w-3.5" />} title="Device" priority="secondary">
+            <SummaryRow label="Platform" value={profile.platform} />
+            <SummaryRow label="Screen" value={`${profile.screen_width} x ${profile.screen_height}`} />
+            <SummaryRow
+              label="Cores"
+              value={profile.hardware_concurrency ? `${profile.hardware_concurrency} cores` : "-"}
+            />
+            <SummaryRow label="GPU" value={profile.gpu_renderer ?? profile.gpu_vendor ?? "-"} title={profile.gpu_renderer ?? profile.gpu_vendor ?? undefined} />
+          </SummarySection>
+        </div>
       </div>
     </aside>
   );

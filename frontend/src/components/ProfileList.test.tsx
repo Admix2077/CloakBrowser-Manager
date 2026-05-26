@@ -301,6 +301,27 @@ describe("ProfileList operations filters", () => {
     expect(screen.queryByText("Stopped JP Profile")).toBeNull();
   });
 
+  it("adds non-layout motion feedback to active quick views and selected shortcuts", () => {
+    render(
+      <ProfileList
+        profiles={[runningProfile, stoppedProfile]}
+        selectedId="profile-running"
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        healthByProfileId={{
+          "profile-running": runningWarningHealth,
+          "profile-stopped": errorHealth,
+        }}
+        filters={{ ...defaultProfileFilters, status: "running" }}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Running profiles" }).className).toContain("transition-[background-color,border-color,color,box-shadow,transform]");
+    expect(screen.getByRole("button", { name: "Running profiles" }).className).toContain("active:translate-y-px");
+    expect(screen.getByRole("button", { name: /Running US Profile/ }).className).toContain("animate-profile-selection");
+  });
+
   it("virtualizes large profile lists while keeping selection usable", () => {
     const onSelect = vi.fn();
     const profiles = Array.from({ length: 300 }, (_, index) => bulkProfile(index));

@@ -309,10 +309,10 @@ function QuickViewButton({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-xs font-medium transition-colors ${
+      className={`flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-xs font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:translate-y-px focus:outline-none focus:ring-2 focus:ring-blue-500/15 ${
         active
-          ? "border-blue-200 bg-blue-50 text-blue-700"
-          : "border-transparent text-slate-600 hover:border-border hover:bg-surface-2 hover:text-slate-950"
+          ? "border-blue-200 bg-blue-50 text-blue-700 shadow-[inset_3px_0_0_rgba(37,99,235,0.45)]"
+          : "border-transparent text-slate-600 hover:border-border hover:bg-surface-2 hover:text-slate-950 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
       }`}
     >
       <span className={active ? "text-blue-600" : "text-slate-400"}>{icon}</span>
@@ -367,7 +367,7 @@ function ProfileListItem({
         virtualized ? "h-[108px] overflow-hidden" : ""
       } ${
         selected
-          ? "border border-blue-200 bg-blue-50 shadow-hairline"
+          ? "animate-profile-selection border border-blue-200 bg-blue-50 shadow-[inset_3px_0_0_#2563eb,0_1px_1px_rgba(15,23,42,0.04)]"
           : "border border-transparent hover:border-border hover:bg-surface-2"
       }`}
     >
