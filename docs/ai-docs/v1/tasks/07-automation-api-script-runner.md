@@ -47,9 +47,9 @@
   - started_at。
   - finished_at。
 - [x] 新增 `POST /api/tasks`。
-- [ ] 新增 `GET /api/tasks`。
+- [x] 新增 `GET /api/tasks`。
 - [x] 新增 `GET /api/tasks/{id}`。
-- [ ] 新增 `POST /api/tasks/{id}/cancel`。
+- [x] 新增 `POST /api/tasks/{id}/cancel`。
 - [ ] 支持第一版 step：
   - open_url。
   - wait。
@@ -153,7 +153,7 @@ cd frontend && npm run build
   - `finished_at`。
 - `POST /api/tasks` 当前只创建 `queued` task，不执行脚本，不启动 profile，不读取敏感配置。
 - profile 不存在时返回 `404`。
-- 当前未实现 `GET /api/tasks` 列表、cancel、并发限制、失败重试和 step 执行器。
+- 当前未实现并发限制、失败重试和 step 执行器。
 
 验证记录：
 
@@ -163,6 +163,35 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 70 passed
+```
+
+## 2026-05-27 Automation task 列表与取消小闭环
+
+当前状态：
+
+- 已新增 `AutomationTasksResponse`。
+- 已新增 `GET /api/tasks`：
+  - 返回所有已持久化 task。
+  - 按 `created_at desc` 排序，最新 task 在前。
+  - 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+- 已新增 `POST /api/tasks/{id}/cancel`：
+  - 只允许取消 `queued` task。
+  - 成功后将 task 状态更新为 `cancelled`。
+  - 成功后写入 `finished_at`。
+  - task 不存在时返回 `404`。
+  - 非 `queued` task 返回 `409`，避免把运行中、已完成或失败 task 伪装成可取消成功。
+  - 当前不停止运行中的 Playwright 操作；运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
+- 本小闭环不执行脚本，不启动 profile，不读取敏感配置，不写 Project Mileage 钱包、订单、权限或续期逻辑。
+- 当前仍未实现并发限制、失败重试和 step 执行器。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_returns_newest_tasks backend/tests/test_api.py::test_cancel_queued_automation_task_marks_cancelled backend/tests/test_api.py::test_cancel_running_automation_task_is_rejected -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 73 passed
 ```
 
 ## 2026-05-27 Automation wait-for-selector 小闭环

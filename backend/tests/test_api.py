@@ -1055,6 +1055,44 @@ def test_create_automation_task_rejects_missing_profile(app_client: TestClient):
     assert resp.status_code == 404
 
 
+def test_list_automation_tasks_returns_newest_tasks(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskListProfile"})
+    pid = create.json()["id"]
+    first = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    second = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 2}]}).json()
+
+    resp = app_client.get("/api/tasks")
+
+    assert resp.status_code == 200
+    task_ids = [task["id"] for task in resp.json()["tasks"]]
+    assert task_ids[:2] == [second["id"], first["id"]]
+
+
+def test_cancel_queued_automation_task_marks_cancelled(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskCancelProfile"})
+    pid = create.json()["id"]
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/cancel")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == task["id"]
+    assert data["status"] == "cancelled"
+    assert data["finished_at"] is not None
+
+
+def test_cancel_running_automation_task_is_rejected(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskCancelRunningProfile"})
+    pid = create.json()["id"]
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    main.db.update_automation_task(task["id"], status="running")
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/cancel")
+
+    assert resp.status_code == 409
+
+
 def _mock_running_profile(pid: str) -> MagicMock:
     """Create a mock RunningProfile and register it in browser_mgr."""
     mock = MagicMock(spec=RunningProfile)

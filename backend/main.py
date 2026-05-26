@@ -53,6 +53,7 @@ from .models import (
     AutomationScrollRequest,
     AutomationTaskCreate,
     AutomationTaskResponse,
+    AutomationTasksResponse,
     AutomationWaitForSelectorRequest,
     ClipboardRequest,
     LaunchResponse,
@@ -1476,12 +1477,35 @@ async def create_automation_task(req: AutomationTaskCreate):
     return _automation_task_response(task)
 
 
+@app.get("/api/tasks", response_model=AutomationTasksResponse)
+async def list_automation_tasks():
+    tasks = db.list_automation_tasks()
+    return AutomationTasksResponse(tasks=[_automation_task_response(task) for task in tasks])
+
+
 @app.get("/api/tasks/{task_id}", response_model=AutomationTaskResponse)
 async def get_automation_task(task_id: str):
     task = db.get_automation_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
     return _automation_task_response(task)
+
+
+@app.post("/api/tasks/{task_id}/cancel", response_model=AutomationTaskResponse)
+async def cancel_automation_task(task_id: str):
+    task = db.get_automation_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    if task["status"] != "queued":
+        raise HTTPException(status_code=409, detail="Only queued automation tasks can be cancelled")
+    cancelled = db.update_automation_task(
+        task_id,
+        status="cancelled",
+        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    if cancelled is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    return _automation_task_response(cancelled)
 
 
 # ── Clipboard Relay ──────────────────────────────────────────────────────────

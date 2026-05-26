@@ -35,12 +35,22 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 task 列表与取消小闭环：
+  - 新增 `AutomationTasksResponse`。
+  - 新增 `GET /api/tasks`：返回所有已持久化 task，并按 `created_at desc` 让最新 task 在前。
+  - 新增 `POST /api/tasks/{id}/cancel`：只允许取消 `queued` task。
+  - 取消成功后 task 状态更新为 `cancelled`，并写入 `finished_at`。
+  - task 不存在时返回 `404`；非 `queued` task 返回 `409`，避免把运行中、已完成或失败 task 伪装成可取消成功。
+  - `GET /api/tasks` 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+  - cancel 当前不停止运行中的 Playwright 操作；运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
+  - 本小闭环不执行脚本，不启动 profile，不读取敏感配置，不写 Project Mileage 钱包、订单、权限或续期逻辑。
+  - 当前仍未实现并发限制、失败重试和 step 执行器。
 - 本轮继续 07 Automation API 与脚本运行器，完成 task 最小 API 小闭环：
   - 新增 `AutomationTaskCreate` 和 `AutomationTaskResponse`。
   - 新增 `POST /api/tasks`：只创建 `queued` task，不执行脚本，不启动 profile，不读取敏感配置。
   - 新增 `GET /api/tasks/{id}`：读取已持久化 task。
   - profile 不存在时返回 `404`。
-  - 当前未实现 `GET /api/tasks` 列表、cancel、并发限制、失败重试和 step 执行器。
+  - 当前未实现并发限制、失败重试和 step 执行器。
 - 本轮继续 07 Automation API 与脚本运行器，完成 automation task 表持久层小闭环：
   - 新增 `automation_tasks` 表，字段覆盖 `id/profile_id/status/steps/result/error/created_at/started_at/finished_at`。
   - 新增 `create_automation_task()`、`get_automation_task()`、`list_automation_tasks()`、`update_automation_task()`。
@@ -131,7 +141,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，小步新增 `GET /api/tasks` 列表和 `POST /api/tasks/{id}/cancel` queued task 取消能力。
+1. 继续 CloakBrowser 独立侧 07 Automation API，小步实现第一版 Script Runner executor 的最小 step，例如 `wait`，保持不启动 profile、不读取敏感配置、不把 console/network/evaluate/screenshot 输出默认写入 task result/log。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

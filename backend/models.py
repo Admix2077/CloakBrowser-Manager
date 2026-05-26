@@ -567,6 +567,10 @@ class AutomationTaskResponse(BaseModel):
     finished_at: str | None = None
 
 
+class AutomationTasksResponse(BaseModel):
+    tasks: list[AutomationTaskResponse]
+
+
 class ClipboardRequest(BaseModel):
     text: str = Field(max_length=1_048_576)  # 1MB max
 

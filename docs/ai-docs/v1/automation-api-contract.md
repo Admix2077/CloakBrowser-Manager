@@ -332,6 +332,105 @@ GET /api/profiles/{profile_id}/clipboard
 
 `text` 长度上限为 `1048576`。
 
+## Automation Tasks
+
+### 创建 Task
+
+```http
+POST /api/tasks
+```
+
+请求：
+
+```json
+{
+  "profile_id": "profile-id",
+  "steps": [
+    {"type": "wait", "ms": 1000}
+  ]
+}
+```
+
+当前行为：
+
+- 只创建 `queued` task。
+- `steps` 长度为 `1..200`。
+- profile 不存在时返回 `404`。
+- 不执行脚本，不启动 profile，不读取敏感配置。
+
+返回：
+
+```json
+{
+  "id": "task-id",
+  "profile_id": "profile-id",
+  "status": "queued",
+  "steps": [{"type": "wait", "ms": 1000}],
+  "result": null,
+  "error": null,
+  "created_at": "2026-05-27T00:00:00+00:00",
+  "started_at": null,
+  "finished_at": null
+}
+```
+
+### Task 列表
+
+```http
+GET /api/tasks
+```
+
+返回：
+
+```json
+{
+  "tasks": [
+    {
+      "id": "task-id",
+      "profile_id": "profile-id",
+      "status": "queued",
+      "steps": [{"type": "wait", "ms": 1000}],
+      "result": null,
+      "error": null,
+      "created_at": "2026-05-27T00:00:00+00:00",
+      "started_at": null,
+      "finished_at": null
+    }
+  ]
+}
+```
+
+当前行为：
+
+- 返回所有已持久化 task。
+- 按 `created_at desc` 排序，最新 task 在前。
+- 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+- Project Mileage 后续需要 task 列表时，必须由 Payload 按账号归属、权限和审计策略输出安全 DTO。
+
+### Task 详情
+
+```http
+GET /api/tasks/{id}
+```
+
+task 不存在时返回 `404`。
+
+### 取消 Task
+
+```http
+POST /api/tasks/{id}/cancel
+```
+
+当前行为：
+
+- 只允许取消 `queued` task。
+- 成功后状态更新为 `cancelled`，并写入 `finished_at`。
+- task 不存在时返回 `404`。
+- 非 `queued` task 返回 `409`，避免把运行中、已完成或失败 task 伪装成可取消成功。
+- 当前取消接口不终止浏览器、不停止运行中脚本、不修改 Project Mileage 订单、钱包、权限或续期状态。
+- 重复取消已 `cancelled` task 当前返回 `409`；是否改为幂等成功留给后续 API 版本决定。
+- 运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
+
 ## Script Runner 接入建议
 
 第一版 Script Runner 可以直接复用以下 endpoint 作为 step：
