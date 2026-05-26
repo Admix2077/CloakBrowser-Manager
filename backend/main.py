@@ -510,6 +510,44 @@ async def delete_proxy(proxy_id: str):
     return {"ok": True}
 
 
+@app.post("/api/proxies/{proxy_id}/check", response_model=ProxyResponse)
+async def check_proxy(proxy_id: str):
+    proxy = db.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+
+    raw_url = str(proxy["url"])
+    redacted_url = redact_proxy_asset_url(raw_url)
+    check_at = db._now()
+
+    try:
+        geo = await resolve_network_geo(raw_url)
+    except Exception as exc:
+        safe_error = str(exc).replace(raw_url, redacted_url)
+        updated = db.update_proxy(
+            proxy_id,
+            last_check_status="error",
+            last_check_error=safe_error,
+            last_check_at=check_at,
+        )
+    else:
+        updated = db.update_proxy(
+            proxy_id,
+            last_check_status="good",
+            last_check_ip=geo.ip,
+            last_check_country_code=geo.country_code,
+            last_check_timezone=geo.timezone,
+            last_check_locale=geo.locale,
+            last_check_source=geo.source,
+            last_check_error=None,
+            last_check_at=check_at,
+        )
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    return _proxy_response(updated)
+
+
 @app.get("/api/profiles", response_model=list[ProfileResponse])
 async def list_profiles():
     profiles = db.list_profiles()

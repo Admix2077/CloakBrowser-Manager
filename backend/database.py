@@ -89,6 +89,7 @@ def init_db():
                 last_check_timezone TEXT,
                 last_check_locale TEXT,
                 last_check_source TEXT,
+                last_check_error TEXT,
                 last_check_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -128,6 +129,11 @@ def init_db():
             """
         )
         conn.commit()
+
+        proxy_cols = {row[1] for row in conn.execute("PRAGMA table_info(proxies)").fetchall()}
+        if "last_check_error" not in proxy_cols:
+            conn.execute("ALTER TABLE proxies ADD COLUMN last_check_error TEXT")
+            conn.commit()
 
 
 def _now() -> str:
@@ -341,8 +347,8 @@ def create_proxy(
                 id, name, url, country_code, city, asn, provider, tags, notes,
                 last_check_status, last_check_ip, last_check_country_code,
                 last_check_timezone, last_check_locale, last_check_source,
-                last_check_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                last_check_error, last_check_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 proxy_id,
                 name,
@@ -359,6 +365,7 @@ def create_proxy(
                 fields.get("last_check_timezone"),
                 fields.get("last_check_locale"),
                 fields.get("last_check_source"),
+                fields.get("last_check_error"),
                 fields.get("last_check_at"),
                 now,
                 now,
@@ -398,7 +405,7 @@ def update_proxy(proxy_id: str, **fields: Any) -> dict[str, Any] | None:
         "name", "url", "country_code", "city", "asn", "provider", "tags", "notes",
         "last_check_status", "last_check_ip", "last_check_country_code",
         "last_check_timezone", "last_check_locale", "last_check_source",
-        "last_check_at",
+        "last_check_error", "last_check_at",
     ):
         if col in fields:
             update_cols.append(f"{col} = ?")

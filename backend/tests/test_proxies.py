@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from backend import database as db
+from backend import database as db, main
+from backend.geoip import GeoIPResult
 
 
 def test_init_db_creates_proxies_table(tmp_db: Path):
@@ -155,3 +156,76 @@ def test_proxy_api_not_found(app_client: TestClient):
     assert app_client.get("/api/proxies/missing").status_code == 404
     assert app_client.put("/api/proxies/missing", json={"name": "x"}).status_code == 404
     assert app_client.delete("/api/proxies/missing").status_code == 404
+    assert app_client.post("/api/proxies/missing/check").status_code == 404
+
+
+def test_proxy_check_updates_last_check_fields(app_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    captured_proxy_urls: list[str | None] = []
+
+    async def fake_resolve(proxy_url: str | None):
+        captured_proxy_urls.append(proxy_url)
+        return GeoIPResult(
+            timezone="Asia/Tokyo",
+            locale="ja-JP",
+            ip="203.0.113.8",
+            country_code="JP",
+            source="qa",
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Check me",
+            "url": "socks5://user:hiddenpass@jp.proxy.example:1080",
+        },
+    )
+    proxy_id = create.json()["id"]
+
+    resp = app_client.post(f"/api/proxies/{proxy_id}/check")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert captured_proxy_urls == ["socks5://user:hiddenpass@jp.proxy.example:1080"]
+    assert data["url"] == "socks5://jp.proxy.example:1080"
+    assert data["last_check_status"] == "good"
+    assert data["last_check_ip"] == "203.0.113.8"
+    assert data["last_check_country_code"] == "JP"
+    assert data["last_check_timezone"] == "Asia/Tokyo"
+    assert data["last_check_locale"] == "ja-JP"
+    assert data["last_check_source"] == "qa"
+    assert data["last_check_error"] is None
+    assert data["last_check_at"] is not None
+    assert "hiddenpass" not in str(data)
+
+
+def test_proxy_check_records_failure_without_leaking_credentials(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_resolve(proxy_url: str | None):
+        raise RuntimeError(f"cannot connect via {proxy_url}")
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Broken",
+            "url": "http://user:hiddenpass@proxy.example:8080",
+        },
+    )
+    proxy_id = create.json()["id"]
+
+    resp = app_client.post(f"/api/proxies/{proxy_id}/check")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["last_check_status"] == "error"
+    assert "http://proxy.example:8080" in data["last_check_error"]
+    assert "hiddenpass" not in data["last_check_error"]
+    assert "hiddenpass" not in str(data)
+
+    stored = db.get_proxy(proxy_id)
+    assert stored is not None
+    assert stored["last_check_status"] == "error"
+    assert "hiddenpass" not in stored["last_check_error"]

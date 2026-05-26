@@ -105,6 +105,7 @@ class ProxyResponse(BaseModel):
     last_check_timezone: str | None = None
     last_check_locale: str | None = None
     last_check_source: str | None = None
+    last_check_error: str | None = None
     last_check_at: str | None = None
     created_at: str
     updated_at: str

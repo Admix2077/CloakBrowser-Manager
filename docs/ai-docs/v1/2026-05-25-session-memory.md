@@ -2142,3 +2142,68 @@ cd frontend && npm run build
 - 服务端分页未做；当前继续以固定高度虚拟滚动覆盖数百 profile。
 - ProfileForm 页签、Viewer EnvironmentStrip、Proxy Manager 页面未在本轮处理。
 - 04 Proxy Manager 的 `POST /api/proxies/{id}/check` 仍是下一后端小闭环。
+
+## 32. 2026-05-26 Proxy 单个检测 API 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于 proxy asset CRUD API 增加 `POST /api/proxies/{id}/check`。
+- 本小闭环只做单个 proxy 检测 API；不做 bulk check、前端 Proxy Manager、CSV 导入或 profile 分配。
+- 使用 TDD：先补充 `backend/tests/test_proxies.py`，确认 405 红灯后实现。
+
+本轮实现：
+
+- `backend/database.py`
+  - `proxies` 表新增 `last_check_error`。
+  - 对旧库做兼容迁移，缺列时执行 `ALTER TABLE proxies ADD COLUMN last_check_error TEXT`。
+  - `create_proxy()` / `update_proxy()` 支持写入检测错误原因。
+- `backend/models.py`
+  - `ProxyResponse` 新增 `last_check_error`。
+- `backend/main.py`
+  - 新增 `POST /api/proxies/{proxy_id}/check`。
+  - 成功检测时调用 `resolve_network_geo(raw_proxy_url)`，使用包含凭据的原始 proxy URL 做真实网络检测。
+  - 成功后写入 `last_check_status="good"`、IP、country、timezone、locale、source、checked_at，并清空错误。
+  - 检测失败时返回 200，不抛 500；写入 `last_check_status="error"`、`last_check_at` 和脱敏后的 `last_check_error`。
+  - API 响应继续通过 `_proxy_response()`，`url` 默认脱敏。
+- `backend/tests/test_proxies.py`
+  - 覆盖 missing proxy 返回 404。
+  - 覆盖成功检测写入 `last_check_*`。
+  - 覆盖失败检测不会泄露 proxy 密码，DB 和 API 响应都脱敏。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 勾选 `POST /api/proxies/{id}/check`、`支持字段`、`检测时复用 GeoIP resolver`、`检测失败保留错误原因`。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 9 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 17 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_api.py -q
+# 70 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 226 passed
+
+git diff --check
+# passed
+```
+
+接管后新鲜复验：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 17 passed
+
+git diff --check
+# passed
+```
+
+仍未做：
+
+- `POST /api/proxies/bulk/check`。
+- 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入。
+- 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

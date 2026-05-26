@@ -27,9 +27,9 @@
 
 - [x] 新增 `proxies` 表。
 - [x] 新增 proxy CRUD。
-- [ ] 新增 `POST /api/proxies/{id}/check`。
+- [x] 新增 `POST /api/proxies/{id}/check`。
 - [ ] 新增 `POST /api/proxies/bulk/check`。
-- [ ] 支持字段：
+- [x] 支持字段：
   - name。
   - url。
   - country_code。
@@ -40,7 +40,7 @@
   - notes。
   - last_check_*。
 - [x] proxy URL 保存时保留原始配置，但 UI 默认遮蔽用户名密码。
-- [ ] 检测时复用 GeoIP resolver。
+- [x] 检测时复用 GeoIP resolver。
 - [ ] 支持将 proxy 分配到 profile。
 - [ ] 支持从 profile 当前 proxy 保存为 proxy asset。
 - [ ] 前端新增 Proxy Manager 页面。
@@ -59,7 +59,7 @@ cd frontend && npm run build
 ## 验收标准
 
 - [x] 无效 proxy 不会保存为可用状态。
-- [ ] 检测失败保留错误原因。
+- [x] 检测失败保留错误原因。
 - [x] proxy 密码不在列表中明文展示。
 - [x] 删除 proxy 不应删除已存在 profile，只解除引用或阻止删除并提示。
 
@@ -125,3 +125,72 @@ git diff --check
 - `POST /api/proxies/bulk/check` 未做。
 - 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入未做。
 - 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset 未做。
+
+## 2026-05-26 Proxy 单个检测 API 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于上一轮 proxy asset CRUD API 增加单个代理检测。
+- 本小闭环只做 `POST /api/proxies/{id}/check`，不进入 bulk check、前端 Proxy Manager 页面、CSV 导入或 profile 分配。
+- 使用 TDD：先补充 `backend/tests/test_proxies.py` 并确认红灯，再实现最小后端能力。
+
+红灯确认：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 3 failed, 6 passed
+# POST /api/proxies/missing/check 当前 405，POST /api/proxies/{id}/check 当前 405
+```
+
+已完成：
+
+- [x] `backend/tests/test_proxies.py`
+  - 覆盖 `POST /api/proxies/missing/check` 返回 404。
+  - 覆盖成功检测时调用 `resolve_network_geo(raw_proxy_url)`，传入包含凭据的原始 proxy URL。
+  - 覆盖成功检测写入 `last_check_status/ip/country_code/timezone/locale/source/at`。
+  - 覆盖失败检测返回 200 并写入 `last_check_status="error"` 和脱敏 `last_check_error`。
+  - 覆盖 API 响应与 DB 中的 `last_check_error` 不泄露 proxy 密码。
+- [x] `backend/database.py`
+  - `proxies` 表新增 `last_check_error`。
+  - 兼容旧 DB：启动时若缺少该列，执行 `ALTER TABLE proxies ADD COLUMN last_check_error TEXT`。
+  - `create_proxy()` / `update_proxy()` 支持写入 `last_check_error`。
+- [x] `backend/models.py`
+  - `ProxyResponse` 新增 `last_check_error`。
+- [x] `backend/main.py`
+  - 新增 `POST /api/proxies/{proxy_id}/check`。
+  - 成功时复用 `resolve_network_geo()`，写入 `last_check_*` 并清空 `last_check_error`。
+  - 失败时不抛 500，写入 `last_check_status="error"`、`last_check_at` 和脱敏错误原因。
+  - API 响应继续通过 `_proxy_response()`，`url` 默认脱敏。
+
+保持不变：
+
+- Profile 仍保留原有 `proxy` 字符串字段；本轮不引入 `proxy_id` 分配。
+- 本轮不改 profile launch / health check 的 proxy 行为。
+- 本轮不新增前端 Proxy Manager 页面，因此没有前端测试或 build 要求。
+- 本轮不做 `POST /api/proxies/bulk/check`。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 9 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py backend/tests/test_geoip.py -q
+# 17 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_api.py -q
+# 70 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 226 passed
+
+git diff --check
+# passed
+```
+
+范围说明：
+
+- `POST /api/proxies/bulk/check` 未做。
+- 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入未做。
+- 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset 未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
