@@ -795,6 +795,77 @@ def claim_next_automation_task(
     return get_automation_task(row["id"])
 
 
+def renew_automation_task_lease(
+    task_id: str,
+    *,
+    lease_owner: str,
+    lease_seconds: int,
+    now: str | None = None,
+    allowed_statuses: set[str] | None = None,
+) -> dict[str, Any] | None:
+    statuses = allowed_statuses or {"running"}
+    if not statuses:
+        return None
+    now_value, lease_expires_at = _lease_expires_at(now, lease_seconds)
+    placeholders = ", ".join("?" for _ in statuses)
+    with get_db() as conn:
+        cursor = conn.execute(
+            f"""
+            UPDATE automation_tasks
+            SET lease_expires_at = ?
+            WHERE id = ?
+              AND lease_owner = ?
+              AND status IN ({placeholders})
+            """,
+            (lease_expires_at, task_id, lease_owner, *sorted(statuses)),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_automation_task(task_id)
+
+
+def finish_claimed_automation_task(
+    task_id: str,
+    *,
+    lease_owner: str,
+    status: str,
+    result: dict[str, Any] | None,
+    error: str | None,
+    now: str | None = None,
+) -> dict[str, Any] | None:
+    if status not in {"cancelled", "failed", "succeeded"}:
+        return None
+    finished_at, _ = _lease_expires_at(now, 0)
+    with get_db() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE automation_tasks
+            SET status = ?,
+                result = ?,
+                error = ?,
+                finished_at = ?,
+                lease_owner = NULL,
+                lease_expires_at = NULL
+            WHERE id = ?
+              AND lease_owner = ?
+              AND status = 'running'
+            """,
+            (
+                status,
+                json.dumps(result) if result is not None else None,
+                error,
+                finished_at,
+                task_id,
+                lease_owner,
+            ),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_automation_task(task_id)
+
+
 _AUDIT_SENSITIVE_KEYS = {
     "authorization",
     "auth_token",

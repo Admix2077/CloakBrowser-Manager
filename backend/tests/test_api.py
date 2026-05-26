@@ -1061,6 +1061,37 @@ def test_automation_task_responses_do_not_expose_worker_lease_metadata(app_clien
     assert "worker-secret" not in str(list_resp.json())
 
 
+def test_automation_task_responses_do_not_expose_renewed_or_finished_lease_metadata(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskLeaseFinishRedactProfile"})
+    pid = create.json()["id"]
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    claimed = main.db.claim_next_automation_task(lease_owner="worker-secret", lease_seconds=60)
+    renewed = main.db.renew_automation_task_lease(task["id"], lease_owner="worker-secret", lease_seconds=120)
+    finished = main.db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-secret",
+        status="succeeded",
+        result={"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]},
+        error=None,
+    )
+
+    get_resp = app_client.get(f"/api/tasks/{task['id']}")
+    list_resp = app_client.get("/api/tasks")
+
+    assert claimed is not None
+    assert renewed is not None
+    assert finished is not None
+    assert get_resp.status_code == 200
+    assert "lease_owner" not in get_resp.json()
+    assert "lease_expires_at" not in get_resp.json()
+    assert "worker-secret" not in str(get_resp.json())
+    assert list_resp.status_code == 200
+    listed_task = next(item for item in list_resp.json()["tasks"] if item["id"] == task["id"])
+    assert "lease_owner" not in listed_task
+    assert "lease_expires_at" not in listed_task
+    assert "worker-secret" not in str(list_resp.json())
+
+
 def test_automation_task_responses_redact_open_url_steps(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRedactProfile"})
     pid = create.json()["id"]

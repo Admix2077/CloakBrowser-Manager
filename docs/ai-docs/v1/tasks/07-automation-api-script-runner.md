@@ -169,6 +169,37 @@ cd frontend && npm run build
 # 7 passed
 ```
 
+## 2026-05-27 Automation task lease renew/finish 数据层小闭环
+
+当前状态：
+
+- 新增 DB 层 `renew_automation_task_lease(task_id, lease_owner, lease_seconds, now=None, allowed_statuses=None)`：
+  - 只允许匹配当前 `lease_owner` 的 task 续租。
+  - 默认只允许 `running` task 续租。
+  - 续租时间按当前服务器时间或传入 `now` 重新计算为 `now + lease_seconds`，不在旧 lease 上累加。
+  - worker owner 不匹配、状态不匹配或 task 不存在时返回 `None`，不修改 task。
+- 新增 DB 层 `finish_claimed_automation_task(task_id, lease_owner, status, result, error, now=None)`：
+  - 只允许匹配当前 `lease_owner` 的 `running` task 收束。
+  - 只允许终态 `succeeded | failed | cancelled`。
+  - 收束成功后写入 `status/result/error/finished_at`，并清空 `lease_owner`、`lease_expires_at`。
+  - worker owner 不匹配、task 已收束或状态不是允许终态时返回 `None`，不覆盖既有终态。
+- 当前仍只完成后台 worker 池的数据层前置能力，不新增公开 REST API，不启动后台 worker，不自动执行脚本，不自动启动 profile。
+- `lease_owner` / `lease_expires_at` 仍是内部调度字段，不属于 `AutomationTaskResponse`；即使经过 claim、renew、finish，`GET /api/tasks/{id}` 和 `GET /api/tasks` 也不会暴露这些字段。
+- 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token、VNC token 或审计事实源。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py::test_renew_automation_task_lease_extends_only_matching_running_owner backend/tests/test_database.py::test_finish_claimed_automation_task_updates_terminal_status_and_clears_lease backend/tests/test_database.py::test_finish_claimed_automation_task_rejects_non_terminal_status -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_do_not_expose_worker_lease_metadata backend/tests/test_api.py::test_automation_task_responses_do_not_expose_renewed_or_finished_lease_metadata -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py -q
+# 42 passed
+```
+
 ## 2026-05-27 Automation task 最小 API 小闭环
 
 当前状态：

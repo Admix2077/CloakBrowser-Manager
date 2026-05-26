@@ -386,6 +386,108 @@ def test_claim_next_automation_task_reclaims_expired_running_lease(tmp_db: Path)
     assert claimed["lease_expires_at"] > "2026-05-27T00:01:00+00:00"
 
 
+def test_renew_automation_task_lease_extends_only_matching_running_owner(tmp_db: Path):
+    profile = db.create_profile("Automation Task Renew Lease")
+    task = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])
+    claimed = db.claim_next_automation_task(
+        lease_owner="worker-a",
+        lease_seconds=30,
+        now="2026-05-27T00:00:00+00:00",
+    )
+
+    wrong_owner = db.renew_automation_task_lease(
+        task["id"],
+        lease_owner="worker-b",
+        lease_seconds=60,
+        now="2026-05-27T00:00:10+00:00",
+    )
+    renewed = db.renew_automation_task_lease(
+        task["id"],
+        lease_owner="worker-a",
+        lease_seconds=60,
+        now="2026-05-27T00:00:10+00:00",
+    )
+    finished = db.renew_automation_task_lease(
+        task["id"],
+        lease_owner="worker-a",
+        lease_seconds=60,
+        now="2026-05-27T00:00:20+00:00",
+        allowed_statuses={"succeeded"},
+    )
+
+    assert claimed is not None
+    assert wrong_owner is None
+    assert renewed is not None
+    assert renewed["id"] == task["id"]
+    assert renewed["status"] == "running"
+    assert renewed["lease_owner"] == "worker-a"
+    assert renewed["lease_expires_at"] == "2026-05-27T00:01:10+00:00"
+    assert finished is None
+
+
+def test_finish_claimed_automation_task_updates_terminal_status_and_clears_lease(tmp_db: Path):
+    profile = db.create_profile("Automation Task Finish Lease")
+    task = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])
+    db.claim_next_automation_task(
+        lease_owner="worker-a",
+        lease_seconds=60,
+        now="2026-05-27T00:00:00+00:00",
+    )
+
+    wrong_owner = db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-b",
+        status="succeeded",
+        result={"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]},
+        error=None,
+        now="2026-05-27T00:00:30+00:00",
+    )
+    finished = db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-a",
+        status="succeeded",
+        result={"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]},
+        error=None,
+        now="2026-05-27T00:00:30+00:00",
+    )
+    second_finish = db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-a",
+        status="failed",
+        result={"steps": [{"index": 0, "type": "wait", "status": "failed"}]},
+        error="should not overwrite",
+        now="2026-05-27T00:00:40+00:00",
+    )
+
+    assert wrong_owner is None
+    assert finished is not None
+    assert finished["status"] == "succeeded"
+    assert finished["result"] == {"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]}
+    assert finished["error"] is None
+    assert finished["finished_at"] == "2026-05-27T00:00:30+00:00"
+    assert finished["lease_owner"] is None
+    assert finished["lease_expires_at"] is None
+    assert second_finish is None
+    assert db.get_automation_task(task["id"])["status"] == "succeeded"
+
+
+def test_finish_claimed_automation_task_rejects_non_terminal_status(tmp_db: Path):
+    profile = db.create_profile("Automation Task Finish Reject")
+    task = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])
+    db.claim_next_automation_task(lease_owner="worker-a", lease_seconds=60)
+
+    finished = db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-a",
+        status="running",
+        result={"steps": []},
+        error=None,
+    )
+
+    assert finished is None
+    assert db.get_automation_task(task["id"])["status"] == "running"
+
+
 # ── update_profile ───────────────────────────────────────────────────────────
 
 

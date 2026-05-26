@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task lease renew/finish 数据层小闭环：
+  - 新增 DB 层 `renew_automation_task_lease()`，只允许匹配当前 `lease_owner` 且状态允许的 task 续租。
+  - 续租时间按当前服务器时间或传入 `now` 重新计算为 `now + lease_seconds`，不在旧 lease 上累加。
+  - 新增 DB 层 `finish_claimed_automation_task()`，只允许匹配当前 `lease_owner` 的 `running` task 收束为 `succeeded | failed | cancelled`。
+  - 收束成功后写入 `status/result/error/finished_at`，并清空 `lease_owner`、`lease_expires_at`。
+  - owner 不匹配、状态不匹配、task 已收束或非终态 status 时返回 `None`，不覆盖既有 task 状态。
+  - 公开 task API 响应仍不暴露 `lease_owner`、`lease_expires_at`；该能力仍只服务后续内部 worker 池。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task claim/lease 数据层小闭环：
   - `automation_tasks` 表新增内部 worker lease 字段 `lease_owner`、`lease_expires_at`，并在 `init_db()` 中补齐既有数据库迁移。
   - 新增 DB 层 `claim_next_automation_task(lease_owner, lease_seconds, now=None)`，用于后续后台 worker 池领取 task。
