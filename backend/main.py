@@ -1494,6 +1494,9 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
                 and 1 <= step["timeout_ms"] <= 300_000
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
+        if step_type == "evaluate":
+            if isinstance(step.get("page_ref"), str):
+                redacted["page_ref"] = step["page_ref"]
         if step_type == "click":
             if isinstance(step.get("page_ref"), str):
                 redacted["page_ref"] = step["page_ref"]
@@ -1675,7 +1678,7 @@ async def run_automation_task(task_id: str):
     for index, step in enumerate(running_task["steps"]):
         step_type = step.get("type")
         if step_type != "wait":
-            if step_type not in {"click", "fill", "keyboard_type", "open_url", "scroll", "wait_for_selector"}:
+            if step_type not in {"click", "evaluate", "fill", "keyboard_type", "open_url", "scroll", "wait_for_selector"}:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(
                     task_id,
@@ -1710,6 +1713,25 @@ async def run_automation_task(task_id: str):
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
                     failed = _fail_automation_task(task_id, step_results, "Wait for selector step failed")
+                    return _automation_task_finished_response(failed, status_code=400)
+                step_results.append(_automation_task_step_result(index, step, "succeeded"))
+                continue
+
+            if step_type == "evaluate":
+                expression = _automation_step_str(step, "expression")
+                page_ref = _automation_step_str(step, "page_ref", "0") or "0"
+                if expression is None or not expression or len(expression) > 200_000:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Invalid evaluate step")
+                    return _automation_task_finished_response(failed, status_code=400)
+                try:
+                    _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
+                    await page.evaluate(expression)
+                except HTTPException:
+                    raise
+                except Exception:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Evaluate step failed")
                     return _automation_task_finished_response(failed, status_code=400)
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue

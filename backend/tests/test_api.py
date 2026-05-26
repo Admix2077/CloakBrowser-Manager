@@ -1146,6 +1146,52 @@ def test_automation_task_responses_redact_wait_for_selector_steps(app_client: Te
     assert "do-not-echo" not in str(cancel_resp.json())
 
 
+def test_automation_task_responses_redact_evaluate_steps(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskEvaluateRedactProfile"})
+    pid = create.json()["id"]
+    expression = "window.localStorage.getItem('account-token-super-secret')"
+    steps = [
+        {
+            "type": "evaluate",
+            "expression": expression,
+            "page_ref": "0",
+            "note": "do-not-echo",
+        },
+    ]
+    expected_steps = [{"type": "evaluate", "page_ref": "0"}]
+
+    create_resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+    task_id = create_resp.json()["id"]
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["steps"] == expected_steps
+    assert expression not in str(create_resp.json())
+    assert "super-secret" not in str(create_resp.json())
+    assert "do-not-echo" not in str(create_resp.json())
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    assert expression not in str(get_resp.json())
+    assert "super-secret" not in str(get_resp.json())
+    assert "do-not-echo" not in str(get_resp.json())
+
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["steps"] == expected_steps
+    assert expression not in str(list_resp.json())
+    assert "super-secret" not in str(list_resp.json())
+    assert "do-not-echo" not in str(list_resp.json())
+
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == expected_steps
+    assert expression not in str(cancel_resp.json())
+    assert "super-secret" not in str(cancel_resp.json())
+    assert "do-not-echo" not in str(cancel_resp.json())
+
+
 def test_automation_task_responses_redact_persisted_result_steps(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskResultRedactProfile"})
     pid = create.json()["id"]
@@ -1171,8 +1217,34 @@ def test_automation_task_responses_redact_persisted_result_steps(app_client: Tes
             "raw_url": secret_url,
         },
     )
+    evaluate_resp = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "evaluate", "expression": "window.secret"}],
+        },
+    )
+    evaluate_task_id = evaluate_resp.json()["id"]
+    main.db.update_automation_task(
+        evaluate_task_id,
+        status="succeeded",
+        result={
+            "steps": [
+                {
+                    "index": 0,
+                    "type": "evaluate",
+                    "status": "succeeded",
+                    "expression": "window.localStorage.getItem('super-secret')",
+                    "result": {"token": "super-secret"},
+                    "payload": {"token": "super-secret"},
+                }
+            ],
+            "raw_result": {"token": "super-secret"},
+        },
+    )
 
     get_resp = app_client.get(f"/api/tasks/{task_id}")
+    evaluate_get_resp = app_client.get(f"/api/tasks/{evaluate_task_id}")
     list_resp = app_client.get("/api/tasks")
 
     assert get_resp.status_code == 200
@@ -1180,10 +1252,22 @@ def test_automation_task_responses_redact_persisted_result_steps(app_client: Tes
     assert secret_url not in str(get_resp.json())
     assert "super-secret" not in str(get_resp.json())
 
+    assert evaluate_get_resp.status_code == 200
+    assert evaluate_get_resp.json()["result"] == {
+        "steps": [{"index": 0, "type": "evaluate", "status": "succeeded"}],
+    }
+    assert "window.localStorage" not in str(evaluate_get_resp.json())
+    assert "super-secret" not in str(evaluate_get_resp.json())
+
     assert list_resp.status_code == 200
     listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
     assert listed_task["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "succeeded"}]}
+    listed_evaluate_task = next(task for task in list_resp.json()["tasks"] if task["id"] == evaluate_task_id)
+    assert listed_evaluate_task["result"] == {
+        "steps": [{"index": 0, "type": "evaluate", "status": "succeeded"}],
+    }
     assert secret_url not in str(list_resp.json())
+    assert "window.localStorage" not in str(list_resp.json())
     assert "super-secret" not in str(list_resp.json())
 
 
@@ -1551,6 +1635,119 @@ def test_run_wait_for_selector_step_failure_uses_redacted_error(app_client: Test
     assert data["result"] == {"steps": [{"index": 0, "type": "wait_for_selector", "status": "failed"}]}
     assert data["error"] == "Wait for selector step failed"
     assert selector not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunEvaluateProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.evaluate.return_value = {"token": "result-token-super-secret"}
+    _automation_running_profile(pid, [page])
+    expression = "window.localStorage.getItem('account-token-super-secret')"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "evaluate",
+                    "expression": expression,
+                    "page_ref": "0",
+                    "note": "do-not-echo",
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.evaluate.assert_awaited_once_with(expression)
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "evaluate", "page_ref": "0"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "evaluate", "status": "succeeded"}]}
+    assert data["error"] is None
+    assert expression not in str(data)
+    assert "result-token-super-secret" not in str(data)
+    assert "super-secret" not in str(data)
+    assert "do-not-echo" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_evaluate_step_marks_failed_for_invalid_expression_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunEvaluateInvalidProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    secret_note = "account-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "evaluate", "expression": "", "note": secret_note}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "evaluate"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "evaluate", "status": "failed"}]}
+    assert data["error"] == "Invalid evaluate step"
+    assert secret_note not in str(data)
+    assert "super-secret" not in str(data)
+    page.evaluate.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_evaluate_step_marks_failed_for_non_string_expression_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunEvaluateNonStringProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    secret_note = "account-token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "evaluate", "expression": 123, "note": secret_note}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "evaluate"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "evaluate", "status": "failed"}]}
+    assert data["error"] == "Invalid evaluate step"
+    assert secret_note not in str(data)
+    assert "super-secret" not in str(data)
+    page.evaluate.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_evaluate_step_failure_uses_redacted_error(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunEvaluateFailureProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    expression = "window.localStorage.getItem('account-token-super-secret')"
+    page.evaluate.side_effect = RuntimeError(f"evaluate failed: {expression}")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "evaluate", "expression": expression}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "evaluate"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "evaluate", "status": "failed"}]}
+    assert data["error"] == "Evaluate step failed"
+    assert expression not in str(data)
     assert "super-secret" not in str(data)
     main.browser_mgr.running.pop(pid, None)
 

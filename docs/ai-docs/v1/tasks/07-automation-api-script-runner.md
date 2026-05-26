@@ -58,7 +58,7 @@
   - [x] fill。
   - [x] keyboard_type。
   - [x] scroll。
-  - [ ] evaluate。
+  - [x] evaluate。
   - [ ] screenshot。
 - [ ] 支持并发限制。
 - [ ] 支持失败重试。
@@ -278,6 +278,29 @@ cd frontend && npm run build
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_wait_for_selector_steps backend/tests/test_api.py::test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_wait_for_selector_step_marks_failed_for_invalid_selector_without_leaking_payload backend/tests/test_api.py::test_run_wait_for_selector_step_marks_failed_for_invalid_state backend/tests/test_api.py::test_run_wait_for_selector_step_marks_failed_for_bool_timeout backend/tests/test_api.py::test_run_wait_for_selector_step_uses_defaults backend/tests/test_api.py::test_run_wait_for_selector_step_failure_uses_redacted_error -q
 # 7 passed
+```
+
+## 2026-05-27 Automation Script Runner evaluate step 小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已支持 `evaluate` step。
+- step 格式：
+  - `type`: `evaluate`。
+  - `expression`: 必填字符串，长度 `1..200000`。
+  - `page_ref`: 可选，默认 `"0"`，可传 page index 或 page id。
+- 执行时复用已运行 profile 的既有 page 和 `page.evaluate(expression)`，不自动启动 profile，不创建新 page。
+- 成功后 task 按既有状态机进入 `succeeded`；非法 expression 进入 `failed` 并返回 `400`。
+- Playwright evaluate 执行异常进入 `failed` 并返回固定低敏错误 `Evaluate step failed`，不回显异常原文。
+- task 对外响应对 `evaluate` step 做白名单脱敏：只回显 `type/page_ref`，不回显 expression 或未知字段。
+- `result.steps[]` 只记录 `index/type/status`，不复制 expression、evaluate 返回值、完整 step payload 或异常原文。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、screenshot step。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps backend/tests/test_api.py::test_automation_task_responses_redact_evaluate_steps backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_evaluate_step_marks_failed_for_invalid_expression_without_leaking_payload backend/tests/test_api.py::test_run_evaluate_step_marks_failed_for_non_string_expression_without_leaking_payload backend/tests/test_api.py::test_run_evaluate_step_failure_uses_redacted_error -q
+# 6 passed
 ```
 
 ## 2026-05-27 Automation Script Runner click step 小闭环
