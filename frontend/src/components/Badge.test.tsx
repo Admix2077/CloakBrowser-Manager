@@ -17,13 +17,14 @@ describe("Badge system", () => {
     expect(screen.getByText("US").getAttribute("data-badge-type")).toBe("country");
   });
 
-  it("preserves tag colors without leaking layout concerns to callers", () => {
+  it("keeps custom tag tint while using readable text contrast", () => {
     render(<TagBadge tag="ready" color="#22c55e" />);
 
     const tag = screen.getByText("ready");
     expect(tag.getAttribute("data-badge-type")).toBe("tag");
     expect(tag.style.backgroundColor).toBe("rgba(34, 197, 94, 0.125)");
-    expect(tag.style.color).toBe("rgb(34, 197, 94)");
+    expect(tag.style.borderColor).toBe("rgba(34, 197, 94, 0.28)");
+    expect(tag.style.color).toBe("rgb(26, 127, 73)");
   });
 
   it("renders accessible dots for status-style badges", () => {

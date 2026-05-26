@@ -90,7 +90,7 @@ export function TagBadge({ tag, color }: { tag: string; color?: string | null })
       type="tag"
       tone="muted"
       className="max-w-full truncate"
-      style={color ? { backgroundColor: `${color}20`, color } : undefined}
+      style={getAccessibleTagStyle(color)}
       title={tag}
     >
       {tag}
@@ -112,4 +112,95 @@ export function ProxyBadge() {
       Proxy
     </Badge>
   );
+}
+
+function getAccessibleTagStyle(color?: string | null): CSSProperties | undefined {
+  const rgb = parseHexColor(color);
+  if (!rgb) return undefined;
+
+  const background = blend(rgb, WHITE, 0.125);
+  const text = getReadableTextColor(rgb, background);
+
+  return {
+    backgroundColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.125)`,
+    borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.28)`,
+    color: `rgb(${text.r}, ${text.g}, ${text.b})`,
+  };
+}
+
+const WHITE = { r: 255, g: 255, b: 255 };
+const SLATE_950 = { r: 15, g: 23, b: 42 };
+
+function parseHexColor(color?: string | null): { r: number; g: number; b: number } | null {
+  if (!color) return null;
+  const normalized = color.trim().replace(/^#/, "");
+  const expanded = normalized.length === 3
+    ? normalized.split("").map((char) => char + char).join("")
+    : normalized;
+  if (!/^[0-9a-fA-F]{6}$/.test(expanded)) return null;
+
+  return {
+    r: Number.parseInt(expanded.slice(0, 2), 16),
+    g: Number.parseInt(expanded.slice(2, 4), 16),
+    b: Number.parseInt(expanded.slice(4, 6), 16),
+  };
+}
+
+function getReadableTextColor(
+  color: { r: number; g: number; b: number },
+  background: { r: number; g: number; b: number },
+): { r: number; g: number; b: number } {
+  if (contrastRatio(color, background) >= 4.5) return color;
+
+  for (let amount = 0.15; amount <= 1; amount += 0.05) {
+    const candidate = mix(color, SLATE_950, amount);
+    if (contrastRatio(candidate, background) >= 4.5) return candidate;
+  }
+
+  return SLATE_950;
+}
+
+function blend(
+  foreground: { r: number; g: number; b: number },
+  background: { r: number; g: number; b: number },
+  alpha: number,
+): { r: number; g: number; b: number } {
+  return {
+    r: Math.round(foreground.r * alpha + background.r * (1 - alpha)),
+    g: Math.round(foreground.g * alpha + background.g * (1 - alpha)),
+    b: Math.round(foreground.b * alpha + background.b * (1 - alpha)),
+  };
+}
+
+function mix(
+  from: { r: number; g: number; b: number },
+  to: { r: number; g: number; b: number },
+  amount: number,
+): { r: number; g: number; b: number } {
+  return {
+    r: Math.round(from.r + (to.r - from.r) * amount),
+    g: Math.round(from.g + (to.g - from.g) * amount),
+    b: Math.round(from.b + (to.b - from.b) * amount),
+  };
+}
+
+function contrastRatio(
+  foreground: { r: number; g: number; b: number },
+  background: { r: number; g: number; b: number },
+): number {
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05)
+    / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+}
+
+function luminance({ r, g, b }: { r: number; g: number; b: number }): number {
+  return 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b);
+}
+
+function srgb(value: number): number {
+  const channel = value / 255;
+  return channel <= 0.03928
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
 }

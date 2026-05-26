@@ -534,7 +534,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
                   <h2 className="text-xl font-semibold tracking-tight text-slate-950">Profile operations</h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-slate-600">
                     {consoleStats.total} profiles · {consoleStats.running} running · {consoleStats.issues} need review
                   </p>
                 </div>

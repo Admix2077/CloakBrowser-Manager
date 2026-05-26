@@ -26,10 +26,10 @@ export function ProfileSummaryPanel({
         className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-4 text-sm text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
             Inspector
           </span>
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] border border-slate-200 bg-white text-slate-400">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] border border-slate-200 bg-white text-slate-500">
             <Monitor className="h-3.5 w-3.5" />
           </span>
         </div>
@@ -77,7 +77,7 @@ export function ProfileSummaryPanel({
               <h2 className="truncate text-sm font-semibold text-slate-950" title={profile.name}>
                 {profile.name}
               </h2>
-              <p className="mt-1 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</p>
+              <p className="mt-1 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</p>
             </div>
             <HealthBadge health={health} compact />
           </div>
@@ -176,7 +176,7 @@ function SummarySection({
         <span className={`flex h-5 w-5 items-center justify-center rounded-[5px] border ${
           priority === "primary"
             ? "border-blue-100 bg-blue-50 text-blue-600"
-            : "border-slate-200 bg-slate-50 text-slate-400"
+            : "border-slate-200 bg-slate-50 text-slate-600"
         }`}>
           {icon}
         </span>

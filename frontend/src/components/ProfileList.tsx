@@ -125,7 +125,7 @@ export function ProfileList({
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
               Saved views
             </span>
-            <span className="text-[11px] text-slate-400">{filtered.length} shown</span>
+            <span className="text-[11px] text-slate-600">{filtered.length} shown</span>
           </div>
           <div className="grid gap-1.5">
             {quickViews.map((view) => (
@@ -157,7 +157,7 @@ export function ProfileList({
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
             Profile shortcuts
           </span>
-          <span className="text-[11px] text-slate-400">filtered</span>
+          <span className="text-[11px] text-slate-600">filtered</span>
         </div>
       </div>
       <div
@@ -317,9 +317,9 @@ function QuickViewButton({
           : "border-transparent text-slate-600 hover:border-border hover:bg-surface-2 hover:text-slate-950 hover:shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
       }`}
     >
-      <span className={active ? "text-blue-600" : "text-slate-400"}>{icon}</span>
+      <span className={active ? "text-blue-600" : "text-slate-500"}>{icon}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span aria-hidden="true" className={`tabular-nums ${active ? "text-blue-600" : "text-slate-400"}`}>{count}</span>
+      <span aria-hidden="true" className={`tabular-nums ${active ? "text-blue-600" : "text-slate-600"}`}>{count}</span>
     </button>
   );
 }

@@ -63,7 +63,7 @@ cd frontend && npm run build
 - [x] 表单长字段不撑破容器。
 - [x] Viewer 工具条不遮挡 VNC。
 - [x] 批量操作栏不挡住主操作。
-- [ ] 浅色默认主题对比度足够。
+- [x] 浅色默认主题对比度足够。
 
 ## 2026-05-26 Profile 运营台 UI/UE 质感小闭环
 
@@ -805,4 +805,65 @@ rg -n -i "保证|不封号|封号|无法检测|不可检测|检测不到|防封|
 
 - 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
 - 没有改变 URL 凭证脱敏实现，只改用户可见说明文案。
+- 没有推送到任何远端仓库。
+
+## 2026-05-26 浅色主题对比度收口小闭环
+
+背景：
+
+- 继续推进 `11 UI 视觉系统与体验升级` 的最后一个浏览器检查项：`浅色默认主题对比度足够`。
+- 使用 `ui-ux-pro-max` 查询 B2B SaaS / operations dashboard 的可访问性准则，当前闭环采用普通文本至少 4.5:1、明显 focus、移动端不破版作为验收口径。
+- 本轮只处理 Profile operations 可见文本对比度和 tag badge 颜色算法，不改变虚拟滚动、批量操作、表格结构、后端、runtime 或 Project Mileage。
+
+已完成：
+
+- [x] `frontend/src/components/Badge.tsx`
+  - 自定义 `TagBadge` 继续保留业务色彩 tint。
+  - 文本色按 tint 背景自动向 slate 深色混合，直到达到 4.5:1 对比度。
+  - 无法解析的非 hex 色回退到既有 muted badge，不引入不确定 inline style。
+- [x] `frontend/src/components/ProfileList.tsx`
+  - 左侧 rail 的 `shown`、`filtered`、quick view count 等辅助文本从过浅 slate 调整为可读 slate。
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - 表格/移动卡片中的 profile 短 ID、field label、空值和 Tags label 调整为可读 slate。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector 空态、短 ID 和次级 section icon 文本色调整为可读 slate。
+- [x] `frontend/src/App.tsx`
+  - Profile operations 统计说明在浅色背景上改为更稳的 `text-slate-600`。
+- [x] `frontend/src/components/Badge.test.tsx`
+  - 覆盖自定义 tag 保留 tint，同时使用可读文本色。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/Badge.test.tsx
+# 红灯：1 failed, 2 passed
+# 失败点：旧测试要求 custom tag 文本使用原始亮色，和 4.5:1 对比度目标冲突
+
+cd frontend && npm test -- --run src/components/Badge.test.tsx
+# 1 passed, 3 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 166 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 安装 Google Chrome 后，Playwright MCP 可正常打开 `http://127.0.0.1:8095/`；此前 MCP 失败原因为系统缺少 `/opt/google/chrome/chrome`。
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x960`：
+  - 对当前 viewport 可见文本运行 contrast audit，普通文本阈值 4.5:1，大字阈值 3:1。
+  - JS 验证：`totalFailures=0`。
+  - 截图：`/tmp/cloakbrowser-contrast-screens/desktop-profile-contrast.png`。
+- 移动 `390x844`：
+  - JS 验证：`totalFailures=0`、`scrollWidth=390`、`clientWidth=390`。
+  - 截图：`/tmp/cloakbrowser-contrast-screens/mobile-profile-contrast.png`。
+- Playwright MCP console：0 errors、0 warnings。
+
+边界：
+
+- 没有修改后端、runtime、Docker 或 Project Mileage 仓库。
+- 没有改变 profile API、批量 health check、批量高风险 disabled 语义、表格虚拟滚动或移动端横向滚动策略。
 - 没有推送到任何远端仓库。

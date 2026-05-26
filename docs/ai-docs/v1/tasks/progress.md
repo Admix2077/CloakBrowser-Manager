@@ -27,7 +27,7 @@
 - [ ] 08 Cookie、Profile 导入导出：`08-cookie-profile-import-export.md`
 - [ ] 09 模板、批量创建与批量运营：`09-templates-bulk-ops.md`
 - [ ] 10 审计、安全与权限：`10-audit-security-rbac.md`
-- [ ] 11 UI 视觉系统与体验升级：`11-ui-visual-system.md`
+- [x] 11 UI 视觉系统与体验升级：`11-ui-visual-system.md`
 - [ ] 12 部署、观测与资源治理：`12-deployment-observability.md`
 - [ ] 13 总回归、交付与上线门禁：`13-regression-release.md`
 

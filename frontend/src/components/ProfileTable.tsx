@@ -702,7 +702,7 @@ function ProfileCard({
           >
             {profile.name}
           </button>
-          <div className="mt-0.5 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</div>
+          <div className="mt-0.5 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</div>
         </div>
         <button
           type="button"
@@ -739,11 +739,11 @@ function ProfileCard({
       </div>
 
       <div className="mt-3 flex min-w-0 items-center gap-1 overflow-hidden">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Tags</span>
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">Tags</span>
         {profile.tags.length > 0 ? profile.tags.map((tag) => (
           <TagBadge key={tag.tag} tag={tag.tag} color={tag.color} />
         )) : (
-          <span className="text-xs text-slate-400">-</span>
+          <span className="text-xs text-slate-600">-</span>
         )}
       </div>
     </article>
@@ -765,7 +765,7 @@ function CardField({
 
   return (
     <div className="min-w-0">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">{label}</div>
       <div
         className={`mt-0.5 flex min-w-0 truncate font-medium text-slate-700 ${mono ? "font-mono" : ""}`}
         title={valueTitle}
@@ -827,7 +827,7 @@ function ProfileTableRow({
         >
           {profile.name}
         </button>
-        <div className="mt-0.5 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</div>
       </td>
       <td className="truncate border-b border-slate-100 px-2 py-2">
         <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
@@ -856,7 +856,7 @@ function ProfileTableRow({
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
             <TagBadge key={tag.tag} tag={tag.tag} color={tag.color} />
           )) : (
-            <span className="text-slate-400">-</span>
+            <span className="text-slate-600">-</span>
           )}
         </div>
       </td>
