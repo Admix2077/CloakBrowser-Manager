@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { Lock, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
+import { Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles } from "./hooks/useProfiles";
 import { api, setOnUnauthorized, type Profile, type ProfileCreateData } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
@@ -8,6 +8,7 @@ import { ProfileViewer } from "./components/ProfileViewer";
 import { ProfileTable } from "./components/ProfileTable";
 import { ProfileFilters } from "./components/ProfileFilters";
 import { ProfileSummaryPanel } from "./components/ProfileSummaryPanel";
+import { ProxyManagerPage } from "./components/ProxyManagerPage";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
@@ -20,6 +21,7 @@ import {
 
 type AuthState = "checking" | "required" | "ok" | "error";
 type View = "empty" | "create" | "edit" | "view";
+type ConsoleSection = "profiles" | "proxies";
 
 function getInitialSidebarOpen(): boolean {
   return typeof window === "undefined" || window.innerWidth >= 768;
@@ -130,6 +132,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   } = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<View>("empty");
+  const [section, setSection] = useState<ConsoleSection>("profiles");
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [filters, setFilters] = useState<ProfileFilterState>(defaultProfileFilters);
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => new Set());
@@ -199,6 +202,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   }, [profiles]);
 
   const handleNew = useCallback(() => {
+    setSection("profiles");
     setSelectedId(null);
     setView("create");
   }, []);
@@ -339,7 +343,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   return (
     <div className="flex h-screen bg-[#f6f7f9] text-slate-900">
       {/* Sidebar */}
-      {sidebarOpen && (
+      {section === "profiles" && sidebarOpen && (
         <>
           <button
             type="button"
@@ -368,25 +372,60 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Top bar */}
         <div className="flex min-h-14 items-center justify-between overflow-hidden border-b border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur sm:px-4">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-surface-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-accent/20"
-              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            >
-              {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
-            </button>
+            {section === "profiles" && (
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-surface-2 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-accent/20"
+                title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              >
+                {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+              </button>
+            )}
+            <div className="flex items-center gap-1 rounded-[8px] border border-slate-200 bg-slate-50 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]">
+              <button
+                type="button"
+                aria-pressed={section === "profiles"}
+                onClick={() => setSection("profiles")}
+                className={`inline-flex h-7 items-center rounded-[6px] px-2.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                  section === "profiles"
+                    ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                }`}
+              >
+                Profiles
+              </button>
+              <button
+                type="button"
+                aria-pressed={section === "proxies"}
+                onClick={() => setSection("proxies")}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+                  section === "proxies"
+                    ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                }`}
+              >
+                <Network className="h-3.5 w-3.5" />
+                Proxy Manager
+              </button>
+            </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-950">Profiles</span>
-                <span className="rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
-                  {consoleStats.visible} shown
+                <span className="text-sm font-semibold text-slate-950">
+                  {section === "profiles" ? "Profiles" : "Proxy Manager"}
                 </span>
+                {section === "profiles" && (
+                  <span className="rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                    {consoleStats.visible} shown
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500">
-                {consoleStats.total} profiles · {consoleStats.running} running · {consoleStats.issues} need review
+                {section === "profiles"
+                  ? `${consoleStats.total} profiles · ${consoleStats.running} running · ${consoleStats.issues} need review`
+                  : "Proxy inventory · credential-safe URLs · read-only view"}
               </p>
             </div>
-            {selected && (
+            {section === "profiles" && selected && (
               <div className="hidden items-center gap-2 rounded-[7px] border border-slate-200 bg-slate-50 px-2.5 py-1.5 md:flex">
                 <StatusIndicator status={selected.status} size="md" />
                 <span className="max-w-[220px] truncate text-sm font-medium text-slate-700">{selected.name}</span>
@@ -394,15 +433,17 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             )}
           </div>
           <div className="flex min-w-0 shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleNew}
-              className="btn-primary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New Profile
-            </button>
-            {selected && (
+            {section === "profiles" && (
+              <button
+                type="button"
+                onClick={handleNew}
+                className="btn-primary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Profile
+              </button>
+            )}
+            {section === "profiles" && selected && (
               <LaunchButton
                 status={selected.status}
                 onLaunch={handleLaunch}
@@ -430,7 +471,11 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
 
         {/* Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {view === "empty" && (
+          {section === "proxies" && (
+            <ProxyManagerPage />
+          )}
+
+          {section === "profiles" && view === "empty" && (
             <div className="flex h-full min-h-0 flex-col gap-3 p-3 sm:p-4 lg:p-5">
               <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
                 <div className="min-w-0">
@@ -493,7 +538,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             </div>
           )}
 
-          {view === "create" && (
+          {section === "profiles" && view === "create" && (
             <ProfileForm
               profile={null}
               onSave={handleCreate}
@@ -501,7 +546,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             />
           )}
 
-          {view === "edit" && selected && (
+          {section === "profiles" && view === "edit" && selected && (
             <ProfileForm
               profile={selected}
               onSave={handleUpdate}
@@ -513,7 +558,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             />
           )}
 
-          {view === "view" && selected && selected.status === "running" && (
+          {section === "profiles" && view === "view" && selected && selected.status === "running" && (
             <ProfileViewer
               key={selected.id}
               profileId={selected.id}

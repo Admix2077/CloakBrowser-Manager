@@ -2819,3 +2819,100 @@ git diff --check
 - CSV 粘贴导入。
 - 真实 UI 批量检测交互。
 - `profiles.proxy` 到 `proxy_id` 的数据模型迁移。
+
+## 41. 2026-05-26 Proxy Manager 前端只读页面小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于已完成的后端 proxy API 和前端 API client，新增运营台里可访问的 Proxy Manager 页面。
+- 本轮只做只读资产列表，不做搜索、筛选、批量检测、CSV、分配 UI 或其它 mutation。
+- 使用 `ui-ux-pro-max` 查询 B2B SaaS operations dashboard / data table 方向：采用 data-dense dashboard、浅色高对比、稳定 hover/focus、表格横向滚动隔离。
+- 派发两个只读子 agent：
+  - 一个审计 App 架构、view 状态、测试 mock 和移动端约束。
+  - 一个审计 ProxyAsset 字段、URL 脱敏契约和只读 action 边界。
+
+已完成：
+
+- `frontend/src/components/ProxyManagerPage.tsx`
+  - 内部调用 `api.listProxies()`。
+  - 展示 Proxy Manager header、summary tiles、只读 proxy assets table。
+  - 列表展示 name、credential-safe URL、location、provider、health、last check、tags。
+  - 使用 `redactUrlCredentials()` 对 URL 和 error 文本做额外防护。
+  - 空状态和错误状态均不触发 mutation；Refresh 只重新拉取列表。
+- `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 新增只读列表、统计、脱敏、空状态、错误重试、横向滚动隔离测试。
+  - 明确断言页面不出现 delete / assign action。
+- `frontend/src/App.tsx`
+  - 新增顶层 `ConsoleSection = "profiles" | "proxies"`。
+  - 顶栏新增 `Profiles` / `Proxy Manager` section switch。
+  - Proxy Manager section 隐藏 Profile 专用 sidebar、`New Profile`、Launch/Stop、Profile table 和 inspector。
+- `frontend/src/App.test.tsx`
+  - 新增 section 切换测试，确认进入 Proxy Manager 后不渲染 Profile table 和 `New Profile`，返回 Profiles 后恢复。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 勾选 `前端新增 Proxy Manager 页面`。
+  - 追加本小闭环记录，并明确其它未完成范围。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 failed, no tests
+# 红灯：ProxyManagerPage 文件不存在
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 failed
+# 红灯：没有 Proxy Manager section 入口
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProxyManagerPage.test.tsx
+# 2 passed, 21 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 132 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- 第一轮在 `http://127.0.0.1:5173/` 上用 fetch patch 验证代理列表渲染和移动端宽度。
+- 第二轮启动隔离 QA 后端 `127.0.0.1:8093`，再用临时 Vite config 在 `http://127.0.0.1:5176/` 代理 `/api` 到该后端。
+- QA 后端 seed：
+  - 1 个 `Proxy Manager QA Profile`。
+  - 2 个 proxy assets：`Credential Pool` 和 `Broken JP Pool`。
+  - 两个 proxy URL 和其中一个 `last_check_error` 都包含凭据，用于验证 UI 不泄露密码。
+- 桌面 `1440x900`：
+  - 顶栏 `Proxy Manager` 可进入页面。
+  - `Proxy assets table` 可见，渲染 2 行。
+  - 文本包含脱敏后的 `http://proxy.example:8080` 和 `socks5://jp.proxy.example:1080`。
+  - 页面文本不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+  - `document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- 移动 `390x844`：
+  - `Proxy Manager` 页面可见。
+  - `Proxy assets table` 自身横向滚动，body 不横向撑破。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 页面文本不包含 `hiddenpass` 或 `topsecret`。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-v1-screens/desktop-proxy-manager.png`
+- `/tmp/cloakbrowser-proxy-manager-v1-screens/mobile-proxy-manager.png`
+- `/tmp/cloakbrowser-proxy-manager-v1-screens/desktop-proxy-manager-real-api.png`
+- `/tmp/cloakbrowser-proxy-manager-v1-screens/mobile-proxy-manager-real-api.png`
+
+仍未做：
+
+- 搜索、筛选、按国家/provider/tag 过滤。
+- 单个检测 / 批量检测 UI。
+- 新建 / 编辑 / 删除 proxy UI。
+- 前端 Proxy Manager 分配入口。
+- CSV 粘贴导入。
+- `profiles.proxy` 到 `proxy_id` 的数据模型迁移。

@@ -36,6 +36,15 @@ vi.mock("./components/ProfileViewer", () => ({
   ),
 }));
 
+vi.mock("./components/ProxyManagerPage", () => ({
+  ProxyManagerPage: () => (
+    <section role="region" aria-label="Proxy Manager">
+      <h2>Proxy Manager</h2>
+      <p>Proxy Manager page</p>
+    </section>
+  ),
+}));
+
 import { api } from "./lib/api";
 import { useProfiles } from "./hooks/useProfiles";
 
@@ -176,6 +185,22 @@ function tableProfileNames(): string[] {
 }
 
 describe("App operations console", () => {
+  it("switches between profile operations and the Proxy Manager section", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Proxy Manager" }));
+
+    expect(screen.getByRole("region", { name: "Proxy Manager" })).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("button", { name: "New Profile" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
+
+    expect(await screen.findByRole("table")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "New Profile" }).length).toBeGreaterThan(0);
+  });
+
   it("keeps profile creation reachable from the operations console", async () => {
     render(<App />);
 

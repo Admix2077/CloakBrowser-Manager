@@ -45,7 +45,7 @@
   - [x] 后端 `POST /api/proxies/{id}/assign` 将 proxy asset 分配给 profiles。
   - [ ] 前端 Proxy Manager 分配入口。
 - [x] 支持从 profile 当前 proxy 保存为 proxy asset。
-- [ ] 前端新增 Proxy Manager 页面。
+- [x] 前端新增 Proxy Manager 页面。
 - [ ] 支持搜索、筛选、批量检测。
 - [ ] 支持按国家、provider、tag 筛选。
 - [ ] 支持 CSV 粘贴导入第一版。
@@ -485,3 +485,93 @@ git diff --check
 - CSV 粘贴导入未做。
 - 不迁移 `profiles.proxy` 为 `proxy_id`。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 2026-05-26 Proxy Manager 前端只读页面小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，在前端 API client 已覆盖后，新增 Proxy Manager 最小可见页面，让运营者能从主界面查看 proxy asset 库。
+- 本小闭环只接入 `GET /api/proxies` 做只读列表和脱敏展示，不接线新增、编辑、删除、单个检测、批量检测、分配到 profile、CSV 导入或搜索筛选。
+- UI 方向继续遵守 B2B data-dense operations console：紧凑统计、稳定表格、浅色高对比、移动端不撑破 body。
+
+红灯确认：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 failed, no tests
+# ./ProxyManagerPage 组件不存在
+
+cd frontend && npm test -- --run src/App.test.tsx
+# 1 failed
+# 当前没有 Proxy Manager section 入口
+```
+
+已完成：
+
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - 内部调用 `api.listProxies()` 加载 proxy assets。
+  - 展示 total / good / needs review / unchecked summary。
+  - 展示只读 proxy assets table：name、credential-safe URL、location、provider、health、last check、tags。
+  - 对 URL 和检测错误文本额外执行 `redactUrlCredentials()`，即使 mock 或异常文本带凭据也不会渲染密码。
+  - 空状态明确说明 API 创建的 proxy asset 会显示在此处。
+  - 错误状态提供只读 refresh/retry，不触发 mutation。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖只读列表、统计、脱敏 URL、error message、空状态、横向滚动隔离。
+  - 覆盖页面不出现 Delete / Assign 等高风险 mutation action。
+- [x] `frontend/src/App.tsx`
+  - 新增顶层 section switch：`Profiles` / `Proxy Manager`。
+  - Proxy Manager section 隐藏 Profile 专用 sidebar、`New Profile`、Launch/Stop 和 Profile table。
+  - 返回 Profiles 时保留原 Profile operations 工作流。
+- [x] `frontend/src/App.test.tsx`
+  - 覆盖 Profile operations 与 Proxy Manager section 来回切换。
+
+范围说明：
+
+- 前端 Proxy Manager 页面当前是只读列表，不代表搜索、筛选、批量检测交互完成。
+- 前端 Proxy Manager 分配入口未做，因此顶层 `支持将 proxy 分配到 profile` 暂不勾选完成。
+- 单个检测 / 批量检测按钮未接线。
+- 新建 / 编辑 / 删除 proxy UI 未做。
+- 按国家、provider、tag 筛选未做。
+- CSV 粘贴导入未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProxyManagerPage.test.tsx
+# 2 passed, 21 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 132 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:5176/`，通过临时 Vite config 代理 `/api` 到隔离 QA 后端 `127.0.0.1:8093`。
+- QA 后端 seed 了 1 个 profile 和 2 个 proxy assets，其中 proxy URL 与 `last_check_error` 均包含凭据，用于验证 UI 脱敏。
+- 桌面 `1440x900`：
+  - `Proxy Manager` section 可从顶栏进入。
+  - `Proxy assets table` 显示 2 行 proxy assets。
+  - 表格区域 `overflow: auto`，`document.documentElement.scrollWidth === window.innerWidth === 1440`。
+  - 页面文本不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+- 移动 `390x844`：
+  - Proxy Manager 页面可见。
+  - 表格横向滚动限制在 `Proxy assets table` 区域。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 页面文本不包含 `hiddenpass` 或 `topsecret`。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-v1-screens/desktop-proxy-manager-real-api.png`
+- `/tmp/cloakbrowser-proxy-manager-v1-screens/mobile-proxy-manager-real-api.png`
