@@ -331,6 +331,73 @@ describe("App operations console", () => {
     expect(tableProfileNames()[0]).toContain("Alpha Good");
   });
 
+  it("shows a no-profile empty state that keeps creation one click away", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [],
+      healthByProfileId: {},
+      loading: false,
+      error: null,
+      create: mockCreate,
+      update: mockUpdate,
+      remove: mockRemove,
+      launch: mockLaunch,
+      stop: mockStop,
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("status", { name: "No profiles yet" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    expect(await screen.findByRole("heading", { name: "New Profile" })).toBeTruthy();
+  });
+
+  it("shows a filtered-empty state and clears filters back to the table", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Search profiles"), { target: { value: "does-not-exist" } });
+
+    expect(screen.getByRole("status", { name: "No profiles match these filters" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+
+    expect(tableProfileNames()).toHaveLength(2);
+    expect((screen.getByLabelText("Search profiles") as HTMLInputElement).value).toBe("");
+  });
+
+  it("surfaces an all-unknown health state without blocking table operations", async () => {
+    mockUseProfiles.mockReturnValue({
+      profiles: [
+        profile({ id: "unknown-a", name: "Unknown A" }),
+        profile({ id: "unknown-b", name: "Unknown B" }),
+      ],
+      healthByProfileId: {},
+      loading: false,
+      error: null,
+      create: mockCreate,
+      update: mockUpdate,
+      remove: mockRemove,
+      launch: mockLaunch,
+      stop: mockStop,
+      checkHealth: mockCheckHealth,
+      launchProfiles: mockLaunchProfiles,
+      stopProfiles: mockStopProfiles,
+      addTagsToProfiles: mockAddTagsToProfiles,
+      deleteProfiles: mockDeleteProfiles,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByRole("status", { name: "Health not checked yet" })).toBeTruthy();
+    expect(screen.getByText("2 visible profiles do not have health results yet. Select them and run Check health when ready.")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("table")).getByRole("button", { name: "Open Unknown A" }));
+    expect(await screen.findByRole("heading", { name: "Edit Profile" })).toBeTruthy();
+  });
+
   it("starts with the sidebar collapsed on narrow screens while keeping main operations filters available", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,

@@ -76,7 +76,7 @@
   - quick actions。
 - [x] 保留创建/编辑 profile 能力。
 - [x] 保留 VNC viewer 能力。
-- [ ] 空态拆分：
+- [x] 空态拆分：
   - 无 profile。
   - 筛选无结果。
   - health 未检测。
@@ -1404,4 +1404,87 @@ git diff --check
 
 - 本轮没有改 VNC proxy / noVNC 生产实现。
 - 本轮没有做真实 KasmVNC 二进制启动复验；当前 host 环境缺少 `Xvnc`，真实端到端 VNC 启动应在 Docker/运行时回归中补验。
-- 03 模块仍未完成：空态拆分、窄屏 card list 待后续。
+- 当时 03 模块仍未完成：空态拆分、窄屏 card list 待后续；本轮后空态拆分已完成。
+
+## 2026-05-26 Profile 运营台空态拆分小闭环
+
+背景：
+
+- 03 模块剩余空态拆分：无 profile、筛选无结果、health 未检测。
+- 本轮在已完成的高质感 UI polish、批量动作和虚拟滚动语义上补齐空态体验，不重构主表和批量能力。
+- 继续采用 `ui-ux-pro-max` 的 Data-Dense Dashboard 方向：浅色、低噪声、明确 CTA、稳定 hover/focus，不做炫技装饰。
+
+已完成：
+
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - 新增 `totalProfileCount`、`hasActiveFilters`、`onCreateProfile`、`onClearFilters` props。
+  - `profiles.length === 0 && totalProfileCount === 0` 显示 `No profiles yet`，提供 `Create profile` CTA。
+  - `profiles.length === 0 && totalProfileCount !== 0` 显示 `No profiles match these filters`，提供 `Clear filters` CTA。
+  - 可见 rows 全部缺失 health 或 health 为 `unknown` 时显示轻量 `Health not checked yet` 提示；不隐藏 table rows，不影响 `Open` action。
+  - 保持 table region `overflow-auto`、内层 `min-w-[840px]`、12 列、select-all disabled、固定行高和 120 条阈值虚拟滚动。
+- [x] `frontend/src/App.tsx`
+  - 增加 `profileFiltersEqual()`，计算 `hasActiveFilters`。
+  - 向 `ProfileTable` 传入 profile 总数、筛选状态、创建 profile 和清空筛选动作。
+- [x] `frontend/src/components/ProfileTable.test.tsx`
+  - 覆盖首次无 profile 空态和 `Create profile`。
+  - 覆盖筛选无结果空态和 `Clear filters`。
+  - 覆盖 health 未检测提示不遮挡 rows。
+  - 覆盖虚拟滚动 reset 后不残留旧 row。
+- [x] `frontend/src/App.test.tsx`
+  - 覆盖空库时从空态一键进入创建页。
+  - 覆盖搜索无结果后 `Clear filters` 恢复 table。
+  - 覆盖 all-unknown health 提示存在且 table `Open` 仍可进入编辑页。
+
+保持不变：
+
+- `Actions` / `Open` 仍在桌面和移动横向滚动中可访问。
+- 移动端 body 不横向撑破；横向滚动只发生在 table region。
+- 批量 `Check health` 仍真实调用后端。
+- 批量 delete 仍需 `DELETE` 确认；高风险动作没有放开。
+- 数百 profile 主表虚拟滚动和左侧列表虚拟滚动语义不变。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 45 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 110 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:18181/`。
+- QA 数据目录：`/tmp/cloakbrowser-empty-qa-data`。
+- 桌面 `1440x900`：
+  - 空库显示 `No profiles yet`，`Create profile` CTA 可见。
+  - 创建 2 个 QA profile 后，health 未检测提示显示在 table 上方，rows 和 `Open` action 仍可见。
+  - select all 后 bulk bar 显示，`Check health` 真实调用后端；检测后 good / error health 状态参与 risk-first 排序。
+  - 搜索 `does-not-exist` 后显示 `No profiles match these filters`，点击 `Clear filters` 恢复 2 行 table。
+- 移动 `390x844`：
+  - 初始 sidebar 收起，主区保留 filter toolbar 和 table。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - `Profile operations table` 的 `overflow` 为 `auto`，横向滚动仍由 table 自身承担。
+- `agent-browser console --clear` / `agent-browser errors --clear` 无相关应用错误。
+
+截图：
+
+- `/tmp/cloakbrowser-polish-screens/no-profiles-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/health-unknown-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/bulk-selected-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/bulk-check-health-after.png`
+- `/tmp/cloakbrowser-polish-screens/filtered-empty-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/mobile-table.png`
+
+仍未做：
+
+- 窄屏 card list 未做；当前窄屏继续采用主表自身横向滚动。
+- 03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

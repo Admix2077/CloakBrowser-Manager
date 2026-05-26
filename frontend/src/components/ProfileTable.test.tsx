@@ -509,7 +509,8 @@ describe("ProfileTable", () => {
     expect(document.body.innerHTML).not.toContain("user:hiddenpass");
   });
 
-  it("renders a filtered-empty state without hiding table controls", () => {
+  it("renders a first-run empty state with a create action", () => {
+    const onCreateProfile = vi.fn();
     render(
       <ProfileTable
         profiles={[]}
@@ -518,10 +519,52 @@ describe("ProfileTable", () => {
         selectedProfileIds={new Set()}
         onToggleProfileSelection={vi.fn()}
         onToggleVisibleSelection={vi.fn()}
+        totalProfileCount={0}
+        onCreateProfile={onCreateProfile}
       />,
     );
 
-    expect(screen.getByText("No profiles in this view")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "No profiles yet" })).toBeTruthy();
+    expect(screen.getByText("Create the first profile to start tracking runtime, proxy, GeoIP, and fingerprint health.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Create profile" }));
+    expect(onCreateProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a filtered-empty state with a clear filters action", () => {
+    const onClearFilters = vi.fn();
+    render(
+      <ProfileTable
+        profiles={[]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+        onToggleVisibleSelection={vi.fn()}
+        totalProfileCount={8}
+        hasActiveFilters
+        onClearFilters={onClearFilters}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "No profiles match these filters" })).toBeTruthy();
+    expect(screen.getByText("Clear or adjust filters to bring profiles back into the operations table.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    expect(onClearFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces the health-not-checked state without hiding profile rows", () => {
+    render(
+      <ProfileTable
+        profiles={[profile({ id: "unknown-a", name: "Unknown A" }), profile({ id: "unknown-b", name: "Unknown B" })]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: "Health not checked yet" })).toBeTruthy();
+    expect(screen.getByText("2 visible profiles do not have health results yet. Select them and run Check health when ready.")).toBeTruthy();
+    expect(screen.getByText("Unknown A")).toBeTruthy();
+    expect(screen.getByText("Unknown B")).toBeTruthy();
   });
 
   it("virtualizes large profile tables while keeping row actions usable", () => {
@@ -617,7 +660,7 @@ describe("ProfileTable", () => {
       />,
     );
 
-    expect(screen.getByText("No profiles in this view")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "No profiles match these filters" })).toBeTruthy();
     expect(screen.queryByText("Table Profile 120")).toBeNull();
     expect((screen.getByLabelText("Select all visible profiles") as HTMLInputElement).disabled).toBe(true);
   });

@@ -1,5 +1,6 @@
-import { ArrowRight, Check, Minus } from "lucide-react";
+import { ArrowRight, Check, FilterX, HeartPulse, Minus, PlusCircle } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
 import { BulkActionBar } from "./BulkActionBar";
@@ -32,6 +33,10 @@ interface ProfileTableProps {
   taggingSelectedProfiles?: boolean;
   onDeleteSelectedProfiles?: (ids: string[]) => Promise<void> | void;
   deletingSelectedProfiles?: boolean;
+  totalProfileCount?: number;
+  hasActiveFilters?: boolean;
+  onCreateProfile?: () => void;
+  onClearFilters?: () => void;
 }
 
 export function ProfileTable({
@@ -54,6 +59,10 @@ export function ProfileTable({
   taggingSelectedProfiles = false,
   onDeleteSelectedProfiles,
   deletingSelectedProfiles = false,
+  totalProfileCount,
+  hasActiveFilters = false,
+  onCreateProfile,
+  onClearFilters,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -80,6 +89,16 @@ export function ProfileTable({
     ? (profiles.length - virtualWindow.end) * PROFILE_TABLE_ROW_HEIGHT
     : 0;
   const profileWindowKey = filteredIds.join("\u0000");
+  const emptyState = profiles.length === 0
+    ? totalProfileCount === 0
+      ? "first-run"
+      : "filtered"
+    : null;
+  const unknownHealthCount = profiles.filter((profile) => {
+    const status = healthByProfileId[profile.id]?.status;
+    return !status || status === "unknown";
+  }).length;
+  const showHealthNotCheckedNotice = profiles.length > 0 && unknownHealthCount === profiles.length;
 
   useLayoutEffect(() => {
     const scrollContainer = scrollRef.current;
@@ -144,6 +163,22 @@ export function ProfileTable({
             deleting={deletingSelectedProfiles}
           />
         )}
+        {showHealthNotCheckedNotice && (
+          <div
+            role="status"
+            aria-label="Health not checked yet"
+            className="border-b border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-blue-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
+          >
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-700 shadow-hairline">
+                <HeartPulse className="h-3.5 w-3.5" />
+              </span>
+              <p>
+                {profiles.length} visible profile{profiles.length === 1 ? "" : "s"} do not have health results yet. Select {profiles.length === 1 ? "it" : "them"} and run Check health when ready.
+              </p>
+            </div>
+          </div>
+        )}
         <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs text-slate-700">
           <colgroup>
             <col style={{ width: 42 }} />
@@ -185,10 +220,30 @@ export function ProfileTable({
             </tr>
           </thead>
           <tbody>
-            {profiles.length === 0 ? (
+            {emptyState ? (
               <tr>
-                <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
-                  No profiles in this view
+                <td colSpan={12} className="px-4 py-10">
+                  {emptyState === "first-run" ? (
+                    <ProfileTableEmptyState
+                      icon={<PlusCircle className="h-4 w-4" />}
+                      label="No profiles yet"
+                      title="No profiles yet"
+                      description="Create the first profile to start tracking runtime, proxy, GeoIP, and fingerprint health."
+                      actionLabel="Create profile"
+                      onAction={onCreateProfile}
+                    />
+                  ) : (
+                    <ProfileTableEmptyState
+                      icon={<FilterX className="h-4 w-4" />}
+                      label="No profiles match these filters"
+                      title="No profiles match these filters"
+                      description={hasActiveFilters
+                        ? "Clear or adjust filters to bring profiles back into the operations table."
+                        : "No profiles are available in this table view."}
+                      actionLabel={onClearFilters ? "Clear filters" : undefined}
+                      onAction={onClearFilters}
+                    />
+                  )}
                 </td>
               </tr>
             ) : (
@@ -212,6 +267,46 @@ export function ProfileTable({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function ProfileTableEmptyState({
+  icon,
+  label,
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  icon: ReactNode;
+  label: string;
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      aria-label={label}
+      className="mx-auto flex max-w-[420px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 px-6 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+    >
+      <span className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-hairline">
+        {icon}
+      </span>
+      <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+      <p className="mt-1.5 text-sm leading-5 text-slate-500">{description}</p>
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          className="mt-4 inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-blue-600 bg-blue-600 px-3 text-xs font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.18),inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:border-blue-700 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+          onClick={onAction}
+        >
+          {actionLabel === "Create profile" ? <PlusCircle className="h-3.5 w-3.5" /> : <FilterX className="h-3.5 w-3.5" />}
+          {actionLabel}
+        </button>
+      )}
     </div>
   );
 }

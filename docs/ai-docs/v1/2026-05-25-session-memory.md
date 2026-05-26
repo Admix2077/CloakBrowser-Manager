@@ -1859,6 +1859,77 @@ git diff --check
 仍未做：
 
 - 真实 KasmVNC / `Xvnc` 二进制启动端到端复验，需在 Docker/运行时回归补验。
-- 03 剩余：空态拆分、窄屏 card list。
+- 当时 03 剩余：空态拆分、窄屏 card list；本轮后空态拆分已完成。
 
 03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 28. 2026-05-26 Profile 运营台空态拆分小闭环
+
+背景：
+
+- 03 模块剩余空态拆分：无 profile、筛选无结果、health 未检测。
+- 本轮在已完成 UI polish、bulk action 和虚拟滚动基础上补齐空态体验，不重构运营台主结构。
+- `ui-ux-pro-max` 本轮设计系统仍采用 Data-Dense Dashboard：浅色、专业 B2B、低噪声、明确 CTA 和稳定 focus。
+
+本轮实现：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - 新增 `totalProfileCount`、`hasActiveFilters`、`onCreateProfile`、`onClearFilters`。
+  - 空库显示 `No profiles yet` 和 `Create profile`。
+  - 筛选无结果显示 `No profiles match these filters` 和 `Clear filters`。
+  - 可见 rows 全部 health 缺失或 `unknown` 时显示 `Health not checked yet` 提示，不遮挡 rows 和 `Open` action。
+  - 保留 `min-w-[840px]`、table 自身横向滚动、固定 64px 行高和主表虚拟滚动。
+- `frontend/src/App.tsx`
+  - 增加 `profileFiltersEqual()` 和 `hasActiveFilters`。
+  - 将 profile 总数、清空筛选和创建 profile 动作传给 `ProfileTable`。
+- `frontend/src/components/ProfileTable.test.tsx`
+  - 覆盖首次空态、筛选空态、health 未检测提示和虚拟滚动 reset。
+- `frontend/src/App.test.tsx`
+  - 覆盖空态创建、筛选空态清空、health 未检测不阻塞 table 操作。
+- `docs/ai-docs/v1/tasks/03-profile-operations-console.md`
+  - `空态拆分` 已勾选，并追加本轮记录。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/App.test.tsx
+# 2 passed, 45 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 110 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+```
+
+浏览器证据：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:18181/`。
+- QA 数据目录：`/tmp/cloakbrowser-empty-qa-data`。
+- 桌面 `1440x900`：
+  - 空库 `No profiles yet` 可见。
+  - 2 个 profile 下 `Health not checked yet` 可见，table rows / Actions 仍可见。
+  - select all 后 bulk bar 可见，`Check health` 真实调用后端并更新 risk-first 状态。
+  - 搜索无结果显示 `No profiles match these filters`，`Clear filters` 恢复 rows。
+- 移动 `390x844`：
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - table region `overflow === "auto"`，横向滚动不撑破 body。
+- `agent-browser console --clear` / `agent-browser errors --clear` 无相关应用错误。
+
+截图：
+
+- `/tmp/cloakbrowser-polish-screens/no-profiles-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/health-unknown-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/bulk-selected-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/bulk-check-health-after.png`
+- `/tmp/cloakbrowser-polish-screens/filtered-empty-desktop.png`
+- `/tmp/cloakbrowser-polish-screens/mobile-table.png`
+
+仍未做：
+
+- 03 剩余：窄屏 card list。
+- 03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

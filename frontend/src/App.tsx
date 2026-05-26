@@ -25,6 +25,16 @@ function getInitialSidebarOpen(): boolean {
   return typeof window === "undefined" || window.innerWidth >= 768;
 }
 
+function profileFiltersEqual(a: ProfileFilterState, b: ProfileFilterState): boolean {
+  return a.search === b.search
+    && a.status === b.status
+    && a.health === b.health
+    && a.proxy === b.proxy
+    && a.country === b.country
+    && a.tag === b.tag
+    && a.sortBy === b.sortBy;
+}
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [authRequired, setAuthRequired] = useState(false);
@@ -138,6 +148,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const filteredProfiles = useMemo(
     () => filterAndSortProfiles(profiles, healthByProfileId, filters),
     [filters, healthByProfileId, profiles],
+  );
+  const hasActiveFilters = useMemo(
+    () => !profileFiltersEqual(filters, defaultProfileFilters),
+    [filters],
   );
   const previewProfile = useMemo(() => {
     const firstProfile = filteredProfiles[0];
@@ -462,6 +476,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     taggingSelectedProfiles={bulkTagging}
                     onDeleteSelectedProfiles={handleDeleteSelectedProfiles}
                     deletingSelectedProfiles={bulkDeleting}
+                    totalProfileCount={profiles.length}
+                    hasActiveFilters={hasActiveFilters}
+                    onCreateProfile={handleNew}
+                    onClearFilters={() => setFilters(defaultProfileFilters)}
                   />
                 </div>
                 <div className="min-h-[360px] min-w-0 lg:min-h-0">
