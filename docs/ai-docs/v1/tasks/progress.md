@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task profile 过滤小闭环：
+  - `GET /api/tasks` 支持可选 `profile_id` query。
+  - 未传 `profile_id` 时保持原行为：返回所有已持久化 task，并按 `created_at desc` 排序。
+  - 传入 `profile_id` 时只返回该 profile 的 task，并继续按 `created_at desc` 排序。
+  - profile 不存在时返回 `404 Profile not found`，避免把无效 profile 误读为空任务列表。
+  - 过滤后的对外响应继续复用统一 `AutomationTaskResponse` 脱敏；`open_url.url`、query、fragment、token 和未知字段不会回显。
+  - 当前仍未提供分页或权限隔离；`GET /api/tasks` 仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
+  - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task profile 并发限制小闭环：
   - `POST /api/tasks/{id}/run` 已增加 profile 级并发限制。
   - 同一个 `profile_id` 已存在其他 `running` task 时，新的 queued task run 返回 `409`。
@@ -135,11 +143,11 @@
   - 当前仍未实现后台队列、并发限制、失败重试、running cancel、click/fill/scroll/evaluate/screenshot step。
 - 本轮继续 07 Automation API 与脚本运行器，完成 task 列表与取消小闭环：
   - 新增 `AutomationTasksResponse`。
-  - 新增 `GET /api/tasks`：返回所有已持久化 task，并按 `created_at desc` 让最新 task 在前。
+  - 新增 `GET /api/tasks`：返回所有已持久化 task，并按 `created_at desc` 让最新 task 在前；当前已支持可选 `profile_id` query 过滤。
   - 新增 `POST /api/tasks/{id}/cancel`：只允许取消 `queued` task。
   - 取消成功后 task 状态更新为 `cancelled`，并写入 `finished_at`。
   - task 不存在时返回 `404`；非 `queued` task 返回 `409`，避免把运行中、已完成或失败 task 伪装成可取消成功。
-  - `GET /api/tasks` 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+  - `GET /api/tasks` 当前未提供分页或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
   - cancel 当前不停止运行中的 Playwright 操作；运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
   - 本小闭环不执行脚本，不启动 profile，不读取敏感配置，不写 Project Mileage 钱包、订单、权限或续期逻辑。
   - 当前仍未实现并发限制、失败重试和 step 执行器。

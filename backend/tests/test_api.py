@@ -1418,6 +1418,70 @@ def test_list_automation_tasks_returns_newest_tasks(app_client: TestClient):
     assert task_ids[:2] == [second["id"], first["id"]]
 
 
+def test_list_automation_tasks_filters_by_profile(app_client: TestClient):
+    first_profile = app_client.post("/api/profiles", json={"name": "TaskListFilterFirst"}).json()["id"]
+    second_profile = app_client.post("/api/profiles", json={"name": "TaskListFilterSecond"}).json()["id"]
+    first_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": first_profile, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    app_client.post(
+        "/api/tasks",
+        json={"profile_id": second_profile, "steps": [{"type": "wait", "ms": 2}]},
+    )
+
+    resp = app_client.get(f"/api/tasks?profile_id={first_profile}")
+
+    assert resp.status_code == 200
+    assert [task["id"] for task in resp.json()["tasks"]] == [first_task["id"]]
+
+
+def test_list_automation_tasks_filter_rejects_missing_profile(app_client: TestClient):
+    resp = app_client.get("/api/tasks?profile_id=missing")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Profile not found"
+
+
+def test_list_automation_tasks_filter_keeps_steps_redacted(app_client: TestClient):
+    pid = app_client.post("/api/profiles", json={"name": "TaskListFilterRedact"}).json()["id"]
+    secret_url = "https://example.com/account?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "open_url",
+                    "url": secret_url,
+                    "page_ref": "0",
+                    "wait_until": "domcontentloaded",
+                    "timeout_ms": 5000,
+                }
+            ],
+        },
+    ).json()
+
+    resp = app_client.get(f"/api/tasks?profile_id={pid}")
+
+    assert resp.status_code == 200
+    assert resp.json()["tasks"] == [
+        {
+            **task,
+            "steps": [
+                {
+                    "type": "open_url",
+                    "page_ref": "0",
+                    "wait_until": "domcontentloaded",
+                    "timeout_ms": 5000,
+                }
+            ],
+        }
+    ]
+    assert secret_url not in str(resp.json())
+    assert "super-secret" not in str(resp.json())
+
+
 def test_cancel_queued_automation_task_marks_cancelled(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskCancelProfile"})
     pid = create.json()["id"]

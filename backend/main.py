@@ -1663,8 +1663,10 @@ async def create_automation_task(req: AutomationTaskCreate):
 
 
 @app.get("/api/tasks", response_model=AutomationTasksResponse)
-async def list_automation_tasks():
-    tasks = db.list_automation_tasks()
+async def list_automation_tasks(profile_id: str | None = None):
+    if profile_id is not None and db.get_profile(profile_id) is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    tasks = db.list_automation_tasks(profile_id=profile_id)
     return AutomationTasksResponse(tasks=[_automation_task_response(task) for task in tasks])
 
 

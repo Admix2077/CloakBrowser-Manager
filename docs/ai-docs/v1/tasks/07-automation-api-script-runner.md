@@ -177,7 +177,8 @@ cd frontend && npm run build
   - 返回所有已持久化 task。
   - 按 `created_at desc` 排序，最新 task 在前。
   - 对外响应中的 `steps` 统一走白名单脱敏。
-  - 当前未提供分页、profile 过滤或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+  - 支持可选 `profile_id` query 过滤；profile 不存在时返回 `404 Profile not found`。
+  - 当前未提供分页或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - 已新增 `POST /api/tasks/{id}/cancel`：
   - 只允许取消 `queued` task。
   - 成功后将 task 状态更新为 `cancelled`。
@@ -187,6 +188,31 @@ cd frontend && npm run build
   - 当前不停止运行中的 Playwright 操作；运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
 - 本小闭环不执行脚本，不启动 profile，不读取敏感配置，不写 Project Mileage 钱包、订单、权限或续期逻辑。
 - 当前仍未实现并发限制、失败重试和 step 执行器。
+
+## 2026-05-27 Automation task profile 过滤小闭环
+
+当前状态：
+
+- `GET /api/tasks` 支持可选 `profile_id` query。
+- 未传 `profile_id` 时保持原行为：返回所有已持久化 task，并按 `created_at desc` 排序。
+- 传入 `profile_id` 时只返回该 profile 的 task，并继续按 `created_at desc` 排序。
+- profile 不存在时返回 `404 Profile not found`，避免把无效 profile 误读为空任务列表。
+- 过滤后的对外响应继续复用统一 `AutomationTaskResponse` 脱敏：`open_url.url`、query、fragment、token 和未知字段不会回显。
+- 当前仍未提供分页或权限隔离；该接口仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
+- 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_filters_by_profile -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_filter_rejects_missing_profile -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_filter_keeps_steps_redacted -q
+# 1 passed
+```
 
 ## 2026-05-27 Automation task 响应脱敏收口小闭环
 
