@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles, type BulkHealthResult } from "./hooks/useProfiles";
-import { api, setOnUnauthorized, type Profile, type ProfileCreateData } from "./lib/api";
+import { api, setOnUnauthorized, type Profile, type ProfileCreateData, type ProfileTemplate } from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
@@ -174,6 +174,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [bulkTagging, setBulkTagging] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkFeedback, setBulkFeedback] = useState<BulkFeedback>(null);
+  const [profileTemplates, setProfileTemplates] = useState<ProfileTemplate[]>([]);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
   const filterOptions = useMemo(
@@ -217,6 +218,20 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       return next.size === prev.size ? prev : next;
     });
   }, [filteredProfiles]);
+
+  useEffect(() => {
+    let active = true;
+    api.listProfileTemplates()
+      .then((templates) => {
+        if (active) setProfileTemplates(templates);
+      })
+      .catch(() => {
+        if (active) setProfileTemplates([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     setBulkFeedback(null);
@@ -599,6 +614,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
           {section === "profiles" && view === "create" && (
             <ProfileForm
               profile={null}
+              templates={profileTemplates}
               onSave={handleCreate}
               onCancel={() => setView("empty")}
             />

@@ -18,7 +18,7 @@
   - humanize。
   - launch args。
   - geoip。
-- [ ] 创建 profile 时可选择模板。
+- [x] 创建 profile 时可选择模板。
 - [x] 模板变更不自动修改已有 profile，避免意外批量污染。
 
 ### Proxy Template
@@ -152,3 +152,68 @@ cd frontend && npm run build
 - 前端创建 profile 时选择模板。
 - 前端 API 类型暴露 `template_id`。
 - 保存当前 profile 为模板。
+
+## 2026-05-26 Profile 创建页模板选择小闭环
+
+背景：
+
+- 在后端 `template_id` 契约完成后，补齐 Profile 创建页的模板选择入口。
+- 本轮只处理创建 Profile 表单，不做编辑页模板切换，不做保存当前 profile 为模板，不做 CSV 批量导入。
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProfileTemplate` / `ProfileTemplateCreateData` / `ProfileTemplateUpdateData`。
+  - `ProfileCreateData` 新增可选 `template_id`。
+  - 新增 profile template CRUD API client。
+- [x] `frontend/src/App.tsx`
+  - 启动后读取 `/api/profile-templates`。
+  - 创建 Profile 时把模板列表传给 `ProfileForm`。
+- [x] `frontend/src/components/ProfileForm.tsx`
+  - 创建模式下显示 `Profile template` 下拉。
+  - 选择模板后把 platform、screen、GPU、hardware concurrency、color scheme、humanize、human preset、launch args、geoip 应用到表单。
+  - 编辑模式不显示模板选择，避免误把模板变更套到既有 profile。
+- [x] `frontend/src/App.test.tsx`
+  - 覆盖创建页选择模板后提交 `template_id` 和模板字段。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx -t "applies a profile template"
+# 红灯：1 failed
+# 失败点：创建页没有 Profile template 下拉
+
+cd frontend && npm test -- --run src/App.test.tsx -t "applies a profile template"
+# 1 passed, 23 skipped
+
+cd frontend && npm test -- --run
+# 13 passed, 167 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 重启本地 QA 服务 `http://127.0.0.1:8095/`，让服务加载新的后端和 `frontend/dist`。
+- 通过 API 创建 QA 模板 `Mac warmup`。
+- 桌面 `1440x960`：
+  - 创建页可见 `Profile template` 下拉。
+  - 选择 `Mac warmup` 后，Device 页显示 `1440 × 900`、hardware concurrency `8`、GPU `Apple / Apple M2`。
+  - Behavior 页显示 humanize checked、color scheme `light`。
+  - Advanced 页显示 `--private-window`。
+  - 点击 Create 后，`/api/profiles` 返回 `Template QA Profile`，字段为 `macos / 1440x900 / Apple M2 / humanize=true / --private-window / geoip=false`。
+  - `scrollWidth=1440`、`clientWidth=1440`。
+- 移动 `390x844`：
+  - 创建页模板下拉可见，页面未横向撑破。
+- Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/tmp/cloakbrowser-template-form-screens/desktop-template-select.png`
+  - `/tmp/cloakbrowser-template-form-screens/desktop-template-applied.png`
+  - `/tmp/cloakbrowser-template-form-screens/mobile-template-select.png`
+
+未覆盖范围：
+
+- 前端保存当前 profile 为模板。
+- 模板列表管理页面。
+- CSV 批量创建中的 `template` 字段。

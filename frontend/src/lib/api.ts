@@ -42,6 +42,7 @@ export interface Profile {
 
 export interface ProfileCreateData {
   name: string;
+  template_id?: string | null;
   fingerprint_seed?: number | null;
   proxy?: string | null;
   timezone?: string | null;
@@ -64,6 +65,41 @@ export interface ProfileCreateData {
   notes?: string | null;
   tags?: { tag: string; color: string | null }[];
 }
+
+export interface ProfileTemplate {
+  id: string;
+  name: string;
+  platform: string;
+  screen_width: number;
+  screen_height: number;
+  gpu_vendor: string | null;
+  gpu_renderer: string | null;
+  hardware_concurrency: number | null;
+  color_scheme: string | null;
+  humanize: boolean;
+  human_preset: string;
+  launch_args: string[];
+  geoip: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfileTemplateCreateData {
+  name: string;
+  platform?: string;
+  screen_width?: number;
+  screen_height?: number;
+  gpu_vendor?: string | null;
+  gpu_renderer?: string | null;
+  hardware_concurrency?: number | null;
+  color_scheme?: string | null;
+  humanize?: boolean;
+  human_preset?: string;
+  launch_args?: string[];
+  geoip?: boolean;
+}
+
+export type ProfileTemplateUpdateData = Partial<ProfileTemplateCreateData>;
 
 export interface ProxyAsset {
   id: string;
@@ -253,6 +289,24 @@ export const api = {
 
   deleteProfile: (id: string) =>
     request<{ ok: boolean }>(`/api/profiles/${id}`, { method: "DELETE" }),
+
+  listProfileTemplates: () =>
+    request<ProfileTemplate[]>("/api/profile-templates"),
+
+  createProfileTemplate: (data: ProfileTemplateCreateData) =>
+    request<ProfileTemplate>("/api/profile-templates", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateProfileTemplate: (id: string, data: ProfileTemplateUpdateData) =>
+    request<ProfileTemplate>(`/api/profile-templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteProfileTemplate: (id: string) =>
+    request<{ ok: boolean }>(`/api/profile-templates/${id}`, { method: "DELETE" }),
 
   launchProfile: (id: string) =>
     request<LaunchResult>(`/api/profiles/${id}/launch`, { method: "POST" }),

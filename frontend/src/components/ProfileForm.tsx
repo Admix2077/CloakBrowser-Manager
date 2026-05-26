@@ -1,10 +1,11 @@
 import { Dices, Fingerprint, Monitor, MousePointer2, Network, Save, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Profile, ProfileCreateData } from "../lib/api";
+import type { Profile, ProfileCreateData, ProfileTemplate } from "../lib/api";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface ProfileFormProps {
   profile: Profile | null; // null = create mode
+  templates?: ProfileTemplate[];
   onSave: (data: ProfileCreateData) => Promise<void>;
   onDelete?: () => Promise<void>;
   onCancel: () => void;
@@ -67,7 +68,7 @@ const PROFILE_FORM_SECTIONS: Array<{
   { id: "advanced", label: "Advanced", Icon: SlidersHorizontal },
 ];
 
-export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileFormProps) {
+export function ProfileForm({ profile, templates = [], onSave, onDelete, onCancel }: ProfileFormProps) {
   const isEdit = profile !== null;
 
   const [form, setForm] = useState<ProfileCreateData>({
@@ -92,6 +93,32 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
   const [launchArgInput, setLaunchArgInput] = useState("");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<ProfileFormSectionId>("identity");
+
+  const applyTemplate = (templateId: string) => {
+    if (!templateId) {
+      set("template_id", null);
+      return;
+    }
+
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) return;
+
+    setForm((prev) => ({
+      ...prev,
+      template_id: template.id,
+      platform: template.platform,
+      screen_width: template.screen_width,
+      screen_height: template.screen_height,
+      gpu_vendor: template.gpu_vendor,
+      gpu_renderer: template.gpu_renderer,
+      hardware_concurrency: template.hardware_concurrency,
+      color_scheme: template.color_scheme,
+      humanize: template.humanize,
+      human_preset: template.human_preset,
+      launch_args: [...template.launch_args],
+      geoip: template.geoip,
+    }));
+  };
 
   useEffect(() => {
     if (profile) {
@@ -118,6 +145,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         launch_args: profile.launch_args ?? [],
         notes: profile.notes,
         tags: profile.tags ?? [],
+        template_id: null,
       });
     }
     setActiveSection("identity");
@@ -258,6 +286,24 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
         >
           <h3 className="section-title">Identity</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {!isEdit && templates.length > 0 && (
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="profile-template">Profile template</label>
+                <select
+                  id="profile-template"
+                  className="input"
+                  value={form.template_id ?? ""}
+                  onChange={(e) => applyTemplate(e.target.value)}
+                >
+                  <option value="">Blank profile</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="sm:col-span-2">
               <label className="label" htmlFor="profile-name">Profile Name</label>
               <input

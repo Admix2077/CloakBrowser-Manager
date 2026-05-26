@@ -24,6 +24,7 @@ vi.mock("./lib/api", () => ({
   api: {
     authStatus: vi.fn(),
     logout: vi.fn(),
+    listProfileTemplates: vi.fn(),
   },
   setOnUnauthorized: vi.fn(),
 }));
@@ -63,6 +64,7 @@ import { useProfiles } from "./hooks/useProfiles";
 const mockApi = api as {
   authStatus: ReturnType<typeof vi.fn>;
   logout: ReturnType<typeof vi.fn>;
+  listProfileTemplates: ReturnType<typeof vi.fn>;
 };
 
 const mockUseProfiles = useProfiles as ReturnType<typeof vi.fn>;
@@ -139,6 +141,8 @@ beforeEach(() => {
   });
   mockApi.authStatus.mockResolvedValue({ auth_required: false, authenticated: true });
   mockApi.logout.mockResolvedValue({ ok: true });
+  mockApi.listProfileTemplates.mockReset();
+  mockApi.listProfileTemplates.mockResolvedValue([]);
   mockCreate.mockReset();
   mockCreate.mockResolvedValue(profile({ id: "created", name: "Created Profile" }));
   mockUpdate.mockReset();
@@ -684,6 +688,54 @@ describe("App operations console", () => {
     expect(tableProfileNames().join(" ")).toContain("Beta Broken");
     expect(screen.queryByRole("heading", { name: "Edit Profile" })).toBeNull();
     expect((screen.getByLabelText("Health status") as HTMLSelectElement).value).toBe("all");
+  });
+
+  it("applies a profile template when creating a profile", async () => {
+    mockApi.listProfileTemplates.mockResolvedValue([
+      {
+        id: "template-mac",
+        name: "Mac warmup",
+        platform: "macos",
+        screen_width: 1440,
+        screen_height: 900,
+        gpu_vendor: "Apple",
+        gpu_renderer: "Apple M2",
+        hardware_concurrency: 8,
+        color_scheme: "light",
+        humanize: true,
+        human_preset: "careful",
+        launch_args: ["--private-window"],
+        geoip: false,
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getAllByRole("button", { name: "New Profile" }).at(-1)!);
+
+    const templateSelect = await screen.findByLabelText("Profile template");
+    fireEvent.change(templateSelect, { target: { value: "template-mac" } });
+    fireEvent.change(screen.getByLabelText("Profile Name"), { target: { value: "Templated profile" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
+      name: "Templated profile",
+      template_id: "template-mac",
+      platform: "macos",
+      screen_width: 1440,
+      screen_height: 900,
+      gpu_vendor: "Apple",
+      gpu_renderer: "Apple M2",
+      hardware_concurrency: 8,
+      color_scheme: "light",
+      humanize: true,
+      human_preset: "careful",
+      launch_args: ["--private-window"],
+      geoip: false,
+    })));
   });
 
   it("returns to the all profiles table when selecting All profiles from the VNC viewer", async () => {
