@@ -317,7 +317,6 @@ git diff --check
 仍未完成：
 
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
-- runtime VNC connect/disconnect audit。
 - 更完整的失败事件审计与 reason code 分类。
 - profile/proxy/health/bulk/automation 等非 runtime service API 审计。
 

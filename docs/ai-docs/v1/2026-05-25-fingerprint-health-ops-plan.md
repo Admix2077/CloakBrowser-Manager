@@ -69,21 +69,22 @@
 /home/jeff/code/cloakbrowser-invisible-manager
 ```
 
-runtime audit 小闭环前的基线提交：
+runtime VNC viewer audit 小闭环前的基线提交：
 
 ```text
-7dd5537 add runtime session renew
+2830fa5 add runtime session audit
 ```
 
 当前接力状态：
 
-- 已完成 05 Session Broker 的 CloakBrowser 侧最小 runtime session API、runtime viewer token、runtime terminate、runtime renew 和 runtime audit 小闭环。
+- 已完成 05/06 的 CloakBrowser 侧最小 runtime session API、runtime viewer token、runtime terminate、runtime renew、runtime audit 和 runtime VNC viewer audit 小闭环。
 - 已新增并通过 `backend/tests/test_session_broker.py`。
 - 已实现 `RUNTIME_SERVICE_TOKEN`、`runtime_sessions` 表、`POST /api/runtime/sessions`、`GET /api/runtime/sessions/{id}`、`POST /api/runtime/sessions/{id}/viewer-token`、`WebSocket /api/runtime/sessions/{id}/vnc`、`POST /api/runtime/sessions/{id}/terminate` 和 `POST /api/runtime/sessions/{id}/renew`。
 - 已实现通用 `audit_events` 表，并让 runtime service API 成功动作写 audit。
+- 已实现 runtime VNC 成功 connected/disconnected 审计。
 - Runtime session API 响应不包含 Project Mileage 钱包/订单/计费字段，也不暴露内部 `viewer_token_hash`。
-- Runtime audit metadata 不记录 viewer token、viewer URL、viewer token hash、runtime service token、proxy password 或 cookie。
-- 05 模块整体仍未完成，顶层进度不要勾选 05；Payload 授权扣费联动、runtime VNC connect/disconnect audit 和失败事件 reason code 审计仍待后续小闭环。
+- Runtime audit metadata 不记录 viewer token、viewer URL、viewer token hash、runtime service token、proxy password、cookie、Origin 原文、请求头或 URL query。
+- 05/06 模块整体仍未完成，顶层进度不要勾选 05 或 06；Payload 授权扣费联动、真实远程工作台跨仓实现和失败事件 reason code 审计仍待后续小闭环。
 - 新会话如果继续 05，应先运行：
 
 ```bash
@@ -108,8 +109,8 @@ runtime audit 小闭环前的基线提交：
 
 最近已验证：
 
-- 后端测试最近完整基线：`277 passed`（完成 runtime audit 后记录）。
-- Session Broker 目标测试：`20 passed`。
+- 后端测试最近完整基线：`279 passed`（完成 runtime VNC viewer audit 后记录）。
+- Session Broker 目标测试：`22 passed`。
 - 前端测试最新基线：`13 test files passed, 184 tests passed`。
 - 前端 build：通过。
 - BrowserScan 复验：`Browser fingerprint authenticity: 100%`。

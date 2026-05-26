@@ -33,7 +33,8 @@
 - [ ] automation task 写 audit。
 - [x] runtime session 写 audit：
   - 当前已覆盖 runtime service API 成功动作。
-  - VNC connect/disconnect、失败事件 reason code 仍待后续小闭环。
+  - 当前已覆盖 runtime VNC 成功 connected/disconnected。
+  - 失败事件 reason code 仍待后续小闭环。
 
 ### RBAC 远期设计
 

@@ -5165,6 +5165,63 @@ git diff --check
 - 没有把钱包、订单、用户权限判断写入 CloakBrowser。
 - 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
 
+## 74. 2026-05-27 Runtime VNC viewer audit 小闭环
+
+背景：
+
+- 在 `2830fa5 add runtime session audit` 后继续推进 05/06。
+- 用户更新协作边界：如发现 Project Mileage app/payload 需要配合，先在 CloakBrowser 侧说明目标、原因、文件、风险和方案，不直接修改 Project Mileage 主仓。资金、订单、权限、密钥、支付、钱包、审计等高风险事项必须先收敛方案和边界。
+- 本轮选择低风险 CloakBrowser 内部小闭环：runtime VNC 成功 connected/disconnected 审计。
+- 子 agent 只读审计建议：成功连接审计点放在 `_proxy_running_vnc()` 成功进入 `websockets.connect(...)` 后；断开审计只在已成功 connected 后写；失败事件 reason code 单独小闭环，避免记录 viewer token、query、Origin 或请求头。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 runtime VNC viewer audit TDD 覆盖。
+  - 确认新增测试初始红灯：成功进入 runtime VNC 后没有 `runtime.viewer.connected` / `runtime.viewer.disconnected`。
+  - 覆盖成功连接 runtime VNC 后写 `runtime.viewer.connected` 和 `runtime.viewer.disconnected`。
+  - 覆盖 viewer audit 使用 `actor_type=runtime_viewer`。
+  - 覆盖事件绑定 runtime session id、profile id 和 external session id。
+  - 覆盖 connected metadata 只记录 `subprotocol`。
+  - 覆盖 disconnected metadata 只记录 `close_code`。
+  - 覆盖审计不包含 viewer token、viewer URL、viewer token hash、Origin 原文。
+  - 补充红灯并修复：上游 KasmVNC 连接失败时不写 connected/disconnected，避免把失败事件混成成功断开事件。
+- `backend/main.py`
+  - 新增 `_audit_runtime_viewer_event()`。
+  - `runtime_vnc_proxy()` 通过回调给 `_proxy_running_vnc()` 注入 runtime viewer 审计。
+  - `_proxy_running_vnc()` 保持普通 profile VNC 路径可复用；只有 runtime VNC 传入回调时才写 viewer 审计。
+  - `_proxy_running_vnc()` 只有在成功连接 KasmVNC 后才写 connected，并且只有已经 connected 才写 disconnected。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit backend/tests/test_session_broker.py::test_runtime_vnc_backend_connect_failure_does_not_write_viewer_audit -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 22 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_ws_allows_same_origin backend/tests/test_api.py::test_ws_allows_no_origin backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 279 passed
+```
+
+仍未完成：
+
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+- Project Mileage App 侧真实远程账号列表和受控 viewer 页面。
+- runtime VNC 失败事件 reason code 审计。
+- profile/proxy/health/bulk/automation 等非 runtime service API 审计。
+
+边界：
+
+- 没有修改 Project Mileage app/payload。
+- 没有把钱包、订单、用户权限判断写入 CloakBrowser。
+- 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
+- 没有把 viewer token、viewer URL、viewer token hash、runtime service token、proxy password、cookie、Origin 原文、请求头或 URL query 写入 audit metadata。
+
 ## 73. 2026-05-27 Runtime audit 小闭环
 
 背景：
@@ -5225,7 +5282,6 @@ git diff --check
 仍未完成：
 
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
-- runtime VNC connect/disconnect audit。
 - 更完整的失败事件审计与 reason code 分类。
 - profile/proxy/health/bulk/automation 等非 runtime service API 审计。
 

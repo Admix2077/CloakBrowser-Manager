@@ -403,6 +403,125 @@ def test_runtime_vnc_accepts_valid_viewer_token_and_proxies_to_profile_vnc(
     assert kwargs["ping_interval"] is None
 
 
+def test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-vnc-audit",
+    )
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+    stored_with_token = db.get_runtime_session(session["id"])
+    assert stored_with_token is not None
+    main.browser_mgr.running[profile_id] = _mock_running_profile()
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+
+    with app_client.websocket_connect(
+        token_resp.json()["viewer_url"],
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    events = db.list_audit_events(session["id"])
+    assert [event["event_type"] for event in events][-2:] == [
+        "runtime.viewer.connected",
+        "runtime.viewer.disconnected",
+    ]
+    viewer_events = events[-2:]
+    assert all(event["actor_type"] == "runtime_viewer" for event in viewer_events)
+    assert all(event["runtime_session_id"] == session["id"] for event in viewer_events)
+    assert all(event["profile_id"] == profile_id for event in viewer_events)
+    assert all(event["external_session_id"] == "pm-session-vnc-audit" for event in viewer_events)
+    assert viewer_events[0]["metadata"] == {
+        "subprotocol": "binary",
+    }
+    assert viewer_events[1]["metadata"] == {
+        "close_code": 1000,
+    }
+
+    serialized_events = json.dumps(viewer_events, sort_keys=True)
+    assert token_resp.json()["viewer_token"] not in serialized_events
+    assert stored_with_token["viewer_token_hash"] not in serialized_events
+    assert token_resp.json()["viewer_url"] not in serialized_events
+    assert "viewer_token" not in serialized_events
+    assert "origin" not in serialized_events.lower()
+
+
+def test_runtime_vnc_backend_connect_failure_does_not_write_viewer_audit(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+    main.browser_mgr.running[profile_id] = _mock_running_profile()
+
+    class FailingConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            raise OSError("backend vnc unavailable")
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FailingConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+
+    with app_client.websocket_connect(
+        token_resp.json()["viewer_url"],
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    event_types = _audit_event_types()
+    assert "runtime.viewer.connected" not in event_types
+    assert "runtime.viewer.disconnected" not in event_types
+
+
 def test_runtime_session_terminate_requires_runtime_service_token(
     app_client: TestClient,
     runtime_headers: dict[str, str],

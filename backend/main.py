@@ -586,6 +586,17 @@ def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None =
     )
 
 
+def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict | None = None) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="runtime_viewer",
+        runtime_session_id=str(session["id"]),
+        profile_id=str(session["profile_id"]),
+        external_session_id=str(session["external_session_id"]),
+        metadata=metadata,
+    )
+
+
 def _runtime_service_token_from_request(request: Request) -> str | None:
     token = request.headers.get("X-Runtime-Service-Token")
     return token or None
@@ -1532,10 +1543,30 @@ async def runtime_vnc_proxy(websocket: WebSocket, session_id: str):
         await websocket.close(code=4004, reason="Profile not running")
         return
 
-    await _proxy_running_vnc(websocket, profile_id, running)
+    await _proxy_running_vnc(
+        websocket,
+        profile_id,
+        running,
+        on_connected=lambda metadata: _audit_runtime_viewer_event(
+            "runtime.viewer.connected",
+            session,
+            metadata,
+        ),
+        on_disconnected=lambda metadata: _audit_runtime_viewer_event(
+            "runtime.viewer.disconnected",
+            session,
+            metadata,
+        ),
+    )
 
 
-async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
+async def _proxy_running_vnc(
+    websocket: WebSocket,
+    profile_id: str,
+    running,
+    on_connected=None,
+    on_disconnected=None,
+):
     # Accept with client's requested subprotocol (if any) — RFC 6455 requires
     # the server must not respond with a subprotocol the client didn't request.
     requested = websocket.scope.get("subprotocols", [])
@@ -1545,6 +1576,8 @@ async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
     import websockets
 
     vnc_url = f"ws://127.0.0.1:{running.ws_port}/websockify"
+    audit_connected = False
+    disconnect_metadata = {"close_code": None}
 
     try:
         async with websockets.connect(
@@ -1560,6 +1593,9 @@ async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
                 "VNC proxy: connected to KasmVNC for %s (subprotocol=%s)",
                 profile_id, vnc_ws.subprotocol,
             )
+            if on_connected:
+                on_connected({"subprotocol": subprotocol})
+                audit_connected = True
 
             # noVNC v1.4 sends extension message types (150=ContinuousUpdates,
             # 248=QEMUKey, etc.) that KasmVNC 1.3.3 doesn't support, causing
@@ -1580,6 +1616,7 @@ async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
                         msg = await websocket.receive()
                         msg_type = msg.get("type", "")
                         if msg_type == "websocket.disconnect":
+                            disconnect_metadata["close_code"] = msg.get("code")
                             logger.info("VNC proxy [c->v]: client disconnect (code=%s) after %d msgs (%d dropped)", msg.get("code"), count, dropped)
                             break
                         if "bytes" in msg and msg["bytes"]:
@@ -1616,6 +1653,7 @@ async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
                         else:
                             logger.warning("VNC proxy [c->v]: unhandled msg keys=%s type=%s", list(msg.keys()), msg_type)
                 except WebSocketDisconnect as exc:
+                    disconnect_metadata["close_code"] = exc.code
                     logger.info("VNC proxy [c->v]: WebSocketDisconnect code=%s after %d msgs (%d dropped)", exc.code, count, dropped)
                 except Exception as exc:
                     logger.warning("VNC proxy [c->v]: %s: %s (after %d msgs)", type(exc).__name__, exc, count)
@@ -1642,8 +1680,10 @@ async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
                             await websocket.send_bytes(msg)
                         else:
                             await websocket.send_text(msg)
+                    disconnect_metadata["close_code"] = vnc_ws.close_code
                     logger.info("VNC proxy [v->c]: KasmVNC stream ended after %d msgs (close_code=%s)", count, vnc_ws.close_code)
                 except WebSocketDisconnect as exc:
+                    disconnect_metadata["close_code"] = exc.code
                     logger.info("VNC proxy [v->c]: client disconnect code=%s after %d msgs", exc.code, count)
                 except Exception as exc:
                     logger.warning("VNC proxy [v->c]: %s: %s (after %d msgs)", type(exc).__name__, exc, count)
@@ -1682,6 +1722,8 @@ async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
     except Exception as exc:
         logger.error("VNC proxy connect error for %s: %s: %s", profile_id, type(exc).__name__, exc)
     finally:
+        if on_disconnected and audit_connected:
+            on_disconnected(disconnect_metadata)
         try:
             await websocket.close()
         except Exception as exc:
