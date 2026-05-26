@@ -62,8 +62,8 @@
   - [x] screenshot。
 - [x] 支持并发限制。
 - [x] 支持失败重试。
-- [ ] 前端新增 Automation 页面。
-- [ ] 前端新增 task log viewer。
+- [x] 前端新增 Automation 页面。
+- [x] 前端新增 task log viewer。
 
 ## 典型脚本
 
@@ -234,6 +234,40 @@ cd frontend && npm run build
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_paginates_newest_tasks backend/tests/test_api.py::test_list_automation_tasks_rejects_invalid_pagination backend/tests/test_database.py::test_list_automation_tasks_paginates_after_profile_filter -q
 # 3 passed
+```
+
+## 2026-05-27 前端 Automation task log viewer 小闭环
+
+当前状态：
+
+- 前端新增 `Automation` 顶部分段入口，和 `Profiles`、`Proxy Manager` 同级。
+- 新增 `frontend/src/components/AutomationTaskLogViewer.tsx`，只读展示最近 50 条 Automation task。
+- 新增 `api.listAutomationTasks({ profileId?, limit?, offset? })`，通过统一 API adapter 请求 `/api/tasks`，支持 `profile_id`、`limit`、`offset` query。
+- task log viewer 展示：
+  - task 短 ID。
+  - profile 短 ID。
+  - task status。
+  - 低敏 step 摘要。
+  - 低敏 result step 摘要。
+  - task 固定错误文案。
+  - created/finished 时间。
+- viewer 不提供 `run`、`cancel`、`retry` 按钮，不新增脚本执行入口，不启动 profile，不终止浏览器，不修改 task 状态。
+- viewer 只渲染白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page` 和 `result.steps[].index/type/status`。
+- 即使 API mock 或历史数据带有 `open_url.url`、query、fragment、token、selector、value、keyboard text、evaluate expression、screenshot base64/path、result raw URL 或表单值，前端组件也不会渲染这些字段。
+- 该页面仍然只面向 CloakBrowser 本地可信管理台；`GET /api/tasks` 当前没有 Project Mileage 账号归属、订单、权限或审计隔离，不能直接暴露给 Project Mileage App。
+- 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token、VNC token 或屏幕流逻辑。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- src/lib/api.test.ts
+# 31 passed
+
+cd frontend && npm test -- src/components/AutomationTaskLogViewer.test.tsx
+# 3 passed
+
+cd frontend && npm test -- src/App.test.tsx
+# 28 passed
 ```
 
 ## 2026-05-27 Automation task 响应脱敏收口小闭环

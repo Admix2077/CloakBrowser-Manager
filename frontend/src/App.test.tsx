@@ -20,6 +20,13 @@ const mockProxyManagerPage = vi.hoisted(() => vi.fn(({
   </section>
 )));
 
+const mockAutomationTaskLogViewer = vi.hoisted(() => vi.fn(() => (
+  <section role="region" aria-label="Automation tasks">
+    <h2>Automation tasks</h2>
+    <p>Automation task log viewer</p>
+  </section>
+)));
+
 vi.mock("./lib/api", () => ({
   api: {
     authStatus: vi.fn(),
@@ -58,6 +65,10 @@ vi.mock("./components/ProfileViewer", () => ({
 
 vi.mock("./components/ProxyManagerPage", () => ({
   ProxyManagerPage: mockProxyManagerPage,
+}));
+
+vi.mock("./components/AutomationTaskLogViewer", () => ({
+  AutomationTaskLogViewer: mockAutomationTaskLogViewer,
 }));
 
 import { api } from "./lib/api";
@@ -181,6 +192,7 @@ beforeEach(() => {
   mockRefresh.mockReset();
   mockRefresh.mockResolvedValue(undefined);
   mockProxyManagerPage.mockClear();
+  mockAutomationTaskLogViewer.mockClear();
   mockLaunchProfiles.mockReset();
   mockLaunchProfiles.mockResolvedValue(undefined);
   mockStopProfiles.mockReset();
@@ -294,6 +306,23 @@ describe("App operations console", () => {
 
     expect(await screen.findByRole("table")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "New Profile" }).length).toBeGreaterThan(0);
+  });
+
+  it("switches to the read-only Automation task log section", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Automation" }));
+
+    expect(screen.getByRole("region", { name: "Automation tasks" })).toBeTruthy();
+    expect(screen.getByText("Queued scripts · redacted task payloads")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New Profile" })).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(mockAutomationTaskLogViewer).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
+
+    expect(await screen.findByRole("table")).toBeTruthy();
   });
 
   it("passes profiles and refresh into the Proxy Manager section for assignment workflows", async () => {

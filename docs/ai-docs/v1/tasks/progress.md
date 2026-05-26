@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task log viewer 小闭环：
+  - 前端新增 `Automation` 顶部分段入口，与 `Profiles`、`Proxy Manager` 同级。
+  - 新增 `frontend/src/components/AutomationTaskLogViewer.tsx`，只读展示最近 50 条 Automation task。
+  - 新增 `api.listAutomationTasks({ profileId?, limit?, offset? })`，通过统一 API adapter 请求 `/api/tasks`，支持 `profile_id`、`limit`、`offset` query。
+  - viewer 展示 task 短 ID、profile 短 ID、status、低敏 step 摘要、低敏 result step 摘要、固定错误文案和 created/finished 时间。
+  - viewer 不提供 `run`、`cancel`、`retry` 按钮，不新增脚本执行入口，不启动 profile，不终止浏览器，不修改 task 状态。
+  - viewer 只渲染白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page` 和 `result.steps[].index/type/status`。
+  - 即使 API mock 或历史数据带有 `open_url.url`、query、fragment、token、selector、value、keyboard text、evaluate expression、screenshot base64/path、result raw URL 或表单值，前端组件也不会渲染这些字段。
+  - 该页面仍然只面向 CloakBrowser 本地可信管理台；`GET /api/tasks` 当前没有 Project Mileage 账号归属、订单、权限或审计隔离，不能直接暴露给 Project Mileage App。
+  - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token、VNC token 或屏幕流逻辑。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task 列表分页小闭环：
   - `GET /api/tasks` 支持可选 `limit` 和 `offset` query。
   - `limit` 范围为 `1..500`；超过范围返回 FastAPI `422`。
@@ -268,7 +278,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，进入 running cancel、前端 Automation 页面、task log viewer、后台队列或全局 worker 池等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
+1. 继续 CloakBrowser 独立侧 07 Automation API，进入 running cancel、后台队列、全局 worker 池、task detail drawer 或更完整任务过滤等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

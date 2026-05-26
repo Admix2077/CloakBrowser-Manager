@@ -362,6 +362,54 @@ export interface SystemStatus {
   profiles_total: number;
 }
 
+export interface AutomationTaskStep {
+  type: string;
+  page_ref?: string;
+  ms?: number;
+  wait_until?: string;
+  timeout_ms?: number;
+  state?: string;
+  delta_x?: number;
+  delta_y?: number;
+  delay_ms?: number;
+  full_page?: boolean;
+  [key: string]: unknown;
+}
+
+export interface AutomationTaskResultStep {
+  index: number;
+  type: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface AutomationTaskResult {
+  steps: AutomationTaskResultStep[];
+  [key: string]: unknown;
+}
+
+export interface AutomationTask {
+  id: string;
+  profile_id: string;
+  status: string;
+  steps: AutomationTaskStep[];
+  result: AutomationTaskResult | null;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface AutomationTasksResponse {
+  tasks: AutomationTask[];
+}
+
+export interface AutomationTaskListParams {
+  profileId?: string;
+  limit?: number;
+  offset?: number;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -394,6 +442,15 @@ async function request<T>(
     throw new ApiError(res.status, body.detail || res.statusText);
   }
   return res.json();
+}
+
+function buildAutomationTasksPath(params: AutomationTaskListParams = {}): string {
+  const query = new URLSearchParams();
+  if (params.profileId) query.set("profile_id", params.profileId);
+  if (params.limit !== undefined) query.set("limit", String(params.limit));
+  if (params.offset !== undefined) query.set("offset", String(params.offset));
+  const search = query.toString();
+  return search ? `/api/tasks?${search}` : "/api/tasks";
 }
 
 export const api = {
@@ -535,6 +592,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  listAutomationTasks: (params?: AutomationTaskListParams) =>
+    request<AutomationTasksResponse>(buildAutomationTasksPath(params)),
 
   saveProfileProxyAsAsset: (profileId: string, data: ProxyFromProfileCreateData) =>
     request<ProxyAsset>(`/api/profiles/${profileId}/proxy-asset`, {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { FileSpreadsheet, Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
+import { FileSpreadsheet, ListChecks, Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles, type BulkHealthResult } from "./hooks/useProfiles";
 import {
   api,
@@ -17,6 +17,7 @@ import { ProfileCsvPreviewDialog } from "./components/ProfileCsvPreviewDialog";
 import { ProfileFilters } from "./components/ProfileFilters";
 import { ProfileSummaryPanel } from "./components/ProfileSummaryPanel";
 import { ProxyManagerPage } from "./components/ProxyManagerPage";
+import { AutomationTaskLogViewer } from "./components/AutomationTaskLogViewer";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
@@ -29,7 +30,7 @@ import {
 
 type AuthState = "checking" | "required" | "ok" | "error";
 type View = "empty" | "create" | "edit" | "view";
-type ConsoleSection = "profiles" | "proxies";
+type ConsoleSection = "profiles" | "proxies" | "automation";
 type BulkFeedback = {
   tone: "success" | "warning";
   message: string;
@@ -522,11 +523,24 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 <Network className="h-3.5 w-3.5" />
                 Proxy Manager
               </button>
+              <button
+                type="button"
+                aria-pressed={section === "automation"}
+                onClick={() => setSection("automation")}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-150 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
+                  section === "automation"
+                    ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                }`}
+              >
+                <ListChecks className="h-3.5 w-3.5" />
+                Automation
+              </button>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-950">
-                  {section === "profiles" ? "Profiles" : "Proxy Manager"}
+                  {section === "profiles" ? "Profiles" : section === "proxies" ? "Proxy Manager" : "Automation"}
                 </span>
                 {section === "profiles" && (
                   <span className="rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
@@ -537,7 +551,9 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <p className="text-xs text-slate-500">
                 {section === "profiles"
                   ? `${consoleStats.total} profiles · ${consoleStats.running} running · ${consoleStats.issues} need review`
-                  : "Proxy inventory · redacted URLs · assignment controls"}
+                  : section === "proxies"
+                    ? "Proxy inventory · redacted URLs · assignment controls"
+                    : "Queued scripts · redacted task payloads"}
               </p>
             </div>
             {section === "profiles" && selected && (
@@ -599,6 +615,12 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
           {section === "proxies" && (
             <div data-console-section="proxies" className="animate-console-section-in h-full min-h-0">
               <ProxyManagerPage profiles={profiles} onProfilesAssigned={refresh} />
+            </div>
+          )}
+
+          {section === "automation" && (
+            <div data-console-section="automation" className="animate-console-section-in h-full min-h-0">
+              <AutomationTaskLogViewer />
             </div>
           )}
 

@@ -477,6 +477,50 @@ describe("api.assignRandomProxyToProfiles", () => {
   });
 });
 
+// ── automation tasks ───────────────────────────────────────────────────────
+
+describe("api.listAutomationTasks", () => {
+  it("requests automation tasks with pagination", async () => {
+    const response = {
+      tasks: [
+        {
+          id: "task-1",
+          profile_id: "profile-1",
+          status: "queued",
+          steps: [{ type: "wait", ms: 1000 }],
+          result: null,
+          error: null,
+          created_at: "2026-05-27T00:00:00Z",
+          started_at: null,
+          finished_at: null,
+        },
+      ],
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse(response));
+
+    const result = await api.listAutomationTasks({ limit: 20 });
+
+    expect(result).toEqual(response);
+    expect(mockFetch).toHaveBeenCalledWith("/api/tasks?limit=20", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  it("requests automation tasks for a profile after the profile filter and offset", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ tasks: [] }));
+
+    await api.listAutomationTasks({
+      profileId: "profile-1",
+      limit: 20,
+      offset: 20,
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/tasks?profile_id=profile-1&limit=20&offset=20", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+});
+
 describe("api.saveProfileProxyAsAsset", () => {
   it("sends proxy asset metadata without a URL to the profile proxy-asset endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({

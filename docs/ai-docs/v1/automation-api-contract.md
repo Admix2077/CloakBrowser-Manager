@@ -417,6 +417,26 @@ GET /api/tasks
 - 当前未提供权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - Project Mileage 后续需要 task 列表时，必须由 Payload 按账号归属、权限和审计策略输出安全 DTO。
 
+### 前端 Task Log Viewer
+
+当前 CloakBrowser 管理台前端提供只读 `Automation` 页面：
+
+- 入口：顶部 `Automation` 分段按钮。
+- 数据源：`api.listAutomationTasks({ limit: 50 })` 调用 `GET /api/tasks?limit=50`。
+- 展示内容：
+  - task 短 ID。
+  - profile 短 ID。
+  - status。
+  - step 低敏摘要。
+  - `result.steps[]` 低敏摘要。
+  - task 固定错误文案。
+  - created/finished 时间。
+- 前端只渲染 step 白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page`。
+- 前端只渲染 result 白名单字段：`index/type/status`。
+- 前端不渲染 `open_url.url`、URL query、fragment、token、selector、fill value、keyboard text、evaluate expression/result、screenshot bytes/base64/path、clipboard、console text、network URL、headers、body 或未知字段。
+- 前端不提供 `run`、`cancel`、`retry` 按钮，避免在日志页面制造高权限自动化入口。
+- 该页面仍属于 CloakBrowser 本地可信管理台，不是 Project Mileage App 对接面；Project Mileage App 后续只能通过 Payload 安全 DTO 获取经过账号归属、订单、权限和审计裁剪后的数据。
+
 ### Task 详情
 
 ```http
