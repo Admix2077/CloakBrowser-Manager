@@ -41,7 +41,11 @@
 ### CloakBrowser
 
 - [x] viewer token 校验接入 VNC WebSocket。
-- [ ] EnvironmentStrip 支持业务 session 标识。
+- [x] EnvironmentStrip 支持业务 session 标识：
+  - `ProfileViewer` 支持可选 `externalSessionId`，显示为短格式 `Session <id>`。
+  - `ProfileViewer` 支持可选 `vncUrl`，为后续受控 runtime viewer 连接短生命周期 viewer URL 留出入口。
+  - 普通 profile viewer 不显示 session chip，仍连接 `/api/profiles/{profileId}/vnc`。
+  - 不渲染 viewer token、viewer URL、runtime service token、订单、钱包或用户权限信息。
 - [x] 记录 viewer connected/disconnected audit：
   - 当前覆盖成功进入 runtime VNC 后的 `runtime.viewer.connected`。
   - 当前覆盖成功连接后的断开 `runtime.viewer.disconnected`。
@@ -181,4 +185,54 @@ git diff --check
 
 - Project Mileage Payload 侧 remote session contract、授权、扣费、续期和业务审计。
 - Project Mileage App 侧真实远程账号列表和受控 viewer 页面。
-- `EnvironmentStrip` 支持业务 session 标识。
+
+## 2026-05-27 CloakBrowser EnvironmentStrip business session marker 小闭环
+
+当前状态：
+
+- 已完成 CloakBrowser 前端 viewer 环境条对业务 session 标识的低敏展示能力。
+- 本轮只改 CloakBrowser 前端组件，不进入 Project Mileage app/payload 跨仓实现。
+
+已完成：
+
+- `frontend/src/components/ProfileViewer.tsx`
+  - `ProfileViewer` 新增可选 `externalSessionId`。
+  - 有 `externalSessionId` 时，环境条显示短格式 `Session <short externalSessionId>`，`title` 保存完整低敏业务 session 标识。
+  - 无 `externalSessionId` 时，普通 profile viewer 不显示 session chip。
+  - `ProfileViewer` 新增可选 `vncUrl`；传入时 noVNC 连接该 URL，否则保持原 `/api/profiles/{profileId}/vnc`。
+  - `vncUrl` 仅用于 noVNC 连接，不在 UI 文案中渲染。
+- `frontend/src/components/ProfileViewer.test.tsx`
+  - 覆盖有 `externalSessionId` 时显示 session chip。
+  - 覆盖普通 profile viewer 不显示 session chip。
+  - 覆盖传入 runtime viewer URL 时 noVNC 使用该 URL，并且页面文本不渲染 viewer token 或完整 viewer URL。
+
+验证记录：
+
+```bash
+npm test -- ProfileViewer.test.tsx
+# 9 passed
+
+npm test -- App.test.tsx
+# 27 passed
+
+npm test -- lib/api.test.ts
+# 29 passed
+
+npm test -- --run
+# 187 passed
+
+npm run build
+# built successfully
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 24 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- Project Mileage Payload 侧 remote session contract、授权、扣费、续期和业务审计。
+- Project Mileage App 侧真实远程账号列表和受控 viewer 页面。
+- 真实 runtime viewer 页面如何刷新过期 viewer token，仍应由 Payload/App 契约确认。

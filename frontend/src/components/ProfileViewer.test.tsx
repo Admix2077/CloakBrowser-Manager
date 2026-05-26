@@ -139,6 +139,59 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(screen.getByRole("button", { name: "Fullscreen" })).toBeTruthy();
   });
 
+  it("shows a redacted business session identifier when provided", () => {
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1234567890"
+        externalSessionId="pm-remote-session-1234567890"
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    const sessionChip = screen.getByText("Session pm-remot...7890");
+    expect(sessionChip).toBeTruthy();
+    expect(sessionChip.getAttribute("title")).toBe("pm-remote-session-1234567890");
+  });
+
+  it("omits the business session chip for regular profile viewers", () => {
+    render(
+      <ProfileViewer
+        profileId="profile-1"
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText(/^Session /)).toBeNull();
+  });
+
+  it("connects noVNC to a supplied runtime viewer URL without rendering its token", async () => {
+    const runtimeViewerUrl =
+      "/api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";
+
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1"
+        externalSessionId="pm-session-runtime-viewer"
+        vncUrl={runtimeViewerUrl}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(MockRFB).toHaveBeenCalledTimes(1));
+
+    const [, wsUrl, options] = MockRFB.mock.calls[0];
+    expect(wsUrl).toBe(runtimeViewerUrl);
+    expect(options).toEqual({ wsProtocols: ["binary"] });
+    expect(document.body.textContent).not.toContain("secret-viewer-token");
+    expect(document.body.textContent).not.toContain(runtimeViewerUrl);
+  });
+
   it("keeps viewer actions compact and fullscreens the whole viewer frame", async () => {
     const requestFullscreen = vi.fn(function requestFullscreen(this: HTMLElement) {
       Object.defineProperty(document, "fullscreenElement", {

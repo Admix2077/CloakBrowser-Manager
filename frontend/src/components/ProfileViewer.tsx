@@ -4,6 +4,8 @@ import { api } from "../lib/api";
 
 interface ProfileViewerProps {
   profileId: string;
+  externalSessionId?: string | null;
+  vncUrl?: string | null;
   automationUrl: string | null;
   clipboardSync: boolean;
   onDisconnect: () => void;
@@ -20,7 +22,14 @@ function formatProfileHandle(profileId: string) {
   return `${profileId.slice(0, 8)}...${profileId.slice(-4)}`;
 }
 
-export function ProfileViewer({ profileId, automationUrl, clipboardSync: initialClipboardSync, onDisconnect }: ProfileViewerProps) {
+export function ProfileViewer({
+  profileId,
+  externalSessionId = null,
+  vncUrl = null,
+  automationUrl,
+  clipboardSync: initialClipboardSync,
+  onDisconnect,
+}: ProfileViewerProps) {
   const viewerFrameRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<any>(null);
@@ -30,6 +39,9 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
   const [clipboardSync, setClipboardSync] = useState(initialClipboardSync);
   const [automationCopied, setAutomationCopied] = useState(false);
   const shortProfileId = formatProfileHandle(profileId);
+  const shortExternalSessionId = externalSessionId
+    ? formatProfileHandle(externalSessionId)
+    : null;
 
   useEffect(() => {
     let rfb: any = null;
@@ -43,7 +55,7 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
         if (cancelled) return;
 
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = `${protocol}//${window.location.host}/api/profiles/${profileId}/vnc`;
+        const wsUrl = vncUrl ?? `${protocol}//${window.location.host}/api/profiles/${profileId}/vnc`;
 
         rfb = new RFB(containerRef.current!, wsUrl, {
           wsProtocols: ["binary"],
@@ -88,7 +100,7 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
       }
       rfbRef.current = null;
     };
-  }, [profileId, onDisconnect]);
+  }, [profileId, vncUrl, onDisconnect]);
 
   // Host→VNC: intercept Ctrl+V/Cmd+V at keydown (capture phase)
   // Must fire BEFORE noVNC's canvas listener to prevent the race condition
@@ -271,6 +283,14 @@ export function ProfileViewer({ profileId, automationUrl, clipboardSync: initial
           >
             Profile {shortProfileId}
           </span>
+          {externalSessionId && shortExternalSessionId ? (
+            <span
+              className="shrink-0 rounded-[999px] border border-cyan-200 bg-cyan-50 px-2 py-1 font-mono text-[11px] font-semibold text-cyan-700 shadow-hairline"
+              title={externalSessionId}
+            >
+              Session {shortExternalSessionId}
+            </span>
+          ) : null}
           <span className={`shrink-0 rounded-[999px] border px-2 py-1 text-[11px] font-semibold transition-colors ${
             automationUrl
               ? "border-blue-200 bg-blue-50 text-blue-700"

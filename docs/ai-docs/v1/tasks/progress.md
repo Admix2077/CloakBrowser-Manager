@@ -49,6 +49,7 @@
   - runtime service API 成功动作写 audit。
   - runtime VNC 成功 connected/disconnected 写 audit。
   - runtime VNC 失败事件写低敏 reason code audit。
+  - EnvironmentStrip 支持低敏业务 session 标识和可选 runtime viewer URL。
   - 从 profile 创建 runtime session。
   - 从 template 创建 runtime session 并复制 template 指纹字段。
   - runtime response 不包含 wallet/order/billing 字段，也不暴露内部 `viewer_token_hash`。
@@ -61,9 +62,9 @@
 
 下一步建议：
 
-1. 继续 06 时补 `EnvironmentStrip` 支持业务 session 标识，方便后续 Project Mileage viewer 页面展示当前业务 session 的低敏上下文。
-2. 随后再准备 Project Mileage Payload/App 跨仓契约联动。
-3. Project Mileage 跨仓联动仍需 Payload 侧授权、扣费、续期契约确认后再进入。
+1. 准备 Project Mileage Payload/App 跨仓契约联动提案和验收清单。
+2. Project Mileage 跨仓联动仍需 Payload 侧授权、扣费、续期契约确认后再进入。
+3. CloakBrowser 独立侧可继续补 runtime viewer token 过期/刷新 UX 的安全提示，但不替代 Payload 契约。
 
 ## 推荐执行顺序
 
