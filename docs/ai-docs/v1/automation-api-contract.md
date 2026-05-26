@@ -437,6 +437,11 @@ GET /api/tasks
   - `Failed`：展示 `failed`。
   - `Finished`：展示 `succeeded | cancelled`。
 - status filter 只过滤当前已加载的最近 50 条 task，不新增 API query，不改变 task 状态，不触发 run/cancel/retry。
+- 支持本地 task/profile 搜索框：
+  - 搜索只匹配 `task.id` 和 `task.profile_id`。
+  - 搜索与 status filter 组合生效。
+  - 搜索只过滤当前已加载的最近 50 条 task，不新增 API query，不调用新的后端接口。
+  - 搜索不匹配、不读取、不渲染 `steps`、`result`、`error` 或任何自动化 payload 内容。
 - 表格行提供只读详情入口，打开后在 drawer 中展示该 task 的完整低敏 `steps` 和完整低敏 `result.steps[]`，不再使用表格摘要的 4 条截断上限。
 - 前端只渲染 step 白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page`。
 - 前端只渲染 result 白名单字段：`index/type/status`。

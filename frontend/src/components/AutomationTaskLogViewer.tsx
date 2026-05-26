@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock, ListChecks, RefreshCw, X, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, ListChecks, RefreshCw, Search, X, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AutomationTask, type AutomationTaskResultStep, type AutomationTaskStep } from "../lib/api";
 import { formatTimestamp } from "../lib/profileDisplay";
@@ -22,6 +22,7 @@ export function AutomationTaskLogViewer() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("all");
+  const [query, setQuery] = useState("");
 
   const loadTasks = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     if (quiet) {
@@ -59,9 +60,10 @@ export function AutomationTaskLogViewer() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
+  const normalizedQuery = query.trim().toLowerCase();
   const visibleTasks = useMemo(
-    () => tasks.filter((task) => taskMatchesStatusFilter(task.status, statusFilter)),
-    [statusFilter, tasks],
+    () => tasks.filter((task) => taskMatchesStatusFilter(task.status, statusFilter) && taskMatchesQuery(task, normalizedQuery)),
+    [normalizedQuery, statusFilter, tasks],
   );
 
   return (
@@ -97,6 +99,18 @@ export function AutomationTaskLogViewer() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <label className="relative block w-full min-w-[220px] sm:w-[260px]">
+              <span className="sr-only">Filter automation tasks by task or profile id</span>
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                aria-label="Filter automation tasks by task or profile id"
+                placeholder="Filter task or profile"
+                className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-2 text-xs text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
             <div
               role="group"
               aria-label="Automation task status filter"
@@ -164,7 +178,7 @@ export function AutomationTaskLogViewer() {
             <Clock className="h-8 w-8 text-slate-300" />
             <p className="mt-3 text-sm font-semibold text-slate-900">No matching tasks</p>
             <p className="mt-1 max-w-md text-sm text-slate-500">
-              Change the status filter or refresh the latest task log.
+              Change the status filter, clear the search, or refresh the latest task log.
             </p>
           </div>
         ) : (
@@ -475,4 +489,9 @@ function taskMatchesStatusFilter(status: string, filter: TaskStatusFilter): bool
   if (filter === "running") return status === "running" || status === "cancel_requested";
   if (filter === "failed") return status === "failed";
   return status === "succeeded" || status === "cancelled";
+}
+
+function taskMatchesQuery(task: AutomationTask, query: string): boolean {
+  if (!query) return true;
+  return task.id.toLowerCase().includes(query) || task.profile_id.toLowerCase().includes(query);
 }

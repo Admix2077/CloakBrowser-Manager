@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task log task/profile search 小闭环：
+  - `frontend/src/components/AutomationTaskLogViewer.tsx` 在 status filter 旁新增只读本地搜索框。
+  - 搜索只匹配 `task.id` 和 `profile_id`，并与 status filter 组合生效。
+  - 搜索只作用于前端当前已加载的最近 50 条 task，不新增后端 API query，不调用新的后端接口，不修改 task 状态。
+  - 搜索不匹配 `steps`、`result`、`error`，不读取或渲染自动化 payload 里的 URL、query、fragment、token、selector、表单值、keyboard text、evaluate expression/result、screenshot 内容、console/network 内容或未知字段。
+  - 搜索控件不提供 `run`、`cancel`、`retry` 能力；原 task log、status filter 和 detail drawer 的脱敏边界保持不变。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task log status filter 小闭环：
   - `frontend/src/components/AutomationTaskLogViewer.tsx` 新增只读 status filter segmented control。
   - `All` 展示当前加载的最近 50 条；`Running` 展示 `running | cancel_requested`；`Failed` 展示 `failed`；`Finished` 展示 `succeeded | cancelled`。

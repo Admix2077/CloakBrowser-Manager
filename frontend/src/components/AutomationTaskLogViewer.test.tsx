@@ -180,6 +180,41 @@ describe("AutomationTaskLogViewer", () => {
     expect(mockListAutomationTasks).toHaveBeenCalledTimes(1);
   });
 
+  it("filters the local read-only task list by task or profile id", async () => {
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({ id: "task-alpha-123456", profile_id: "profile-alpha-123456", status: "queued" }),
+        task({ id: "task-beta-123456", profile_id: "profile-beta-123456", status: "failed" }),
+        task({ id: "task-gamma-123456", profile_id: "profile-shared-123456", status: "succeeded" }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    const search = within(page).getByRole("searchbox", { name: "Filter automation tasks by task or profile id" });
+    expect(within(page).getByText("task-alp...")).toBeTruthy();
+    expect(within(page).getByText("task-bet...")).toBeTruthy();
+    expect(within(page).getByText("task-gam...")).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "beta" } });
+    expect(within(page).getByText("task-bet...")).toBeTruthy();
+    expect(within(page).queryByText("task-alp...")).toBeNull();
+    expect(within(page).queryByText("task-gam...")).toBeNull();
+    expect(mockListAutomationTasks).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(search, { target: { value: "profile-shared" } });
+    expect(within(page).getByText("task-gam...")).toBeTruthy();
+    expect(within(page).queryByText("task-bet...")).toBeNull();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Show failed automation tasks" }));
+    expect(await screen.findByRole("status", { name: "No automation tasks match the selected filter" })).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "" } });
+    expect(within(page).getByText("task-bet...")).toBeTruthy();
+    expect(within(page).queryByText("task-gam...")).toBeNull();
+  });
+
   it("opens a read-only task detail drawer without rendering sensitive payloads", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [

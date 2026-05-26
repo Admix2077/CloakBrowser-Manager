@@ -258,6 +258,11 @@ cd frontend && npm run build
   - `Failed` 展示 `failed`。
   - `Finished` 展示 `succeeded | cancelled`。
 - status filter 只筛选前端当前内存列表，不新增 API query，不调用新的后端接口，不修改 task 状态。
+- task log viewer 支持本地 task/profile 搜索：
+  - 搜索只匹配 `task.id` 和 `profile_id`。
+  - 搜索与 status filter 组合生效。
+  - 搜索只筛选当前已加载的最近 50 条 task，不新增 API query，不调用新的后端接口，不修改 task 状态。
+  - 搜索不匹配 `steps`、`result`、`error`，不读取或渲染自动化 payload 里的 URL、selector、表单值、keyboard text、evaluate expression/result、screenshot 内容、console/network 内容或未知字段。
 - task log table 每行提供只读 `Details` 入口；打开后在 drawer 中展示该 task 的完整低敏 steps 和完整低敏 result steps，不再受表格摘要 4 条截断限制。
 - viewer 不提供 `run`、`cancel`、`retry` 按钮，不新增脚本执行入口，不启动 profile，不终止浏览器，不修改 task 状态。
 - detail drawer 同样不提供 `run`、`cancel`、`retry` 按钮，不调用新的后端接口，不改变 task 状态。
@@ -271,7 +276,7 @@ cd frontend && npm run build
 
 ```bash
 cd frontend && npm test -- src/components/AutomationTaskLogViewer.test.tsx
-# 5 passed
+# 6 passed
 
 cd frontend && npm test -- src/lib/api.test.ts
 # 31 passed
@@ -280,7 +285,7 @@ cd frontend && npm test -- src/App.test.tsx
 # 28 passed
 
 cd frontend && npm test -- --run
-# 14 files / 201 tests passed
+# 14 files / 202 tests passed
 
 cd frontend && npm run build
 # passed
