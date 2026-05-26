@@ -38,6 +38,7 @@ from .health import (
     validate_profile_proxy,
 )
 from .models import (
+    AutomationClickRequest,
     AutomationEvaluateRequest,
     AutomationEvaluateResponse,
     AutomationGotoRequest,
@@ -1956,6 +1957,24 @@ async def automation_wait_for_selector(
             page_index,
             exc,
         )
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await _automation_page_summary(running, page_index, page)
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/click",
+    response_model=AutomationPageResponse,
+)
+async def automation_click(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationClickRequest,
+):
+    running, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.click(body.selector, timeout=body.timeout_ms)
+    except Exception as exc:
+        logger.warning("Automation click failed for %s page %d: %s", profile_id, page_index, exc)
         raise HTTPException(status_code=400, detail=str(exc))
     return await _automation_page_summary(running, page_index, page)
 

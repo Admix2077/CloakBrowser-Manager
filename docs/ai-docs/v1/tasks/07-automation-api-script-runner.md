@@ -14,6 +14,7 @@
 - page close。
 - goto。
 - wait for selector。
+- click。
 - evaluate。
 - screenshot。
 - clipboard get/set。
@@ -24,7 +25,7 @@
 - [x] 新增 page create。
 - [x] 新增 page close。
 - [x] 新增 wait for selector。
-- [ ] 新增 click。
+- [x] 新增 click。
 - [ ] 新增 fill。
 - [ ] 新增 keyboard input。
 - [ ] 新增 scroll。
@@ -106,4 +107,26 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 59 passed
+```
+
+## 2026-05-27 Automation click 小闭环
+
+当前状态：
+
+- 已补齐 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/click`。
+- 该接口只操作运行中 profile 的既有 Playwright page，不引入 Chromium CDP。
+- 请求体包含：
+  - `selector`：必填，长度 `1..10000`。
+  - `timeout_ms`：`1..300000`，默认 `30000`。
+- 成功后返回现有 `AutomationPageResponse`。
+- Playwright click 失败沿用现有 automation 模式返回 `400`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_click_clicks_selector_and_returns_page -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 60 passed
 ```

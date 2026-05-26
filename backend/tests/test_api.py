@@ -535,6 +535,7 @@ def _automation_page(url: str = "about:blank", title: str = "Blank") -> MagicMoc
     page.set_extra_http_headers = AsyncMock()
     page.evaluate = AsyncMock()
     page.wait_for_selector = AsyncMock()
+    page.click = AsyncMock()
     page.screenshot = AsyncMock(return_value=b"png-bytes")
     page.close = AsyncMock()
     return page
@@ -675,6 +676,27 @@ def test_automation_wait_for_selector_waits_and_returns_page(app_client: TestCli
         state="visible",
         timeout=2500,
     )
+    data = resp.json()
+    assert data["index"] == 0
+    assert data["url"] == "https://example.com/"
+    assert data["title"] == "Example"
+    assert isinstance(data["page_id"], str)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_click_clicks_selector_and_returns_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationClick"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/click",
+        json={"selector": "#submit", "timeout_ms": 2500},
+    )
+
+    assert resp.status_code == 200
+    page.click.assert_awaited_once_with("#submit", timeout=2500)
     data = resp.json()
     assert data["index"] == 0
     assert data["url"] == "https://example.com/"
