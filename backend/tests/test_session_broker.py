@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
 
-from backend import main
+from backend import database as db, main
 
 
 @pytest.fixture()
@@ -32,6 +33,30 @@ def _create_profile(client: TestClient, name: str = "Runtime Profile") -> str:
 
 def _mock_running_profile() -> SimpleNamespace:
     return SimpleNamespace(ws_port=6109, display=109, resolved_geoip=None)
+
+
+def _create_runtime_session(
+    client: TestClient,
+    headers: dict[str, str],
+    profile_id: str,
+    external_session_id: str = "pm-session-token",
+) -> dict:
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(return_value=_mock_running_profile()),
+    ):
+        resp = client.post(
+            "/api/runtime/sessions",
+            headers=headers,
+            json={
+                "external_session_id": external_session_id,
+                "profile_id": profile_id,
+                "lease_seconds": 900,
+            },
+        )
+    assert resp.status_code == 201
+    return resp.json()
 
 
 def test_runtime_session_create_requires_service_token(
@@ -189,3 +214,185 @@ def test_runtime_session_uses_runtime_token_when_ui_auth_is_enabled(
 
     assert resp.status_code == 201
     assert resp.json()["external_session_id"] == "pm-session-auth-enabled"
+
+
+def test_runtime_viewer_token_requires_runtime_service_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+
+    resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        json={"ttl_seconds": 60},
+    )
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runtime service token required"
+
+
+def test_runtime_viewer_token_persists_hash_and_returns_short_lived_viewer_url(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+
+    resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["viewer_url"].startswith(f"/api/runtime/sessions/{session['id']}/vnc?viewer_token=")
+    assert data["viewer_token"]
+    assert data["viewer_token"] in data["viewer_url"]
+    assert data["expires_at"]
+    assert "viewer_token_hash" not in data
+    assert "wallet" not in data
+    assert "order" not in data
+    assert "billing" not in data
+
+    stored = db.get_runtime_session(session["id"])
+    assert stored is not None
+    assert stored["viewer_token_hash"]
+    assert stored["viewer_token_hash"] != data["viewer_token"]
+    assert stored["viewer_token_expires_at"] == data["expires_at"]
+
+
+def test_runtime_viewer_token_rejects_missing_session(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    resp = app_client.post(
+        "/api/runtime/sessions/missing/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+
+    assert resp.status_code == 404
+
+
+def test_runtime_vnc_rejects_missing_wrong_or_expired_viewer_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+
+    with pytest.raises(Exception) as missing:
+        with app_client.websocket_connect(f"/api/runtime/sessions/{session['id']}/vnc"):
+            pass
+    assert missing.value.code == 4401
+
+    with pytest.raises(Exception) as wrong:
+        with app_client.websocket_connect(
+            f"/api/runtime/sessions/{session['id']}/vnc?viewer_token=wrong-token"
+        ):
+            pass
+    assert wrong.value.code == 4401
+
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 1},
+    )
+    assert token_resp.status_code == 201
+    db.set_runtime_session_viewer_token(
+        session["id"],
+        db.get_runtime_session(session["id"])["viewer_token_hash"],
+        "2000-01-01T00:00:00+00:00",
+    )
+
+    with pytest.raises(Exception) as expired:
+        with app_client.websocket_connect(
+            token_resp.json()["viewer_url"],
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+    assert expired.value.code == 4401
+
+
+def test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    main.browser_mgr.running[profile_id] = _mock_running_profile()
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            token_resp.json()["viewer_url"],
+            headers={"origin": "http://evil.com"},
+        ):
+            pass
+
+    assert rejected.value.code == 4403
+
+
+def test_runtime_vnc_accepts_valid_viewer_token_and_proxies_to_profile_vnc(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+    main.browser_mgr.running[profile_id] = _mock_running_profile()
+    captured: dict[str, object] = {}
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        async def send(self, data: bytes):
+            captured["sent"] = data
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            captured["url"] = url
+            captured["kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+
+    with app_client.websocket_connect(
+        token_resp.json()["viewer_url"],
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    assert captured["url"] == "ws://127.0.0.1:6109/websockify"
+    kwargs = captured["kwargs"]
+    assert kwargs["subprotocols"] == ["binary"]
+    assert kwargs["compression"] is None
+    assert kwargs["ping_interval"] is None

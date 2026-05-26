@@ -77,11 +77,11 @@
 
 当前接力状态：
 
-- 已完成 05 Session Broker 的 CloakBrowser 侧最小 runtime session API。
+- 已完成 05 Session Broker 的 CloakBrowser 侧最小 runtime session API 和 runtime viewer token 小闭环。
 - 已新增并通过 `backend/tests/test_session_broker.py`。
-- 已实现 `RUNTIME_SERVICE_TOKEN`、`runtime_sessions` 表、`POST /api/runtime/sessions`、`GET /api/runtime/sessions/{id}`。
+- 已实现 `RUNTIME_SERVICE_TOKEN`、`runtime_sessions` 表、`POST /api/runtime/sessions`、`GET /api/runtime/sessions/{id}`、`POST /api/runtime/sessions/{id}/viewer-token` 和 `WebSocket /api/runtime/sessions/{id}/vnc`。
 - Runtime session API 响应不包含 Project Mileage 钱包/订单/计费字段，也不暴露内部 `viewer_token_hash`。
-- 05 模块整体仍未完成，顶层进度不要勾选 05；viewer token、terminate、renew、audit、Payload 授权扣费联动仍待后续小闭环。
+- 05 模块整体仍未完成，顶层进度不要勾选 05；terminate、renew、audit、Payload 授权扣费联动仍待后续小闭环。
 - 新会话如果继续 05，应先运行：
 
 ```bash
@@ -106,8 +106,8 @@
 
 最近已验证：
 
-- 后端测试最近完整基线：`262 passed`（完成最小 runtime session API 后记录）。
-- Session Broker 目标测试：`5 passed`。
+- 后端测试最近完整基线：`268 passed`（完成 runtime viewer token 后记录）。
+- Session Broker 目标测试：`11 passed`。
 - 前端测试最新基线：`13 test files passed, 184 tests passed`。
 - 前端 build：通过。
 - BrowserScan 复验：`Browser fingerprint authenticity: 100%`。

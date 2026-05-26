@@ -7,10 +7,13 @@ for browser profile management with live VNC viewing.
 from __future__ import annotations
 
 import asyncio
+import datetime
+import hashlib
 import hmac
 import logging
 import os
 import random
+import secrets
 import struct
 import shutil
 import uuid
@@ -78,6 +81,8 @@ from .models import (
     ProfileUpdate,
     RuntimeSessionCreate,
     RuntimeSessionResponse,
+    RuntimeViewerTokenCreate,
+    RuntimeViewerTokenResponse,
     StatusResponse,
     TagResponse,
 )
@@ -580,6 +585,41 @@ def _require_runtime_service_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Runtime service token required")
 
 
+def _runtime_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _utc_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
+def _parse_datetime(value: str) -> datetime.datetime | None:
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def _runtime_session_is_live(session: dict) -> bool:
+    if session.get("status") != "active":
+        return False
+    lease_expires_at = _parse_datetime(session.get("lease_expires_at", ""))
+    return bool(lease_expires_at and lease_expires_at > _utc_now())
+
+
+def _runtime_viewer_token_is_valid(session: dict, viewer_token: str | None) -> bool:
+    if not viewer_token:
+        return False
+    token_hash = session.get("viewer_token_hash")
+    if not token_hash or not hmac.compare_digest(token_hash, _runtime_token_hash(viewer_token)):
+        return False
+    expires_at = _parse_datetime(session.get("viewer_token_expires_at", ""))
+    return bool(expires_at and expires_at > _utc_now())
+
+
 def _safe_proxy_check_error(exc: Exception, raw_url: str) -> str:
     redacted_url = redact_proxy_asset_url(raw_url)
     message = str(exc).replace(raw_url, redacted_url)
@@ -945,6 +985,41 @@ async def get_runtime_session(session_id: str, request: Request):
     if not session:
         raise HTTPException(status_code=404, detail="Runtime session not found")
     return _runtime_session_response(session)
+
+
+@app.post(
+    "/api/runtime/sessions/{session_id}/viewer-token",
+    response_model=RuntimeViewerTokenResponse,
+    status_code=201,
+)
+async def create_runtime_viewer_token(
+    session_id: str,
+    req: RuntimeViewerTokenCreate,
+    request: Request,
+):
+    _require_runtime_service_token(request)
+    session = db.get_runtime_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Runtime session not found")
+    if not _runtime_session_is_live(session):
+        raise HTTPException(status_code=409, detail="Runtime session is not active")
+
+    viewer_token = secrets.token_urlsafe(32)
+    expires_at = (_utc_now() + datetime.timedelta(seconds=req.ttl_seconds)).isoformat()
+    updated = db.set_runtime_session_viewer_token(
+        session_id,
+        _runtime_token_hash(viewer_token),
+        expires_at,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="Runtime session not found")
+
+    viewer_url = f"/api/runtime/sessions/{session_id}/vnc?viewer_token={viewer_token}"
+    return RuntimeViewerTokenResponse(
+        viewer_url=viewer_url,
+        viewer_token=viewer_token,
+        expires_at=expires_at,
+    )
 
 
 @app.post("/api/proxies/{proxy_id}/check", response_model=ProxyResponse)
@@ -1373,6 +1448,33 @@ async def vnc_proxy(websocket: WebSocket, profile_id: str):
         await websocket.close(code=4004, reason="Profile not running")
         return
 
+    await _proxy_running_vnc(websocket, profile_id, running)
+
+
+@app.websocket("/api/runtime/sessions/{session_id}/vnc")
+async def runtime_vnc_proxy(websocket: WebSocket, session_id: str):
+    """Proxy a runtime session VNC stream after validating a short-lived viewer token."""
+    if not await _check_websocket_origin(websocket):
+        return
+
+    session = db.get_runtime_session(session_id)
+    if not session or not _runtime_session_is_live(session):
+        await websocket.close(code=4404, reason="Runtime session not found")
+        return
+    if not _runtime_viewer_token_is_valid(session, websocket.query_params.get("viewer_token")):
+        await websocket.close(code=4401, reason="Runtime viewer token invalid")
+        return
+
+    profile_id = str(session["profile_id"])
+    running = browser_mgr.running.get(profile_id)
+    if not running:
+        await websocket.close(code=4004, reason="Profile not running")
+        return
+
+    await _proxy_running_vnc(websocket, profile_id, running)
+
+
+async def _proxy_running_vnc(websocket: WebSocket, profile_id: str, running):
     # Accept with client's requested subprotocol (if any) — RFC 6455 requires
     # the server must not respond with a subprotocol the client didn't request.
     requested = websocket.scope.get("subprotocols", [])

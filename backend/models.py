@@ -437,6 +437,16 @@ class RuntimeSessionResponse(BaseModel):
     updated_at: str
 
 
+class RuntimeViewerTokenCreate(BaseModel):
+    ttl_seconds: int = Field(ge=1, le=300)
+
+
+class RuntimeViewerTokenResponse(BaseModel):
+    viewer_url: str
+    viewer_token: str
+    expires_at: str
+
+
 class StatusResponse(BaseModel):
     running_count: int
     binary_version: str

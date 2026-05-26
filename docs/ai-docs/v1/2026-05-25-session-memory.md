@@ -5156,11 +5156,76 @@ git diff --check
 
 仍未完成：
 
-- `POST /api/runtime/sessions/{id}/viewer-token`。
 - `POST /api/runtime/sessions/{id}/terminate`。
 - `POST /api/runtime/sessions/{id}/renew`。
 - runtime audit。
-- viewer token 到期、session 终止后的 VNC 访问失效。
+- session 终止后的 VNC 访问失效。
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+
+边界：
+
+- 没有修改 Project Mileage app/payload。
+- 没有把钱包、订单、用户权限判断写入 CloakBrowser。
+- 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
+
+## 70. 2026-05-27 Runtime viewer token 小闭环
+
+背景：
+
+- 在 `184718d add runtime session broker baseline` 之后继续推进 05。
+- 用户授权以 CTO 合作伙伴视角主动决策；本轮选择 viewer token 作为下一小闭环，因为它是 Project Mileage 远程工作台进入在线操控前的必要安全入口。
+- 本轮仍只做 CloakBrowser runtime 能力，不修改 Project Mileage app/payload，不写钱包、订单、权限判断。
+
+已完成：
+
+- 使用子 agent 做只读侦察，确认当前 VNC 由 `/api/profiles/{profile_id}/vnc` 代理到 KasmVNC `websockify`，并建议新增 runtime viewer-token API 与 runtime VNC 路径。
+- `backend/tests/test_session_broker.py`
+  - 新增 viewer token TDD 覆盖。
+  - 确认新增测试初始红灯：viewer-token API 返回 405，runtime VNC 路径不存在。
+  - 覆盖无 runtime service token 不能颁发 viewer token。
+  - 覆盖不存在 session 返回 404。
+  - 覆盖 response 不包含 wallet/order/billing，也不暴露 `viewer_token_hash`。
+  - 覆盖 DB 只保存 token hash 和过期时间，不保存明文 token。
+  - 覆盖缺失、错误、过期 viewer token 无法连接 runtime VNC。
+  - 覆盖跨域 Origin 即使带有效 viewer token 也无法连接 runtime VNC。
+  - 覆盖有效 viewer token 可连接 `/api/runtime/sessions/{id}/vnc` 并代理到对应 profile 的 KasmVNC websockify。
+- `backend/models.py`
+  - 新增 `RuntimeViewerTokenCreate`。
+  - 新增 `RuntimeViewerTokenResponse`。
+- `backend/database.py`
+  - `runtime_sessions` 新增 `viewer_token_expires_at` 字段。
+  - 为既有 DB 增加 `viewer_token_expires_at` 迁移。
+  - 新增 `set_runtime_session_viewer_token()`。
+- `backend/main.py`
+  - 新增 token hash、UTC 时间和 runtime session live 校验 helper。
+  - 新增 `POST /api/runtime/sessions/{session_id}/viewer-token`。
+  - 新增 `WebSocket /api/runtime/sessions/{session_id}/vnc`。
+  - viewer token 使用 `secrets.token_urlsafe(32)` 生成，明文只在 response 返回一次，DB 只保存 sha256 hash。
+  - runtime VNC 路径校验同源 Origin、session active、lease 未过期、viewer token hash、viewer token 过期时间和 profile running。
+  - 抽出 `_proxy_running_vnc()`，让既有 `/api/profiles/{profile_id}/vnc` 与 runtime VNC 路径复用同一 VNC 代理逻辑。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 11 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_ws_allows_same_origin backend/tests/test_api.py::test_ws_allows_no_origin backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 268 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- `POST /api/runtime/sessions/{id}/terminate`。
+- `POST /api/runtime/sessions/{id}/renew`。
+- runtime audit。
+- session 终止后的 VNC 访问失效。
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
 
 边界：

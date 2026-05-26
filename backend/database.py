@@ -131,6 +131,7 @@ def init_db():
                 status TEXT NOT NULL,
                 lease_expires_at TEXT NOT NULL,
                 viewer_token_hash TEXT,
+                viewer_token_expires_at TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -173,6 +174,11 @@ def init_db():
         proxy_cols = {row[1] for row in conn.execute("PRAGMA table_info(proxies)").fetchall()}
         if "last_check_error" not in proxy_cols:
             conn.execute("ALTER TABLE proxies ADD COLUMN last_check_error TEXT")
+            conn.commit()
+
+        runtime_cols = {row[1] for row in conn.execute("PRAGMA table_info(runtime_sessions)").fetchall()}
+        if "viewer_token_expires_at" not in runtime_cols:
+            conn.execute("ALTER TABLE runtime_sessions ADD COLUMN viewer_token_expires_at TEXT")
             conn.commit()
 
 
@@ -478,8 +484,8 @@ def create_runtime_session(
         conn.execute(
             """INSERT INTO runtime_sessions (
                 id, profile_id, external_session_id, status, lease_expires_at,
-                viewer_token_hash, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                viewer_token_hash, viewer_token_expires_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 session_id,
                 profile_id,
@@ -487,6 +493,7 @@ def create_runtime_session(
                 status,
                 lease_expires_at,
                 viewer_token_hash,
+                None,
                 now,
                 now,
             ),
@@ -503,6 +510,24 @@ def get_runtime_session(session_id: str) -> dict[str, Any] | None:
             (session_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def set_runtime_session_viewer_token(
+    session_id: str,
+    viewer_token_hash: str,
+    viewer_token_expires_at: str,
+) -> dict[str, Any] | None:
+    with get_db() as conn:
+        cursor = conn.execute(
+            """UPDATE runtime_sessions
+            SET viewer_token_hash = ?, viewer_token_expires_at = ?, updated_at = ?
+            WHERE id = ?""",
+            (viewer_token_hash, viewer_token_expires_at, _now(), session_id),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_runtime_session(session_id)
 
 
 def _proxy_from_row(row: sqlite3.Row) -> dict[str, Any]:
