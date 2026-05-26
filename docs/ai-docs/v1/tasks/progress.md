@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 network summary 小闭环：
+  - 新增 `AutomationNetworkEvent` 和 `AutomationNetworkSummaryResponse`。
+  - 新增 `GET /api/profiles/{profile_id}/automation/pages/{page_ref}/network-summary`。
+  - 通过 Playwright `request`、`response`、`requestfailed` 事件捕获低敏摘要。
+  - 每个 page 仅在进程内内存保留最近 200 条，不新增 DB 表，不写 `audit_events`，不把 network URL 或失败详情写入 logger。
+  - URL 丢弃 username、password、query、fragment、params；不采集 headers、cookie、Authorization、body。
+  - 目标红灯：`404 Not Found`。
+  - 目标绿灯：`test_automation_network_summary_redacts_urls_and_returns_recent_events` 和 `test_automation_network_summary_keeps_recent_redacted_events` 通过。
 - 本轮继续 07 Automation API 与脚本运行器，完成 console logs 小闭环：
   - 新增 `AutomationConsoleLogEntry` 和 `AutomationConsoleLogsResponse`。
   - 新增 `GET /api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs`。
@@ -107,7 +115,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，小步补齐 network summary；注意 URL query、header、cookie、Authorization 等敏感信息脱敏或不采集。
+1. 继续 CloakBrowser 独立侧 07 Automation API，进入 Script Runner / task 表前先补 Automation API 文档或整理 API contract。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

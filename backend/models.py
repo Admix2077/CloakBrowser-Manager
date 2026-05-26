@@ -492,6 +492,19 @@ class AutomationConsoleLogsResponse(BaseModel):
     logs: list[AutomationConsoleLogEntry]
 
 
+class AutomationNetworkEvent(BaseModel):
+    event: str
+    method: str | None = None
+    url: str
+    resource_type: str | None = None
+    status: int | None = None
+    failure: str | None = None
+
+
+class AutomationNetworkSummaryResponse(BaseModel):
+    events: list[AutomationNetworkEvent]
+
+
 class AutomationGotoRequest(BaseModel):
     url: str
     wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "load"

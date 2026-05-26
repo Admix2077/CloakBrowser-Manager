@@ -46,6 +46,7 @@ from .models import (
     AutomationGotoRequest,
     AutomationInfoResponse,
     AutomationKeyboardTypeRequest,
+    AutomationNetworkSummaryResponse,
     AutomationPageResponse,
     AutomationPagesResponse,
     AutomationScreenshotRequest,
@@ -116,6 +117,7 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 AUTH_TOKEN: str | None = os.environ.get("AUTH_TOKEN") or None
 RUNTIME_SERVICE_TOKEN: str | None = os.environ.get("RUNTIME_SERVICE_TOKEN") or None
 _AUTOMATION_CONSOLE_LOG_LIMIT = 200
+_AUTOMATION_NETWORK_EVENT_LIMIT = 200
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
@@ -1851,8 +1853,73 @@ def _automation_ensure_console_capture(page) -> None:
     page.automation_console_capture_ready = True
 
 
+def _automation_safe_url(raw_url: str) -> str:
+    parsed = urlparse(str(raw_url))
+    if not parsed.scheme or not parsed.hostname:
+        return ""
+    host = parsed.hostname
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return parsed._replace(netloc=host, params="", query="", fragment="").geturl()
+
+
+def _automation_network_event(event: str, request=None, response=None, failure: str | None = None) -> dict:
+    request_obj = request or getattr(response, "request", None)
+    raw_url = getattr(request_obj, "url", "") if request_obj is not None else ""
+    return {
+        "event": event,
+        "method": getattr(request_obj, "method", None) if request_obj is not None else None,
+        "url": _automation_safe_url(raw_url),
+        "resource_type": getattr(request_obj, "resource_type", None) if request_obj is not None else None,
+        "status": getattr(response, "status", None) if response is not None else None,
+        "failure": failure,
+    }
+
+
+def _automation_append_network_event(page, entry: dict) -> None:
+    events = getattr(page, "automation_network_events", [])
+    events.append(entry)
+    if len(events) > _AUTOMATION_NETWORK_EVENT_LIMIT:
+        del events[:-_AUTOMATION_NETWORK_EVENT_LIMIT]
+    page.automation_network_events = events
+
+
+def _automation_ensure_network_capture(page) -> None:
+    if getattr(page, "automation_network_capture_ready", False) is True:
+        return
+    if not isinstance(getattr(page, "automation_network_events", None), list):
+        page.automation_network_events = []
+
+    try:
+        page.on(
+            "request",
+            lambda request: _automation_append_network_event(
+                page,
+                _automation_network_event("request", request=request),
+            ),
+        )
+        page.on(
+            "response",
+            lambda response: _automation_append_network_event(
+                page,
+                _automation_network_event("response", response=response),
+            ),
+        )
+        page.on(
+            "requestfailed",
+            lambda request: _automation_append_network_event(
+                page,
+                _automation_network_event("requestfailed", request=request, failure="request_failed"),
+            ),
+        )
+    except AttributeError:
+        return
+    page.automation_network_capture_ready = True
+
+
 async def _automation_page_summary(running, index: int, page) -> AutomationPageResponse:
     _automation_ensure_console_capture(page)
+    _automation_ensure_network_capture(page)
     try:
         title = await page.title()
     except Exception as exc:
@@ -1931,6 +1998,16 @@ async def automation_console_logs(profile_id: str, page_ref: str):
     _, page, _ = _automation_get_page(profile_id, page_ref)
     _automation_ensure_console_capture(page)
     return AutomationConsoleLogsResponse(logs=list(getattr(page, "automation_console_logs", []) or []))
+
+
+@app.get(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/network-summary",
+    response_model=AutomationNetworkSummaryResponse,
+)
+async def automation_network_summary(profile_id: str, page_ref: str):
+    _, page, _ = _automation_get_page(profile_id, page_ref)
+    _automation_ensure_network_capture(page)
+    return AutomationNetworkSummaryResponse(events=list(getattr(page, "automation_network_events", []) or []))
 
 
 @app.post(

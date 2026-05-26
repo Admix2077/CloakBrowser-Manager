@@ -19,6 +19,7 @@
 - keyboard type。
 - scroll。
 - console logs。
+- network summary。
 - evaluate。
 - screenshot。
 - clipboard get/set。
@@ -34,7 +35,7 @@
 - [x] 新增 keyboard input。
 - [x] 新增 scroll。
 - [x] 新增 console logs。
-- [ ] 新增 network summary。
+- [x] 新增 network summary。
 - [ ] 新增 task 表：
   - id。
   - profile_id。
@@ -226,4 +227,34 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 65 passed
+```
+
+## 2026-05-27 Automation network summary 小闭环
+
+当前状态：
+
+- 已补齐 `GET /api/profiles/{profile_id}/automation/pages/{page_ref}/network-summary`。
+- 该接口只读取运行中 profile 的既有 Playwright page，不引入 Chromium CDP。
+- network 事件通过 `page.on("request" | "response" | "requestfailed", ...)` 捕获，存放在 page 对象的进程内内存字段。
+- 每个 page 最多保留最近 200 条 network event，超出后丢弃旧记录。
+- 响应结构为：
+  - `events[].event`
+  - `events[].method`
+  - `events[].url`
+  - `events[].resource_type`
+  - `events[].status`
+  - `events[].failure`
+- URL 只保留 scheme、host、port 和 path；丢弃 username、password、query、fragment、params。
+- 不采集 headers、cookie、Authorization、request/response body。
+- 不新增 DB 表，不写 `audit_events`，不把 network URL 或失败详情写入 logger。
+- request failed 只返回固定 `failure: "request_failed"`，不透传底层 failure 字符串。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_network_summary_redacts_urls_and_returns_recent_events backend/tests/test_api.py::test_automation_network_summary_keeps_recent_redacted_events -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 67 passed
 ```

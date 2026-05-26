@@ -835,6 +835,99 @@ def test_automation_console_logs_captures_recent_console_messages(app_client: Te
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_network_summary_redacts_urls_and_returns_recent_events(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationNetworkSummary"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert resp.status_code == 200
+    assert page.on.call_count == 3
+    event_callbacks = {call.args[0]: call.args[1] for call in page.on.call_args_list}
+
+    request = MagicMock()
+    request.method = "POST"
+    request.url = "https://user:pass@example.com/api/orders?token=secret#frag"
+    request.resource_type = "xhr"
+    event_callbacks["request"](request)
+
+    response = MagicMock()
+    response.status = 201
+    response.request = request
+    event_callbacks["response"](response)
+
+    failed_request = MagicMock()
+    failed_request.method = "GET"
+    failed_request.url = "https://example.com/private?authorization=secret"
+    failed_request.resource_type = "document"
+    failed_request.failure = "net::ERR_FAILED"
+    event_callbacks["requestfailed"](failed_request)
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "events": [
+            {
+                "event": "request",
+                "method": "POST",
+                "url": "https://example.com/api/orders",
+                "resource_type": "xhr",
+                "status": None,
+                "failure": None,
+            },
+            {
+                "event": "response",
+                "method": "POST",
+                "url": "https://example.com/api/orders",
+                "resource_type": "xhr",
+                "status": 201,
+                "failure": None,
+            },
+            {
+                "event": "requestfailed",
+                "method": "GET",
+                "url": "https://example.com/private",
+                "resource_type": "document",
+                "status": None,
+                "failure": "request_failed",
+            },
+        ],
+    }
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_network_summary_keeps_recent_redacted_events(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationNetworkRing"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert resp.status_code == 200
+    event_callbacks = {call.args[0]: call.args[1] for call in page.on.call_args_list}
+    for index in range(205):
+        request = MagicMock()
+        request.method = "GET"
+        request.url = f"https://user:pass@example.com/items/{index}?token=secret#frag"
+        request.resource_type = "fetch"
+        event_callbacks["request"](request)
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert resp.status_code == 200
+    events = resp.json()["events"]
+    assert len(events) == 200
+    assert events[0]["url"] == "https://example.com/items/5"
+    assert events[-1]["url"] == "https://example.com/items/204"
+    assert all("token" not in event["url"] for event in events)
+    assert all("user:pass" not in event["url"] for event in events)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_page_id_remains_stable_when_page_order_changes(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationPageId"})
     pid = create.json()["id"]
