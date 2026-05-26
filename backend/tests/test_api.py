@@ -1575,6 +1575,136 @@ def test_run_fill_step_failure_uses_redacted_error(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_keyboard_type_step_types_existing_page_without_leaking_text(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunKeyboardTypeProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    text = "account-token-super-secret@example.com"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "keyboard_type",
+                    "text": text,
+                    "page_ref": "0",
+                    "delay_ms": 25,
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.keyboard.type.assert_awaited_once_with(text, delay=25)
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "keyboard_type", "page_ref": "0", "delay_ms": 25}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "keyboard_type", "status": "succeeded"}]}
+    assert text not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_keyboard_type_step_marks_failed_for_bool_delay(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunKeyboardTypeBoolDelayProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    text = "account-token-super-secret@example.com"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "keyboard_type", "text": text, "delay_ms": True}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "keyboard_type"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "keyboard_type", "status": "failed"}]}
+    assert data["error"] == "Invalid keyboard_type step"
+    assert text not in str(data)
+    assert "super-secret" not in str(data)
+    page.keyboard.type.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_keyboard_type_step_uses_default_delay(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunKeyboardTypeDefaultDelayProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    text = "hello"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "keyboard_type", "text": text}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.keyboard.type.assert_awaited_once_with(text, delay=0)
+    data = resp.json()
+    assert data["steps"] == [{"type": "keyboard_type"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "keyboard_type", "status": "succeeded"}]}
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_keyboard_type_step_marks_failed_for_empty_text(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunKeyboardTypeEmptyTextProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    secret_note = "account-token-super-secret@example.com"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "keyboard_type", "text": "", "note": secret_note}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "keyboard_type"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "keyboard_type", "status": "failed"}]}
+    assert data["error"] == "Invalid keyboard_type step"
+    assert secret_note not in str(data)
+    assert "super-secret" not in str(data)
+    page.keyboard.type.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_keyboard_type_step_failure_uses_redacted_error(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunKeyboardTypeFailureProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    text = "account-token-super-secret@example.com"
+    page.keyboard.type.side_effect = RuntimeError(f"keyboard failed: {text}")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "keyboard_type", "text": text}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "keyboard_type"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "keyboard_type", "status": "failed"}]}
+    assert data["error"] == "Keyboard type step failed"
+    assert text not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_run_scroll_step_scrolls_existing_page(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunScrollProfile"})
     pid = create.json()["id"]

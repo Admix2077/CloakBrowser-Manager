@@ -1501,6 +1501,15 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
                 and 1 <= step["timeout_ms"] <= 300_000
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
+        if step_type == "keyboard_type":
+            if isinstance(step.get("page_ref"), str):
+                redacted["page_ref"] = step["page_ref"]
+            if (
+                isinstance(step.get("delay_ms"), int)
+                and not isinstance(step.get("delay_ms"), bool)
+                and 0 <= step["delay_ms"] <= 10_000
+            ):
+                redacted["delay_ms"] = step["delay_ms"]
         if step_type == "scroll":
             if isinstance(step.get("page_ref"), str):
                 redacted["page_ref"] = step["page_ref"]
@@ -1655,7 +1664,7 @@ async def run_automation_task(task_id: str):
     for index, step in enumerate(running_task["steps"]):
         step_type = step.get("type")
         if step_type != "wait":
-            if step_type not in {"click", "fill", "open_url", "scroll"}:
+            if step_type not in {"click", "fill", "keyboard_type", "open_url", "scroll"}:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
                 failed = _fail_automation_task(
                     task_id,
@@ -1719,6 +1728,34 @@ async def run_automation_task(task_id: str):
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
                     failed = _fail_automation_task(task_id, step_results, "Fill step failed")
+                    return _automation_task_finished_response(failed, status_code=400)
+                step_results.append(_automation_task_step_result(index, step, "succeeded"))
+                continue
+
+            if step_type == "keyboard_type":
+                text = _automation_step_str(step, "text")
+                raw_delay_ms = step.get("delay_ms", 0)
+                page_ref = _automation_step_str(step, "page_ref", "0") or "0"
+                if (
+                    text is None
+                    or not text
+                    or len(text) > 1_048_576
+                    or not isinstance(raw_delay_ms, int)
+                    or isinstance(raw_delay_ms, bool)
+                    or raw_delay_ms < 0
+                    or raw_delay_ms > 10_000
+                ):
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Invalid keyboard_type step")
+                    return _automation_task_finished_response(failed, status_code=400)
+                try:
+                    _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
+                    await page.keyboard.type(text, delay=raw_delay_ms)
+                except HTTPException:
+                    raise
+                except Exception:
+                    step_results.append(_automation_task_step_result(index, step, "failed"))
+                    failed = _fail_automation_task(task_id, step_results, "Keyboard type step failed")
                     return _automation_task_finished_response(failed, status_code=400)
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue

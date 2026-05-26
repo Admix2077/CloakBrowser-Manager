@@ -55,6 +55,7 @@
   - [x] wait。
   - [x] click。
   - [x] fill。
+  - [x] keyboard_type。
   - [x] scroll。
   - [ ] evaluate。
   - [ ] screenshot。
@@ -275,6 +276,30 @@ cd frontend && npm run build
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_marks_failed_for_invalid_selector_without_leaking_payload backend/tests/test_api.py::test_run_click_step_marks_failed_for_bool_timeout backend/tests/test_api.py::test_run_click_step_failure_uses_redacted_error -q
 # 4 passed
+```
+
+## 2026-05-27 Automation Script Runner keyboard_type step 小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已支持 `keyboard_type` step。
+- step 格式：
+  - `type`: `keyboard_type`。
+  - `text`: 必填字符串，长度 `1..1048576`。
+  - `page_ref`: 可选，默认 `"0"`，可传 page index 或 page id。
+  - `delay_ms`: 可选整数，范围 `0..10000`，默认 `0`，不接受 `bool`。
+- 执行时复用已运行 profile 的既有 page 和 `page.keyboard.type(text, delay=delay_ms)`，不自动启动 profile，不创建新 page。
+- 成功后 task 按既有状态机进入 `succeeded`；非法 text 或 delay 进入 `failed` 并返回 `400`。
+- Playwright keyboard type 执行异常进入 `failed` 并返回固定低敏错误 `Keyboard type step failed`，不回显异常原文。
+- task 对外响应对 `keyboard_type` step 做白名单脱敏：只回显 `type/page_ref/delay_ms`，不回显 text 或未知字段。
+- `result.steps[]` 只记录 `index/type/status`，不复制 text、完整 step payload 或异常原文。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_keyboard_type_step_marks_failed_for_bool_delay backend/tests/test_api.py::test_run_keyboard_type_step_uses_default_delay backend/tests/test_api.py::test_run_keyboard_type_step_marks_failed_for_empty_text backend/tests/test_api.py::test_run_keyboard_type_step_failure_uses_redacted_error -q
+# 5 passed
 ```
 
 ## 2026-05-27 Automation Script Runner fill step 小闭环
