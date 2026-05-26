@@ -1444,6 +1444,137 @@ def test_run_click_step_failure_uses_redacted_error(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_fill_step_fills_existing_page_without_leaking_selector_or_value(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunFillProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    selector = "#email-token-super-secret"
+    value = "account-token-super-secret@example.com"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "fill",
+                    "selector": selector,
+                    "value": value,
+                    "page_ref": "0",
+                    "timeout_ms": 2500,
+                },
+            ],
+        },
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.fill.assert_awaited_once_with(selector, value, timeout=2500)
+    data = resp.json()
+    assert data["status"] == "succeeded"
+    assert data["steps"] == [{"type": "fill", "page_ref": "0", "timeout_ms": 2500}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "fill", "status": "succeeded"}]}
+    assert selector not in str(data)
+    assert value not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_fill_step_marks_failed_for_invalid_value_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunFillInvalidProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    secret_value = "account-token-super-secret@example.com"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "fill", "selector": "#email", "value": 123, "note": secret_value}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "fill"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "fill", "status": "failed"}]}
+    assert data["error"] == "Invalid fill step"
+    assert secret_value not in str(data)
+    assert "super-secret" not in str(data)
+    page.fill.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_fill_step_allows_empty_value(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunFillEmptyValueProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "fill", "selector": "#email", "value": ""}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    page.fill.assert_awaited_once_with("#email", "", timeout=30_000)
+    data = resp.json()
+    assert data["steps"] == [{"type": "fill"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "fill", "status": "succeeded"}]}
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_fill_step_marks_failed_for_bool_timeout(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunFillBoolTimeoutProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "fill", "selector": "#email", "value": "x", "timeout_ms": True}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "fill"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "fill", "status": "failed"}]}
+    assert data["error"] == "Invalid fill step"
+    page.fill.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_fill_step_failure_uses_redacted_error(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunFillFailureProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    selector = "#email-token-super-secret"
+    value = "account-token-super-secret@example.com"
+    page.fill.side_effect = RuntimeError(f"fill failed: {selector} {value}")
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "fill", "selector": selector, "value": value}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "fill"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "fill", "status": "failed"}]}
+    assert data["error"] == "Fill step failed"
+    assert selector not in str(data)
+    assert value not in str(data)
+    assert "super-secret" not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_run_scroll_step_scrolls_existing_page(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunScrollProfile"})
     pid = create.json()["id"]

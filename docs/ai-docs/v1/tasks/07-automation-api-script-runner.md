@@ -54,7 +54,7 @@
   - [x] open_url。
   - [x] wait。
   - [x] click。
-  - [ ] fill。
+  - [x] fill。
   - [x] scroll。
   - [ ] evaluate。
   - [ ] screenshot。
@@ -275,6 +275,31 @@ cd frontend && npm run build
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_marks_failed_for_invalid_selector_without_leaking_payload backend/tests/test_api.py::test_run_click_step_marks_failed_for_bool_timeout backend/tests/test_api.py::test_run_click_step_failure_uses_redacted_error -q
 # 4 passed
+```
+
+## 2026-05-27 Automation Script Runner fill step 小闭环
+
+当前状态：
+
+- `POST /api/tasks/{id}/run` 已支持 `fill` step。
+- step 格式：
+  - `type`: `fill`。
+  - `selector`: 必填字符串，长度 `1..10000`。
+  - `value`: 必填字符串，长度 `0..1048576`，允许空字符串用于清空输入。
+  - `page_ref`: 可选，默认 `"0"`，可传 page index 或 page id。
+  - `timeout_ms`: 可选整数，范围 `1..300000`，默认 `30000`，不接受 `bool`。
+- 执行时复用已运行 profile 的既有 page 和 `page.fill(selector, value, timeout=timeout_ms)`，不自动启动 profile，不创建新 page。
+- 成功后 task 按既有状态机进入 `succeeded`；非法 selector、value 或 timeout 进入 `failed` 并返回 `400`。
+- Playwright fill 执行异常进入 `failed` 并返回固定低敏错误 `Fill step failed`，不回显异常原文。
+- task 对外响应对 `fill` step 做白名单脱敏：只回显 `type/page_ref/timeout_ms`，不回显 selector、value 或未知字段。
+- `result.steps[]` 只记录 `index/type/status`，不复制 selector、value、完整 step payload 或异常原文。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_fill_step_marks_failed_for_invalid_value_without_leaking_payload backend/tests/test_api.py::test_run_fill_step_allows_empty_value backend/tests/test_api.py::test_run_fill_step_marks_failed_for_bool_timeout backend/tests/test_api.py::test_run_fill_step_failure_uses_redacted_error -q
+# 5 passed
 ```
 
 ## 2026-05-27 Automation Script Runner open_url step 小闭环

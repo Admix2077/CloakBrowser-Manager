@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner fill step 小闭环：
+  - `POST /api/tasks/{id}/run` 已支持 `fill` step。
+  - `fill` 支持必填 `selector`，长度 `1..10000`；必填 `value`，长度 `0..1048576`，允许空字符串用于清空输入；可选 `page_ref`，默认 `"0"`；可选 `timeout_ms`，默认 `30000`，范围 `1..300000`，且拒绝 `bool`。
+  - 执行时复用已运行 profile 的既有 page 和 `page.fill(selector, value, timeout=timeout_ms)`，不自动启动 profile，不创建新 page。
+  - 非法 selector、value 或 timeout 进入 `failed` 并返回固定低敏错误 `Invalid fill step`；执行异常进入 `failed` 并返回固定低敏错误 `Fill step failed`。
+  - task 对外响应对 `fill` step 做白名单脱敏，只回显 `type/page_ref/timeout_ms`，不回显 selector 或 value。
+  - `result.steps[]` 只记录 `index/type/status`，不复制 selector、value、完整 step payload 或异常原文。
+  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、evaluate/screenshot step。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner click step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `click` step。
   - `click` 支持必填 `selector`，长度 `1..10000`；可选 `page_ref`，默认 `"0"`；可选 `timeout_ms`，默认 `30000`，范围 `1..300000`，且拒绝 `bool`。
