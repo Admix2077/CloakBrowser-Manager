@@ -48,6 +48,7 @@ from .models import (
     AutomationPageResponse,
     AutomationPagesResponse,
     AutomationScreenshotRequest,
+    AutomationScrollRequest,
     AutomationWaitForSelectorRequest,
     ClipboardRequest,
     LaunchResponse,
@@ -2018,6 +2019,27 @@ async def automation_keyboard_type(
             page_index,
             exc,
         )
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await _automation_page_summary(running, page_index, page)
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/scroll",
+    response_model=AutomationPageResponse,
+)
+async def automation_scroll(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationScrollRequest,
+):
+    running, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.evaluate(
+            "([deltaX, deltaY]) => window.scrollBy(deltaX, deltaY)",
+            [body.delta_x, body.delta_y],
+        )
+    except Exception as exc:
+        logger.warning("Automation scroll failed for %s page %d: %s", profile_id, page_index, exc)
         raise HTTPException(status_code=400, detail=str(exc))
     return await _automation_page_summary(running, page_index, page)
 

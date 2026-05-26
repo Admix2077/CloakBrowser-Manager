@@ -750,6 +750,30 @@ def test_automation_keyboard_type_types_text_and_returns_page(app_client: TestCl
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_scroll_scrolls_page_and_returns_page(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationScroll"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/scroll",
+        json={"delta_x": 10, "delta_y": 600},
+    )
+
+    assert resp.status_code == 200
+    page.evaluate.assert_awaited_once_with(
+        "([deltaX, deltaY]) => window.scrollBy(deltaX, deltaY)",
+        [10, 600],
+    )
+    data = resp.json()
+    assert data["index"] == 0
+    assert data["url"] == "https://example.com/"
+    assert data["title"] == "Example"
+    assert isinstance(data["page_id"], str)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_page_id_remains_stable_when_page_order_changes(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationPageId"})
     pid = create.json()["id"]

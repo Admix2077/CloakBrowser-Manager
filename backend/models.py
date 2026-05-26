@@ -510,6 +510,11 @@ class AutomationKeyboardTypeRequest(BaseModel):
     delay_ms: int = Field(default=0, ge=0, le=10_000)
 
 
+class AutomationScrollRequest(BaseModel):
+    delta_x: int = Field(default=0, ge=-100_000, le=100_000)
+    delta_y: int = Field(default=0, ge=-100_000, le=100_000)
+
+
 class AutomationEvaluateRequest(BaseModel):
     expression: str = Field(min_length=1, max_length=200_000)
 

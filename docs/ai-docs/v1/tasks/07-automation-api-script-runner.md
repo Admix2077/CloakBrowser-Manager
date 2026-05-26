@@ -17,6 +17,7 @@
 - click。
 - fill。
 - keyboard type。
+- scroll。
 - evaluate。
 - screenshot。
 - clipboard get/set。
@@ -30,7 +31,7 @@
 - [x] 新增 click。
 - [x] 新增 fill。
 - [x] 新增 keyboard input。
-- [ ] 新增 scroll。
+- [x] 新增 scroll。
 - [ ] 新增 console logs。
 - [ ] 新增 network summary。
 - [ ] 新增 task 表：
@@ -176,4 +177,27 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 62 passed
+```
+
+## 2026-05-27 Automation scroll 小闭环
+
+当前状态：
+
+- 已补齐 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/scroll`。
+- 该接口只操作运行中 profile 的既有 Playwright page，不引入 Chromium CDP。
+- 请求体包含：
+  - `delta_x`：横向滚动量，`-100000..100000`，默认 `0`。
+  - `delta_y`：纵向滚动量，`-100000..100000`，默认 `0`。
+- 实现通过页面内 `window.scrollBy(deltaX, deltaY)` 完成，不依赖鼠标滚轮底层实现。
+- 成功后返回现有 `AutomationPageResponse`。
+- Playwright evaluate 失败沿用现有 automation 模式返回 `400`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_scroll_scrolls_page_and_returns_page -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 63 passed
 ```
