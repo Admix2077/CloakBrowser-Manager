@@ -86,6 +86,27 @@ describe("api.importProfiles", () => {
   });
 });
 
+describe("api.exportProfiles", () => {
+  it("sends selected profile ids to the profile config export endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      schema_version: 1,
+      total: 2,
+      exported: 1,
+      failed: 1,
+      results: [],
+    }));
+
+    await api.exportProfiles(["profile-1", "missing"]);
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/export");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      profile_ids: ["profile-1", "missing"],
+    });
+  });
+});
+
 // ── updateProfile ───────────────────────────────────────────────────────────
 
 describe("api.updateProfile", () => {

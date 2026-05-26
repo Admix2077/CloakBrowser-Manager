@@ -152,6 +152,46 @@ export interface ProfileImportResponse {
   results: ProfileImportResult[];
 }
 
+export interface ProfileConfigExport {
+  name: string;
+  fingerprint_seed: number;
+  proxy: string | null;
+  timezone: string | null;
+  locale: string | null;
+  platform: string;
+  user_agent: string | null;
+  screen_width: number;
+  screen_height: number;
+  gpu_vendor: string | null;
+  gpu_renderer: string | null;
+  hardware_concurrency: number | null;
+  humanize: boolean;
+  human_preset: string;
+  headless: boolean;
+  geoip: boolean;
+  clipboard_sync: boolean;
+  auto_launch: boolean;
+  color_scheme: string | null;
+  launch_args: string[];
+  notes: string | null;
+  tags: { tag: string; color: string | null }[];
+}
+
+export interface ProfileExportResult {
+  profile_id: string;
+  ok: boolean;
+  error: string | null;
+  config: ProfileConfigExport | null;
+}
+
+export interface ProfileExportResponse {
+  schema_version: number;
+  total: number;
+  exported: number;
+  failed: number;
+  results: ProfileExportResult[];
+}
+
 export interface ProxyAsset {
   id: string;
   name: string;
@@ -342,6 +382,12 @@ export const api = {
     request<ProfileImportResponse>("/api/profiles/import", {
       method: "POST",
       body: JSON.stringify({ csv_text: csvText }),
+    }),
+
+  exportProfiles: (profileIds: string[]) =>
+    request<ProfileExportResponse>("/api/profiles/export", {
+      method: "POST",
+      body: JSON.stringify({ profile_ids: profileIds }),
     }),
 
   updateProfile: (id: string, data: Partial<ProfileCreateData>) =>

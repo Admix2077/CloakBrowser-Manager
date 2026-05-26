@@ -3,6 +3,7 @@ import {
   api,
   type Profile,
   type ProfileCreateData,
+  type ProfileExportResponse,
   type ProfileHealthResponse,
 } from "../lib/api";
 import { redactUrlCredentials } from "../lib/profileDisplay";
@@ -146,6 +147,22 @@ export function useProfiles() {
       checkedCount: successfulResults.length,
       failedCount,
     };
+  }, []);
+
+  const exportProfileConfigs = useCallback(async (
+    profileIds: string[],
+  ): Promise<ProfileExportResponse | undefined> => {
+    const ids = [...new Set(profileIds.filter(Boolean))];
+    if (ids.length === 0) return undefined;
+
+    try {
+      const response = await api.exportProfiles(ids);
+      setOperationError(null);
+      return response;
+    } catch (err) {
+      setOperationError(err instanceof Error ? redactUrlCredentials(err.message) : "Failed to export profile configs");
+      return undefined;
+    }
   }, []);
 
   const refresh = useCallback(async (): Promise<Profile[] | undefined> => {
@@ -562,6 +579,7 @@ export function useProfiles() {
     refresh,
     refreshHealth,
     checkHealth,
+    exportProfileConfigs,
     create,
     update,
     remove,

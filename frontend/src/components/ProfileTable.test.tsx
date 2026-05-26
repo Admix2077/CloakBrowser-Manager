@@ -289,6 +289,7 @@ describe("ProfileTable", () => {
 
   it("shows a bulk action bar with selected profile health and runtime summary", () => {
     const onCheckHealth = vi.fn();
+    const onExportSelected = vi.fn();
     const onLaunchSelected = vi.fn();
     const onStopSelected = vi.fn();
     const onTagSelected = vi.fn();
@@ -302,6 +303,7 @@ describe("ProfileTable", () => {
         selectedProfileIds={new Set(["good", "error"])}
         onClearSelection={vi.fn()}
         onCheckSelectedHealth={onCheckHealth}
+        onExportSelectedProfiles={onExportSelected}
         onLaunchSelectedProfiles={onLaunchSelected}
         onStopSelectedProfiles={onStopSelected}
         onAddTagsToSelectedProfiles={onTagSelected}
@@ -324,6 +326,9 @@ describe("ProfileTable", () => {
     expect(screen.getByRole("button", { name: "Check health" }).textContent).toContain("Check health");
     fireEvent.click(screen.getByRole("button", { name: "Check health" }));
     expect(onCheckHealth).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole("button", { name: "Export config" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Export config" }));
+    expect(onExportSelected).toHaveBeenCalledWith(["good", "error"]);
     expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Launch selected" }));
     expect(onLaunchSelected).not.toHaveBeenCalled();
@@ -533,6 +538,24 @@ describe("ProfileTable", () => {
     expect(checkButton.disabled).toBe(true);
     expect(checkButton.querySelector("svg")?.getAttribute("class")).toContain("animate-pulse");
     expect(screen.getByText("Checking...")).toBeTruthy();
+  });
+
+  it("disables export config while selected profiles are exporting", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        onExportSelectedProfiles={vi.fn()}
+        exportingSelectedProfiles
+      />,
+    );
+
+    expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("true");
+    const exportButton = screen.getByRole("button", { name: "Exporting config" }) as HTMLButtonElement;
+    expect(exportButton.disabled).toBe(true);
+    expect(exportButton.textContent).toContain("Exporting...");
   });
 
   it("opens the existing profile detail flow when a row action is clicked", () => {

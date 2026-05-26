@@ -1,7 +1,14 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { FileSpreadsheet, Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles, type BulkHealthResult } from "./hooks/useProfiles";
-import { api, setOnUnauthorized, type Profile, type ProfileCreateData, type ProfileTemplate } from "./lib/api";
+import {
+  api,
+  setOnUnauthorized,
+  type Profile,
+  type ProfileCreateData,
+  type ProfileExportResponse,
+  type ProfileTemplate,
+} from "./lib/api";
 import { ProfileList } from "./components/ProfileList";
 import { ProfileForm } from "./components/ProfileForm";
 import { ProfileViewer } from "./components/ProfileViewer";
@@ -40,6 +47,21 @@ function profileFiltersEqual(a: ProfileFilterState, b: ProfileFilterState): bool
     && a.country === b.country
     && a.tag === b.tag
     && a.sortBy === b.sortBy;
+}
+
+function downloadProfileExport(response: ProfileExportResponse) {
+  const blob = new Blob([JSON.stringify(response, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  anchor.href = url;
+  anchor.download = `cloakbrowser-profile-configs-${timestamp}.json`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
 }
 
 function LoadingShell() {
@@ -159,6 +181,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     stop,
     stopProfiles,
     checkHealth,
+    exportProfileConfigs,
     addTagsToProfiles,
     deleteProfiles,
   } = useProfiles();
@@ -170,6 +193,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(() => new Set());
   const [previewProfileId, setPreviewProfileId] = useState<string | null>(null);
   const [bulkHealthChecking, setBulkHealthChecking] = useState(false);
+  const [bulkExporting, setBulkExporting] = useState(false);
   const [bulkLaunching, setBulkLaunching] = useState(false);
   const [bulkStopping, setBulkStopping] = useState(false);
   const [bulkTagging, setBulkTagging] = useState(false);
@@ -351,6 +375,28 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       setBulkHealthChecking(false);
     }
   }, [checkHealth]);
+
+  const handleExportSelectedProfiles = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setBulkFeedback(null);
+    setBulkExporting(true);
+    try {
+      const result = await exportProfileConfigs(ids);
+      if (!result) return;
+      downloadProfileExport(result);
+      setBulkFeedback(result.failed > 0
+        ? {
+          tone: "warning",
+          message: `Export finished: ${result.exported} exported, ${result.failed} failed.`,
+        }
+        : {
+          tone: "success",
+          message: `Exported ${result.exported} profile config${result.exported === 1 ? "" : "s"}.`,
+        });
+    } finally {
+      setBulkExporting(false);
+    }
+  }, [exportProfileConfigs]);
 
   const handleLaunchSelectedProfiles = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -597,6 +643,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                     onPreviewProfile={setPreviewProfileId}
                     onCheckSelectedHealth={handleCheckSelectedHealth}
                     checkingSelectedHealth={bulkHealthChecking}
+                    onExportSelectedProfiles={handleExportSelectedProfiles}
+                    exportingSelectedProfiles={bulkExporting}
                     bulkFeedback={bulkFeedback}
                     onLaunchSelectedProfiles={handleLaunchSelectedProfiles}
                     launchingSelectedProfiles={bulkLaunching}

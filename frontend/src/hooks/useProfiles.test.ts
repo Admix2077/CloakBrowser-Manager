@@ -13,6 +13,7 @@ vi.mock("../lib/api", () => ({
     stopProfile: vi.fn(),
     getProfileHealth: vi.fn(),
     checkProfileHealth: vi.fn(),
+    exportProfiles: vi.fn(),
   },
 }));
 
@@ -27,6 +28,7 @@ const mockApi = api as {
   stopProfile: ReturnType<typeof vi.fn>;
   getProfileHealth: ReturnType<typeof vi.fn>;
   checkProfileHealth: ReturnType<typeof vi.fn>;
+  exportProfiles: ReturnType<typeof vi.fn>;
 };
 
 const fakeProfile = {
@@ -74,6 +76,13 @@ beforeEach(() => {
   mockApi.listProfiles.mockResolvedValue([fakeProfile]);
   mockApi.getProfileHealth.mockResolvedValue(fakeHealth);
   mockApi.checkProfileHealth.mockResolvedValue(fakeHealth);
+  mockApi.exportProfiles.mockResolvedValue({
+    schema_version: 1,
+    total: 1,
+    exported: 1,
+    failed: 0,
+    results: [],
+  });
 });
 
 afterEach(() => {
@@ -184,6 +193,66 @@ describe("useProfiles", () => {
       skippedRunningCount: 0,
       failedCount: 0,
     });
+  });
+
+  it("exports unique selected profile configs without changing profile state", async () => {
+    const exportResponse = {
+      schema_version: 1,
+      total: 2,
+      exported: 1,
+      failed: 1,
+      results: [
+        {
+          profile_id: "abc-123",
+          ok: true,
+          error: null,
+          config: {
+            name: "Test",
+            fingerprint_seed: 12345,
+            proxy: null,
+            timezone: null,
+            locale: null,
+            platform: "windows",
+            user_agent: null,
+            screen_width: 1920,
+            screen_height: 1080,
+            gpu_vendor: null,
+            gpu_renderer: null,
+            hardware_concurrency: null,
+            humanize: false,
+            human_preset: "default",
+            headless: false,
+            geoip: false,
+            clipboard_sync: true,
+            auto_launch: false,
+            color_scheme: null,
+            launch_args: [],
+            notes: null,
+            tags: [],
+          },
+        },
+        {
+          profile_id: "missing",
+          ok: false,
+          error: "Profile not found",
+          config: null,
+        },
+      ],
+    };
+    mockApi.exportProfiles.mockResolvedValue(exportResponse);
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let returned;
+    await act(async () => {
+      returned = await result.current.exportProfileConfigs(["abc-123", "missing", "abc-123"]);
+    });
+
+    expect(mockApi.exportProfiles).toHaveBeenCalledWith(["abc-123", "missing"]);
+    expect(returned).toEqual(exportResponse);
+    expect(result.current.profiles).toEqual([fakeProfile]);
+    expect(result.current.error).toBe(null);
   });
 
   it("skips running profiles during bulk delete", async () => {

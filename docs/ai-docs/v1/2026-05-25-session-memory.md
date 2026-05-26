@@ -4609,3 +4609,69 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 60. 2026-05-26 Profile Config 批量导出前端下载入口小闭环
+
+背景：
+
+- 后端 `POST /api/profiles/export` 已完成，本轮补齐 Profile 运营台里的前端下载入口。
+- 只启用只读 `Export config`，继续保持批量启动/停止/tag/delete 等高风险操作 disabled。
+
+已完成：
+
+- `frontend/src/lib/api.ts`
+  - 新增 profile config export 类型和 `api.exportProfiles(profileIds)`。
+- `frontend/src/hooks/useProfiles.ts`
+  - 新增 `exportProfileConfigs(ids)`，去重后调用 API，不修改 profile state。
+- `frontend/src/components/BulkActionBar.tsx`
+  - 新增 `Export config` 按钮和 exporting 状态。
+  - `aria-busy` 纳入 exporting。
+- `frontend/src/components/ProfileTable.tsx`
+  - 从受控 selection 传完整选中 profile ids，保留虚拟滚动语义。
+- `frontend/src/App.tsx`
+  - 调用导出 API 后生成本地 JSON 下载。
+  - 使用 bulk feedback 展示成功/部分失败摘要。
+- 测试覆盖：
+  - API body shape。
+  - hook 去重和不改 state。
+  - bulk bar 启用 export、exporting disabled、高风险动作仍 disabled。
+  - App 下载 Blob、触发 anchor click、partial feedback、不把导出 proxy secret 渲染到 DOM。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 红灯：6 failed
+
+cd frontend && npm test -- --run src/lib/api.test.ts src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 4 passed, 114 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 175 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 本地 QA 服务：`http://127.0.0.1:8095/`，进程 `1681096`。
+- 桌面 `1440x960`：
+  - 选中 2 个 profile 后显示 `Export config`。
+  - 点击后触发 `POST /api/profiles/export` 并下载 `cloakbrowser-profile-configs-2026-05-26T13-15-52-514Z.json`。
+  - 反馈显示 `Exported 2 profile configs.`。
+  - Launch/Stop/Tag/Delete 仍 disabled。
+- 移动 `390x844`：
+  - bulk bar 与 profile cards 可用。
+  - `body.scrollWidth=390`、`documentElement.scrollWidth=390`。
+- Playwright MCP console：导出交互后 0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-export-desktop.png`
+  - `/home/jeff/code/cloakbrowser-export-mobile.png`
+
+边界：
+
+- 没有修改后端。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

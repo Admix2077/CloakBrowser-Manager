@@ -51,7 +51,7 @@
 - [ ] 批量刷新 GeoIP。
 - [ ] 批量设置 tag。
 - [ ] 批量设置 proxy。
-- [x] 批量导出 profile config（后端 API；前端下载入口另起闭环）。
+- [x] 批量导出 profile config（后端 API + 前端下载入口）。
 - [ ] 批量删除必须二次确认。
 
 ## 验证
@@ -308,9 +308,74 @@ cd frontend && npm run build
 
 未覆盖范围：
 
-- 前端 `Export config` 下载入口。
-- 前端生成本地 JSON 文件名。
+- 前端 `Export config` 下载入口已在后续小闭环补齐，见下一节。
 - 批量启动/停止/health check/GeoIP/tag/proxy/delete。
+
+## 2026-05-26 Profile Config 批量导出前端下载入口小闭环
+
+背景：
+
+- 后端 `POST /api/profiles/export` 已完成，本轮补齐 Profile 运营台批量栏里的只读下载入口。
+- 只启用低风险 `Export config`；不解锁批量启动/停止/tag/delete 等高风险操作。
+- 导出 JSON 只通过浏览器下载，不把完整 config 渲染到 DOM。
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProfileConfigExport` / `ProfileExportResult` / `ProfileExportResponse` 类型。
+  - 新增 `api.exportProfiles(profileIds)`，请求体为 `{ profile_ids: [...] }`。
+- [x] `frontend/src/hooks/useProfiles.ts`
+  - 新增 `exportProfileConfigs(ids)`。
+  - 对选中 id 去重，不修改 `profiles` state。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - 在批量栏新增 `Export config` 按钮。
+  - 导出中显示 `Exporting...`，并纳入 toolbar `aria-busy`。
+  - 保持 Launch/Stop/Tag/Delete disabled。
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - 从当前受控 selection 传递完整选中 profile ids，不依赖虚拟窗口 DOM。
+- [x] `frontend/src/App.tsx`
+  - 点击后调用导出 API，生成本地 JSON 下载文件 `cloakbrowser-profile-configs-*.json`。
+  - 成功/部分失败使用现有 bulk feedback 展示摘要。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 红灯：6 failed，缺少 api/hook/button/App 下载链路
+
+cd frontend && npm test -- --run src/lib/api.test.ts src/hooks/useProfiles.test.ts src/components/ProfileTable.test.tsx src/App.test.tsx
+# 4 passed, 114 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 175 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 重启本地 QA 服务 `http://127.0.0.1:8095/`，当前进程 `1681096`。
+- 桌面 `1440x960`：
+  - 选中 `Alpha Warmup` 和 `Beta Running Candidate` 后，批量栏显示 `2 selected`。
+  - `Check health` 保持可用，`Export config` 可用。
+  - `Launch selected` / `Stop selected` / `Tag selected` / `Delete selected` 均保持 disabled。
+  - 点击 `Export config` 触发 `POST /api/profiles/export`，请求体包含 2 个选中 profile id，响应 `exported=2/failed=0`。
+  - 浏览器下载 `cloakbrowser-profile-configs-2026-05-26T13-15-52-514Z.json`。
+  - bulk feedback 显示 `Exported 2 profile configs.`。
+- 移动 `390x844`：
+  - 批量栏、card selection、profile cards 保持可用。
+  - `body.scrollWidth=390`、`documentElement.scrollWidth=390`，未横向撑破页面。
+  - 表格/卡片语义和 Actions 入口未被导出按钮破坏。
+- Playwright MCP console：导出交互后 0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-export-desktop.png`
+  - `/home/jeff/code/cloakbrowser-export-mobile.png`
+
+未覆盖范围：
+
+- 批量启动/停止/health check/GeoIP/tag/proxy/delete。
+  - 其中 bulk health check UI 已存在，但本轮未重新定义模块 09 checkbox 口径。
 
 ## 2026-05-26 Profile CSV 导入预览前端 UI 小闭环
 

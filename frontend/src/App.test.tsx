@@ -83,6 +83,7 @@ const mockLaunchProfiles = vi.fn();
 const mockStopProfiles = vi.fn();
 const mockAddTagsToProfiles = vi.fn();
 const mockDeleteProfiles = vi.fn();
+const mockExportProfileConfigs = vi.fn();
 
 function profile(overrides: Partial<Profile>): Profile {
   return {
@@ -195,6 +196,14 @@ beforeEach(() => {
     failedCount: 0,
     deletedIds: ["beta", "alpha"],
   });
+  mockExportProfileConfigs.mockReset();
+  mockExportProfileConfigs.mockResolvedValue({
+    schema_version: 1,
+    total: 2,
+    exported: 2,
+    failed: 0,
+    results: [],
+  });
   mockUseProfiles.mockReturnValue({
     profiles: [
       profile({ id: "beta", name: "Beta Broken" }),
@@ -217,6 +226,7 @@ beforeEach(() => {
     stopProfiles: mockStopProfiles,
     addTagsToProfiles: mockAddTagsToProfiles,
     deleteProfiles: mockDeleteProfiles,
+    exportProfileConfigs: mockExportProfileConfigs,
   });
 });
 
@@ -615,6 +625,7 @@ describe("App operations console", () => {
     fireEvent.click(screen.getByLabelText("Select Alpha Good"));
 
     expect((screen.getByRole("button", { name: "Check health" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Export config" }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: "Launch selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Stop selected" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Tag selected" }) as HTMLButtonElement).disabled).toBe(true);
@@ -630,6 +641,98 @@ describe("App operations console", () => {
     expect(mockDeleteProfiles).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Bulk tag name")).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Confirm bulk profile deletion" })).toBeNull();
+  });
+
+  it("exports selected profile configs as a JSON download and shows partial feedback", async () => {
+    const exportResponse = {
+      schema_version: 1,
+      total: 2,
+      exported: 1,
+      failed: 1,
+      results: [
+        {
+          profile_id: "beta",
+          ok: true,
+          error: null,
+          config: {
+            name: "Beta Broken",
+            fingerprint_seed: 12345,
+            proxy: "http://user:hiddenpass@proxy.example:8080",
+            timezone: null,
+            locale: null,
+            platform: "windows",
+            user_agent: null,
+            screen_width: 1920,
+            screen_height: 1080,
+            gpu_vendor: null,
+            gpu_renderer: null,
+            hardware_concurrency: null,
+            humanize: false,
+            human_preset: "default",
+            headless: false,
+            geoip: true,
+            clipboard_sync: true,
+            auto_launch: false,
+            color_scheme: null,
+            launch_args: [],
+            notes: null,
+            tags: [],
+          },
+        },
+        {
+          profile_id: "alpha",
+          ok: false,
+          error: "Profile not found",
+          config: null,
+        },
+      ],
+    };
+    mockExportProfileConfigs.mockResolvedValue(exportResponse);
+    const createObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+    const revokeObjectURLDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+    const createObjectURL = vi.fn(() => "blob:profile-export");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+
+    try {
+      render(<App />);
+
+      await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+      fireEvent.click(screen.getByLabelText("Select Beta Broken"));
+      fireEvent.click(screen.getByLabelText("Select Alpha Good"));
+      fireEvent.click(screen.getByRole("button", { name: "Export config" }));
+
+      await waitFor(() => expect(mockExportProfileConfigs).toHaveBeenCalledWith(["beta", "alpha"]));
+      expect(createObjectURL).toHaveBeenCalledTimes(1);
+      const downloadedBlob = createObjectURL.mock.calls[0][0] as Blob;
+      await expect(downloadedBlob.text()).resolves.toBe(JSON.stringify(exportResponse, null, 2));
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:profile-export");
+      expect((await screen.findByRole("alert", { name: "Profile operation feedback" })).textContent).toBe("Export finished: 1 exported, 1 failed.");
+      expect(document.body.innerHTML).not.toContain("hiddenpass");
+    } finally {
+      anchorClick.mockRestore();
+      if (createObjectURLDescriptor) {
+        Object.defineProperty(URL, "createObjectURL", createObjectURLDescriptor);
+      } else {
+        delete (URL as typeof URL & { createObjectURL?: unknown }).createObjectURL;
+      }
+      if (revokeObjectURLDescriptor) {
+        Object.defineProperty(URL, "revokeObjectURL", revokeObjectURLDescriptor);
+      } else {
+        delete (URL as typeof URL & { revokeObjectURL?: unknown }).revokeObjectURL;
+      }
+    }
   });
 
   it("keeps high-risk bulk actions disabled for mixed running and stopped selections", async () => {

@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, HeartPulse, Play, Square, Tags, Trash2, X } from "lucide-react";
+import { Activity, AlertTriangle, Download, HeartPulse, Play, Square, Tags, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
@@ -12,6 +12,8 @@ interface BulkActionBarProps {
   onClearSelection?: () => void;
   onCheckHealth?: () => Promise<void> | void;
   checkingHealth?: boolean;
+  onExport?: () => Promise<void> | void;
+  exporting?: boolean;
   feedback?: {
     tone: "success" | "warning";
     message: string;
@@ -33,6 +35,8 @@ export function BulkActionBar({
   onClearSelection,
   onCheckHealth,
   checkingHealth = false,
+  onExport,
+  exporting = false,
   feedback = null,
   onLaunch,
   launching = false,
@@ -63,6 +67,7 @@ export function BulkActionBar({
   }).length;
   const normalizedTagName = tagName.trim();
   const highRiskBulkActionsEnabled = false;
+  const exportEnabled = Boolean(onExport) && !exporting;
   const launchEnabled = highRiskBulkActionsEnabled && Boolean(onLaunch) && !launching && stoppedCount > 0;
   const stopEnabled = highRiskBulkActionsEnabled && Boolean(onStop) && !stopping && runningCount > 0;
   const tagEnabled = highRiskBulkActionsEnabled && Boolean(onAddTags) && !tagging;
@@ -126,7 +131,7 @@ export function BulkActionBar({
       <div
         role="toolbar"
         aria-label="Bulk profile actions"
-        aria-busy={checkingHealth || launching || stopping || tagging || deleting}
+        aria-busy={checkingHealth || exporting || launching || stopping || tagging || deleting}
         className="flex h-11 items-center gap-2 overflow-x-auto px-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div
@@ -176,6 +181,17 @@ export function BulkActionBar({
             )}
           </div>
           <div role="group" aria-label="Secondary bulk actions" className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              disabled={!exportEnabled}
+              aria-label={exporting ? "Exporting config" : "Export config"}
+              title={exporting ? "Exporting selected profile configs" : "Export selected profile configs"}
+              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-[6px] border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none"
+              onClick={() => void onExport?.()}
+            >
+              <Download className={`h-3.5 w-3.5 ${exporting ? "animate-pulse" : ""}`} />
+              <span>{exporting ? "Exporting..." : "Export config"}</span>
+            </button>
             <button
               type="button"
               disabled={!launchEnabled}
