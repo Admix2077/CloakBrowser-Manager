@@ -116,6 +116,46 @@ class ProfileTemplateResponse(BaseModel):
     updated_at: str
 
 
+class ProfileImportPreviewRequest(BaseModel):
+    csv_text: str = Field(min_length=1)
+
+
+class ProfileImportPreviewProfile(BaseModel):
+    name: str
+    template_id: str | None = None
+    proxy: str | None = None
+    timezone: str | None = None
+    locale: str | None = None
+    platform: str = "windows"
+    screen_width: int = 1920
+    screen_height: int = 1080
+    gpu_vendor: str | None = None
+    gpu_renderer: str | None = None
+    hardware_concurrency: int | None = None
+    color_scheme: str | None = None
+    humanize: bool = False
+    human_preset: str = "default"
+    launch_args: list[str] = Field(default_factory=list)
+    geoip: bool = True
+    notes: str | None = None
+    tags: list[TagResponse] = Field(default_factory=list)
+
+
+class ProfileImportPreviewRow(BaseModel):
+    line_number: int
+    ok: bool
+    errors: list[str] = Field(default_factory=list)
+    source: dict[str, str] = Field(default_factory=dict)
+    profile: ProfileImportPreviewProfile | None = None
+
+
+class ProfileImportPreviewResponse(BaseModel):
+    total: int
+    valid: int
+    invalid: int
+    rows: list[ProfileImportPreviewRow] = Field(default_factory=list)
+
+
 class ProxyCreate(BaseModel):
     name: str = Field(min_length=1)
     url: str = Field(min_length=1)

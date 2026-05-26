@@ -4283,3 +4283,54 @@ cd frontend && npm run build
 - 没有修改后端模板/创建契约之外的 runtime 行为。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 58. 2026-05-26 Profile CSV 导入预览后端 API 小闭环
+
+背景：
+
+- 继续推进 09 模板、批量创建与批量运营。
+- 子 agent 只读审计建议：先做 CSV paste/import preview，固定字段契约、模板解析和行级错误结构，再进入真正批量创建。
+- 本轮只做后端 preview API，不写库、不做前端导入 UI、不触碰 Project Mileage。
+
+已完成：
+
+- `backend/tests/test_bulk.py`
+  - 先写红灯测试，确认 `/api/profiles/import/preview` 不存在时返回 `405`。
+  - 覆盖 CSV preview 应用模板、显式字段覆盖模板、proxy 响应脱敏、tags 解析、预览不写入 profiles。
+  - 覆盖混合成功/失败行，失败行保留原因且不阻断有效行。
+  - 覆盖空 CSV、无可用 header 返回 `422`。
+- `backend/models.py`
+  - 新增 Profile import preview 请求、行、profile payload、响应模型。
+- `backend/profile_import.py`
+  - 新增 CSV 解析、字段规范化、模板 id/name 解析、行级校验、preview payload 生成。
+  - 抽出 `apply_profile_template_fields`，后续普通创建和批量创建可共用模板覆盖规则。
+- `backend/main.py`
+  - 新增 `POST /api/profiles/import/preview`。
+  - `POST /api/profiles` 复用模板应用 helper，已有模板契约测试保持通过。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选 `导入前预览（后端 API；前端导入 UI 另起闭环）`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 红灯：3 failed, 1 passed
+# 失败点：/api/profiles/import/preview 尚不存在，返回 405
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_templates.py -q
+# 12 passed
+```
+
+未覆盖范围：
+
+- 前端 CSV 粘贴导入 UI、无效行标红、导入后部分成功写入。
+- 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。
+
+边界：
+
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

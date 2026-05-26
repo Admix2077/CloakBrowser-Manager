@@ -39,7 +39,7 @@
   - platform。
   - locale。
   - timezone。
-- [ ] 导入前预览。
+- [x] 导入前预览（后端 API；前端导入 UI 另起闭环）。
 - [ ] 无效行标红。
 - [ ] 部分导入成功，失败行保留原因。
 
@@ -217,3 +217,50 @@ cd frontend && npm run build
 - 前端保存当前 profile 为模板。
 - 模板列表管理页面。
 - CSV 批量创建中的 `template` 字段。
+
+## 2026-05-26 Profile CSV 导入预览后端 API 小闭环
+
+背景：
+
+- 在 Profile Template 事实源和创建页模板选择完成后，继续推进批量创建的低风险前置能力。
+- 本轮只做 `POST /api/profiles/import/preview`，用于 CSV 粘贴导入前的后端解析、模板应用和行级校验。
+- 本轮不写入 `profiles`，不做前端导入 UI，不做真正批量创建，不启动浏览器。
+
+已完成：
+
+- [x] `backend/tests/test_bulk.py`
+  - 先写红灯测试：CSV preview endpoint 不存在，返回 `405`。
+  - 覆盖模板按名称/id 解析、显式 CSV 字段覆盖模板字段、proxy 响应脱敏、tags 解析、预览不写库。
+  - 覆盖混合成功/失败：一行失败不会阻断其他有效行。
+  - 覆盖空 CSV 和无可用 header 返回 `422`。
+- [x] `backend/models.py`
+  - 新增 `ProfileImportPreviewRequest` / `ProfileImportPreviewProfile` / `ProfileImportPreviewRow` / `ProfileImportPreviewResponse`。
+- [x] `backend/profile_import.py`
+  - 新增 CSV 解析与 preview 纯逻辑。
+  - 支持字段：`name`、`proxy`、`tags`、`notes`、`template`、`platform`、`locale`、`timezone`。
+  - 额外兼容模板相关字段：`screen_width`、`screen_height`、`gpu_vendor`、`gpu_renderer`、`hardware_concurrency`、`color_scheme`、`humanize`、`human_preset`、`launch_args`、`geoip`。
+  - 抽出 `apply_profile_template_fields`，复用到普通 profile 创建，避免模板覆盖规则分叉。
+- [x] `backend/main.py`
+  - 新增 `POST /api/profiles/import/preview`。
+  - 普通 `POST /api/profiles` 改为复用模板应用 helper，行为保持与既有测试一致。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 红灯：3 failed, 1 passed
+# 失败点：/api/profiles/import/preview 尚不存在，返回 405
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_templates.py -q
+# 12 passed
+```
+
+未覆盖范围：
+
+- 前端 CSV 粘贴导入 UI。
+- 无效行前端标红。
+- 真正批量创建 profile 与部分成功写入。
+- 批量启动/停止/health check/GeoIP/tag/proxy/export/delete。

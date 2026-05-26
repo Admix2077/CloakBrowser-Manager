@@ -55,6 +55,8 @@ from .models import (
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
+    ProfileImportPreviewRequest,
+    ProfileImportPreviewResponse,
     ProfileResponse,
     ProfileStatusResponse,
     ProfileTemplateCreate,
@@ -63,6 +65,12 @@ from .models import (
     ProfileUpdate,
     StatusResponse,
     TagResponse,
+)
+from .profile_import import (
+    ProfileImportHeaderError,
+    ProfileTemplateNotFoundError,
+    apply_profile_template_fields,
+    preview_profile_csv_import,
 )
 from .proxies import redact_proxy_asset_url
 
@@ -696,27 +704,11 @@ async def list_profiles():
 @app.post("/api/profiles", response_model=ProfileResponse, status_code=201)
 async def create_profile(req: ProfileCreate):
     data = req.model_dump()
-    explicit_fields = set(req.model_fields_set)
-    template_id = data.pop("template_id", None)
-    if template_id:
-        template = db.get_profile_template(template_id)
-        if not template:
-            raise HTTPException(status_code=404, detail="Profile template not found")
-        for field in (
-            "platform",
-            "screen_width",
-            "screen_height",
-            "gpu_vendor",
-            "gpu_renderer",
-            "hardware_concurrency",
-            "color_scheme",
-            "humanize",
-            "human_preset",
-            "launch_args",
-            "geoip",
-        ):
-            if field not in explicit_fields:
-                data[field] = template[field]
+    try:
+        data = apply_profile_template_fields(data, set(req.model_fields_set))
+    except ProfileTemplateNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    data.pop("template_id", None)
     tags = data.pop("tags", None)
     if tags:
         data["tags"] = [t.model_dump() if hasattr(t, "model_dump") else t for t in tags]
@@ -729,6 +721,14 @@ async def create_profile(req: ProfileCreate):
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     return ProfileResponse(**profile)
+
+
+@app.post("/api/profiles/import/preview", response_model=ProfileImportPreviewResponse)
+async def preview_profile_import(req: ProfileImportPreviewRequest):
+    try:
+        return preview_profile_csv_import(req.csv_text)
+    except ProfileImportHeaderError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @app.post("/api/profiles/{profile_id}/proxy-asset", response_model=ProxyResponse, status_code=201)
