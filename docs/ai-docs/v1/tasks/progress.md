@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task 列表分页小闭环：
+  - `GET /api/tasks` 支持可选 `limit` 和 `offset` query。
+  - `limit` 范围为 `1..500`；超过范围返回 FastAPI `422`。
+  - `offset` 默认 `0`，范围为非负整数；负数返回 FastAPI `422`。
+  - 未传 `limit` 时保持兼容行为：返回匹配条件下的全部 task。
+  - 分页在 `profile_id` 过滤后应用，排序仍为 `created_at desc`，最新 task 在前。
+  - DB 层 `list_automation_tasks(profile_id=None, limit=None, offset=0)` 支持同样的分页语义，避免 API 事后切片。
+  - 分页后的对外响应继续复用统一 `AutomationTaskResponse` 脱敏。
+  - 当前仍未提供权限隔离；该接口仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
+  - 本小闭环为后续前端 Automation 页面 / task log viewer 提供基础，不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task 显式重试小闭环：
   - 新增 `POST /api/tasks/{id}/retry`。
   - retry 只允许对已结束 task 创建新 queued task，允许 `failed | cancelled | succeeded`。
@@ -52,7 +62,7 @@
   - 传入 `profile_id` 时只返回该 profile 的 task，并继续按 `created_at desc` 排序。
   - profile 不存在时返回 `404 Profile not found`，避免把无效 profile 误读为空任务列表。
   - 过滤后的对外响应继续复用统一 `AutomationTaskResponse` 脱敏；`open_url.url`、query、fragment、token 和未知字段不会回显。
-  - 当前仍未提供分页或权限隔离；`GET /api/tasks` 仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
+  - 当前仍未提供权限隔离；`GET /api/tasks` 仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
   - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task profile 并发限制小闭环：
   - `POST /api/tasks/{id}/run` 已增加 profile 级并发限制。

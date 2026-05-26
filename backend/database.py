@@ -640,15 +640,28 @@ def get_automation_task(task_id: str) -> dict[str, Any] | None:
     return _automation_task_from_row(row) if row else None
 
 
-def list_automation_tasks(profile_id: str | None = None) -> list[dict[str, Any]]:
+def list_automation_tasks(
+    profile_id: str | None = None,
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    pagination_clause = ""
+    pagination_args: list[Any] = []
+    if limit is not None:
+        pagination_clause = " LIMIT ? OFFSET ?"
+        pagination_args = [limit, offset]
     with get_db() as conn:
         if profile_id:
             rows = conn.execute(
-                "SELECT * FROM automation_tasks WHERE profile_id = ? ORDER BY created_at DESC",
-                (profile_id,),
+                f"SELECT * FROM automation_tasks WHERE profile_id = ? ORDER BY created_at DESC{pagination_clause}",
+                (profile_id, *pagination_args),
             ).fetchall()
         else:
-            rows = conn.execute("SELECT * FROM automation_tasks ORDER BY created_at DESC").fetchall()
+            rows = conn.execute(
+                f"SELECT * FROM automation_tasks ORDER BY created_at DESC{pagination_clause}",
+                pagination_args,
+            ).fetchall()
     return [_automation_task_from_row(row) for row in rows]
 
 

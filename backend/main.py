@@ -22,7 +22,7 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -1663,10 +1663,14 @@ async def create_automation_task(req: AutomationTaskCreate):
 
 
 @app.get("/api/tasks", response_model=AutomationTasksResponse)
-async def list_automation_tasks(profile_id: str | None = None):
+async def list_automation_tasks(
+    profile_id: str | None = None,
+    limit: int | None = Query(default=None, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
     if profile_id is not None and db.get_profile(profile_id) is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    tasks = db.list_automation_tasks(profile_id=profile_id)
+    tasks = db.list_automation_tasks(profile_id=profile_id, limit=limit, offset=offset)
     return AutomationTasksResponse(tasks=[_automation_task_response(task) for task in tasks])
 
 

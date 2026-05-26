@@ -178,7 +178,8 @@ cd frontend && npm run build
   - 按 `created_at desc` 排序，最新 task 在前。
   - 对外响应中的 `steps` 统一走白名单脱敏。
   - 支持可选 `profile_id` query 过滤；profile 不存在时返回 `404 Profile not found`。
-  - 当前未提供分页或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+  - 支持可选 `limit` 和 `offset` query 分页；`limit` 范围 `1..500`，`offset` 默认 `0` 且不能为负数。
+  - 当前未提供权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - 已新增 `POST /api/tasks/{id}/cancel`：
   - 只允许取消 `queued` task。
   - 成功后将 task 状态更新为 `cancelled`。
@@ -198,7 +199,7 @@ cd frontend && npm run build
 - 传入 `profile_id` 时只返回该 profile 的 task，并继续按 `created_at desc` 排序。
 - profile 不存在时返回 `404 Profile not found`，避免把无效 profile 误读为空任务列表。
 - 过滤后的对外响应继续复用统一 `AutomationTaskResponse` 脱敏：`open_url.url`、query、fragment、token 和未知字段不会回显。
-- 当前仍未提供分页或权限隔离；该接口仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
+- 当前仍未提供权限隔离；该接口仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
 - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
 
 验证记录：
@@ -212,6 +213,27 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_filter_keeps_steps_redacted -q
 # 1 passed
+```
+
+## 2026-05-27 Automation task 列表分页小闭环
+
+当前状态：
+
+- `GET /api/tasks` 支持可选 `limit` 和 `offset` query。
+- `limit` 范围为 `1..500`；超过范围返回 FastAPI `422`。
+- `offset` 默认 `0`，范围为非负整数；负数返回 FastAPI `422`。
+- 未传 `limit` 时保持兼容行为：返回匹配条件下的全部 task。
+- 分页在 `profile_id` 过滤后应用，排序仍为 `created_at desc`，最新 task 在前。
+- DB 层 `list_automation_tasks(profile_id=None, limit=None, offset=0)` 支持同样的分页语义，避免 API 事后切片。
+- 分页后的对外响应继续复用统一 `AutomationTaskResponse` 脱敏。
+- 当前仍未提供权限隔离；该接口仍只能视为 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App。
+- 本小闭环为后续前端 Automation 页面 / task log viewer 提供基础，不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期或 viewer token 逻辑。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_list_automation_tasks_paginates_newest_tasks backend/tests/test_api.py::test_list_automation_tasks_rejects_invalid_pagination backend/tests/test_database.py::test_list_automation_tasks_paginates_after_profile_filter -q
+# 3 passed
 ```
 
 ## 2026-05-27 Automation task 响应脱敏收口小闭环

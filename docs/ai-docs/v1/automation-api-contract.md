@@ -385,6 +385,8 @@ GET /api/tasks
 可选 query：
 
 - `profile_id`: 指定 profile 时只返回该 profile 的 task；profile 不存在时返回 `404 Profile not found`。
+- `limit`: 可选，范围 `1..500`；不传时保持兼容行为，返回匹配条件下的全部 task。
+- `offset`: 可选，范围 `0..`，默认 `0`；仅在传入 `limit` 时生效。
 
 返回：
 
@@ -410,8 +412,9 @@ GET /api/tasks
 
 - 未传 `profile_id` 时返回所有已持久化 task；传入 `profile_id` 时仅返回该 profile 的 task。
 - 按 `created_at desc` 排序，最新 task 在前。
+- `limit/offset` 在 profile 过滤后应用，用于前端 task log viewer 或运营台分页加载。
 - 对外响应中的 `steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
-- 当前未提供分页或权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
+- 当前未提供权限隔离，只能视为 CloakBrowser 本地管理 API，不能直接暴露给 Project Mileage App。
 - Project Mileage 后续需要 task 列表时，必须由 Payload 按账号归属、权限和审计策略输出安全 DTO。
 
 ### Task 详情

@@ -300,6 +300,20 @@ def test_list_automation_tasks_for_profile(tmp_db: Path):
     assert [task["id"] for task in tasks] == [first["id"]]
 
 
+def test_list_automation_tasks_paginates_after_profile_filter(tmp_db: Path):
+    first_profile = db.create_profile("Automation Task Page A")
+    second_profile = db.create_profile("Automation Task Page B")
+    first = db.create_automation_task(profile_id=first_profile["id"], steps=[{"type": "wait", "ms": 1}])
+    second = db.create_automation_task(profile_id=first_profile["id"], steps=[{"type": "wait", "ms": 2}])
+    third = db.create_automation_task(profile_id=first_profile["id"], steps=[{"type": "wait", "ms": 3}])
+    db.create_automation_task(profile_id=second_profile["id"], steps=[{"type": "wait", "ms": 4}])
+
+    tasks = db.list_automation_tasks(profile_id=first_profile["id"], limit=2, offset=1)
+
+    assert [task["id"] for task in tasks] == [second["id"], first["id"]]
+    assert third["id"] not in [task["id"] for task in tasks]
+
+
 # ── update_profile ───────────────────────────────────────────────────────────
 
 

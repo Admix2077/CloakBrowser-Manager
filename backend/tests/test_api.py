@@ -1436,6 +1436,28 @@ def test_list_automation_tasks_filters_by_profile(app_client: TestClient):
     assert [task["id"] for task in resp.json()["tasks"]] == [first_task["id"]]
 
 
+def test_list_automation_tasks_paginates_newest_tasks(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskListPaginationProfile"})
+    pid = create.json()["id"]
+    first = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    second = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 2}]}).json()
+    third = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 3}]}).json()
+
+    resp = app_client.get("/api/tasks?limit=2&offset=1")
+
+    assert resp.status_code == 200
+    assert [task["id"] for task in resp.json()["tasks"]] == [second["id"], first["id"]]
+    assert third["id"] not in [task["id"] for task in resp.json()["tasks"]]
+
+
+def test_list_automation_tasks_rejects_invalid_pagination(app_client: TestClient):
+    negative_offset = app_client.get("/api/tasks?offset=-1")
+    excessive_limit = app_client.get("/api/tasks?limit=501")
+
+    assert negative_offset.status_code == 422
+    assert excessive_limit.status_code == 422
+
+
 def test_list_automation_tasks_filter_rejects_missing_profile(app_client: TestClient):
     resp = app_client.get("/api/tasks?profile_id=missing")
 
