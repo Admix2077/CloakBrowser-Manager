@@ -46,9 +46,9 @@
   - created_at。
   - started_at。
   - finished_at。
-- [ ] 新增 `POST /api/tasks`。
+- [x] 新增 `POST /api/tasks`。
 - [ ] 新增 `GET /api/tasks`。
-- [ ] 新增 `GET /api/tasks/{id}`。
+- [x] 新增 `GET /api/tasks/{id}`。
 - [ ] 新增 `POST /api/tasks/{id}/cancel`。
 - [ ] 支持第一版 step：
   - open_url。
@@ -130,6 +130,39 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_database.py -q
 # 34 passed
+```
+
+## 2026-05-27 Automation task 最小 API 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/tasks`。
+- 已新增 `GET /api/tasks/{id}`。
+- 请求模型：
+  - `profile_id`：必填。
+  - `steps`：必填，长度 `1..200`。
+- 响应模型覆盖：
+  - `id`。
+  - `profile_id`。
+  - `status`。
+  - `steps`。
+  - `result`。
+  - `error`。
+  - `created_at`。
+  - `started_at`。
+  - `finished_at`。
+- `POST /api/tasks` 当前只创建 `queued` task，不执行脚本，不启动 profile，不读取敏感配置。
+- profile 不存在时返回 `404`。
+- 当前未实现 `GET /api/tasks` 列表、cancel、并发限制、失败重试和 step 执行器。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_create_automation_task_queues_steps_without_running_script backend/tests/test_api.py::test_get_automation_task_returns_persisted_task backend/tests/test_api.py::test_create_automation_task_rejects_missing_profile -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 70 passed
 ```
 
 ## 2026-05-27 Automation wait-for-selector 小闭环

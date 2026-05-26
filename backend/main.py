@@ -51,6 +51,8 @@ from .models import (
     AutomationPagesResponse,
     AutomationScreenshotRequest,
     AutomationScrollRequest,
+    AutomationTaskCreate,
+    AutomationTaskResponse,
     AutomationWaitForSelectorRequest,
     ClipboardRequest,
     LaunchResponse,
@@ -1457,6 +1459,29 @@ async def get_system_status():
         binary_version="invisible-playwright",
         profiles_total=len(profiles),
     )
+
+
+# ── Automation Tasks ─────────────────────────────────────────────────────────
+
+
+def _automation_task_response(task: dict) -> AutomationTaskResponse:
+    return AutomationTaskResponse(**task)
+
+
+@app.post("/api/tasks", response_model=AutomationTaskResponse, status_code=201)
+async def create_automation_task(req: AutomationTaskCreate):
+    if db.get_profile(req.profile_id) is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    task = db.create_automation_task(profile_id=req.profile_id, steps=req.steps)
+    return _automation_task_response(task)
+
+
+@app.get("/api/tasks/{task_id}", response_model=AutomationTaskResponse)
+async def get_automation_task(task_id: str):
+    task = db.get_automation_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    return _automation_task_response(task)
 
 
 # ── Clipboard Relay ──────────────────────────────────────────────────────────

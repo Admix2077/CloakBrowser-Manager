@@ -1013,6 +1013,48 @@ def test_automation_unknown_page_id_returns_404_before_listing(app_client: TestC
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_create_automation_task_queues_steps_without_running_script(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskProfile"})
+    pid = create.json()["id"]
+    steps = [
+        {"type": "open_url", "url": "https://example.com"},
+        {"type": "wait", "ms": 1000},
+    ]
+
+    resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["id"]
+    assert data["profile_id"] == pid
+    assert data["status"] == "queued"
+    assert data["steps"] == steps
+    assert data["result"] is None
+    assert data["error"] is None
+    assert data["created_at"] is not None
+    assert data["started_at"] is None
+    assert data["finished_at"] is None
+
+
+def test_get_automation_task_returns_persisted_task(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskGetProfile"})
+    pid = create.json()["id"]
+    create_task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]})
+    task_id = create_task.json()["id"]
+
+    resp = app_client.get(f"/api/tasks/{task_id}")
+
+    assert resp.status_code == 200
+    assert resp.json()["id"] == task_id
+    assert resp.json()["status"] == "queued"
+
+
+def test_create_automation_task_rejects_missing_profile(app_client: TestClient):
+    resp = app_client.post("/api/tasks", json={"profile_id": "missing", "steps": [{"type": "wait", "ms": 1}]})
+
+    assert resp.status_code == 404
+
+
 def _mock_running_profile(pid: str) -> MagicMock:
     """Create a mock RunningProfile and register it in browser_mgr."""
     mock = MagicMock(spec=RunningProfile)

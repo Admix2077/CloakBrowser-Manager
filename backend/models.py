@@ -550,6 +550,23 @@ class AutomationScreenshotRequest(BaseModel):
     full_page: bool = False
 
 
+class AutomationTaskCreate(BaseModel):
+    profile_id: str = Field(min_length=1)
+    steps: list[dict[str, Any]] = Field(min_length=1, max_length=200)
+
+
+class AutomationTaskResponse(BaseModel):
+    id: str
+    profile_id: str
+    status: str
+    steps: list[dict[str, Any]]
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
 class ClipboardRequest(BaseModel):
     text: str = Field(max_length=1_048_576)  # 1MB max
 

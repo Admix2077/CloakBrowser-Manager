@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 task 最小 API 小闭环：
+  - 新增 `AutomationTaskCreate` 和 `AutomationTaskResponse`。
+  - 新增 `POST /api/tasks`：只创建 `queued` task，不执行脚本，不启动 profile，不读取敏感配置。
+  - 新增 `GET /api/tasks/{id}`：读取已持久化 task。
+  - profile 不存在时返回 `404`。
+  - 当前未实现 `GET /api/tasks` 列表、cancel、并发限制、失败重试和 step 执行器。
 - 本轮继续 07 Automation API 与脚本运行器，完成 automation task 表持久层小闭环：
   - 新增 `automation_tasks` 表，字段覆盖 `id/profile_id/status/steps/result/error/created_at/started_at/finished_at`。
   - 新增 `create_automation_task()`、`get_automation_task()`、`list_automation_tasks()`、`update_automation_task()`。
@@ -125,7 +131,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，小步新增 `POST /api/tasks` 和 `GET /api/tasks/{id}`，先只创建/读取 queued task，不执行脚本。
+1. 继续 CloakBrowser 独立侧 07 Automation API，小步新增 `GET /api/tasks` 列表和 `POST /api/tasks/{id}/cancel` queued task 取消能力。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。
