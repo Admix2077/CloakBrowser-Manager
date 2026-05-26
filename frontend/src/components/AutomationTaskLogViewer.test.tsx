@@ -134,6 +134,109 @@ describe("AutomationTaskLogViewer", () => {
     expect(mockListAutomationTasks).toHaveBeenLastCalledWith({ limit: 50 });
   });
 
+  it("opens a read-only task detail drawer without rendering sensitive payloads", async () => {
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({
+          id: "task-detail-123456",
+          profile_id: "profile-detail-123456",
+          status: "cancelled",
+          steps: [
+            { type: "wait", ms: 1000 },
+            {
+              type: "open_url",
+              page_ref: "0",
+              wait_until: "domcontentloaded",
+              timeout_ms: 5000,
+              url: "https://example.com/app?token=super-secret#frag",
+            },
+            {
+              type: "click",
+              page_ref: "0",
+              timeout_ms: 30000,
+              selector: "#danger",
+            },
+            {
+              type: "keyboard_type",
+              page_ref: "0",
+              delay_ms: 5,
+              text: "typed-secret",
+            },
+            {
+              type: "scroll",
+              page_ref: "0",
+              delta_x: 0,
+              delta_y: 600,
+              note: "do-not-render",
+            },
+          ] as AutomationTask["steps"],
+          result: {
+            steps: [
+              { index: 0, type: "wait", status: "succeeded" },
+              {
+                index: 1,
+                type: "open_url",
+                status: "succeeded",
+                raw_url: "https://example.com/app?token=result-secret",
+              },
+              {
+                index: 2,
+                type: "click",
+                status: "cancelled",
+                selector: "#danger",
+              },
+              { index: 3, type: "keyboard_type", status: "succeeded", text: "result-typed-secret" },
+              { index: 4, type: "scroll", status: "succeeded", note: "result-do-not-render" },
+            ] as AutomationTask["result"]["steps"],
+            raw_url: "https://example.com/result?token=result-secret",
+          },
+          error: "Open URL step failed",
+          started_at: "2026-05-27T00:00:01Z",
+          finished_at: "2026-05-27T00:00:02Z",
+        }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getByText("+1 more steps")).toBeTruthy();
+    expect(within(page).getByText("+1 more results")).toBeTruthy();
+
+    fireEvent.click(within(page).getByRole("button", { name: "View task details for task-detail-123456" }));
+
+    const drawer = await screen.findByRole("dialog", { name: "Automation task details" });
+    expect(within(drawer).getAllByText("task-det...").length).toBeGreaterThan(0);
+    expect(within(drawer).getByText("profile-...")).toBeTruthy();
+    expect(within(drawer).getByText("cancelled")).toBeTruthy();
+    expect(within(drawer).getByText("wait")).toBeTruthy();
+    expect(within(drawer).getByText("open_url")).toBeTruthy();
+    expect(within(drawer).getByText("click")).toBeTruthy();
+    expect(within(drawer).getByText("keyboard_type")).toBeTruthy();
+    expect(within(drawer).getByText("scroll")).toBeTruthy();
+    expect(within(drawer).getByText("2 click cancelled")).toBeTruthy();
+    expect(within(drawer).getByText("4 scroll succeeded")).toBeTruthy();
+    expect(within(drawer).getByText("Open URL step failed")).toBeTruthy();
+    expect(within(drawer).queryByText("+1 more steps")).toBeNull();
+    expect(within(drawer).queryByText("+1 more results")).toBeNull();
+
+    expect(drawer.textContent).not.toContain("https://example.com");
+    expect(drawer.textContent).not.toContain("token");
+    expect(drawer.textContent).not.toContain("super-secret");
+    expect(drawer.textContent).not.toContain("result-secret");
+    expect(drawer.textContent).not.toContain("#danger");
+    expect(drawer.textContent).not.toContain("typed-secret");
+    expect(drawer.textContent).not.toContain("do-not-render");
+    expect(drawer.textContent).not.toContain("result-typed-secret");
+    expect(drawer.textContent).not.toContain("result-do-not-render");
+    expect(within(drawer).queryByRole("button", { name: /run/i })).toBeNull();
+    expect(within(drawer).queryByRole("button", { name: /cancel/i })).toBeNull();
+    expect(within(drawer).queryByRole("button", { name: /retry/i })).toBeNull();
+
+    fireEvent.click(within(drawer).getByRole("button", { name: "Close task details" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Automation task details" })).toBeNull());
+  });
+
   it("shows a low-risk empty state when no tasks exist", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({ tasks: [] });
 

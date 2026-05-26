@@ -431,10 +431,11 @@ GET /api/tasks
   - `result.steps[]` 低敏摘要。
   - task 固定错误文案。
   - created/finished 时间。
+- 表格行提供只读详情入口，打开后在 drawer 中展示该 task 的完整低敏 `steps` 和完整低敏 `result.steps[]`，不再使用表格摘要的 4 条截断上限。
 - 前端只渲染 step 白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page`。
 - 前端只渲染 result 白名单字段：`index/type/status`。
 - 前端不渲染 `open_url.url`、URL query、fragment、token、selector、fill value、keyboard text、evaluate expression/result、screenshot bytes/base64/path、clipboard、console text、network URL、headers、body 或未知字段。
-- 前端不提供 `run`、`cancel`、`retry` 按钮，避免在日志页面制造高权限自动化入口。
+- 前端不提供 `run`、`cancel`、`retry` 按钮，详情 drawer 也不提供这些动作，避免在日志页面制造高权限自动化入口。
 - 该页面仍属于 CloakBrowser 本地可信管理台，不是 Project Mileage App 对接面；Project Mileage App 后续只能通过 Payload 安全 DTO 获取经过账号归属、订单、权限和审计裁剪后的数据。
 
 ### Task 详情

@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Clock, ListChecks, RefreshCw, XCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, ListChecks, RefreshCw, X, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AutomationTask, type AutomationTaskResultStep, type AutomationTaskStep } from "../lib/api";
 import { formatTimestamp } from "../lib/profileDisplay";
@@ -8,6 +8,7 @@ const DEFAULT_TASK_LIMIT = 50;
 const STATUS_STYLES: Record<string, string> = {
   queued: "border-slate-200 bg-slate-50 text-slate-700",
   running: "border-blue-200 bg-blue-50 text-blue-700",
+  cancel_requested: "border-amber-200 bg-amber-50 text-amber-700",
   succeeded: "border-emerald-200 bg-emerald-50 text-emerald-700",
   failed: "border-red-200 bg-red-50 text-red-700",
   cancelled: "border-amber-200 bg-amber-50 text-amber-700",
@@ -18,6 +19,7 @@ export function AutomationTaskLogViewer() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const loadTasks = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     if (quiet) {
@@ -46,11 +48,15 @@ export function AutomationTaskLogViewer() {
   }, [loadTasks]);
 
   const stats = useMemo(() => {
-    const running = tasks.filter((task) => task.status === "running").length;
+    const running = tasks.filter((task) => task.status === "running" || task.status === "cancel_requested").length;
     const failed = tasks.filter((task) => task.status === "failed").length;
     const finished = tasks.filter((task) => task.status === "succeeded" || task.status === "cancelled").length;
     return { total: tasks.length, running, failed, finished };
   }, [tasks]);
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [selectedTaskId, tasks],
+  );
 
   return (
     <section
@@ -153,7 +159,17 @@ export function AutomationTaskLogViewer() {
                   style={{ height: 76 }}
                 >
                   <BodyCell>
-                    <span className="font-mono text-[11px] font-semibold text-slate-900">{shortId(task.id)}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono text-[11px] font-semibold text-slate-900">{shortId(task.id)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTaskId(task.id)}
+                        className="w-fit text-[11px] font-semibold text-blue-700 underline-offset-2 hover:underline"
+                        aria-label={`View task details for ${task.id}`}
+                      >
+                        Details
+                      </button>
+                    </div>
                   </BodyCell>
                   <BodyCell>
                     <span className="font-mono text-[11px] text-slate-600">{shortId(task.profile_id)}</span>
@@ -182,6 +198,10 @@ export function AutomationTaskLogViewer() {
           </table>
         )}
       </div>
+
+      {selectedTask && (
+        <TaskDetailDrawer task={selectedTask} onClose={() => setSelectedTaskId(null)} />
+      )}
     </section>
   );
 }
@@ -241,12 +261,15 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function StepList({ steps }: { steps: AutomationTaskStep[] }) {
+function StepList({ steps, maxItems = 4 }: { steps: AutomationTaskStep[]; maxItems?: number }) {
   if (steps.length === 0) return <span className="text-slate-400">-</span>;
+
+  const visibleSteps = steps.slice(0, maxItems);
+  const hiddenCount = steps.length - visibleSteps.length;
 
   return (
     <div className="flex max-w-[320px] flex-col gap-1">
-      {steps.slice(0, 4).map((step, index) => (
+      {visibleSteps.map((step, index) => (
         <div key={`${step.type}-${index}`} className="flex flex-wrap items-center gap-1.5">
           <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
             {safeLabel(step.type)}
@@ -258,27 +281,109 @@ function StepList({ steps }: { steps: AutomationTaskStep[] }) {
           ))}
         </div>
       ))}
-      {steps.length > 4 && (
-        <span className="text-[11px] text-slate-500">+{steps.length - 4} more steps</span>
+      {hiddenCount > 0 && (
+        <span className="text-[11px] text-slate-500">+{hiddenCount} more steps</span>
       )}
     </div>
   );
 }
 
-function ResultList({ steps }: { steps: AutomationTaskResultStep[] }) {
+function ResultList({ steps, maxItems = 4 }: { steps: AutomationTaskResultStep[]; maxItems?: number }) {
   if (steps.length === 0) return <span className="text-slate-400">-</span>;
+
+  const visibleSteps = steps.slice(0, maxItems);
+  const hiddenCount = steps.length - visibleSteps.length;
 
   return (
     <div className="flex max-w-[260px] flex-col gap-1">
-      {steps.slice(0, 4).map((step) => (
+      {visibleSteps.map((step) => (
         <span key={`${step.index}-${step.type}-${step.status}`} className="font-mono text-[11px] text-slate-700">
           {step.index} {safeLabel(step.type)} {safeLabel(step.status)}
         </span>
       ))}
-      {steps.length > 4 && (
-        <span className="text-[11px] text-slate-500">+{steps.length - 4} more results</span>
+      {hiddenCount > 0 && (
+        <span className="text-[11px] text-slate-500">+{hiddenCount} more results</span>
       )}
     </div>
+  );
+}
+
+function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/20" role="presentation">
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label="Automation task details"
+        className="flex h-full w-full max-w-[560px] flex-col border-l border-slate-200 bg-white shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Task detail</p>
+            <h3 className="mt-1 font-mono text-sm font-semibold text-slate-950">{shortId(task.id)}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close task details"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <DetailField label="Task" value={shortId(task.id)} monospace />
+            <DetailField label="Profile" value={shortId(task.profile_id)} monospace />
+            <DetailField label="Status" value={task.status} />
+            <DetailField label="Created" value={formatTimestamp(task.created_at)} />
+            <DetailField label="Started" value={formatTimestamp(task.started_at)} />
+            <DetailField label="Finished" value={formatTimestamp(task.finished_at)} />
+          </div>
+
+          {task.error && (
+            <div className="mt-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {task.error}
+            </div>
+          )}
+
+          <DetailSection title="Steps">
+            <StepList steps={task.steps} maxItems={task.steps.length} />
+          </DetailSection>
+
+          <DetailSection title="Result">
+            <ResultList steps={task.result?.steps ?? []} maxItems={task.result?.steps.length ?? 0} />
+          </DetailSection>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function DetailField({
+  label,
+  value,
+  monospace = false,
+}: {
+  label: string;
+  value: string;
+  monospace?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</div>
+      <div className={`mt-1 text-sm text-slate-900 ${monospace ? "font-mono" : "font-medium"}`}>{value}</div>
+    </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+      <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{title}</h4>
+      <div className="mt-2">{children}</div>
+    </section>
   );
 }
 

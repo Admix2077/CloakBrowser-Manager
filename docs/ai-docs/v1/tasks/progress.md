@@ -35,6 +35,15 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task detail drawer 小闭环：
+  - `frontend/src/components/AutomationTaskLogViewer.tsx` 的 task log table 每行新增只读 `Details` 入口。
+  - detail drawer 展示 task 短 ID、profile 短 ID、status、created/started/finished、固定错误文案、完整低敏 steps 和完整低敏 result steps。
+  - 表格仍保留最多 4 条 step/result 摘要，drawer 不使用该截断上限，便于本地管理台排查完整脚本轨迹。
+  - drawer 复用 task log viewer 的低敏渲染边界，只显示 step 白名单字段 `type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page` 和 `result.steps[].index/type/status`。
+  - drawer 不渲染 `open_url.url`、URL query、fragment、token、selector、fill value、keyboard text、evaluate expression/result、screenshot bytes/base64/path、clipboard、console/network URL、headers、body 或未知字段。
+  - drawer 不提供 `run`、`cancel`、`retry` 按钮，不调用新的后端接口，不启动/停止 profile，不修改 task 状态。
+  - `cancel_requested` 在前端状态 pill 中按进行中/待收束口径展示，并计入 Running 统计。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation running task 协作式取消小闭环：
   - queued task 取消仍为 `queued -> cancelled`，并写入 `finished_at`。
   - running task 取消改为 `running -> cancel_requested`，`finished_at` 保持 `null`，不伪造已停止。

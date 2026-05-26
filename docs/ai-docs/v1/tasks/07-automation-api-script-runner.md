@@ -252,23 +252,32 @@ cd frontend && npm run build
   - 低敏 result step 摘要。
   - task 固定错误文案。
   - created/finished 时间。
+- task log table 每行提供只读 `Details` 入口；打开后在 drawer 中展示该 task 的完整低敏 steps 和完整低敏 result steps，不再受表格摘要 4 条截断限制。
 - viewer 不提供 `run`、`cancel`、`retry` 按钮，不新增脚本执行入口，不启动 profile，不终止浏览器，不修改 task 状态。
+- detail drawer 同样不提供 `run`、`cancel`、`retry` 按钮，不调用新的后端接口，不改变 task 状态。
 - viewer 只渲染白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page` 和 `result.steps[].index/type/status`。
 - 即使 API mock 或历史数据带有 `open_url.url`、query、fragment、token、selector、value、keyboard text、evaluate expression、screenshot base64/path、result raw URL 或表单值，前端组件也不会渲染这些字段。
+- detail drawer 复用同一套低敏渲染边界，不渲染 `open_url.url`、URL query、fragment、token、selector、fill value、keyboard text、evaluate expression/result、screenshot bytes/base64/path、clipboard、console/network URL、headers、body 或未知字段。
 - 该页面仍然只面向 CloakBrowser 本地可信管理台；`GET /api/tasks` 当前没有 Project Mileage 账号归属、订单、权限或审计隔离，不能直接暴露给 Project Mileage App。
 - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token、VNC token 或屏幕流逻辑。
 
 验证记录：
 
 ```bash
+cd frontend && npm test -- src/components/AutomationTaskLogViewer.test.tsx
+# 4 passed
+
 cd frontend && npm test -- src/lib/api.test.ts
 # 31 passed
 
-cd frontend && npm test -- src/components/AutomationTaskLogViewer.test.tsx
-# 3 passed
-
 cd frontend && npm test -- src/App.test.tsx
 # 28 passed
+
+cd frontend && npm test -- --run
+# 14 files / 200 tests passed
+
+cd frontend && npm run build
+# passed
 ```
 
 ## 2026-05-27 Automation running task 协作式取消小闭环
