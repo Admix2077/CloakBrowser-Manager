@@ -1599,3 +1599,89 @@ git diff --check
 - 本轮不把 Profile 详情 / VNC viewer 改为抽屉式连续运营形态。
 - 本轮不新增新的高风险批量能力。
 - 03 模块任务清单已全部完成，`tasks/progress.md` 已更新 03 为完成。
+
+## 2026-05-26 Profile 运营台控件质感二次 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，尤其是 checkbox、bulk action、table row、toolbar、inspector 这些高频控件显得不够高级。
+- 本轮继续使用 `ui-ux-pro-max` / frontend design 方向；参考 `/home/jeff/code/reference-repos/saas_kit` 的 B2B SaaS app shell / data table 质感，只借鉴密度、层级、控件状态和分组方式。
+- 本轮只做 Profile 运营台 UI polish，不迁入参考仓库 auth、db、payment、schema，不引入 Project Mileage 业务逻辑，不改 Firefox / invisible_playwright / Automation REST API 边界。
+
+设计判断：
+
+- 信息架构继续保持：左侧 rail 做 saved views / shortcuts，主区 table/card 承担数百 profile 的搜索、筛选、批量和核心运营，右侧 inspector 做只读扫视。
+- 当前低质感主要不是缺功能，而是控件状态颗粒度不足：checkbox 没有显式状态层，bulk toolbar 没有 summary / commands 分组，table row selected / previewed 状态噪声偏高，inspector section 不是清晰的可访问 region。
+- 本轮不继续堆功能，不改筛选/排序/虚拟滚动算法，不改批量 API 数据流。
+
+已完成：
+
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - `SelectionCheckbox` 增加 `data-state="checked|unchecked|indeterminate"`，保留真实 checkbox input、`aria-checked="mixed"`、键盘 focus 和半选态。
+  - checkbox 视觉层补充 18px 控件盒、轻量 focus ring、hover surface 和 inset highlight，解决原生 checkbox 质感偏低的问题。
+  - table header 改为更干净的 white sticky header，保留 `min-w-[840px]`、12 列、`Actions` 列和表格自身横向滚动。
+  - table row / card selected / previewed 状态改为低噪声底色 + 左侧状态线，保留 64px table 行高和 188px card 行高。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - bulk toolbar 增加 `Selected profile summary` 和 `Bulk action commands` 两个 `role="group"`，结构更接近专业 data table command bar。
+  - secondary actions 收敛成图标按钮，保留 `aria-label` / `title` / loading 文案，避免 1440px + sidebar + inspector 时末尾 `Clear` 被挤出可视区域。
+  - `Check health` 仍是主动作且真实调用后端；launch / stop / tag / delete 的既有运行态过滤、disabled、typed delete 确认语义不变。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector section 增加 `aria-label`，Health / Runtime / GeoIP / Proxy / Device 现在是可访问 region。
+  - header 和 section surface 降噪，字段行 hover / spacing 更稳定，减少“普通配置面板”感。
+- [x] 测试补充：
+  - checkbox label 暴露 checked / unchecked / indeterminate 状态。
+  - bulk toolbar 暴露 summary / commands 分组。
+  - inspector 分区可通过 region 角色访问。
+
+保持不变：
+
+- 桌面 table `Actions` / `Open` 仍可见。
+- 移动端 body 不横向撑破；card list 继续替代窄屏 table。
+- `Check health` 批量动作仍真实调用后端。
+- 批量 launch / stop / tag / delete 保留既有真实动作、运行态过滤和高风险确认语义。
+- 主表超过 120 条、左侧超过 80 条的固定行高虚拟滚动语义不变。
+- proxy 可见文本和 `title` 继续不暴露用户名/密码。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 2 passed, 31 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 30 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 115 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8080/`，当前 QA 数据约 162 个 profiles。
+- 桌面 `1440x900`：
+  - table/card 没有重复渲染，dense table 可见。
+  - 选择 2 个 profile 后 bulk toolbar 显示 `2 selected`，`Selected profile summary` / `Bulk action commands` 分组存在。
+  - `Check health` 可点击并完成，selection 保留。
+  - `Actions` / `Open` 可见，`Clear` 在当前 viewport 内可见。
+  - `body.scrollWidth === window.innerWidth === 1440`，table region `overflow: auto`。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - 选择 1 个 profile 后 bulk toolbar 显示 `1 selected`，summary / commands 分组存在。
+  - `body.scrollWidth === window.innerWidth === 390`，sidebar 初始收起。
+  - DOM 中约 21 张 card，数百 profile 仍不是全量渲染。
+- `agent-browser errors` / `agent-browser console` 无输出。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v3-screens/desktop-table-bulk-inspector.png`
+- `/tmp/cloakbrowser-ui-polish-v3-screens/mobile-card-selected.png`
+
+范围说明：
+
+- 本轮不做服务端分页；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip 或 Proxy Manager 页面。
+- 本轮不处理 04 Proxy Manager 的 `POST /api/proxies/{id}/check` 红灯测试；该后端小闭环仍待继续。

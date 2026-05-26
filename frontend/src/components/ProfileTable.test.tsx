@@ -176,8 +176,13 @@ describe("ProfileTable", () => {
     const headerCheckbox = screen.getByLabelText("Select all visible profiles") as HTMLInputElement;
     expect(headerCheckbox.indeterminate).toBe(true);
     expect(headerCheckbox.getAttribute("aria-checked")).toBe("mixed");
-    expect((screen.getByLabelText("Select Good US") as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText("Select Broken Proxy") as HTMLInputElement).checked).toBe(false);
+    expect(headerCheckbox.closest("label")?.getAttribute("data-state")).toBe("indeterminate");
+    const selectedRowCheckbox = screen.getByLabelText("Select Good US") as HTMLInputElement;
+    const uncheckedRowCheckbox = screen.getByLabelText("Select Broken Proxy") as HTMLInputElement;
+    expect(selectedRowCheckbox.checked).toBe(true);
+    expect(selectedRowCheckbox.closest("label")?.getAttribute("data-state")).toBe("checked");
+    expect(uncheckedRowCheckbox.checked).toBe(false);
+    expect(uncheckedRowCheckbox.closest("label")?.getAttribute("data-state")).toBe("unchecked");
 
     fireEvent.click(screen.getByLabelText("Select Broken Proxy"));
     expect(onToggleProfileSelection).toHaveBeenCalledWith("error");
@@ -268,6 +273,8 @@ describe("ProfileTable", () => {
     );
 
     expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("false");
+    expect(screen.getByRole("group", { name: "Selected profile summary" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Bulk action commands" })).toBeTruthy();
     expect(screen.getByText("2 selected")).toBeTruthy();
     expect(screen.getByText("1 running")).toBeTruthy();
     expect(screen.getByText("1 stopped")).toBeTruthy();

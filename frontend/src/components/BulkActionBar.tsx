@@ -99,7 +99,7 @@ export function BulkActionBar({
 
   return (
     <div
-      className="sticky top-0 z-20 h-11 border-b border-slate-200 bg-slate-50/95 text-xs shadow-[0_8px_18px_rgba(15,23,42,0.06)] backdrop-blur"
+      className="sticky top-0 z-20 h-11 border-b border-slate-200 bg-white/95 text-xs shadow-[0_8px_20px_rgba(15,23,42,0.065)] backdrop-blur"
     >
       <div
         role="toolbar"
@@ -107,17 +107,27 @@ export function BulkActionBar({
         aria-busy={checkingHealth || launching || stopping || tagging || deleting}
         className="flex h-11 items-center gap-2 overflow-x-auto px-2.5"
       >
-        <span
-          role="status"
+        <div
+          role="group"
           aria-label="Selected profile summary"
-          className="inline-flex h-7 shrink-0 items-center rounded-md border border-blue-200 bg-white px-2.5 font-semibold tabular-nums text-blue-800 shadow-[0_1px_2px_rgba(37,99,235,0.08)] ring-1 ring-blue-600/[0.03]"
+          className="flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]"
         >
-          {selectedCount} selected
-        </span>
-        <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
-        <SummaryPill label={`${stoppedCount} stopped`} />
-        <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
-        <div className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <span
+            role="status"
+            aria-label="Selected profile count"
+            className="inline-flex h-7 shrink-0 items-center rounded-md border border-blue-200 bg-white px-2.5 font-semibold tabular-nums text-blue-800 shadow-[0_1px_2px_rgba(37,99,235,0.08)] ring-1 ring-blue-600/[0.03]"
+          >
+            {selectedCount} selected
+          </span>
+          <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
+          <SummaryPill label={`${stoppedCount} stopped`} />
+          <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
+        </div>
+        <div
+          role="group"
+          aria-label="Bulk action commands"
+          className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]"
+        >
           <button
             type="button"
             disabled={!onCheckHealth || checkingHealth}
@@ -132,21 +142,23 @@ export function BulkActionBar({
             type="button"
             disabled={!onLaunch || launching || stoppedCount === 0}
             aria-label={launching ? "Launching selected" : "Launch selected"}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            title={launching ? "Launching selected" : "Launch selected"}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
             onClick={() => void onLaunch?.()}
           >
             <Play className="h-3.5 w-3.5" />
-            <span>{launching ? "Launching..." : "Launch"}</span>
+            <span className="sr-only">{launching ? "Launching..." : "Launch"}</span>
           </button>
           <button
             type="button"
             disabled={!onStop || stopping || runningCount === 0}
             aria-label={stopping ? "Stopping selected" : "Stop selected"}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-hairline transition-colors hover:border-amber-200 hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+            title={stopping ? "Stopping selected" : "Stop selected"}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white font-medium text-slate-700 shadow-hairline transition-colors hover:border-amber-200 hover:bg-white hover:text-amber-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
             onClick={() => void onStop?.()}
           >
             <Square className="h-3.5 w-3.5" />
-            <span>{stopping ? "Stopping..." : "Stop"}</span>
+            <span className="sr-only">{stopping ? "Stopping..." : "Stop"}</span>
           </button>
           {tagEditorOpen ? (
             <form
@@ -196,11 +208,12 @@ export function BulkActionBar({
               type="button"
               disabled={!onAddTags || tagging}
               aria-label={tagging ? "Applying tag" : "Tag selected"}
-              className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
+              title={tagging ? "Applying tag" : "Tag selected"}
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400 disabled:shadow-none"
               onClick={() => setTagEditorOpen(true)}
             >
               <Tags className="h-3.5 w-3.5" />
-              <span>{tagging ? "Applying..." : "Tag"}</span>
+              <span className="sr-only">{tagging ? "Applying..." : "Tag"}</span>
             </button>
           )}
           <button
@@ -208,14 +221,14 @@ export function BulkActionBar({
             disabled={!deleteEnabled}
             aria-label={deleting ? "Deleting selected" : "Delete selected"}
             title={deleteTitle}
-            className="inline-flex h-7 shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-red-200 bg-white px-2.5 font-medium text-red-700 shadow-hairline transition-colors hover:border-red-300 hover:bg-white hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:border-red-100 disabled:bg-red-50/35 disabled:text-red-300 disabled:shadow-none"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-red-200 bg-white font-medium text-red-700 shadow-hairline transition-colors hover:border-red-300 hover:bg-white hover:text-red-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:border-red-100 disabled:bg-red-50/35 disabled:text-red-300 disabled:shadow-none"
             onClick={() => {
               setTagEditorOpen(false);
               setDeleteConfirmOpen(true);
             }}
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>{deleting ? "Deleting..." : "Delete"}</span>
+            <span className="sr-only">{deleting ? "Deleting..." : "Delete"}</span>
           </button>
           {onClearSelection && (
             <>

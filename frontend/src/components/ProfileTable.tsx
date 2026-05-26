@@ -331,9 +331,9 @@ function ProfileDesktopTable({
         <col style={{ width: 64 }} />
         <col style={{ width: 80 }} />
       </colgroup>
-      <thead className={`sticky z-10 bg-slate-50/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
-        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
-          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/95 px-1.5 py-1.5 font-semibold">
+      <thead className={`sticky z-10 bg-white/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
+        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.28)]">
+          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-white/95 px-1.5 py-1.5 font-semibold">
             <SelectionCheckbox
               label="Select all visible profiles"
               checked={allVisibleSelected}
@@ -430,7 +430,7 @@ function ProfileCardList({
       <div
         role="toolbar"
         aria-label="Profile card selection"
-        className={`sticky z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}
+        className={`sticky z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.045)] backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}
       >
         <div className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700">
           <SelectionCheckbox
@@ -569,7 +569,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="h-9 truncate border-b border-slate-200 bg-slate-50/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+    <th className="h-9 truncate border-b border-slate-200 bg-white/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
       {children}
     </th>
   );
@@ -591,6 +591,7 @@ function SelectionCheckbox({
   onChange,
 }: SelectionCheckboxProps) {
   const ref = useRef<HTMLInputElement>(null);
+  const state = indeterminate ? "indeterminate" : checked ? "checked" : "unchecked";
 
   useEffect(() => {
     if (ref.current) ref.current.indeterminate = indeterminate;
@@ -598,8 +599,9 @@ function SelectionCheckbox({
 
   return (
     <label
+      data-state={state}
       className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center align-middle ${
-        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer rounded-lg hover:bg-slate-100/80"
       }`}
     >
       <input
@@ -614,9 +616,9 @@ function SelectionCheckbox({
       />
       <span
         aria-hidden="true"
-        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border shadow-[0_1px_1px_rgba(15,23,42,0.06)] ring-1 ring-transparent transition-colors duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
+        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border shadow-[0_1px_1px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.7)] ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
           checked || indeterminate
-            ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.22)]"
+            ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.22),inset_0_1px_0_rgba(255,255,255,0.18)]"
             : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50"
         }`}
       >
@@ -662,11 +664,11 @@ function ProfileCard({
       role="listitem"
       aria-label={`Profile card ${profile.name}`}
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
-      className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-slate-900/[0.02] transition-colors focus-within:ring-blue-500/15 hover:border-slate-300 ${
+      className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.045)] ring-1 ring-slate-900/[0.02] transition-[border-color,background-color,box-shadow] duration-150 focus-within:ring-blue-500/15 hover:border-slate-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.07)] ${
         selected
-          ? "border-blue-200 border-l-blue-600 bg-gradient-to-r from-blue-50/90 to-white"
+          ? "border-blue-200 border-l-blue-600 bg-blue-50/70 shadow-[0_8px_20px_rgba(37,99,235,0.08)]"
           : previewed
-            ? "border-slate-300 border-l-slate-500 bg-gradient-to-r from-slate-50 to-white"
+            ? "border-slate-300 border-l-slate-500 bg-slate-50/85"
             : "border-slate-200 border-l-transparent"
       }`}
       style={{ height: PROFILE_CARD_ROW_HEIGHT - 8 }}
@@ -780,11 +782,11 @@ function ProfileTableRow({
   return (
     <tr
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
-      className={`group transition-colors duration-150 focus-within:bg-blue-50/50 ${
+      className={`group transition-[background-color,box-shadow] duration-150 focus-within:bg-blue-50/50 ${
         selected
-          ? "bg-gradient-to-r from-blue-50/90 to-white hover:from-blue-50"
+          ? "bg-blue-50/70 shadow-[inset_0_1px_0_rgba(37,99,235,0.05),inset_0_-1px_0_rgba(37,99,235,0.06)] hover:bg-blue-50"
           : previewed
-            ? "bg-gradient-to-r from-slate-50 to-white hover:from-slate-100/80"
+            ? "bg-slate-50/90 shadow-[inset_0_1px_0_rgba(148,163,184,0.08),inset_0_-1px_0_rgba(148,163,184,0.08)] hover:bg-slate-100/80"
             : "odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/70"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}

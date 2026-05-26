@@ -47,7 +47,7 @@ export function ProfileSummaryPanel({
       aria-label="Profile summary"
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.055)] ring-1 ring-slate-900/[0.025]"
     >
-      <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
+      <div className="border-b border-slate-200 bg-white p-4 shadow-[inset_0_-1px_0_rgba(248,250,252,0.95)]">
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
             Previewing
@@ -67,7 +67,7 @@ export function ProfileSummaryPanel({
         </div>
         <button
           type="button"
-          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-md border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           onClick={() => onOpenProfile(profile.id)}
           aria-label={`Open ${profile.name}`}
         >
@@ -76,7 +76,7 @@ export function ProfileSummaryPanel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto">
+      <div className="min-h-0 flex-1 divide-y divide-slate-100 overflow-y-auto bg-slate-50/45">
         <SummarySection icon={<ShieldAlert className="h-3.5 w-3.5" />} title="Health">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs text-slate-500">Status</span>
@@ -138,9 +138,12 @@ function SummarySection({
   children: ReactNode;
 }) {
   return (
-    <section className="p-4">
+    <section
+      aria-label={title}
+      className="bg-white px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
+    >
       <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-hairline">
+        <span className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400 shadow-hairline">
           {icon}
         </span>
         {title}
@@ -164,7 +167,7 @@ function SummaryRow({
   title?: string;
 }) {
   return (
-    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-2 rounded-md px-1 py-0.5 text-xs hover:bg-slate-50">
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-slate-50">
       <span className="text-slate-500">{label}</span>
       <span
         className={`truncate text-right font-medium text-slate-700 ${mono ? "font-mono text-[11px]" : ""}`}

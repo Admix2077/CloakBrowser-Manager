@@ -2076,3 +2076,69 @@ git diff --check
 - 前端 Proxy Manager 页面、搜索筛选、批量检测、CSV 粘贴导入。
 - 将 proxy 分配到 profile、从 profile 当前 proxy 保存为 proxy asset。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 31. 2026-05-26 Profile 运营台控件质感二次 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈 Profile 运营台质感和细节还不够，尤其是 checkbox、bulk action、table row、toolbar、inspector。
+- 本轮暂停继续堆功能，只做 UI/UE polish；不触碰 Project Mileage 业务逻辑，不复制 `/home/jeff/code/reference-repos/saas_kit` 的 auth、db、payment、schema。
+- 当前仓库仍有 04 Proxy Manager 的未完成红灯测试在 `backend/tests/test_proxies.py`，本轮没有接管该后端小闭环。
+
+本轮实现：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - `SelectionCheckbox` 增加 `data-state="checked|unchecked|indeterminate"`。
+  - checkbox 保留真实 input、半选态、`aria-checked="mixed"`、键盘 focus。
+  - table header / row / card selected-preview 状态降噪，保留 `min-w-[840px]`、64px table 行高、188px card 行高和虚拟滚动阈值。
+- `frontend/src/components/BulkActionBar.tsx`
+  - 增加 `Selected profile summary` / `Bulk action commands` 两个 `role="group"`。
+  - secondary actions 改成图标按钮，保留 `aria-label` / `title` / loading 文案。
+  - `Check health` 仍为主动作且真实调用后端；launch / stop / tag / delete 既有语义不变。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - Health / Runtime / GeoIP / Proxy / Device section 增加可访问 region。
+  - inspector header / section surface / field row 做低噪声 polish。
+- `frontend/src/components/ProfileTable.test.tsx`
+  - 补充 checkbox 状态、bulk toolbar 分组断言。
+- `frontend/src/components/ProfileSummaryPanel.test.tsx`
+  - 补充 inspector section region 断言。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 2 passed, 31 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 30 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 115 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8080/`，当前 QA 数据约 162 个 profiles。
+- 桌面 `1440x900`：
+  - 选择 2 个 profile 后 bulk toolbar 分组存在，`Check health` 可点击，`Actions` / `Open` 和 `Clear` 可见。
+  - `body.scrollWidth === window.innerWidth === 1440`，table region `overflow: auto`。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染，sidebar 初始收起。
+  - 选择 1 个 profile 后 bulk toolbar 分组存在。
+  - `body.scrollWidth === window.innerWidth === 390`，约 21 张 card 在 DOM 中，数百 profile 没有全量渲染。
+- `agent-browser errors` / `agent-browser console` 无输出。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v3-screens/desktop-table-bulk-inspector.png`
+- `/tmp/cloakbrowser-ui-polish-v3-screens/mobile-card-selected.png`
+
+仍未做：
+
+- 服务端分页未做；当前继续以固定高度虚拟滚动覆盖数百 profile。
+- ProfileForm 页签、Viewer EnvironmentStrip、Proxy Manager 页面未在本轮处理。
+- 04 Proxy Manager 的 `POST /api/proxies/{id}/check` 仍是下一后端小闭环。

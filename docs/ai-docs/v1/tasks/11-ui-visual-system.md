@@ -92,3 +92,16 @@ cd frontend && npm run build
 - `BulkActionBar` 接入真实 `Check health`，保留其他高风险批量动作 disabled。
 
 验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台 IA/视觉二次收口与批量 health check 小闭环`。
+
+## 2026-05-26 Profile 运营台控件质感二次 polish
+
+本轮继续根据 Jeff 对“控件显 low”的反馈做最小 UI polish，范围集中在 Profile 运营台高频控件：
+
+- 使用 `ui-ux-pro-max` 重新确认 B2B data-dense dashboard 方向。
+- 只读审阅 `/home/jeff/code/reference-repos/saas_kit` 的 data table / action bar / inspector 参考，不复制业务代码，不迁入 auth、db、payment、schema。
+- `ProfileTable` 的 selection checkbox 增加显式 `data-state`，保留真实 input、半选态、键盘 focus 和虚拟滚动。
+- `BulkActionBar` 增加 summary / commands 分组，并把 secondary actions 收成图标按钮，避免 1440px + sidebar + inspector 时命令条拥挤。
+- `ProfileSummaryPanel` 的 Health / Runtime / GeoIP / Proxy / Device 分区改为可访问 region，视觉上更像 inspector。
+- 保留桌面 `Actions` 可见、移动 card list、body 不横向撑破、批量 `Check health` 真实可用、proxy 脱敏和数百 profile 固定行高虚拟滚动语义。
+
+验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感二次 polish 小闭环`。

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileSummaryPanel } from "./ProfileSummaryPanel";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
@@ -82,6 +82,12 @@ describe("ProfileSummaryPanel", () => {
     );
 
     expect(screen.getByRole("complementary", { name: "Profile summary" })).toBeTruthy();
+    const summary = screen.getByRole("complementary", { name: "Profile summary" });
+    expect(within(summary).getByRole("region", { name: "Health" })).toBeTruthy();
+    expect(within(summary).getByRole("region", { name: "Runtime" })).toBeTruthy();
+    expect(within(summary).getByRole("region", { name: "GeoIP" })).toBeTruthy();
+    expect(within(summary).getByRole("region", { name: "Proxy" })).toBeTruthy();
+    expect(within(summary).getByRole("region", { name: "Device" })).toBeTruthy();
     expect(screen.getByText("Seller US")).toBeTruthy();
     expect(screen.getByText("Inspector")).toBeTruthy();
     expect(screen.getAllByText("不可用").length).toBeGreaterThan(0);
