@@ -105,3 +105,18 @@ cd frontend && npm run build
 - 保留桌面 `Actions` 可见、移动 card list、body 不横向撑破、批量 `Check health` 真实可用、proxy 脱敏和数百 profile 固定行高虚拟滚动语义。
 
 验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感二次 polish 小闭环`。
+
+## 2026-05-26 Profile 运营台控件质感四次 polish
+
+本轮继续根据 Jeff 对 checkbox / bulk action / table row / toolbar / inspector 质感的反馈做更克制的 B2B 运营台 polish：
+
+- 使用 `ui-ux-pro-max` 确认 data-dense operations console 方向：浅色、低噪声、清晰边界、少渐变、明确 focus。
+- 参考 `/home/jeff/code/reference-repos/saas_kit/ai-mksaas-template` 的 data table / action bar / checkbox 质感，但未复制业务代码，未迁入 auth / db / payment / schema。
+- `ProfileTable` checkbox 改为 18px 控件 + 7px hit target + solid checked state + 明确 focus ring，保留真实 input、半选态和虚拟滚动。
+- `BulkActionBar` 改为单层浅色工具条，summary / commands 分组更清晰，并新增 `Escape` 清空 selection 微交互。
+- `ProfileFilters` 输入控件统一轻 shadow / focus ring。
+- `ProfileSummaryPanel` 改成更像属性 inspector 的 header、section icon、warning block 和 property row。
+- `App` 主区的 top pill、filter band、table panel 做轻量 polish，减少卡片堆叠感。
+- `globals.css` 增加 form controls font inherit 与 `prefers-reduced-motion: reduce`。
+
+验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感四次 polish 小闭环`。

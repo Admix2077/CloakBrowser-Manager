@@ -2465,3 +2465,99 @@ git diff --check
 - bulk toolbar 未改成底部浮动形态，避免破坏当前 sticky header / virtualized table 成熟语义。
 - ProfileForm 页签、Viewer EnvironmentStrip、Proxy Manager 页面未改。
 - 04 Proxy Manager 前端页面和剩余能力仍未完成。
+
+## 37. 2026-05-26 Profile 运营台控件质感四次 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，复选框等控件显 low。
+- 本轮继续暂停 04 Proxy Manager 功能推进，只做 Profile 运营台 UI polish。
+- 使用 `ui-ux-pro-max` 确认 B2B SaaS / data-dense operations console 方向。
+- 只读参考 `/home/jeff/code/reference-repos/saas_kit/ai-mksaas-template` 的 data table / action bar / checkbox / inspector 视觉原则，未复制业务逻辑，未迁入 auth / db / payment / schema。
+- 派发只读子 agent 审计当前 Profile 运营台实现和不能破坏的测试语义。
+
+本轮实现：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - 保留真实 checkbox input、`data-state`、`aria-checked="mixed"`、键盘 focus、disabled 和虚拟滚动。
+  - checkbox 改为更克制的 white / blue solid state、18px 控件、7px hit target、低噪声 hover / focus ring。
+  - table header 改为 slate toolbar 质感，行状态收敛为左侧状态条 + 轻背景。
+  - 移动 card list 继续独立渲染，`Open` action 常显。
+- `frontend/src/components/BulkActionBar.tsx`
+  - 保留 `sticky top-0 h-11` 和 `top-11` offset 契约。
+  - summary / commands 改为单层浅色工具条，`1 selected` 使用深色明确选中状态。
+  - `Check health` 保持主动作突出且真实可用；Launch / Stop / Tag / Delete 保持既有 disabled / confirmation 语义。
+  - 新增 `Escape` 清空 selection；tag form / delete confirm 打开时不误触清空。
+- `frontend/src/components/ProfileFilters.tsx`
+  - search / select 控件统一 6px 半径、轻 shadow 和 focus ring。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、section icon、warning block、property row 做更精细的属性面板视觉。
+- `frontend/src/App.tsx`
+  - top bar pill、filter band、table panel 轻量 polish，减少卡片堆叠感。
+- `frontend/src/styles/globals.css`
+  - font fallback 优先 `Plus Jakarta Sans`，form controls 继承字体。
+  - 增加 `prefers-reduced-motion: reduce`。
+- `frontend/src/components/ProfileTable.test.tsx`
+  - TDD 新增 `Escape` 清空 bulk selection 测试，已先确认红灯。
+
+保持不变：
+
+- 桌面 `Actions` / `Open` 首屏仍可见。
+- 移动端 body 不横向撑破；窄屏继续 card list。
+- 表格自身保持横向滚动边界。
+- 批量 `Check health`、launch、stop、tag、delete 的真实业务语义不变。
+- 高风险 delete 仍只作用 stopped profiles，并要求输入 `DELETE`。
+- 主表超过 120 条、左侧超过 80 条的固定行高虚拟滚动语义不变。
+- proxy 可见文本和 `title` 继续不暴露用户名/密码。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 failed, 35 passed
+# 红灯：Escape 尚未清空 bulk selection
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 36 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileFilters.test.tsx src/App.test.tsx
+# 4 passed, 59 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 122 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8080/`，当前 QA 数据 162 个 profiles。
+- 桌面 `1440x900`：
+  - dense table 可见，`Actions` / `Open` 首屏可见。
+  - 选择首行后 bulk toolbar 显示 `1 selected`，`Check health` 主动作可见。
+  - 按 `Escape` 后 selection 清空，bulk toolbar 消失。
+  - `agent-browser errors --clear` 无输出。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`，body 未横向撑破。
+  - filter toolbar、card selection toolbar、Open action 和 inspector 在窄屏下未重叠。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v5-screens/desktop-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v5-screens/desktop-bulk-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v5-screens/mobile-profile-ops.png`
+
+仍未做：
+
+- 服务端分页、无限滚动或 Profile 数据架构变更。
+- 04 Proxy Manager 前端页面。
+- ProfileForm 页签、Viewer EnvironmentStrip。

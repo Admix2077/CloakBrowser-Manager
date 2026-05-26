@@ -133,7 +133,7 @@ export function ProfileTable({
       ref={scrollRef}
       role="region"
       aria-label="Profile operations table"
-      className="h-full overflow-auto bg-white [scrollbar-gutter:stable]"
+      className="h-full overflow-auto bg-[#fbfcfe] [scrollbar-gutter:stable]"
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
       <div className={isCardLayout ? "min-w-0" : "min-w-[840px]"}>
@@ -170,10 +170,10 @@ export function ProfileTable({
           <div
             role="status"
             aria-label="Health not checked yet"
-            className="border-b border-blue-100 bg-blue-50/70 px-3 py-2 text-xs text-blue-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
+            className="border-b border-blue-100 bg-blue-50/80 px-3 py-2 text-xs text-blue-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]"
           >
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-blue-200 bg-white text-blue-700 shadow-hairline">
+              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border border-blue-200 bg-white text-blue-700 shadow-[0_1px_2px_rgba(37,99,235,0.08)]">
                 <HeartPulse className="h-3.5 w-3.5" />
               </span>
               <p>
@@ -316,7 +316,7 @@ function ProfileDesktopTable({
   onClearFilters,
 }: ProfileDesktopTableProps) {
   return (
-    <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs text-slate-700">
+    <table className="w-full table-fixed border-separate border-spacing-0 bg-white text-left text-xs text-slate-700">
       <colgroup>
         <col style={{ width: 42 }} />
         <col style={{ width: 142 }} />
@@ -331,9 +331,9 @@ function ProfileDesktopTable({
         <col style={{ width: 64 }} />
         <col style={{ width: 80 }} />
       </colgroup>
-      <thead className={`sticky z-10 bg-white/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
-        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.28)]">
-          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-white/95 px-1.5 py-1.5 font-semibold">
+      <thead className={`sticky z-10 bg-slate-50/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
+        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
+          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/95 px-1.5 py-1.5 font-semibold">
             <SelectionCheckbox
               label="Select all visible profiles"
               checked={allVisibleSelected}
@@ -426,11 +426,11 @@ function ProfileCardList({
   }
 
   return (
-    <div className="bg-slate-50/70">
+    <div className="bg-slate-50/80">
       <div
         role="toolbar"
         aria-label="Profile card selection"
-        className={`sticky z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.045)] backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}
+        className={`sticky z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/95 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}
       >
         <div className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700">
           <SelectionCheckbox
@@ -442,7 +442,7 @@ function ProfileCardList({
           />
           <span className="truncate">Select visible</span>
         </div>
-        <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-500 shadow-hairline">
+        <span className="shrink-0 rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.035)]">
           {profiles.length} profile{profiles.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -569,7 +569,7 @@ function ProfileTableSpacer({ height }: { height: number }) {
 
 function HeaderCell({ children }: { children: string }) {
   return (
-    <th className="h-9 truncate border-b border-slate-200 bg-white/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+    <th className="h-9 truncate border-b border-slate-200 bg-slate-50/95 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
       {children}
     </th>
   );
@@ -600,10 +600,10 @@ function SelectionCheckbox({
   return (
     <label
       data-state={state}
-      className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center rounded-md border border-transparent align-middle transition-[background-color,border-color,box-shadow] duration-150 ${
+      className={`group/checkbox relative inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-transparent align-middle transition-[background-color,border-color,box-shadow] duration-150 ${
         disabled
           ? "cursor-not-allowed opacity-50"
-          : "cursor-pointer hover:border-slate-200 hover:bg-slate-100/75 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.75)]"
+          : "cursor-pointer hover:border-slate-200 hover:bg-slate-100/80 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
       }`}
     >
       <input
@@ -618,10 +618,10 @@ function SelectionCheckbox({
       />
       <span
         aria-hidden="true"
-        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border shadow-[0_1px_1px_rgba(15,23,42,0.06),inset_0_1px_0_rgba(255,255,255,0.82)] ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/25 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
+        className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border shadow-[0_1px_1px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-transparent transition-all duration-150 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/30 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white ${
           checked || indeterminate
-            ? "border-blue-600 bg-gradient-to-b from-blue-500 to-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.24),inset_0_1px_0_rgba(255,255,255,0.2)]"
-            : "border-slate-300 bg-gradient-to-b from-white to-slate-50 text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50"
+            ? "border-blue-600 bg-blue-600 text-white shadow-[0_1px_2px_rgba(37,99,235,0.24),inset_0_1px_0_rgba(255,255,255,0.2)]"
+            : "border-slate-300 bg-white text-transparent group-hover/checkbox:border-blue-400 group-hover/checkbox:bg-blue-50/70"
         }`}
       >
         {indeterminate ? (
@@ -666,11 +666,11 @@ function ProfileCard({
       role="listitem"
       aria-label={`Profile card ${profile.name}`}
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
-      className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.045)] ring-1 ring-slate-900/[0.02] transition-[border-color,background-color,box-shadow] duration-150 focus-within:ring-blue-500/15 hover:border-slate-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.07)] ${
+      className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.045)] ring-1 ring-slate-900/[0.02] transition-[border-color,background-color,box-shadow] duration-150 focus-within:ring-blue-500/15 hover:border-slate-300 hover:shadow-[0_8px_18px_rgba(15,23,42,0.065)] ${
         selected
-          ? "border-blue-200 border-l-blue-600 bg-blue-50/70 shadow-[0_8px_20px_rgba(37,99,235,0.08)]"
+          ? "border-blue-200 border-l-blue-600 bg-blue-50/75 shadow-[0_8px_20px_rgba(37,99,235,0.075)]"
           : previewed
-            ? "border-slate-300 border-l-slate-500 bg-slate-50/85"
+            ? "border-slate-300 border-l-slate-500 bg-slate-50/90"
             : "border-slate-200 border-l-transparent"
       }`}
       style={{ height: PROFILE_CARD_ROW_HEIGHT - 8 }}
@@ -698,7 +698,7 @@ function ProfileCard({
         </div>
         <button
           type="button"
-          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >
@@ -707,7 +707,7 @@ function ProfileCard({
         </button>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50/70 px-2 py-1.5">
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-[6px] border border-slate-100 bg-slate-50/70 px-2 py-1.5">
         <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
           <span className="truncate">{profile.status}</span>
@@ -729,7 +729,7 @@ function ProfileCard({
         {profile.tags.length > 0 ? profile.tags.map((tag) => (
           <span
             key={tag.tag}
-            className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-hairline"
+            className="shrink-0 rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-[0_1px_1px_rgba(15,23,42,0.035)]"
             style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
           >
             {tag.tag}
@@ -784,12 +784,12 @@ function ProfileTableRow({
   return (
     <tr
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
-      className={`group transition-[background-color,box-shadow] duration-150 focus-within:bg-blue-50/50 ${
+      className={`group transition-[background-color,box-shadow] duration-150 focus-within:bg-blue-50/55 ${
         selected
-          ? "bg-blue-50/70 shadow-[inset_0_1px_0_rgba(37,99,235,0.05),inset_0_-1px_0_rgba(37,99,235,0.06)] hover:bg-blue-50"
+          ? "bg-blue-50/80 shadow-[inset_0_-1px_0_rgba(37,99,235,0.08)] hover:bg-blue-50"
           : previewed
-            ? "bg-slate-50/90 shadow-[inset_0_1px_0_rgba(148,163,184,0.08),inset_0_-1px_0_rgba(148,163,184,0.08)] hover:bg-slate-100/80"
-            : "odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/70"
+            ? "bg-slate-50/95 shadow-[inset_0_-1px_0_rgba(148,163,184,0.1)] hover:bg-slate-100/75"
+            : "odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/60"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}
     >
@@ -842,7 +842,7 @@ function ProfileTableRow({
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
             <span
               key={tag.tag}
-              className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-hairline"
+              className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-[0_1px_1px_rgba(15,23,42,0.035)]"
               style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
             >
               {tag.tag}
@@ -858,7 +858,7 @@ function ProfileTableRow({
       <td className="border-b border-slate-100 px-2 py-2">
         <button
           type="button"
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 group-hover:border-slate-300"
+          className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 group-hover:border-slate-300"
           onClick={() => onSelect(profile.id)}
           aria-label={`Open ${profile.name}`}
         >

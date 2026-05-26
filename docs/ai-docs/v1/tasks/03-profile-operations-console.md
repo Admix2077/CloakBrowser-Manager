@@ -1787,3 +1787,101 @@ git diff --check
 - 本轮不把 bulk toolbar 改成底部浮动形态。
 - 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip 或 Proxy Manager 页面。
 - 03 模块仍保持完成状态；当前继续按用户反馈在已完成模块上做 UI polish 小闭环。
+
+## 2026-05-26 Profile 运营台控件质感四次 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，尤其是 checkbox 等控件仍显 low。
+- 本轮继续暂停 04 Proxy Manager 功能推进，只做 Profile 运营台 UI polish，不破坏已完成真实功能、测试、性能语义和虚拟滚动。
+- 使用 `ui-ux-pro-max` 重新确认 B2B SaaS / data-dense operations console 方向。
+- 只读参考 `/home/jeff/code/reference-repos/saas_kit/ai-mksaas-template` 的 data table / action bar / checkbox / inspector 质感，只吸收视觉原则，不复制业务逻辑，不迁入 auth / db / payment / schema。
+- 派发只读子 agent 审计当前 Profile 运营台边界，结论是最小改动集中在 `ProfileTable`、`BulkActionBar`、`ProfileFilters`、`ProfileSummaryPanel`、`App` 与少量 `globals.css`。
+
+本轮实现：
+
+- [x] `frontend/src/components/ProfileTable.tsx`
+  - 保留真实 checkbox input、`data-state`、半选态、键盘 focus、disabled 和虚拟滚动语义。
+  - checkbox 视觉从偏渐变控件改成更克制的 white / blue solid state、18px 控件、7px hit target、低噪声 hover / focus ring。
+  - 桌面 table header 改为 slate toolbar 质感，行状态收敛为左侧状态条 + 轻背景，不再叠加过重阴影。
+  - 移动 card list 继续独立渲染，Open action 常显。
+- [x] `frontend/src/components/BulkActionBar.tsx`
+  - 保留 `sticky top-0 h-11`，不破坏 table header / card selection toolbar 的 `top-11`。
+  - summary group / commands group 改成单层浅色工具条，`1 selected` 使用深色明确选中状态。
+  - `Check health` 保持主动作突出且真实可用；Launch / Stop / Tag / Delete 保持既有 disabled / confirmation 语义。
+  - 新增 `Escape` 清空 selection 微交互；tag form / delete confirm 打开时仍由各自表单处理 Escape，不误清空 selection。
+- [x] `frontend/src/components/ProfileFilters.tsx`
+  - 搜索框和 select 控件统一 6px 半径、轻 shadow、明确 focus ring，保留 `role="toolbar"` 和所有 label / filter 语义。
+- [x] `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、section icon、warning block、property row 改成更克制的右侧属性面板质感。
+  - Health / Runtime / GeoIP / Proxy / Device 的 `section aria-label` region 语义不变。
+- [x] `frontend/src/App.tsx`
+  - top bar pill、filter band 和主 table panel 做轻量 polish，减少“卡片堆叠”观感。
+- [x] `frontend/src/styles/globals.css`
+  - font fallback 优先 `Plus Jakarta Sans`，并让 form controls 继承字体。
+  - 增加 `prefers-reduced-motion: reduce` 保护，避免过度动画影响长期运营使用。
+- [x] `frontend/src/components/ProfileTable.test.tsx`
+  - 新增 `Escape` 清空 bulk selection 测试，并先确认红灯再实现。
+
+保持不变：
+
+- 桌面 `Actions` / `Open` 首屏仍可见。
+- 移动端 body 不横向撑破；窄屏继续 card list。
+- 表格自身保持横向滚动边界，仍由 `Profile operations table` region 承载。
+- 批量 `Check health`、launch、stop、tag、delete 的真实业务语义不变。
+- 高风险 delete 仍只作用 stopped profiles，并要求输入 `DELETE`。
+- 主表超过 120 条、左侧超过 80 条的固定行高虚拟滚动语义不变。
+- proxy 可见文本和 `title` 继续不暴露用户名/密码。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 failed, 35 passed
+# 红灯：Escape 尚未清空 bulk selection
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 passed, 36 passed
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileFilters.test.tsx src/App.test.tsx
+# 4 passed, 59 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 122 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8080/`，当前 QA 数据 162 个 profiles。
+- 桌面 `1440x900`：
+  - dense table 可见，`Actions` / `Open` 首屏可见。
+  - 选择首行后 bulk toolbar 显示 `1 selected`，`Check health` 主动作可见。
+  - 按 `Escape` 后 selection 清空，bulk toolbar 消失。
+  - `agent-browser errors --clear` 无输出。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`，body 未横向撑破。
+  - filter toolbar、card selection toolbar、Open action 和 inspector 在窄屏下未重叠。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v5-screens/desktop-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v5-screens/desktop-bulk-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v5-screens/mobile-profile-ops.png`
+
+范围说明：
+
+- 本轮不做服务端分页、无限滚动或 Profile 数据架构变更。
+- 本轮不推进 04 Proxy Manager 前端页面。
+- 本轮不改 ProfileForm 页签、Viewer EnvironmentStrip。
+- 03 模块仍保持完成状态；本记录作为用户反馈驱动的 UI polish 小闭环。

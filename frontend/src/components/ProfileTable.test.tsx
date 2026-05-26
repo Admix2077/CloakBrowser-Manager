@@ -321,6 +321,24 @@ describe("ProfileTable", () => {
     expect((screen.getByRole("button", { name: "Delete selected" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("clears selected profiles from the bulk action bar with Escape", () => {
+    const onClearSelection = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        onClearSelection={onClearSelection}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
+  });
+
   it("requires typed confirmation before deleting selected stopped profiles", () => {
     const onDeleteSelected = vi.fn();
 
