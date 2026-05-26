@@ -183,6 +183,7 @@ cd frontend && npm run build
   - 只允许终态 `succeeded | failed | cancelled`。
   - 收束成功后写入 `status/result/error/finished_at`，并清空 `lease_owner`、`lease_expires_at`。
   - worker owner 不匹配、task 已收束或状态不是允许终态时返回 `None`，不覆盖既有终态。
+- `finish_claimed_automation_task()` 支持显式传入 `allowed_statuses`；默认仍只允许 `running`，后台 worker 处理取消请求时可用 `{"running", "cancel_requested"}` 将同 owner 的 `cancel_requested` task 收束为 `cancelled`，并清空 lease。
 - 当前仍只完成后台 worker 池的数据层前置能力，不新增公开 REST API，不启动后台 worker，不自动执行脚本，不自动启动 profile。
 - `lease_owner` / `lease_expires_at` 仍是内部调度字段，不属于 `AutomationTaskResponse`；即使经过 claim、renew、finish，`GET /api/tasks/{id}` 和 `GET /api/tasks` 也不会暴露这些字段。
 - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token、VNC token 或审计事实源。
@@ -193,11 +194,14 @@ cd frontend && npm run build
 . .venv/bin/activate && python -m pytest backend/tests/test_database.py::test_renew_automation_task_lease_extends_only_matching_running_owner backend/tests/test_database.py::test_finish_claimed_automation_task_updates_terminal_status_and_clears_lease backend/tests/test_database.py::test_finish_claimed_automation_task_rejects_non_terminal_status -q
 # 3 passed
 
+. .venv/bin/activate && python -m pytest backend/tests/test_database.py::test_finish_claimed_automation_task_can_cancel_matching_cancel_requested_owner backend/tests/test_database.py::test_finish_claimed_automation_task_updates_terminal_status_and_clears_lease backend/tests/test_database.py::test_finish_claimed_automation_task_rejects_non_terminal_status backend/tests/test_database.py::test_renew_automation_task_lease_extends_only_matching_running_owner -q
+# 4 passed
+
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_do_not_expose_worker_lease_metadata backend/tests/test_api.py::test_automation_task_responses_do_not_expose_renewed_or_finished_lease_metadata -q
 # 2 passed
 
 . .venv/bin/activate && python -m pytest backend/tests/test_database.py -q
-# 42 passed
+# 43 passed
 ```
 
 ## 2026-05-27 Automation task 最小 API 小闭环

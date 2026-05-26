@@ -41,6 +41,7 @@
   - 新增 DB 层 `finish_claimed_automation_task()`，只允许匹配当前 `lease_owner` 的 `running` task 收束为 `succeeded | failed | cancelled`。
   - 收束成功后写入 `status/result/error/finished_at`，并清空 `lease_owner`、`lease_expires_at`。
   - owner 不匹配、状态不匹配、task 已收束或非终态 status 时返回 `None`，不覆盖既有 task 状态。
+  - `finish_claimed_automation_task()` 支持显式 `allowed_statuses`；后台 worker 处理取消请求时可允许同 owner 的 `cancel_requested -> cancelled`，用于后续 worker 池安全收束取消任务。
   - 公开 task API 响应仍不暴露 `lease_owner`、`lease_expires_at`；该能力仍只服务后续内部 worker 池。
   - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task claim/lease 数据层小闭环：

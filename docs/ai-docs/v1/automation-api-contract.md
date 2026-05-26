@@ -554,7 +554,7 @@ POST /api/tasks/{id}/run
   - 否则选择最早 `queued` task。
   - 如果同一 `profile_id` 已有 `running` 或 `cancel_requested` task 且租约仍有效，则跳过该 profile 的 queued task，避免同 profile 并发。
 - `renew_automation_task_lease(task_id, lease_owner, lease_seconds)` 只允许当前 lease owner 对仍处于允许状态的 task 续租，续租时间按服务器当前时间或调用方传入 `now` 重新计算为 `now + lease_seconds`。
-- `finish_claimed_automation_task(task_id, lease_owner, status, result, error)` 只允许当前 lease owner 把 `running` task 收束为 `succeeded | failed | cancelled`，并清空内部 lease 字段。
+- `finish_claimed_automation_task(task_id, lease_owner, status, result, error)` 只允许当前 lease owner 把允许来源状态收束为 `succeeded | failed | cancelled`，并清空内部 lease 字段；默认来源状态是 `running`，worker 处理取消请求时可显式允许 `cancel_requested -> cancelled`。
 - 该能力只用于后续内部 worker 池，不自动启动 profile，不执行脚本，不新增 Project Mileage 对接面。
 - 内部 `lease_owner` / `lease_expires_at` 不属于前端或 Project Mileage DTO，不应出现在 task API、前端 task log、审计 metadata 或跨仓契约响应中。
 

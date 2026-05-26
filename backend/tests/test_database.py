@@ -471,6 +471,44 @@ def test_finish_claimed_automation_task_updates_terminal_status_and_clears_lease
     assert db.get_automation_task(task["id"])["status"] == "succeeded"
 
 
+def test_finish_claimed_automation_task_can_cancel_matching_cancel_requested_owner(tmp_db: Path):
+    profile = db.create_profile("Automation Task Finish Cancel Requested")
+    task = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])
+    db.claim_next_automation_task(
+        lease_owner="worker-a",
+        lease_seconds=60,
+        now="2026-05-27T00:00:00+00:00",
+    )
+    db.update_automation_task(task["id"], status="cancel_requested")
+
+    wrong_owner = db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-b",
+        status="cancelled",
+        result={"steps": [{"index": 0, "type": "wait", "status": "cancelled"}]},
+        error=None,
+        now="2026-05-27T00:00:30+00:00",
+        allowed_statuses={"running", "cancel_requested"},
+    )
+    cancelled = db.finish_claimed_automation_task(
+        task["id"],
+        lease_owner="worker-a",
+        status="cancelled",
+        result={"steps": [{"index": 0, "type": "wait", "status": "cancelled"}]},
+        error=None,
+        now="2026-05-27T00:00:30+00:00",
+        allowed_statuses={"running", "cancel_requested"},
+    )
+
+    assert wrong_owner is None
+    assert cancelled is not None
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["result"] == {"steps": [{"index": 0, "type": "wait", "status": "cancelled"}]}
+    assert cancelled["lease_owner"] is None
+    assert cancelled["lease_expires_at"] is None
+    assert cancelled["finished_at"] == "2026-05-27T00:00:30+00:00"
+
+
 def test_finish_claimed_automation_task_rejects_non_terminal_status(tmp_db: Path):
     profile = db.create_profile("Automation Task Finish Reject")
     task = db.create_automation_task(profile_id=profile["id"], steps=[{"type": "wait", "ms": 1}])

@@ -833,13 +833,18 @@ def finish_claimed_automation_task(
     result: dict[str, Any] | None,
     error: str | None,
     now: str | None = None,
+    allowed_statuses: set[str] | None = None,
 ) -> dict[str, Any] | None:
     if status not in {"cancelled", "failed", "succeeded"}:
         return None
+    source_statuses = allowed_statuses or {"running"}
+    if not source_statuses:
+        return None
+    placeholders = ", ".join("?" for _ in source_statuses)
     finished_at, _ = _lease_expires_at(now, 0)
     with get_db() as conn:
         cursor = conn.execute(
-            """
+            f"""
             UPDATE automation_tasks
             SET status = ?,
                 result = ?,
@@ -849,7 +854,7 @@ def finish_claimed_automation_task(
                 lease_expires_at = NULL
             WHERE id = ?
               AND lease_owner = ?
-              AND status = 'running'
+              AND status IN ({placeholders})
             """,
             (
                 status,
@@ -858,6 +863,7 @@ def finish_claimed_automation_task(
                 finished_at,
                 task_id,
                 lease_owner,
+                *sorted(source_statuses),
             ),
         )
         conn.commit()
