@@ -539,6 +539,7 @@ def _automation_page(url: str = "about:blank", title: str = "Blank") -> MagicMoc
     page.fill = AsyncMock()
     page.keyboard = MagicMock()
     page.keyboard.type = AsyncMock()
+    page.on = MagicMock()
     page.screenshot = AsyncMock(return_value=b"png-bytes")
     page.close = AsyncMock()
     return page
@@ -771,6 +772,66 @@ def test_automation_scroll_scrolls_page_and_returns_page(app_client: TestClient)
     assert data["url"] == "https://example.com/"
     assert data["title"] == "Example"
     assert isinstance(data["page_id"], str)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_console_logs_returns_in_memory_page_logs(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleLogs"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.automation_console_logs = [
+        {"type": "log", "text": "ready", "location": {"url": "https://example.com/app.js", "line": 4, "column": 2}},
+        {"type": "error", "text": "failed", "location": {}},
+    ]
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "logs": [
+            {
+                "type": "log",
+                "text": "ready",
+                "location": {"url": "https://example.com/app.js", "line": 4, "column": 2},
+            },
+            {"type": "error", "text": "failed", "location": {}},
+        ],
+    }
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_console_logs_captures_recent_console_messages(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleCapture"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    page.on.assert_called_once()
+    event_name, callback = page.on.call_args.args
+    assert event_name == "console"
+    for index in range(205):
+        message = MagicMock()
+        message.type = "log"
+        message.text = f"message-{index}"
+        message.location = {"url": "https://example.com/app.js", "lineNumber": index, "columnNumber": 1}
+        callback(message)
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    logs = resp.json()["logs"]
+    assert len(logs) == 200
+    assert logs[0]["text"] == "message-5"
+    assert logs[-1]["text"] == "message-204"
+    assert logs[-1]["location"] == {
+        "url": "https://example.com/app.js",
+        "lineNumber": 204,
+        "columnNumber": 1,
+    }
     main.browser_mgr.running.pop(pid, None)
 
 

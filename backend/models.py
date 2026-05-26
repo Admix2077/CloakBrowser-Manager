@@ -482,6 +482,16 @@ class AutomationPagesResponse(BaseModel):
     pages: list[AutomationPageResponse]
 
 
+class AutomationConsoleLogEntry(BaseModel):
+    type: str
+    text: str
+    location: dict[str, Any] = Field(default_factory=dict)
+
+
+class AutomationConsoleLogsResponse(BaseModel):
+    logs: list[AutomationConsoleLogEntry]
+
+
 class AutomationGotoRequest(BaseModel):
     url: str
     wait_until: Literal["commit", "domcontentloaded", "load", "networkidle"] = "load"

@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 console logs 小闭环：
+  - 新增 `AutomationConsoleLogEntry` 和 `AutomationConsoleLogsResponse`。
+  - 新增 `GET /api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs`。
+  - 通过 Playwright `page.on("console", ...)` 捕获 console 消息。
+  - 每个 page 仅在进程内内存保留最近 200 条，不新增 DB 表，不写 `audit_events`，不把 console 文本写入 logger。
+  - 目标红灯：`404 Not Found`。
+  - 目标绿灯：`test_automation_console_logs_returns_in_memory_page_logs` 和 `test_automation_console_logs_captures_recent_console_messages` 通过。
 - 本轮继续 07 Automation API 与脚本运行器，完成 scroll 小闭环：
   - 新增 `AutomationScrollRequest`。
   - 新增 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/scroll`。
@@ -100,7 +107,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，小步补齐 console logs 或 network summary。
+1. 继续 CloakBrowser 独立侧 07 Automation API，小步补齐 network summary；注意 URL query、header、cookie、Authorization 等敏感信息脱敏或不采集。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

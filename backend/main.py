@@ -39,6 +39,7 @@ from .health import (
 )
 from .models import (
     AutomationClickRequest,
+    AutomationConsoleLogsResponse,
     AutomationEvaluateRequest,
     AutomationEvaluateResponse,
     AutomationFillRequest,
@@ -114,6 +115,7 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 # (except /api/auth/* and /api/status) require Bearer token or cookie.
 AUTH_TOKEN: str | None = os.environ.get("AUTH_TOKEN") or None
 RUNTIME_SERVICE_TOKEN: str | None = os.environ.get("RUNTIME_SERVICE_TOKEN") or None
+_AUTOMATION_CONSOLE_LOG_LIMIT = 200
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
@@ -1811,7 +1813,46 @@ def _automation_page_id(running, page) -> str:
     return page_id
 
 
+def _automation_console_log_entry(message) -> dict:
+    try:
+        location = message.location
+    except Exception:
+        location = {}
+    if not isinstance(location, dict):
+        location = {}
+    return {
+        "type": str(getattr(message, "type", "")),
+        "text": str(getattr(message, "text", "")),
+        "location": {
+            key: value
+            for key, value in location.items()
+            if key in {"url", "lineNumber", "columnNumber", "line", "column"}
+        },
+    }
+
+
+def _automation_ensure_console_capture(page) -> None:
+    if getattr(page, "automation_console_capture_ready", False) is True:
+        return
+    if not isinstance(getattr(page, "automation_console_logs", None), list):
+        page.automation_console_logs = []
+
+    def _record_console_message(message) -> None:
+        logs = getattr(page, "automation_console_logs", [])
+        logs.append(_automation_console_log_entry(message))
+        if len(logs) > _AUTOMATION_CONSOLE_LOG_LIMIT:
+            del logs[:-_AUTOMATION_CONSOLE_LOG_LIMIT]
+        page.automation_console_logs = logs
+
+    try:
+        page.on("console", _record_console_message)
+    except AttributeError:
+        return
+    page.automation_console_capture_ready = True
+
+
 async def _automation_page_summary(running, index: int, page) -> AutomationPageResponse:
+    _automation_ensure_console_capture(page)
     try:
         title = await page.title()
     except Exception as exc:
@@ -1880,6 +1921,16 @@ async def automation_pages(profile_id: str):
             for index, page in enumerate(pages)
         ],
     )
+
+
+@app.get(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs",
+    response_model=AutomationConsoleLogsResponse,
+)
+async def automation_console_logs(profile_id: str, page_ref: str):
+    _, page, _ = _automation_get_page(profile_id, page_ref)
+    _automation_ensure_console_capture(page)
+    return AutomationConsoleLogsResponse(logs=list(getattr(page, "automation_console_logs", []) or []))
 
 
 @app.post(

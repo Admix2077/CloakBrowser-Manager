@@ -18,6 +18,7 @@
 - fill。
 - keyboard type。
 - scroll。
+- console logs。
 - evaluate。
 - screenshot。
 - clipboard get/set。
@@ -32,7 +33,7 @@
 - [x] 新增 fill。
 - [x] 新增 keyboard input。
 - [x] 新增 scroll。
-- [ ] 新增 console logs。
+- [x] 新增 console logs。
 - [ ] 新增 network summary。
 - [ ] 新增 task 表：
   - id。
@@ -200,4 +201,29 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 63 passed
+```
+
+## 2026-05-27 Automation console logs 小闭环
+
+当前状态：
+
+- 已补齐 `GET /api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs`。
+- 该接口只读取运行中 profile 的既有 Playwright page，不引入 Chromium CDP。
+- console 消息通过 `page.on("console", ...)` 捕获，存放在 page 对象的进程内内存字段。
+- 每个 page 最多保留最近 200 条 console log，超出后丢弃旧记录。
+- 响应结构为：
+  - `logs[].type`
+  - `logs[].text`
+  - `logs[].location`
+- 不新增 DB 表，不写 `audit_events`，不把 console 文本写入 logger。
+- profile stop 后运行中 page 对象释放，console log 缓存随之释放。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_returns_in_memory_page_logs backend/tests/test_api.py::test_automation_console_logs_captures_recent_console_messages -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 65 passed
 ```
