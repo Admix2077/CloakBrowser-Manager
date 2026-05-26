@@ -5156,10 +5156,56 @@ git diff --check
 
 仍未完成：
 
-- `POST /api/runtime/sessions/{id}/terminate`。
 - `POST /api/runtime/sessions/{id}/renew`。
 - runtime audit。
-- session 终止后的 VNC 访问失效。
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+
+边界：
+
+- 没有修改 Project Mileage app/payload。
+- 没有把钱包、订单、用户权限判断写入 CloakBrowser。
+- 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
+
+## 71. 2026-05-27 Runtime session terminate 小闭环
+
+背景：
+
+- 在 `3f9a697 add runtime viewer token access` 后继续推进 05。
+- 选择 terminate 作为下一小闭环，因为商业级远程会话必须能被 Payload/运营侧受控失效。
+- 当前策略：terminate 只标记 runtime session 为 `terminated` 并撤销 viewer token，不自动 stop profile。profile 停止或 lease 释放策略留到后续更完整的 session lease 管理，避免误杀未来可能共享同一 profile 的其他业务会话。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 terminate TDD 覆盖。
+  - 确认新增测试初始红灯：terminate API 返回 405。
+  - 覆盖无 runtime service token 不能 terminate。
+  - 覆盖不存在 session 返回 404。
+  - 覆盖 terminate 后 response 不暴露 `viewer_token_hash`。
+  - 覆盖 terminate 后 DB status 为 `terminated`，viewer token hash 和过期时间被清空。
+  - 覆盖 terminate 后原 viewer token 无法继续连接 runtime VNC。
+- `backend/database.py`
+  - 新增 `terminate_runtime_session()`。
+- `backend/main.py`
+  - 新增 `POST /api/runtime/sessions/{session_id}/terminate`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 14 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 271 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- `POST /api/runtime/sessions/{id}/renew`。
+- runtime audit。
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
 
 边界：

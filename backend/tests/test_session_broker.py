@@ -396,3 +396,68 @@ def test_runtime_vnc_accepts_valid_viewer_token_and_proxies_to_profile_vnc(
     assert kwargs["subprotocols"] == ["binary"]
     assert kwargs["compression"] is None
     assert kwargs["ping_interval"] is None
+
+
+def test_runtime_session_terminate_requires_runtime_service_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+
+    resp = app_client.post(f"/api/runtime/sessions/{session['id']}/terminate")
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runtime service token required"
+
+
+def test_runtime_session_terminate_marks_session_inactive_and_revokes_viewer_token(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    main.browser_mgr.running[profile_id] = _mock_running_profile()
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+
+    terminate = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/terminate",
+        headers=runtime_headers,
+    )
+
+    assert terminate.status_code == 200
+    data = terminate.json()
+    assert data["id"] == session["id"]
+    assert data["status"] == "terminated"
+    assert "viewer_token_hash" not in data
+    stored = db.get_runtime_session(session["id"])
+    assert stored is not None
+    assert stored["status"] == "terminated"
+    assert stored["viewer_token_hash"] is None
+    assert stored["viewer_token_expires_at"] is None
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            token_resp.json()["viewer_url"],
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+
+    assert rejected.value.code == 4404
+
+
+def test_runtime_session_terminate_rejects_missing_session(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    resp = app_client.post(
+        "/api/runtime/sessions/missing/terminate",
+        headers=runtime_headers,
+    )
+
+    assert resp.status_code == 404

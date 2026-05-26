@@ -1022,6 +1022,15 @@ async def create_runtime_viewer_token(
     )
 
 
+@app.post("/api/runtime/sessions/{session_id}/terminate", response_model=RuntimeSessionResponse)
+async def terminate_runtime_session(session_id: str, request: Request):
+    _require_runtime_service_token(request)
+    session = db.terminate_runtime_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Runtime session not found")
+    return _runtime_session_response(session)
+
+
 @app.post("/api/proxies/{proxy_id}/check", response_model=ProxyResponse)
 async def check_proxy(proxy_id: str):
     proxy = db.get_proxy(proxy_id)

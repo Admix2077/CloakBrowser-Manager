@@ -46,7 +46,7 @@ Project Mileage App：
 - [x] 定义 `GET /api/runtime/sessions/{id}`。
 - [x] 定义 `POST /api/runtime/sessions/{id}/viewer-token`：
   - 返回短生命周期 viewer token。
-- [ ] 定义 `POST /api/runtime/sessions/{id}/terminate`。
+- [x] 定义 `POST /api/runtime/sessions/{id}/terminate`。
 - [ ] 定义 `POST /api/runtime/sessions/{id}/renew`。
 - [x] 设计 runtime session 表：
   - id。
@@ -58,7 +58,7 @@ Project Mileage App：
   - created_at。
   - updated_at。
 - [x] session 创建时如果 profile 未运行，启动 profile。
-- [ ] session 终止时按策略 stop profile 或释放 lease。
+- [x] session 终止时撤销 viewer token 并让 runtime VNC 访问失效。
 - [x] viewer token 过期后不能进入 VNC。
 - [ ] 所有 service API 写 audit。
 - [ ] Payload 侧确认授权、扣费、续期后再调用 runtime API。
@@ -83,7 +83,7 @@ cd /home/jeff/code/project-mileage-v3-app && pnpm test <remote-workspace-tests>
 - [x] 无 service token 不能创建 runtime session。
 - [x] viewer token 短生命周期有效。
 - [x] 过期 token 无法连接。
-- [ ] 终止 session 后 VNC 访问失效。
+- [x] 终止 session 后 VNC 访问失效。
 - [x] Runtime session 不包含用户钱包逻辑。
 
 ## 2026-05-26 历史接力状态：CloakBrowser 侧最小 runtime session API 红灯测试草稿
@@ -216,8 +216,46 @@ git diff --check
 
 仍未完成：
 
-- `POST /api/runtime/sessions/{id}/terminate`。
 - `POST /api/runtime/sessions/{id}/renew`。
 - runtime audit。
-- session 终止后的 VNC 访问失效。
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+
+## 2026-05-27 Runtime session terminate 小闭环
+
+当前状态：
+
+- 已完成 CloakBrowser 侧 runtime session terminate 小闭环。
+- 当前 terminate 策略是：将 session 标记为 `terminated`，清空 viewer token hash 和过期时间，使 runtime VNC 访问失效；不自动 stop profile。profile 停止/lease 释放策略留给后续更完整的 session lease 管理，避免误杀未来可能共享同一 profile 的其他业务会话。
+
+已完成：
+
+- `backend/tests/test_session_broker.py`
+  - 新增 terminate TDD 覆盖。
+  - 覆盖无 runtime service token 不能 terminate。
+  - 覆盖不存在 session 返回 404。
+  - 覆盖 terminate 后 response 不暴露 `viewer_token_hash`。
+  - 覆盖 terminate 后 DB status 为 `terminated`，viewer token hash 和过期时间被清空。
+  - 覆盖 terminate 后原 viewer token 无法继续连接 runtime VNC。
+- `backend/database.py`
+  - 新增 `terminate_runtime_session()`。
+- `backend/main.py`
+  - 新增 `POST /api/runtime/sessions/{session_id}/terminate`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 14 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 271 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- `POST /api/runtime/sessions/{id}/renew`。
+- runtime audit。
 - Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。

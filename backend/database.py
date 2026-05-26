@@ -530,6 +530,20 @@ def set_runtime_session_viewer_token(
     return get_runtime_session(session_id)
 
 
+def terminate_runtime_session(session_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        cursor = conn.execute(
+            """UPDATE runtime_sessions
+            SET status = ?, viewer_token_hash = NULL, viewer_token_expires_at = NULL, updated_at = ?
+            WHERE id = ?""",
+            ("terminated", _now(), session_id),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
+    return get_runtime_session(session_id)
+
+
 def _proxy_from_row(row: sqlite3.Row) -> dict[str, Any]:
     proxy = dict(row)
     proxy["tags"] = _decode_tags(proxy.get("tags"))
