@@ -2759,3 +2759,63 @@ git diff --check
   - `frontend/src/lib/api.ts`
   - `frontend/src/lib/api.test.ts`
 - 本轮 commit 时不要把这两个文件混入 UI polish commit。
+
+## 40. 2026-05-26 Proxy Manager 前端 API Client 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，接管上一轮 UI polish 期间刻意未提交的 Proxy API client diff。
+- 后端 proxy asset CRUD、单个检测、批量检测、分配到 profile、从 profile 当前 proxy 保存为 asset 已完成；本轮只补齐前端 API client 和测试，不做页面。
+- 派发只读子 agent 审计后端已实现 endpoint 与当前 client diff，确认缺口是 `getProxy()`、`assignProxyToProfiles()`、`saveProfileProxyAsAsset()` 以及部分测试覆盖。
+
+已完成：
+
+- `frontend/src/lib/api.ts`
+  - 新增 `ProxyAsset`、`ProxyCreateData`、`ProxyUpdateData`。
+  - 新增 `ProxyBulkCheckResult`、`ProxyBulkCheckResponse`。
+  - 新增 `ProxyAssignResult`、`ProxyAssignResponse`。
+  - 新增 `ProxyFromProfileCreateData`，不包含 `url`。
+  - 新增 proxy CRUD client：`listProxies()`、`getProxy()`、`createProxy()`、`updateProxy()`、`deleteProxy()`。
+  - 新增 `checkProxy()`、`bulkCheckProxies()`。
+  - 新增 `assignProxyToProfiles()`。
+  - 新增 `saveProfileProxyAsAsset()`。
+- `frontend/src/lib/api.test.ts`
+  - 覆盖 list / get / create / update / delete。
+  - 覆盖 check / bulk check。
+  - 覆盖 assign 请求体 `{profile_ids}`。
+  - 覆盖从 profile 当前 proxy 保存为 asset 时不向后端提交 `url`。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 追加本小闭环记录。
+  - 不勾选 Proxy Manager 页面、前端分配入口、搜索筛选、CSV 导入或模块完成。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 1 failed, 2 failed | 18 passed
+# 红灯：api.assignProxyToProfiles / api.saveProfileProxyAsAsset 当前不存在
+
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 1 passed, 21 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 127 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+仍未做：
+
+- 前端 Proxy Manager 页面。
+- 前端 Proxy Manager 分配入口。
+- 搜索、筛选、按国家/provider/tag 过滤。
+- CSV 粘贴导入。
+- 真实 UI 批量检测交互。
+- `profiles.proxy` 到 `proxy_id` 的数据模型迁移。

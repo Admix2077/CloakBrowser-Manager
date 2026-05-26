@@ -423,3 +423,65 @@ git diff --check
 - 按国家、provider、tag 筛选未做。
 - CSV 粘贴导入未做。
 - 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+## 2026-05-26 Proxy Manager 前端 API Client 小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，在后端 proxy asset CRUD、单个检测、批量检测、分配到 profile、从 profile 当前 proxy 保存为 asset 已完成后，先补齐前端 API client 契约。
+- 本小闭环只修改 `frontend/src/lib/api.ts` 和 `frontend/src/lib/api.test.ts`，不新增 Proxy Manager 页面、导航、表格、表单、筛选、CSV 导入或分配 UI。
+- 使用 TDD：先补充 assign / save-from-profile client 测试，确认缺少方法红灯后再实现。
+
+红灯确认：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 1 failed, 2 failed | 18 passed
+# api.assignProxyToProfiles / api.saveProfileProxyAsAsset 当前不存在
+```
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProxyAsset`、`ProxyCreateData`、`ProxyUpdateData`。
+  - 新增 `ProxyBulkCheckResult`、`ProxyBulkCheckResponse`。
+  - 新增 `ProxyAssignResult`、`ProxyAssignResponse`。
+  - 新增 `ProxyFromProfileCreateData`，等同 `ProxyCreateData` 去掉 `url`，避免前端向 `POST /api/profiles/{id}/proxy-asset` 提交 URL。
+  - 新增 `listProxies()` / `getProxy()` / `createProxy()` / `updateProxy()` / `deleteProxy()`。
+  - 新增 `checkProxy()` / `bulkCheckProxies()`。
+  - 新增 `assignProxyToProfiles()`，请求体为 `{profile_ids}`。
+  - 新增 `saveProfileProxyAsAsset()`，请求体只包含 proxy asset metadata。
+- [x] `frontend/src/lib/api.test.ts`
+  - 覆盖 proxy list / get / create / update / delete。
+  - 覆盖单个 check 与 bulk check endpoint、method、body shape。
+  - 覆盖 assign endpoint、method、`profile_ids` body shape。
+  - 覆盖从 profile 当前 proxy 保存为 asset 时不提交 `url`。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 1 passed, 21 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 127 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+范围说明：
+
+- 前端 Proxy Manager 页面未做。
+- 前端 Proxy Manager 分配入口未做，因此顶层 `支持将 proxy 分配到 profile` 暂不勾选完成。
+- 前端搜索、筛选、批量检测交互未做；API client 的 `bulkCheckProxies()` 不等于 UI 批量检测交互完成。
+- 按国家、provider、tag 筛选未做。
+- CSV 粘贴导入未做。
+- 不迁移 `profiles.proxy` 为 `proxy_id`。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。

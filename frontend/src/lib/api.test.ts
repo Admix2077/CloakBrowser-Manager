@@ -152,6 +152,178 @@ describe("api.checkProfileHealth", () => {
   });
 });
 
+// ── proxy assets ───────────────────────────────────────────────────────────
+
+describe("api.listProxies", () => {
+  it("requests proxy assets", async () => {
+    const proxies = [{ id: "proxy-1", name: "US pool", url: "http://proxy.example:8080" }];
+    mockFetch.mockResolvedValueOnce(jsonResponse(proxies));
+
+    const result = await api.listProxies();
+
+    expect(result).toEqual(proxies);
+    expect(mockFetch).toHaveBeenCalledWith("/api/proxies", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+});
+
+describe("api.createProxy", () => {
+  it("sends POST with proxy asset JSON body", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "proxy-1", name: "US pool" }, 201));
+
+    await api.createProxy({
+      name: "US pool",
+      url: "http://user:hiddenpass@proxy.example:8080",
+      provider: "ProxyCo",
+      tags: [{ tag: "us", color: "#2563eb" }],
+    });
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      name: "US pool",
+      url: "http://user:hiddenpass@proxy.example:8080",
+      provider: "ProxyCo",
+      tags: [{ tag: "us", color: "#2563eb" }],
+    });
+  });
+});
+
+describe("api.getProxy", () => {
+  it("requests a single proxy asset", async () => {
+    const proxy = { id: "proxy-1", name: "US pool", url: "http://proxy.example:8080" };
+    mockFetch.mockResolvedValueOnce(jsonResponse(proxy));
+
+    const result = await api.getProxy("proxy-1");
+
+    expect(result).toEqual(proxy);
+    expect(mockFetch).toHaveBeenCalledWith("/api/proxies/proxy-1", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+});
+
+describe("api.updateProxy", () => {
+  it("sends PUT with partial proxy asset JSON body", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: "proxy-1", name: "US pool updated" }));
+
+    await api.updateProxy("proxy-1", {
+      name: "US pool updated",
+      provider: "ProxyCo",
+      notes: null,
+    });
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies/proxy-1");
+    expect(options.method).toBe("PUT");
+    expect(JSON.parse(options.body)).toEqual({
+      name: "US pool updated",
+      provider: "ProxyCo",
+      notes: null,
+    });
+  });
+});
+
+describe("api.deleteProxy", () => {
+  it("sends DELETE to a proxy asset endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    const result = await api.deleteProxy("proxy-1");
+
+    expect(result).toEqual({ ok: true });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies/proxy-1");
+    expect(options.method).toBe("DELETE");
+  });
+});
+
+describe("api.checkProxy", () => {
+  it("sends POST to a single proxy check endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      id: "proxy-1",
+      name: "US pool",
+      url: "http://proxy.example:8080",
+      last_check_status: "good",
+    }));
+
+    await api.checkProxy("proxy-1");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies/proxy-1/check");
+    expect(options.method).toBe("POST");
+  });
+});
+
+describe("api.bulkCheckProxies", () => {
+  it("sends POST with proxy ids to the bulk check endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [],
+    }));
+
+    await api.bulkCheckProxies(["proxy-1", "proxy-2"]);
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies/bulk/check");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ proxy_ids: ["proxy-1", "proxy-2"] });
+  });
+});
+
+describe("api.assignProxyToProfiles", () => {
+  it("sends POST with profile ids to the assign endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      proxy_id: "proxy-1",
+      proxy: { id: "proxy-1", name: "US pool", url: "http://proxy.example:8080" },
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      results: [
+        { profile_id: "profile-1", ok: true, error: null },
+        { profile_id: "missing", ok: false, error: "Profile not found" },
+      ],
+    }));
+
+    await api.assignProxyToProfiles("proxy-1", ["profile-1", "missing"]);
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies/proxy-1/assign");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ profile_ids: ["profile-1", "missing"] });
+  });
+});
+
+describe("api.saveProfileProxyAsAsset", () => {
+  it("sends proxy asset metadata without a URL to the profile proxy-asset endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      id: "proxy-1",
+      name: "Saved from profile",
+      url: "http://profile-proxy.example:8080",
+    }, 201));
+
+    await api.saveProfileProxyAsAsset("profile-1", {
+      name: "Saved from profile",
+      provider: "ProfilePool",
+      tags: [{ tag: "saved", color: "#2563eb" }],
+      notes: "Migrated from profile current proxy",
+    });
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/profile-1/proxy-asset");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      name: "Saved from profile",
+      provider: "ProfilePool",
+      tags: [{ tag: "saved", color: "#2563eb" }],
+      notes: "Migrated from profile current proxy",
+    });
+  });
+});
+
 // ── setClipboard ────────────────────────────────────────────────────────────
 
 describe("api.setClipboard", () => {

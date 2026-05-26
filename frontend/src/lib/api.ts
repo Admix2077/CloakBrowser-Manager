@@ -65,6 +65,72 @@ export interface ProfileCreateData {
   tags?: { tag: string; color: string | null }[];
 }
 
+export interface ProxyAsset {
+  id: string;
+  name: string;
+  url: string;
+  country_code: string | null;
+  city: string | null;
+  asn: string | null;
+  provider: string | null;
+  tags: { tag: string; color: string | null }[];
+  notes: string | null;
+  last_check_status: string | null;
+  last_check_ip: string | null;
+  last_check_country_code: string | null;
+  last_check_timezone: string | null;
+  last_check_locale: string | null;
+  last_check_source: string | null;
+  last_check_error: string | null;
+  last_check_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProxyCreateData {
+  name: string;
+  url: string;
+  country_code?: string | null;
+  city?: string | null;
+  asn?: string | null;
+  provider?: string | null;
+  tags?: { tag: string; color: string | null }[];
+  notes?: string | null;
+}
+
+export type ProxyUpdateData = Partial<ProxyCreateData>;
+
+export interface ProxyBulkCheckResult {
+  proxy_id: string;
+  ok: boolean;
+  error: string | null;
+  proxy: ProxyAsset | null;
+}
+
+export interface ProxyBulkCheckResponse {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ProxyBulkCheckResult[];
+}
+
+export interface ProxyAssignResult {
+  profile_id: string;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface ProxyAssignResponse {
+  proxy_id: string;
+  proxy: ProxyAsset;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ProxyAssignResult[];
+}
+
+export type ProxyFromProfileCreateData = Omit<ProxyCreateData, "url">;
+
 export interface LaunchResult {
   profile_id: string;
   status: string;
@@ -200,6 +266,46 @@ export const api = {
   checkProfileHealth: (id: string) =>
     request<ProfileHealthResponse>(`/api/profiles/${id}/health/check`, {
       method: "POST",
+    }),
+
+  listProxies: () => request<ProxyAsset[]>("/api/proxies"),
+
+  getProxy: (id: string) => request<ProxyAsset>(`/api/proxies/${id}`),
+
+  createProxy: (data: ProxyCreateData) =>
+    request<ProxyAsset>("/api/proxies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateProxy: (id: string, data: ProxyUpdateData) =>
+    request<ProxyAsset>(`/api/proxies/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  deleteProxy: (id: string) =>
+    request<{ ok: boolean }>(`/api/proxies/${id}`, { method: "DELETE" }),
+
+  checkProxy: (id: string) =>
+    request<ProxyAsset>(`/api/proxies/${id}/check`, { method: "POST" }),
+
+  bulkCheckProxies: (proxyIds: string[]) =>
+    request<ProxyBulkCheckResponse>("/api/proxies/bulk/check", {
+      method: "POST",
+      body: JSON.stringify({ proxy_ids: proxyIds }),
+    }),
+
+  assignProxyToProfiles: (id: string, profileIds: string[]) =>
+    request<ProxyAssignResponse>(`/api/proxies/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ profile_ids: profileIds }),
+    }),
+
+  saveProfileProxyAsAsset: (profileId: string, data: ProxyFromProfileCreateData) =>
+    request<ProxyAsset>(`/api/profiles/${profileId}/proxy-asset`, {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 
   getStatus: () => request<SystemStatus>("/api/status"),
