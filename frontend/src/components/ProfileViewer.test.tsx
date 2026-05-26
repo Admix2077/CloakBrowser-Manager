@@ -137,6 +137,35 @@ describe("ProfileViewer VNC connection", () => {
     expect(document.body.textContent).not.toContain("internal_ticket=secret-ticket");
     expect(document.body.textContent).not.toContain(rawReason);
   });
+
+  it("redacts regular profile viewer initialization errors instead of rendering token-bearing messages", async () => {
+    const onDisconnect = vi.fn();
+    const rawMessage =
+      `failed to initialize /api/profiles/profile-1/vnc?internal_ticket=secret-ticket`;
+
+    MockRFB.mockImplementationOnce(function MockRFBProfileInitFailure() {
+      throw new Error(rawMessage);
+    });
+
+    render(
+      <ProfileViewer
+        profileId="profile-1"
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    expect(await screen.findByText("Connection failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.",
+      ),
+    ).toBeTruthy();
+    expect(onDisconnect).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain("internal_ticket=secret-ticket");
+    expect(document.body.textContent).not.toContain(rawMessage);
+  });
 });
 
 describe("ProfileViewer Automation API toolbar action", () => {

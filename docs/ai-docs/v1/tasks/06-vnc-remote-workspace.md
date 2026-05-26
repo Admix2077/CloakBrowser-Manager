@@ -56,6 +56,7 @@
   - 普通 profile viewer 的 VNC 断开行为保持不变。
 - [x] 普通 profile viewer 安全失败脱敏：
   - 普通 profile viewer 的 `securityfailure` 同样显示固定提示。
+  - 普通 profile viewer 初始化/构造异常同样显示固定提示。
   - 不渲染 noVNC 原始 reason，避免把内部 ticket、URL query 或后端细节暴露到 UI。
   - 普通 profile viewer 的 VNC 断开行为保持不变。
 - [x] 记录 viewer connected/disconnected audit：
@@ -282,6 +283,7 @@ git diff --check
 - `frontend/src/components/ProfileViewer.tsx`
   - 新增 viewer 固定失败提示文案。
   - 普通 profile viewer 和 runtime viewer 的 `securityfailure` 均显示固定提示，不渲染 noVNC 原始 reason。
+  - 普通 profile viewer 和 runtime viewer 的 noVNC 初始化/构造异常均显示固定提示，不渲染异常 message。
   - `vncUrl` 存在时，`securityfailure` 显示固定提示，不渲染 noVNC 原始 reason。
   - `vncUrl` 存在且连接建立前触发 `disconnect` 时，显示固定提示，并且不调用普通 `onDisconnect()`。
   - `vncUrl` 存在且 noVNC 初始化/构造抛出异常时，显示固定提示，不渲染异常 message。
@@ -289,6 +291,7 @@ git diff --check
   - 未传 `vncUrl` 的普通 profile viewer 断开行为保持不变。
 - `frontend/src/components/ProfileViewer.test.tsx`
   - 覆盖普通 profile viewer `securityfailure` 不渲染内部 ticket、URL query 或原始 reason。
+  - 覆盖普通 profile viewer 初始化/构造异常不渲染内部 ticket、URL query 或原始异常 message。
   - 覆盖 runtime viewer `securityfailure` 不渲染 viewer token、完整 runtime viewer URL 或原始 reason。
   - 覆盖 runtime viewer 建立连接前断开时显示固定提示，且不调用普通断开回调。
   - 覆盖 runtime viewer 初始化/构造异常不渲染 viewer token、完整 runtime viewer URL 或原始异常 message。
@@ -298,7 +301,7 @@ git diff --check
 
 ```bash
 npm test -- ProfileViewer.test.tsx
-# 14 passed
+# 15 passed
 
 npm test -- App.test.tsx
 # 27 passed
@@ -307,7 +310,7 @@ npm test -- lib/api.test.ts
 # 29 passed
 
 npm test -- --run
-# 192 passed
+# 193 passed
 
 npm run build
 # built successfully
