@@ -22,6 +22,15 @@
     color: #0f172a;
   }
 
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar {
     width: 6px;

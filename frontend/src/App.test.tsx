@@ -398,7 +398,7 @@ describe("App operations console", () => {
     expect(await screen.findByRole("heading", { name: "Edit Profile" })).toBeTruthy();
   });
 
-  it("starts with the sidebar collapsed on narrow screens while keeping main operations filters available", async () => {
+  it("starts with the sidebar collapsed on narrow screens while using profile cards", async () => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 390,
@@ -406,11 +406,15 @@ describe("App operations console", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    const cards = await screen.findByRole("list", { name: "Profile cards" });
+    expect(screen.queryByRole("table")).toBeNull();
     expect(screen.getByRole("region", { name: "Profile operations table" }).className).toContain("overflow-auto");
     expect(screen.getByLabelText("Search profiles")).toBeTruthy();
     expect(screen.queryByText("Quick views")).toBeNull();
     expect(screen.getByTitle("Show sidebar")).toBeTruthy();
+
+    fireEvent.click(within(cards).getByRole("button", { name: "Open Alpha Good" }));
+    expect(await screen.findByRole("heading", { name: "Edit Profile" })).toBeTruthy();
   });
 
   it("tracks selected visible profiles and clears selections hidden by filters", async () => {

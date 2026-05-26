@@ -366,7 +366,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       {/* Main panel */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="flex min-h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur">
+        <div className="flex min-h-14 items-center justify-between overflow-hidden border-b border-slate-200 bg-white/95 px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur sm:px-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -393,7 +393,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={handleNew}
@@ -446,7 +446,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
                 </div>
               </section>
-              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02]">
+              <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-hairline">
                 <ProfileFilters
                   value={filters}
                   options={filterOptions}
@@ -455,7 +455,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 />
               </section>
               <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)] ring-1 ring-slate-900/[0.02] lg:min-h-0">
+                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.045)] lg:min-h-0">
                   <ProfileTable
                     profiles={filteredProfiles}
                     healthByProfileId={healthByProfileId}
@@ -545,7 +545,7 @@ function SummaryTile({
   }[tone];
 
   return (
-    <div className={`relative min-w-[92px] overflow-hidden rounded-lg border px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ring-1 ring-slate-900/[0.02] before:absolute before:inset-x-0 before:top-0 before:h-0.5 ${toneClassName}`}>
+    <div className={`relative min-w-[92px] overflow-hidden rounded-lg border px-3 py-2 shadow-hairline before:absolute before:inset-x-0 before:top-0 before:h-0.5 ${toneClassName}`}>
       <div className="text-lg font-semibold leading-5 tabular-nums">{value}</div>
       <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.1em] opacity-75">
         {label}

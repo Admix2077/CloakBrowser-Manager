@@ -1931,5 +1931,90 @@ cd frontend && npm run build
 
 仍未做：
 
-- 03 剩余：窄屏 card list。
-- 03 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+- 当时 03 剩余：窄屏 card list；后续已在第 29 节完成。
+
+## 29. 2026-05-26 窄屏 card list 与高质感控件 polish 收口
+
+背景：
+
+- Jeff 继续反馈 Profile 运营台控件质感仍不够，尤其 checkbox / bulk action / table row / toolbar / inspector。
+- 本轮继续使用 `ui-ux-pro-max` 和 frontend design 方向，参考 `/home/jeff/code/reference-repos/saas_kit` 的 B2B SaaS app shell / data table 规律，但没有复制其 auth/db/payment/schema。
+- 本轮只改 CloakBrowser Profile 运营台，不触碰 Project Mileage 钱包、订单、权限逻辑，不 push 远端。
+
+本轮实现：
+
+- `frontend/src/components/ProfileTable.tsx`
+  - `<768px` 下从 desktop table 降级为 `ProfileCardList`，桌面仍使用 `ProfileDesktopTable`，避免 table/card 双渲染。
+  - mobile card 保留 checkbox、select all、bulk action、preview、Open、health、proxy 脱敏、GeoIP fallback、tags、last checked。
+  - card list 使用固定高度虚拟滚动，`PROFILE_CARD_ROW_HEIGHT = 188`；全选仍作用完整 filtered ids。
+  - mobile card selection toolbar 在有 bulk bar 时使用 `top-11`，避免 sticky 重叠。
+  - table row / card selected / previewed 状态改为低噪声左侧状态线和渐变。
+- `frontend/src/components/BulkActionBar.tsx`
+  - bulk toolbar 降噪，`Check health` 保持唯一主动作；launch / stop / tag / delete 的真实动作和高风险确认语义不变。
+- `frontend/src/components/ProfileFilters.tsx`
+  - main filter strip 增加 `role="toolbar"` / `aria-label="Profile filters"`。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header 和 section icon 降噪。
+- `frontend/src/App.tsx`
+  - 主区 surface 降低 shadow / ring 噪声。
+  - 修复移动端从 card `Open` 进入 edit 后 top bar 造成的 2px body 横向 overflow。
+- `frontend/src/styles/globals.css`
+  - 统一 enabled / disabled button cursor。
+- `docs/ai-docs/v1/tasks/03-profile-operations-console.md`
+  - `窄屏降级为 card list` 已勾选，并追加本轮证据。
+- `docs/ai-docs/v1/tasks/progress.md`
+  - 03 Profile 运营台已标为完成。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileFilters.test.tsx
+# 3 passed, 51 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 115 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 217 passed
+
+git diff --check
+# passed
+```
+
+浏览器证据：
+
+- QA 地址：`http://127.0.0.1:18183/`。
+- QA 数据目录：`/tmp/cloakbrowser-ui-card-polish-data`，共 180 个 profile。
+- 桌面 `1440x900`：
+  - dense table 可见、card list 不渲染，`Actions` / `Open` 首屏可见。
+  - `body.scrollWidth === window.innerWidth === 1440`。
+  - bulk `Check health` 真实可点击并完成，无前端 alert。
+- 移动 `390x844`：
+  - card list 可见、desktop table 不渲染。
+  - `body.scrollWidth === window.innerWidth === 390`。
+  - 首屏约 20 张 card，180 条没有全量渲染。
+  - card selection toolbar 在 bulk bar 下方，class 包含 `top-11`。
+  - card 虚拟滚动到中段后早期 card 离开 region DOM。
+  - card `Open` 进入 `Edit Profile` 后 `body.scrollWidth` 小于 `window.innerWidth`。
+- `agent-browser console --clear` / `agent-browser errors --clear` 无相关应用错误。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-card-polish-screens/desktop-table-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/desktop-bulk-selected-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/desktop-bulk-health-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/desktop-virtual-scroll-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/mobile-card-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/mobile-card-bulk-selected-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/mobile-card-health-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/mobile-card-virtual-scroll-polish.png`
+- `/tmp/cloakbrowser-ui-card-polish-screens/mobile-card-open-edit-polish.png`
+
+仍未做：
+
+- 服务端分页未做；当前继续用固定高度虚拟滚动覆盖数百 profile。
+- Profile 详情 / VNC viewer 还未改为抽屉式连续运营形态。
+- 04 Proxy Manager 尚未开始。

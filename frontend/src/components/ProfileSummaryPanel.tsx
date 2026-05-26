@@ -45,14 +45,14 @@ export function ProfileSummaryPanel({
     <aside
       role="complementary"
       aria-label="Profile summary"
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_8px_20px_rgba(15,23,42,0.05)] ring-1 ring-slate-900/[0.02]"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_10px_26px_rgba(15,23,42,0.055)] ring-1 ring-slate-900/[0.025]"
     >
-      <div className="border-b border-slate-200 bg-slate-50/70 p-4">
+      <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
             Previewing
           </span>
-          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-hairline">
+          <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500 shadow-hairline ring-1 ring-slate-900/[0.02]">
             Inspector
           </span>
         </div>
@@ -140,7 +140,7 @@ function SummarySection({
   return (
     <section className="p-4">
       <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400">
+        <span className="flex h-5 w-5 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-hairline">
           {icon}
         </span>
         {title}

@@ -65,4 +65,17 @@ describe("ProfileFilters", () => {
     });
     expect(onChange).toHaveBeenLastCalledWith({ ...value, sortBy: "last_checked" });
   });
+
+  it("exposes the main filter strip as a toolbar in operations layout", () => {
+    render(
+      <ProfileFilters
+        value={value}
+        options={options}
+        onChange={vi.fn()}
+        layout="toolbar"
+      />,
+    );
+
+    expect(screen.getByRole("toolbar", { name: "Profile filters" })).toBeTruthy();
+  });
 });

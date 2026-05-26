@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileTable } from "./ProfileTable";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 
@@ -100,7 +100,32 @@ const healthByProfileId = {
   }),
 };
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: width,
+  });
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn((query: string) => ({
+      matches: query.includes("max-width: 767px") ? width <= 767 : width >= 768,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+  window.dispatchEvent(new Event("resize"));
+}
+
 describe("ProfileTable", () => {
+  beforeEach(() => {
+    setViewportWidth(1024);
+  });
+
   it("renders dense operations columns", () => {
     render(
       <ProfileTable
@@ -567,6 +592,90 @@ describe("ProfileTable", () => {
     expect(screen.getByText("Unknown B")).toBeTruthy();
   });
 
+  it("renders a narrow card list without duplicating the desktop table", () => {
+    setViewportWidth(390);
+
+    render(
+      <ProfileTable
+        profiles={[profiles[1], profiles[0]]}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByRole("list", { name: "Profile cards" })).toBeTruthy();
+    expect(screen.getByRole("listitem", { name: "Profile card Broken Proxy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Open Broken Proxy" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Preview Broken Proxy" })).toBeTruthy();
+    expect(screen.getByText("Invalid proxy")).toBeTruthy();
+    expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
+    expect(screen.getByText("23.144.4.92")).toBeTruthy();
+    expect(screen.getByText("America/Los_Angeles")).toBeTruthy();
+    expect(screen.getByText("en-US")).toBeTruthy();
+  });
+
+  it("keeps narrow card selection and select-all tied to the full filtered set", () => {
+    setViewportWidth(390);
+    const onToggleProfileSelection = vi.fn();
+    const onToggleVisibleSelection = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good"])}
+        onToggleProfileSelection={onToggleProfileSelection}
+        onToggleVisibleSelection={onToggleVisibleSelection}
+      />,
+    );
+
+    const headerCheckbox = screen.getByLabelText("Select all visible profiles") as HTMLInputElement;
+    expect(headerCheckbox.indeterminate).toBe(true);
+    expect((screen.getByLabelText("Select Good US") as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole("toolbar", { name: "Profile card selection" }).className).toContain("top-11");
+
+    fireEvent.click(screen.getByLabelText("Select Broken Proxy"));
+    expect(onToggleProfileSelection).toHaveBeenCalledWith("error");
+
+    fireEvent.click(screen.getByLabelText("Select all visible profiles"));
+    expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
+  });
+
+  it("keeps narrow card preview, open, and proxy redaction separate", () => {
+    setViewportWidth(390);
+    const onPreviewProfile = vi.fn();
+    const onSelect = vi.fn();
+
+    render(
+      <ProfileTable
+        profiles={[
+          profile({
+            id: "credential-proxy",
+            name: "Credential Proxy",
+            proxy: "http://user:hiddenpass@proxy.example:8080",
+          }),
+        ]}
+        healthByProfileId={{}}
+        onSelect={onSelect}
+        previewProfileId="credential-proxy"
+        onPreviewProfile={onPreviewProfile}
+      />,
+    );
+
+    expect(screen.getByRole("listitem", { name: "Profile card Credential Proxy" }).getAttribute("data-state")).toBe("previewed");
+    expect(screen.getByText("http://proxy.example:8080")).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain("user:hiddenpass");
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview Credential Proxy" }));
+    expect(onPreviewProfile).toHaveBeenCalledWith("credential-proxy");
+    expect(onSelect).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Credential Proxy" }));
+    expect(onSelect).toHaveBeenCalledWith("credential-proxy");
+  });
+
   it("virtualizes large profile tables while keeping row actions usable", () => {
     const onSelect = vi.fn();
     const profiles = Array.from({ length: 300 }, (_, index) => tableProfile(index));
@@ -610,6 +719,40 @@ describe("ProfileTable", () => {
       profiles.map((item) => item.id),
       true,
     );
+  });
+
+  it("virtualizes narrow profile cards while keeping full-set selection usable", () => {
+    setViewportWidth(390);
+    const onSelect = vi.fn();
+    const onToggleVisibleSelection = vi.fn();
+    const profiles = Array.from({ length: 300 }, (_, index) => tableProfile(index));
+
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={{}}
+        onSelect={onSelect}
+        selectedProfileIds={new Set()}
+        onToggleVisibleSelection={onToggleVisibleSelection}
+      />,
+    );
+
+    expect(screen.getByRole("list", { name: "Profile cards" })).toBeTruthy();
+    expect(screen.getByText("Table Profile 000")).toBeTruthy();
+    expect(screen.queryByText("Table Profile 120")).toBeNull();
+
+    fireEvent.click(screen.getByLabelText("Select all visible profiles"));
+    expect(onToggleVisibleSelection).toHaveBeenCalledWith(
+      profiles.map((item) => item.id),
+      true,
+    );
+
+    const region = screen.getByRole("region", { name: "Profile operations table" });
+    fireEvent.scroll(region, { target: { scrollTop: 188 * 120 } });
+
+    expect(screen.queryByText("Table Profile 000")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open Table Profile 120" }));
+    expect(onSelect).toHaveBeenCalledWith("table-120");
   });
 
   it("keeps row selection controlled after a virtualized row leaves and re-enters the DOM", () => {

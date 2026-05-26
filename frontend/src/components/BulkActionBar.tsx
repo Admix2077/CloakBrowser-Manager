@@ -99,7 +99,7 @@ export function BulkActionBar({
 
   return (
     <div
-      className="sticky top-0 z-20 h-11 border-b border-slate-200 bg-white/95 text-xs shadow-[0_8px_18px_rgba(15,23,42,0.06)] backdrop-blur"
+      className="sticky top-0 z-20 h-11 border-b border-slate-200 bg-slate-50/95 text-xs shadow-[0_8px_18px_rgba(15,23,42,0.06)] backdrop-blur"
     >
       <div
         role="toolbar"
@@ -110,14 +110,14 @@ export function BulkActionBar({
         <span
           role="status"
           aria-label="Selected profile summary"
-          className="inline-flex h-7 shrink-0 items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 font-semibold tabular-nums text-blue-800 shadow-hairline"
+          className="inline-flex h-7 shrink-0 items-center rounded-md border border-blue-200 bg-white px-2.5 font-semibold tabular-nums text-blue-800 shadow-[0_1px_2px_rgba(37,99,235,0.08)] ring-1 ring-blue-600/[0.03]"
         >
           {selectedCount} selected
         </span>
         <SummaryPill icon={<Activity className="h-3.5 w-3.5" />} label={`${runningCount} running`} />
         <SummaryPill label={`${stoppedCount} stopped`} />
         <SummaryPill label={`${issueCount} issue${issueCount === 1 ? "" : "s"}`} tone={issueCount > 0 ? "warning" : "muted"} />
-        <div className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50/80 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+        <div className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
           <button
             type="button"
             disabled={!onCheckHealth || checkingHealth}

@@ -10,6 +10,7 @@ import { StatusIndicator } from "./StatusIndicator";
 const EMPTY_SELECTION = new Set<string>();
 const PROFILE_TABLE_VIRTUAL_THRESHOLD = 120;
 const PROFILE_TABLE_ROW_HEIGHT = 64;
+const PROFILE_CARD_ROW_HEIGHT = 188;
 const PROFILE_TABLE_OVERSCAN = 8;
 const PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT = 640;
 
@@ -65,6 +66,7 @@ export function ProfileTable({
   onClearFilters,
 }: ProfileTableProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isCardLayout = useNarrowProfileLayout();
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT);
   const filteredIds = useMemo(() => profiles.map((profile) => profile.id), [profiles]);
@@ -76,17 +78,18 @@ export function ProfileTable({
     () => profiles.filter((profile) => selectedProfileIds.has(profile.id)),
     [profiles, selectedProfileIds],
   );
+  const virtualRowHeight = isCardLayout ? PROFILE_CARD_ROW_HEIGHT : PROFILE_TABLE_ROW_HEIGHT;
   const shouldVirtualize = profiles.length > PROFILE_TABLE_VIRTUAL_THRESHOLD;
   const virtualWindow = useMemo(
-    () => getProfileTableVirtualWindow(profiles.length, scrollTop, viewportHeight),
-    [profiles.length, scrollTop, viewportHeight],
+    () => getProfileTableVirtualWindow(profiles.length, scrollTop, viewportHeight, virtualRowHeight),
+    [profiles.length, scrollTop, viewportHeight, virtualRowHeight],
   );
   const visibleProfiles = shouldVirtualize
     ? profiles.slice(virtualWindow.start, virtualWindow.end)
     : profiles;
-  const topSpacerHeight = shouldVirtualize ? virtualWindow.start * PROFILE_TABLE_ROW_HEIGHT : 0;
+  const topSpacerHeight = shouldVirtualize ? virtualWindow.start * virtualRowHeight : 0;
   const bottomSpacerHeight = shouldVirtualize
-    ? (profiles.length - virtualWindow.end) * PROFILE_TABLE_ROW_HEIGHT
+    ? (profiles.length - virtualWindow.end) * virtualRowHeight
     : 0;
   const profileWindowKey = filteredIds.join("\u0000");
   const emptyState = profiles.length === 0
@@ -133,7 +136,7 @@ export function ProfileTable({
       className="h-full overflow-auto bg-white [scrollbar-gutter:stable]"
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
     >
-      <div className="min-w-[840px]">
+      <div className={isCardLayout ? "min-w-0" : "min-w-[840px]"}>
         {selectedCount > 0 && (
           <BulkActionBar
             selectedCount={selectedCount}
@@ -179,95 +182,321 @@ export function ProfileTable({
             </div>
           </div>
         )}
-        <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs text-slate-700">
-          <colgroup>
-            <col style={{ width: 42 }} />
-            <col style={{ width: 142 }} />
-            <col style={{ width: 66 }} />
-            <col style={{ width: 72 }} />
-            <col style={{ width: 84 }} />
-            <col style={{ width: 68 }} />
-            <col style={{ width: 44 }} />
-            <col style={{ width: 78 }} />
-            <col style={{ width: 50 }} />
-            <col style={{ width: 56 }} />
-            <col style={{ width: 64 }} />
-            <col style={{ width: 80 }} />
-          </colgroup>
-          <thead className={`sticky z-10 bg-slate-50/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
-            <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
-              <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/95 px-1.5 py-1.5 font-semibold">
-                <SelectionCheckbox
-                  label="Select all visible profiles"
-                  checked={allVisibleSelected}
-                  indeterminate={hasPartialVisibleSelection}
-                  disabled={profiles.length === 0 || !onToggleVisibleSelection}
-                  onChange={() => onToggleVisibleSelection?.(filteredIds, !allVisibleSelected)}
-                />
-                <span className="sr-only">Select</span>
-              </th>
-              <HeaderCell>Profile</HeaderCell>
-              <HeaderCell>Runtime</HeaderCell>
-              <HeaderCell>Health</HeaderCell>
-              <HeaderCell>Proxy</HeaderCell>
-              <HeaderCell>IP</HeaderCell>
-              <HeaderCell>Country</HeaderCell>
-              <HeaderCell>Timezone</HeaderCell>
-              <HeaderCell>Locale</HeaderCell>
-              <HeaderCell>Tags</HeaderCell>
-              <HeaderCell>Last checked</HeaderCell>
-              <HeaderCell>Actions</HeaderCell>
-            </tr>
-          </thead>
-          <tbody>
-            {emptyState ? (
-              <tr>
-                <td colSpan={12} className="px-4 py-10">
-                  {emptyState === "first-run" ? (
-                    <ProfileTableEmptyState
-                      icon={<PlusCircle className="h-4 w-4" />}
-                      label="No profiles yet"
-                      title="No profiles yet"
-                      description="Create the first profile to start tracking runtime, proxy, GeoIP, and fingerprint health."
-                      actionLabel="Create profile"
-                      onAction={onCreateProfile}
-                    />
-                  ) : (
-                    <ProfileTableEmptyState
-                      icon={<FilterX className="h-4 w-4" />}
-                      label="No profiles match these filters"
-                      title="No profiles match these filters"
-                      description={hasActiveFilters
-                        ? "Clear or adjust filters to bring profiles back into the operations table."
-                        : "No profiles are available in this table view."}
-                      actionLabel={onClearFilters ? "Clear filters" : undefined}
-                      onAction={onClearFilters}
-                    />
-                  )}
-                </td>
-              </tr>
-            ) : (
-              <>
-                {topSpacerHeight > 0 && <ProfileTableSpacer height={topSpacerHeight} />}
-                {visibleProfiles.map((profile) => (
-                  <ProfileTableRow
-                    key={profile.id}
-                    profile={profile}
-                    health={healthByProfileId[profile.id]}
-                    onSelect={onSelect}
-                    selected={selectedProfileIds.has(profile.id)}
-                    onToggleSelection={onToggleProfileSelection}
-                    previewed={previewProfileId === profile.id}
-                    onPreview={onPreviewProfile}
-                  />
-                ))}
-                {bottomSpacerHeight > 0 && <ProfileTableSpacer height={bottomSpacerHeight} />}
-              </>
-            )}
-          </tbody>
-        </table>
+        {isCardLayout ? (
+          <ProfileCardList
+            profiles={profiles}
+            visibleProfiles={visibleProfiles}
+            healthByProfileId={healthByProfileId}
+            selectedProfileIds={selectedProfileIds}
+            onToggleProfileSelection={onToggleProfileSelection}
+            filteredIds={filteredIds}
+            allVisibleSelected={allVisibleSelected}
+            hasPartialVisibleSelection={hasPartialVisibleSelection}
+            onToggleVisibleSelection={onToggleVisibleSelection}
+            previewProfileId={previewProfileId}
+            onPreviewProfile={onPreviewProfile}
+            onSelect={onSelect}
+            selectedCount={selectedCount}
+            topSpacerHeight={topSpacerHeight}
+            bottomSpacerHeight={bottomSpacerHeight}
+            emptyState={emptyState}
+            hasActiveFilters={hasActiveFilters}
+            onCreateProfile={onCreateProfile}
+            onClearFilters={onClearFilters}
+          />
+        ) : (
+          <ProfileDesktopTable
+            profiles={profiles}
+            visibleProfiles={visibleProfiles}
+            healthByProfileId={healthByProfileId}
+            selectedProfileIds={selectedProfileIds}
+            onToggleProfileSelection={onToggleProfileSelection}
+            filteredIds={filteredIds}
+            allVisibleSelected={allVisibleSelected}
+            hasPartialVisibleSelection={hasPartialVisibleSelection}
+            onToggleVisibleSelection={onToggleVisibleSelection}
+            previewProfileId={previewProfileId}
+            onPreviewProfile={onPreviewProfile}
+            onSelect={onSelect}
+            selectedCount={selectedCount}
+            topSpacerHeight={topSpacerHeight}
+            bottomSpacerHeight={bottomSpacerHeight}
+            emptyState={emptyState}
+            hasActiveFilters={hasActiveFilters}
+            onCreateProfile={onCreateProfile}
+            onClearFilters={onClearFilters}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+function useNarrowProfileLayout(): boolean {
+  const getSnapshot = () => {
+    if (typeof window === "undefined") return false;
+    if (typeof window.matchMedia === "function") {
+      return window.matchMedia("(max-width: 767px)").matches;
+    }
+    return window.innerWidth < 768;
+  };
+
+  const [isNarrow, setIsNarrow] = useState(getSnapshot);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const update = () => setIsNarrow(getSnapshot());
+
+    if (typeof window.matchMedia !== "function") {
+      window.addEventListener("resize", update);
+      update();
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const query = window.matchMedia("(max-width: 767px)");
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+
+  return isNarrow;
+}
+
+type EmptyStateKind = "first-run" | "filtered" | null;
+
+interface ProfileCollectionRenderProps {
+  profiles: Profile[];
+  visibleProfiles: Profile[];
+  healthByProfileId: Record<string, ProfileHealthResponse | undefined>;
+  selectedProfileIds: Set<string>;
+  onToggleProfileSelection?: (id: string) => void;
+  filteredIds: string[];
+  allVisibleSelected: boolean;
+  hasPartialVisibleSelection: boolean;
+  onToggleVisibleSelection?: (ids: string[], shouldSelect: boolean) => void;
+  previewProfileId?: string | null;
+  onPreviewProfile?: (id: string) => void;
+  onSelect: (id: string) => void;
+  topSpacerHeight: number;
+  bottomSpacerHeight: number;
+  emptyState: EmptyStateKind;
+  hasActiveFilters: boolean;
+  onCreateProfile?: () => void;
+  onClearFilters?: () => void;
+}
+
+interface ProfileDesktopTableProps extends ProfileCollectionRenderProps {
+  selectedCount: number;
+}
+
+interface ProfileCardListProps extends ProfileCollectionRenderProps {
+  selectedCount: number;
+}
+
+function ProfileDesktopTable({
+  profiles,
+  visibleProfiles,
+  healthByProfileId,
+  selectedProfileIds,
+  onToggleProfileSelection,
+  filteredIds,
+  allVisibleSelected,
+  hasPartialVisibleSelection,
+  onToggleVisibleSelection,
+  previewProfileId,
+  onPreviewProfile,
+  onSelect,
+  selectedCount,
+  topSpacerHeight,
+  bottomSpacerHeight,
+  emptyState,
+  hasActiveFilters,
+  onCreateProfile,
+  onClearFilters,
+}: ProfileDesktopTableProps) {
+  return (
+    <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs text-slate-700">
+      <colgroup>
+        <col style={{ width: 42 }} />
+        <col style={{ width: 142 }} />
+        <col style={{ width: 66 }} />
+        <col style={{ width: 72 }} />
+        <col style={{ width: 84 }} />
+        <col style={{ width: 68 }} />
+        <col style={{ width: 44 }} />
+        <col style={{ width: 78 }} />
+        <col style={{ width: 50 }} />
+        <col style={{ width: 56 }} />
+        <col style={{ width: 64 }} />
+        <col style={{ width: 80 }} />
+      </colgroup>
+      <thead className={`sticky z-10 bg-slate-50/95 backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}>
+        <tr className="text-slate-500 shadow-[inset_0_-1px_0_rgba(148,163,184,0.24)]">
+          <th aria-label="Select" className="w-9 border-b border-slate-200 bg-slate-50/95 px-1.5 py-1.5 font-semibold">
+            <SelectionCheckbox
+              label="Select all visible profiles"
+              checked={allVisibleSelected}
+              indeterminate={hasPartialVisibleSelection}
+              disabled={profiles.length === 0 || !onToggleVisibleSelection}
+              onChange={() => onToggleVisibleSelection?.(filteredIds, !allVisibleSelected)}
+            />
+            <span className="sr-only">Select</span>
+          </th>
+          <HeaderCell>Profile</HeaderCell>
+          <HeaderCell>Runtime</HeaderCell>
+          <HeaderCell>Health</HeaderCell>
+          <HeaderCell>Proxy</HeaderCell>
+          <HeaderCell>IP</HeaderCell>
+          <HeaderCell>Country</HeaderCell>
+          <HeaderCell>Timezone</HeaderCell>
+          <HeaderCell>Locale</HeaderCell>
+          <HeaderCell>Tags</HeaderCell>
+          <HeaderCell>Last checked</HeaderCell>
+          <HeaderCell>Actions</HeaderCell>
+        </tr>
+      </thead>
+      <tbody>
+        {emptyState ? (
+          <tr>
+            <td colSpan={12} className="px-4 py-10">
+              <ProfileTableEmptyStateView
+                emptyState={emptyState}
+                hasActiveFilters={hasActiveFilters}
+                onCreateProfile={onCreateProfile}
+                onClearFilters={onClearFilters}
+              />
+            </td>
+          </tr>
+        ) : (
+          <>
+            {topSpacerHeight > 0 && <ProfileTableSpacer height={topSpacerHeight} />}
+            {visibleProfiles.map((profile) => (
+              <ProfileTableRow
+                key={profile.id}
+                profile={profile}
+                health={healthByProfileId[profile.id]}
+                onSelect={onSelect}
+                selected={selectedProfileIds.has(profile.id)}
+                onToggleSelection={onToggleProfileSelection}
+                previewed={previewProfileId === profile.id}
+                onPreview={onPreviewProfile}
+              />
+            ))}
+            {bottomSpacerHeight > 0 && <ProfileTableSpacer height={bottomSpacerHeight} />}
+          </>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function ProfileCardList({
+  profiles,
+  visibleProfiles,
+  healthByProfileId,
+  selectedProfileIds,
+  onToggleProfileSelection,
+  filteredIds,
+  allVisibleSelected,
+  hasPartialVisibleSelection,
+  onToggleVisibleSelection,
+  previewProfileId,
+  onPreviewProfile,
+  onSelect,
+  selectedCount,
+  topSpacerHeight,
+  bottomSpacerHeight,
+  emptyState,
+  hasActiveFilters,
+  onCreateProfile,
+  onClearFilters,
+}: ProfileCardListProps) {
+  if (emptyState) {
+    return (
+      <div className="px-3 py-8">
+        <ProfileTableEmptyStateView
+          emptyState={emptyState}
+          hasActiveFilters={hasActiveFilters}
+          onCreateProfile={onCreateProfile}
+          onClearFilters={onClearFilters}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-50/70">
+      <div
+        role="toolbar"
+        aria-label="Profile card selection"
+        className={`sticky z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur ${selectedCount > 0 ? "top-11" : "top-0"}`}
+      >
+        <div className="inline-flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700">
+          <SelectionCheckbox
+            label="Select all visible profiles"
+            checked={allVisibleSelected}
+            indeterminate={hasPartialVisibleSelection}
+            disabled={profiles.length === 0 || !onToggleVisibleSelection}
+            onChange={() => onToggleVisibleSelection?.(filteredIds, !allVisibleSelected)}
+          />
+          <span className="truncate">Select visible</span>
+        </div>
+        <span className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-500 shadow-hairline">
+          {profiles.length} profile{profiles.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div role="list" aria-label="Profile cards" className="p-2">
+        {topSpacerHeight > 0 && <div aria-hidden="true" style={{ height: topSpacerHeight }} />}
+        {visibleProfiles.map((profile) => (
+          <ProfileCard
+            key={profile.id}
+            profile={profile}
+            health={healthByProfileId[profile.id]}
+            selected={selectedProfileIds.has(profile.id)}
+            onToggleSelection={onToggleProfileSelection}
+            previewed={previewProfileId === profile.id}
+            onPreview={onPreviewProfile}
+            onSelect={onSelect}
+          />
+        ))}
+        {bottomSpacerHeight > 0 && <div aria-hidden="true" style={{ height: bottomSpacerHeight }} />}
+      </div>
+    </div>
+  );
+}
+
+function ProfileTableEmptyStateView({
+  emptyState,
+  hasActiveFilters,
+  onCreateProfile,
+  onClearFilters,
+}: {
+  emptyState: Exclude<EmptyStateKind, null>;
+  hasActiveFilters: boolean;
+  onCreateProfile?: () => void;
+  onClearFilters?: () => void;
+}) {
+  return emptyState === "first-run" ? (
+    <ProfileTableEmptyState
+      icon={<PlusCircle className="h-4 w-4" />}
+      label="No profiles yet"
+      title="No profiles yet"
+      description="Create the first profile to start tracking runtime, proxy, GeoIP, and fingerprint health."
+      actionLabel="Create profile"
+      onAction={onCreateProfile}
+    />
+  ) : (
+    <ProfileTableEmptyState
+      icon={<FilterX className="h-4 w-4" />}
+      label="No profiles match these filters"
+      title="No profiles match these filters"
+      description={hasActiveFilters
+        ? "Clear or adjust filters to bring profiles back into the operations table."
+        : "No profiles are available in this table view."}
+      actionLabel={onClearFilters ? "Clear filters" : undefined}
+      onAction={onClearFilters}
+    />
   );
 }
 
@@ -315,15 +544,16 @@ function getProfileTableVirtualWindow(
   total: number,
   scrollTop: number,
   viewportHeight: number,
+  rowHeight: number,
 ): { start: number; end: number } {
   if (total === 0) return { start: 0, end: 0 };
 
   const visibleCount = Math.ceil(
-    Math.max(viewportHeight, PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT) / PROFILE_TABLE_ROW_HEIGHT,
+    Math.max(viewportHeight, PROFILE_TABLE_FALLBACK_VIEWPORT_HEIGHT) / rowHeight,
   );
   const windowSize = visibleCount + PROFILE_TABLE_OVERSCAN * 2;
   const maxStart = Math.max(0, total - windowSize);
-  const rawStart = Math.floor(scrollTop / PROFILE_TABLE_ROW_HEIGHT) - PROFILE_TABLE_OVERSCAN;
+  const rawStart = Math.floor(scrollTop / rowHeight) - PROFILE_TABLE_OVERSCAN;
   const start = Math.min(Math.max(0, rawStart), maxStart);
   const end = Math.min(total, start + windowSize);
   return { start, end };
@@ -410,6 +640,126 @@ interface ProfileTableRowProps {
   onPreview?: (id: string) => void;
 }
 
+function ProfileCard({
+  profile,
+  health,
+  onSelect,
+  selected,
+  onToggleSelection,
+  previewed = false,
+  onPreview,
+}: ProfileTableRowProps) {
+  const geoip = health?.geoip;
+  const ip = geoip?.ip ?? profile.last_geoip_ip;
+  const country = geoip?.country_code ?? profile.last_geoip_country_code;
+  const timezone = geoip?.timezone ?? profile.last_geoip_timezone;
+  const locale = geoip?.locale ?? profile.last_geoip_locale;
+  const lastChecked = health?.checked_at ?? profile.last_geoip_resolved_at;
+  const proxyLabel = formatProxyLabel(profile.proxy);
+
+  return (
+    <article
+      role="listitem"
+      aria-label={`Profile card ${profile.name}`}
+      data-state={selected ? "selected" : previewed ? "previewed" : undefined}
+      className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.05)] ring-1 ring-slate-900/[0.02] transition-colors focus-within:ring-blue-500/15 hover:border-slate-300 ${
+        selected
+          ? "border-blue-200 border-l-blue-600 bg-gradient-to-r from-blue-50/90 to-white"
+          : previewed
+            ? "border-slate-300 border-l-slate-500 bg-gradient-to-r from-slate-50 to-white"
+            : "border-slate-200 border-l-transparent"
+      }`}
+      style={{ height: PROFILE_CARD_ROW_HEIGHT - 8 }}
+    >
+      <div className="flex items-start gap-2">
+        <SelectionCheckbox
+          label={`Select ${profile.name}`}
+          checked={selected}
+          disabled={!onToggleSelection}
+          onChange={() => onToggleSelection?.(profile.id)}
+        />
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            className={`block max-w-full truncate rounded-md text-left text-sm font-semibold transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              selected ? "text-blue-950" : "text-slate-950"
+            }`}
+            title={profile.name}
+            aria-label={`Preview ${profile.name}`}
+            onClick={() => onPreview?.(profile.id)}
+          >
+            {profile.name}
+          </button>
+          <div className="mt-0.5 font-mono text-[11px] text-slate-400">{profile.id.slice(0, 8)}</div>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 shadow-hairline transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          onClick={() => onSelect(profile.id)}
+          aria-label={`Open ${profile.name}`}
+        >
+          <ArrowRight className="h-3.5 w-3.5" />
+          Open
+        </button>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50/70 px-2 py-1.5">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-700">
+          <StatusIndicator status={profile.status} />
+          <span className="truncate">{profile.status}</span>
+        </span>
+        <HealthBadge health={health} compact />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+        <CardField label="Proxy" value={proxyLabel} mono />
+        <CardField label="IP" value={ip ?? "-"} mono />
+        <CardField label="Country" value={country ?? "-"} />
+        <CardField label="Last checked" value={formatTimestamp(lastChecked)} />
+        <CardField label="Timezone" value={timezone ?? "-"} />
+        <CardField label="Locale" value={locale ?? "-"} />
+      </div>
+
+      <div className="mt-3 flex min-w-0 items-center gap-1 overflow-hidden">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Tags</span>
+        {profile.tags.length > 0 ? profile.tags.map((tag) => (
+          <span
+            key={tag.tag}
+            className="shrink-0 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-hairline"
+            style={tag.color ? { backgroundColor: `${tag.color}20`, color: tag.color } : undefined}
+          >
+            {tag.tag}
+          </span>
+        )) : (
+          <span className="text-xs text-slate-400">-</span>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function CardField({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</div>
+      <div
+        className={`mt-0.5 truncate font-medium text-slate-700 ${mono ? "font-mono" : ""}`}
+        title={value}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function ProfileTableRow({
   profile,
   health,
@@ -430,11 +780,11 @@ function ProfileTableRow({
   return (
     <tr
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
-      className={`group transition-colors duration-150 ${
+      className={`group transition-colors duration-150 focus-within:bg-blue-50/50 ${
         selected
-          ? "bg-blue-50/85 hover:bg-blue-50"
+          ? "bg-gradient-to-r from-blue-50/90 to-white hover:from-blue-50"
           : previewed
-            ? "bg-slate-50/95 hover:bg-slate-100/80"
+            ? "bg-gradient-to-r from-slate-50 to-white hover:from-slate-100/80"
             : "odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/70"
       }`}
       style={{ height: PROFILE_TABLE_ROW_HEIGHT }}

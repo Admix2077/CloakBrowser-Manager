@@ -23,7 +23,11 @@ export function ProfileFilters({
   const showVisibleLabels = layout === "toolbar";
 
   return (
-    <div className={layout === "toolbar" ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}>
+    <div
+      role={layout === "toolbar" ? "toolbar" : undefined}
+      aria-label={layout === "toolbar" ? "Profile filters" : undefined}
+      className={layout === "toolbar" ? "grid grid-cols-2 gap-2 xl:grid-cols-[minmax(260px,1.4fr)_repeat(6,minmax(104px,128px))]" : "space-y-3"}
+    >
       <div className={layout === "toolbar" ? "col-span-2 xl:col-span-1" : ""}>
         <FilterLabel htmlFor={filterId(labelled("Search profiles"))} visible={showVisibleLabels}>
           {showVisibleLabels ? "Search" : labelled("Search profiles")}
