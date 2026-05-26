@@ -35,6 +35,17 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation task 显式重试小闭环：
+  - 新增 `POST /api/tasks/{id}/retry`。
+  - retry 只允许对已结束 task 创建新 queued task，允许 `failed | cancelled | succeeded`。
+  - `queued` 或 `running` task retry 返回 `409 Only finished automation tasks can be retried`。
+  - task 不存在时返回 `404 Automation task not found`；profile 不存在时返回 `404 Profile not found`。
+  - retry 成功后返回新创建的 queued task，状态码 `201`。
+  - 原 task 的 `status/result/error/started_at/finished_at` 保持不变，不伪造恢复状态。
+  - retry 不自动执行脚本，不启动 profile，不绕过 `run` 的 profile running 检查或 profile 级并发限制。
+  - retry 复制已持久化并裁剪过的内部 `steps`；对外响应继续统一脱敏，`open_url.url`、query、fragment、selector、表单值、evaluate expression、screenshot 内容、token 和未知字段不会回显。
+  - retry 只是显式再排队一次，不判断 step 是否有副作用；涉及点击、填写、跳转等副作用脚本时，调用方必须在可信管理侧确认可重复执行。
+  - 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token 或审计事实源。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task profile 过滤小闭环：
   - `GET /api/tasks` 支持可选 `profile_id` query。
   - 未传 `profile_id` 时保持原行为：返回所有已持久化 task，并按 `created_at desc` 排序。
@@ -49,7 +60,7 @@
   - 不同 profile 的 running task 不阻塞当前 profile 的 queued task。
   - 被拒绝的 queued task 保持 `queued`，不写 `started_at`、`finished_at` 或 `result`，便于稍后重试。
   - 错误 detail 固定为 `Automation profile already has a running task`，不回显 step payload、URL query、token、selector、表单值或未知字段。
-  - 当前仍未实现后台队列、失败重试、running cancel。
+  - 当前仍未实现后台队列、running cancel。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner screenshot step 小闭环：
   - `POST /api/tasks/{id}/run` 已支持 `screenshot` step。
   - `screenshot` 支持可选 `page_ref`，默认 `"0"`；可选 `full_page`，默认 `false`，且严格要求布尔值。
@@ -247,7 +258,7 @@
 
 下一步建议：
 
-1. 继续 CloakBrowser 独立侧 07 Automation API，进入失败重试、running cancel、前端 Automation 页面或 task log viewer 等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
+1. 继续 CloakBrowser 独立侧 07 Automation API，进入 running cancel、前端 Automation 页面、task log viewer、后台队列或全局 worker 池等后续小闭环；所有 task 对外响应继续保持步骤和结果白名单脱敏。
 2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
 3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
 4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。

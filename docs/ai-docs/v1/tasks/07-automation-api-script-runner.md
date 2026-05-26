@@ -61,7 +61,7 @@
   - [x] evaluate。
   - [x] screenshot。
 - [x] 支持并发限制。
-- [ ] 支持失败重试。
+- [x] 支持失败重试。
 - [ ] 前端新增 Automation 页面。
 - [ ] 前端新增 task log viewer。
 
@@ -376,6 +376,33 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_automation_task_rejects_non_queued_status backend/tests/test_api.py::test_run_automation_task_requires_running_profile backend/tests/test_api.py::test_run_automation_task_fails_unknown_step_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png backend/tests/test_api.py::test_run_scroll_step_scrolls_existing_page backend/tests/test_api.py::test_run_automation_task_rejects_concurrent_task_for_same_profile_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_allows_running_task_on_different_profile -q
 # 15 passed
+```
+
+## 2026-05-27 Automation task 显式重试小闭环
+
+当前状态：
+
+- 已新增 `POST /api/tasks/{id}/retry`。
+- retry 只允许对已结束 task 创建新 queued task：
+  - `failed`。
+  - `cancelled`。
+  - `succeeded`。
+- `queued` 或 `running` task retry 返回 `409 Only finished automation tasks can be retried`，避免给未结束任务制造重复执行入口。
+- task 不存在时返回 `404 Automation task not found`。
+- profile 不存在时返回 `404 Profile not found`。
+- 成功后返回新创建的 queued task，状态码 `201`。
+- retry 不修改原 task 的 `status/result/error/started_at/finished_at`，不伪造原 task 已恢复。
+- retry 不自动执行脚本，不启动 profile，不绕过 `run` 的 profile running 检查或 profile 级并发限制。
+- retry 复制的是已持久化并裁剪过的内部 `steps`；对外响应继续走统一白名单脱敏，`open_url.url`、query、fragment、selector、表单值、evaluate expression、screenshot 内容、token 和未知字段不会回显。
+- retry 只是显式再排队一次，不判断 step 是否有副作用；涉及点击、填写、跳转等副作用脚本时，调用方必须在可信管理侧确认可重复执行。
+- 本小闭环不实现后台队列、自动 retry worker、重试次数上限、指数退避、running cancel 或跨系统补偿。
+- 本小闭环不修改 Project Mileage app/payload，不写钱包、订单、权限、扣费、续期、viewer token 或审计事实源。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_retry_failed_automation_task_creates_new_queued_task_without_running_script backend/tests/test_api.py::test_retry_automation_task_rejects_active_status backend/tests/test_api.py::test_retry_automation_task_rejects_missing_profile backend/tests/test_api.py::test_retry_automation_task_keeps_steps_redacted -q
+# 4 passed
 ```
 
 ## 2026-05-27 Automation Script Runner click step 小闭环

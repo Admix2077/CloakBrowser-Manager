@@ -1507,6 +1507,125 @@ def test_cancel_running_automation_task_is_rejected(app_client: TestClient):
     assert resp.status_code == 409
 
 
+def test_retry_failed_automation_task_creates_new_queued_task_without_running_script(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRetryFailedProfile"})
+    pid = create.json()["id"]
+    original = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    main.db.update_automation_task(
+        original["id"],
+        status="failed",
+        result={"steps": [{"index": 0, "type": "wait", "status": "failed"}]},
+        error="Invalid wait step",
+        started_at="2026-05-27T00:00:00+00:00",
+        finished_at="2026-05-27T00:00:01+00:00",
+    )
+
+    resp = app_client.post(f"/api/tasks/{original['id']}/retry")
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["id"] != original["id"]
+    assert data["profile_id"] == pid
+    assert data["status"] == "queued"
+    assert data["steps"] == [{"type": "wait", "ms": 1}]
+    assert data["result"] is None
+    assert data["error"] is None
+    assert data["started_at"] is None
+    assert data["finished_at"] is None
+    persisted_original = main.db.get_automation_task(original["id"])
+    assert persisted_original["status"] == "failed"
+    assert persisted_original["error"] == "Invalid wait step"
+
+
+def test_retry_automation_task_rejects_active_status(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRetryActiveProfile"})
+    pid = create.json()["id"]
+    queued = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    running = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    main.db.update_automation_task(running["id"], status="running")
+
+    queued_resp = app_client.post(f"/api/tasks/{queued['id']}/retry")
+    running_resp = app_client.post(f"/api/tasks/{running['id']}/retry")
+
+    assert queued_resp.status_code == 409
+    assert queued_resp.json()["detail"] == "Only finished automation tasks can be retried"
+    assert running_resp.status_code == 409
+    assert running_resp.json()["detail"] == "Only finished automation tasks can be retried"
+
+
+def test_retry_automation_task_rejects_missing_profile(app_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    create = app_client.post("/api/profiles", json={"name": "TaskRetryMissingProfile"})
+    pid = create.json()["id"]
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    main.db.update_automation_task(task["id"], status="failed")
+    original_get_profile = main.db.get_profile
+
+    def get_profile_or_missing(profile_id: str):
+        if profile_id == pid:
+            return None
+        return original_get_profile(profile_id)
+
+    monkeypatch.setattr(main.db, "get_profile", get_profile_or_missing)
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/retry")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Profile not found"
+
+
+def test_retry_automation_task_keeps_steps_redacted(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRetryRedactProfile"})
+    pid = create.json()["id"]
+    secret_url = "https://example.com/account?token=super-secret#frag"
+    original = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {
+                    "type": "open_url",
+                    "url": secret_url,
+                    "page_ref": "0",
+                    "wait_until": "domcontentloaded",
+                    "timeout_ms": 5000,
+                }
+            ],
+        },
+    ).json()
+    main.db.update_automation_task(
+        original["id"],
+        status="failed",
+        result={
+            "steps": [
+                {
+                    "index": 0,
+                    "type": "open_url",
+                    "status": "failed",
+                    "url": secret_url,
+                    "payload": {"token": "super-secret"},
+                }
+            ],
+            "raw_url": secret_url,
+        },
+        error="Open URL step failed",
+    )
+
+    resp = app_client.post(f"/api/tasks/{original['id']}/retry")
+
+    assert resp.status_code == 201
+    assert resp.json()["steps"] == [
+        {
+            "type": "open_url",
+            "page_ref": "0",
+            "wait_until": "domcontentloaded",
+            "timeout_ms": 5000,
+        }
+    ]
+    assert resp.json()["result"] is None
+    assert secret_url not in str(resp.json())
+    assert "super-secret" not in str(resp.json())
+
+
 def test_run_wait_automation_task_marks_succeeded(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunWaitProfile"})
     pid = create.json()["id"]

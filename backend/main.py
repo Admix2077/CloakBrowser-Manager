@@ -1695,6 +1695,22 @@ async def cancel_automation_task(task_id: str):
     return _automation_task_response(cancelled)
 
 
+@app.post("/api/tasks/{task_id}/retry", response_model=AutomationTaskResponse, status_code=201)
+async def retry_automation_task(task_id: str):
+    task = db.get_automation_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    if task["status"] not in {"cancelled", "failed", "succeeded"}:
+        raise HTTPException(status_code=409, detail="Only finished automation tasks can be retried")
+    if db.get_profile(task["profile_id"]) is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    retry_task = db.create_automation_task(
+        profile_id=task["profile_id"],
+        steps=_automation_task_persisted_steps(task.get("steps") or []),
+    )
+    return _automation_task_response(retry_task)
+
+
 @app.post("/api/tasks/{task_id}/run", response_model=AutomationTaskResponse)
 async def run_automation_task(task_id: str):
     task = db.get_automation_task(task_id)

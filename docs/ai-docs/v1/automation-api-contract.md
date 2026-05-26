@@ -439,6 +439,26 @@ POST /api/tasks/{id}/cancel
 - 重复取消已 `cancelled` task 当前返回 `409`；是否改为幂等成功留给后续 API 版本决定。
 - 运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
 
+### 重试 Task
+
+```http
+POST /api/tasks/{id}/retry
+```
+
+当前行为：
+
+- 只允许对已结束 task 创建重试任务，允许状态为 `failed | cancelled | succeeded`。
+- `queued` 或 `running` task 返回 `409 Only finished automation tasks can be retried`。
+- task 不存在时返回 `404`。
+- profile 不存在时返回 `404 Profile not found`。
+- 成功后创建一个新的 `queued` task，并返回新 task，状态码 `201`。
+- 原 task 保持原状态、`result`、`error`、`started_at` 和 `finished_at` 不变。
+- retry 不会自动运行脚本，不启动 profile，不绕过 `run` 的 profile running 检查或 profile 级并发限制。
+- retry 复制的是已持久化并裁剪过的内部 `steps`，对外响应继续统一脱敏；`open_url.url`、query、fragment、selector、表单值、evaluate expression、screenshot 内容、token 和未知字段不会在响应中回显。
+- retry 只是显式再排队一次，不判断 step 是否有副作用；涉及点击、填写、跳转等副作用脚本时，调用方必须在可信管理侧确认可重复执行。
+- 当前 retry 不写 Project Mileage 订单、钱包、权限、扣费、续期或 viewer token 状态。
+- Project Mileage 后续需要 retry 能力时，必须由 Payload 按账号归属、订单状态、权限、审计和幂等策略输出安全 DTO；App 不能直连该接口。
+
 ### 运行 Task
 
 ```http
@@ -480,7 +500,7 @@ POST /api/tasks/{id}/run
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前不实现后台队列、全局 worker 池、失败重试、running cancel。
+- 当前不实现后台队列、全局 worker 池或 running cancel；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
 
 ## Script Runner 接入建议
 
