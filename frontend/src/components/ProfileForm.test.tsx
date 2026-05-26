@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileForm } from "./ProfileForm";
 import type { Profile } from "../lib/api";
@@ -146,5 +146,39 @@ describe("ProfileForm accessibility and control polish", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add tag" }));
 
     expect(screen.getByRole("button", { name: "Remove tag ops" })).toBeTruthy();
+  });
+
+  it("uses an in-app confirmation dialog before deleting a profile", async () => {
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    const nativeConfirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <ProfileForm
+        profile={humanizedProfile}
+        onSave={vi.fn()}
+        onDelete={onDelete}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "Delete profile" });
+    expect(dialog).toBeTruthy();
+    expect(screen.getByText("Humanized")).toBeTruthy();
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel delete" }));
+    expect(screen.queryByRole("dialog", { name: "Delete profile" })).toBeNull();
+    expect(onDelete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete profile" }));
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "Delete profile" })).toBeNull();
+
+    nativeConfirm.mockRestore();
   });
 });

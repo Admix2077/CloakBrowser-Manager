@@ -39,7 +39,7 @@
 - [ ] 新增 empty state 样式。
 - [x] 新增 error banner。
 - [ ] 新增 toast 或 inline feedback。
-- [ ] 用项目内 ConfirmDialog 替代原生 `confirm`。
+- [x] 用项目内 ConfirmDialog 替代原生 `confirm`。
 - [ ] ProfileForm 改为分组页签：
   - Identity。
   - Network。
@@ -147,3 +147,60 @@ cd frontend && npm run build
 - `App` 主区 surface / shadow / tile token 继续收口，减少卡片堆叠感。
 
 验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感六次精修 polish 小闭环`。
+
+## 2026-05-26 ProfileForm 删除确认 Dialog 小闭环
+
+背景：
+
+- ProfileForm 删除 profile 仍使用浏览器原生 `confirm()`，交互生硬且不符合当前 B2B 运营台视觉系统。
+- 本小闭环只替换编辑页单 profile 删除确认，不改变 App 的删除事实流，不触碰批量删除、后端或 Project Mileage。
+
+已完成：
+
+- [x] `frontend/src/components/ConfirmDialog.tsx`
+  - 新增项目内确认弹层，支持 danger/default tone、subject、loading、Escape 关闭。
+  - 使用现有 dialog / notice 动效 token，保持 `role="dialog"`、`aria-modal="true"`。
+- [x] `frontend/src/components/ProfileForm.tsx`
+  - 删除按钮改为打开 `Delete profile` dialog。
+  - Cancel / Escape 只关闭 dialog，不调用 `onDelete`。
+  - 点击 `Confirm delete profile` 后才调用既有 `onDelete()`；删除完成后关闭 dialog。
+  - 创建模式和未传 `onDelete` 时仍不显示删除入口。
+- [x] `frontend/src/components/ProfileForm.test.tsx`
+  - 覆盖点击 Delete 不再调用 `window.confirm`。
+  - 覆盖 Cancel 不删除、Confirm 才删除。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 红灯：1 failed, 6 passed
+# window.confirm 仍被调用
+
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 1 passed, 7 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 149 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，生产 build 来自 `frontend/dist`。
+- 桌面 `1440x900`：
+  - 打开 `Alpha Warmup` 编辑页，点击 `Delete` 后出现 app 内 `Delete profile` dialog。
+  - 点击 `Cancel delete` 后 dialog 关闭，仍停留在 `Edit Profile`，profile 未删除。
+  - 新建临时 QA profile `Confirm Dialog QA Delete`，打开编辑页并确认删除后返回主表，API 验证该临时 profile 已删除。
+- 移动 `390x844`：
+  - 打开 `Beta Running Candidate` 编辑页，点击 `Delete` 后 dialog 可见。
+  - JS 验证：`hasDialog=true`、`hasBeta=true`、`scrollWidth=384`、`width=390`。
+  - Escape 关闭后未删除 `Beta Running Candidate`。
+- 截图：
+  - `/tmp/cloakbrowser-confirm-dialog-screens/desktop-delete-dialog.png`
+  - `/tmp/cloakbrowser-confirm-dialog-screens/mobile-delete-dialog.png`

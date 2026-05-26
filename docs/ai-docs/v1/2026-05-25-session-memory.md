@@ -3306,3 +3306,79 @@ git diff --check
 - 没有修改 Project Mileage 仓库或业务逻辑。
 - 没有引入 Chromium CDP 作为产品基础能力。
 - 没有 push 到任何远端仓库。
+
+## 47. 2026-05-26 ProfileForm 删除确认 Dialog 小闭环
+
+背景：
+
+- 04 Proxy Manager 已完成；`05 Project Mileage 会话 Broker` 文档要求实现前先确认 Project Mileage Contract Change Proposal 或任务级契约，因此本轮不越界进入跨仓会话 Broker。
+- 按 CloakBrowser 独立成熟化继续推进 11 UI 视觉系统，优先处理一个低风险且高体感的问题：ProfileForm 删除还在使用浏览器原生 `confirm()`。
+- 派发只读子 agent `Mencius` 审计当前删除流、最小替代方案、测试与 11 文档 checkbox。
+
+子 agent 结论：
+
+- 原生 confirm 位于 `frontend/src/components/ProfileForm.tsx` 的 `handleDelete()`。
+- App 层删除事实流不需要改：`onDelete={handleDelete}` 仍由 App 执行删除、清空选中并回到主表。
+- 最小方案是新增项目内 `ConfirmDialog`，ProfileForm 用本地 `deleteConfirmOpen` 控制弹层。
+- 完成后可勾选 11 文档的 `用项目内 ConfirmDialog 替代原生 confirm`。
+
+已完成：
+
+- `frontend/src/components/ConfirmDialog.tsx`
+  - 新增项目内确认弹层。
+  - 支持 danger tone、subject、loading、Escape 关闭。
+  - 使用现有 dialog 动效，保留 `role="dialog"` 和 `aria-modal="true"`。
+- `frontend/src/components/ProfileForm.tsx`
+  - 删除按钮改为打开 `Delete profile` dialog。
+  - Cancel / Escape 只关闭 dialog，不调用删除。
+  - Confirm 后才调用既有 `onDelete()`，删除完成后关闭 dialog。
+  - 创建模式和未传 `onDelete` 的语义不变。
+- `frontend/src/components/ProfileForm.test.tsx`
+  - 新增红绿测试：点击 Delete 不再调用 `window.confirm`，Cancel 不删除，Confirm 才删除。
+- `docs/ai-docs/v1/tasks/11-ui-visual-system.md`
+  - 勾选 `用项目内 ConfirmDialog 替代原生 confirm`。
+  - 追加本小闭环记录。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 红灯：1 failed, 6 passed
+
+cd frontend && npm test -- --run src/components/ProfileForm.test.tsx
+# 1 passed, 7 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 149 passed
+
+cd frontend && npm run build
+# built successfully
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`。
+- 桌面 `1440x900`：
+  - `Alpha Warmup` 编辑页点击 Delete 后出现 app 内 `Delete profile` dialog。
+  - `Cancel delete` 后 dialog 关闭，仍停留在编辑页。
+  - 临时 QA profile `Confirm Dialog QA Delete` 走确认删除路径，删除后返回主表，API 验证临时 profile 已删除。
+- 移动 `390x844`：
+  - `Beta Running Candidate` 编辑页点击 Delete 后 dialog 可见。
+  - JS 验证：`hasDialog=true`、`hasBeta=true`、`scrollWidth=384`、`width=390`。
+  - Escape 关闭后 API 验证 `Beta Running Candidate` 仍存在。
+
+截图：
+
+- `/tmp/cloakbrowser-confirm-dialog-screens/desktop-delete-dialog.png`
+- `/tmp/cloakbrowser-confirm-dialog-screens/mobile-delete-dialog.png`
+
+边界：
+
+- 没有修改后端。
+- 没有改 App 删除事实源。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

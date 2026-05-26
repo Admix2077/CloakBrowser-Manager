@@ -1,6 +1,7 @@
 import { Save, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Profile, ProfileCreateData } from "../lib/api";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 interface ProfileFormProps {
   profile: Profile | null; // null = create mode
@@ -75,6 +76,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
   const [tagInput, setTagInput] = useState("");
   const [tagColor, setTagColor] = useState<string | null>("#6366f1");
   const [launchArgInput, setLaunchArgInput] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -122,10 +124,10 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
 
   const handleDelete = async () => {
     if (!onDelete) return;
-    if (!confirm("Delete this profile? Browser data will be permanently removed.")) return;
     setDeleting(true);
     try {
       await onDelete();
+      setDeleteConfirmOpen(false);
     } finally {
       setDeleting(false);
     }
@@ -181,7 +183,7 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
           {isEdit && onDelete && (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleting}
               className="btn-danger flex items-center gap-1.5"
             >
@@ -560,6 +562,20 @@ export function ProfileForm({ profile, onSave, onDelete, onCancel }: ProfileForm
           />
         </section>
       </div>
+
+      {deleteConfirmOpen && isEdit && profile && (
+        <ConfirmDialog
+          title="Delete profile"
+          description="Browser data will be permanently removed. This action cannot be undone."
+          subject={profile.name}
+          confirmLabel="Confirm delete profile"
+          cancelLabel="Cancel"
+          loading={deleting}
+          tone="danger"
+          onConfirm={() => void handleDelete()}
+          onCancel={() => setDeleteConfirmOpen(false)}
+        />
+      )}
 
     </form>
   );
