@@ -10,7 +10,10 @@
 
 - `/api/profiles/{id}/automation`
 - pages list。
+- page create。
+- page close。
 - goto。
+- wait for selector。
 - evaluate。
 - screenshot。
 - clipboard get/set。
@@ -18,9 +21,9 @@
 ## 任务清单
 
 - [ ] 补齐 Automation API 文档。
-- [ ] 新增 page create。
-- [ ] 新增 page close。
-- [ ] 新增 wait for selector。
+- [x] 新增 page create。
+- [x] 新增 page close。
+- [x] 新增 wait for selector。
 - [ ] 新增 click。
 - [ ] 新增 fill。
 - [ ] 新增 keyboard input。
@@ -70,7 +73,7 @@
 ## 验证
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_automation.py backend/tests/test_api.py -q
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 cd frontend && npm test -- --run
 cd frontend && npm run build
 ```
@@ -81,3 +84,26 @@ cd frontend && npm run build
 - [ ] 脚本失败能看到失败 step 和错误。
 - [ ] 运行中 profile 才能执行脚本。
 - [ ] 脚本不能绕过权限直接读取敏感配置。
+
+## 2026-05-27 Automation wait-for-selector 小闭环
+
+当前状态：
+
+- 已补齐 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/wait-for-selector`。
+- 该接口只操作运行中 profile 的既有 Playwright page，不引入 Chromium CDP。
+- 请求体包含：
+  - `selector`：必填，长度 `1..10000`。
+  - `state`：`attached | detached | visible | hidden`，默认 `visible`。
+  - `timeout_ms`：`1..300000`，默认 `30000`。
+- 成功后返回现有 `AutomationPageResponse`，便于脚本 runner 后续复用页面摘要。
+- Playwright 等待失败沿用现有 automation 模式返回 `400`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_wait_for_selector_waits_and_returns_page -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 59 passed
+```

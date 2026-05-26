@@ -45,6 +45,7 @@ from .models import (
     AutomationPageResponse,
     AutomationPagesResponse,
     AutomationScreenshotRequest,
+    AutomationWaitForSelectorRequest,
     ClipboardRequest,
     LaunchResponse,
     LoginRequest,
@@ -1930,6 +1931,33 @@ async def automation_evaluate(
         logger.warning("Automation evaluate failed for %s page %d: %s", profile_id, page_index, exc)
         raise HTTPException(status_code=400, detail=str(exc))
     return AutomationEvaluateResponse(result=jsonable_encoder(result))
+
+
+@app.post(
+    "/api/profiles/{profile_id}/automation/pages/{page_ref}/wait-for-selector",
+    response_model=AutomationPageResponse,
+)
+async def automation_wait_for_selector(
+    profile_id: str,
+    page_ref: str,
+    body: AutomationWaitForSelectorRequest,
+):
+    running, page, page_index = _automation_get_page(profile_id, page_ref)
+    try:
+        await page.wait_for_selector(
+            body.selector,
+            state=body.state,
+            timeout=body.timeout_ms,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Automation wait_for_selector failed for %s page %d: %s",
+            profile_id,
+            page_index,
+            exc,
+        )
+        raise HTTPException(status_code=400, detail=str(exc))
+    return await _automation_page_summary(running, page_index, page)
 
 
 @app.post("/api/profiles/{profile_id}/automation/pages/{page_ref}/screenshot")

@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮转入 07 Automation API 与脚本运行器，完成 wait-for-selector 小闭环：
+  - 新增 `AutomationWaitForSelectorRequest`。
+  - 新增 `POST /api/profiles/{profile_id}/automation/pages/{page_ref}/wait-for-selector`。
+  - 复用既有运行中 profile / page 查找与 `AutomationPageResponse`。
+  - 不依赖 Chromium CDP；继续基于 Firefox/invisible_playwright 的 Playwright page API。
+  - 目标红灯：`405 Method Not Allowed`。
+  - 目标绿灯：`test_automation_wait_for_selector_waits_and_returns_page` 通过。
+  - 07 文档同步标记既有 page create/page close 与本轮 wait-for-selector 已完成。
 - `087097a add proxy provider preset manager` 是本轮开始前最新 commit。
 - 本轮完成 05/06 的 CloakBrowser 侧最小 runtime session API、runtime viewer token、runtime terminate、runtime renew、runtime audit 和 runtime VNC viewer audit 小闭环：
   - `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token`。
@@ -64,9 +72,10 @@
 
 下一步建议：
 
-1. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
-2. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
-3. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。
+1. 继续 CloakBrowser 独立侧 07 Automation API，小步补齐 `click`、`fill`、keyboard input 和 scroll。
+2. 等 Jeff/主 agent 确认 Project Mileage remote workspace contract proposal 的 API、DTO、权限、扣费、viewer token 刷新和补偿策略。
+3. 未确认前不改 Project Mileage app/payload；runtime viewer token 失效/不可用的 CloakBrowser 前端固定安全提示已完成，但不替代 Payload/App 的刷新、重开和权限契约。
+4. 确认跨仓契约后，Payload 先做只读 remote accounts/session 数据模型，再逐步做 session 创建、viewer token、renew、terminate。
 
 ## 推荐执行顺序
 
