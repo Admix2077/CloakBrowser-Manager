@@ -4847,3 +4847,84 @@ cd frontend && npm run build
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 66. 2026-05-26 Proxy 随机分配前端运营入口小闭环
+
+背景：
+
+- Module 09 继续推进 Proxy Template / 批量运营。
+- 后端已经完成 `POST /api/proxies/assign/random`，本轮补前端运营入口。
+- 保持 Project Mileage 不进入跨仓实现，不修改 browser runtime。
+
+已完成：
+
+- `frontend/src/lib/api.ts`
+  - 新增 random proxy assignment request/response 类型。
+  - 新增 `api.assignRandomProxyToProfiles`。
+- `frontend/src/components/ProxyManagerPage.tsx`
+  - Toolbar 新增 `Random assign`。
+  - 按当前 `Country / Provider / Tag` filters 生成 selection，并把 `FILTER_ALL` sentinel 转为空字段。
+  - 新增独立 `Random proxy assignment` 弹窗，不复用单 proxy assign 的 `selectedProxy` 状态，避免多选/无选 proxy 时被自动关闭。
+  - 弹窗选择 profiles 后调用真实 random assignment API。
+  - 成功后关闭弹窗、清空 selection、显示成功反馈，并触发 `onProfilesAssigned` 刷新 profile 数据。
+  - 错误继续脱敏。
+- `frontend/src/lib/api.test.ts`
+  - 覆盖 endpoint `/api/proxies/assign/random` 与 request body。
+- `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖 JP / ProxyJP / mobile filters 下随机分配给 2 个 profiles。
+  - 覆盖成功 toast、弹窗关闭、refresh callback、凭证不渲染。
+- `docs/ai-docs/v1/tasks/09-templates-bulk-ops.md`
+  - 勾选按国家/标签选择 proxy 的前端运营入口。
+  - 勾选随机分配策略的前端运营入口。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "assignRandomProxyToProfiles"
+# 1 passed, 28 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx -t "randomly assigns"
+# 1 passed, 19 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 20 passed
+
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 29 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 182 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 本地 QA 服务：`http://127.0.0.1:8095/`，进程 `1749057`。
+- 桌面 `1440x960`：
+  - Proxy Manager 选择 `JP` / `ProxyJP` / `mobile` 后，`Random assign` 打开弹窗。
+  - 弹窗显示 `1 candidate proxy`。
+  - 选择 `Template QA Profile` 和 `Alpha Warmup` 后提交。
+  - 真实请求 `POST /api/proxies/assign/random`：
+    - `country_code=JP`
+    - `provider=ProxyJP`
+    - `tags=["mobile"]`
+    - `profile_ids` 为 2 个 profile id。
+  - 响应 `200 OK`，页面显示 `Random assigned proxy to 2 profile(s), 0 failed`。
+- 移动 `390x844`：
+  - `Random assign` 按钮可见。
+  - `body.scrollWidth=390`、`documentElement.scrollWidth=390`。
+- Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-random-assign-desktop.png`
+  - `/home/jeff/code/cloakbrowser-random-assign-mobile.png`
+
+边界：
+
+- 没有修改后端。
+- 没有修改 CSV import provider preset 行为。
+- 没有修改单 proxy assign、bulk check、表格滚动结构。
+- 没有修改 Firefox/invisible_playwright runtime。
+- 没有修改 Project Mileage 仓库。
+- 没有 push 到任何远端仓库。

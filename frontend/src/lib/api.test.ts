@@ -440,6 +440,43 @@ describe("api.assignProxyToProfiles", () => {
   });
 });
 
+describe("api.assignRandomProxyToProfiles", () => {
+  it("sends selected profile ids and proxy selection filters to the random assign endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      strategy: "random",
+      provider_preset_id: null,
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: ["mobile"],
+      candidate_count: 2,
+      total: 2,
+      succeeded: 2,
+      failed: 0,
+      results: [
+        { profile_id: "alpha", ok: true, error: null, proxy_id: "proxy-jp-1", proxy: null },
+        { profile_id: "beta", ok: true, error: null, proxy_id: "proxy-jp-2", proxy: null },
+      ],
+    }));
+
+    await api.assignRandomProxyToProfiles({
+      profile_ids: ["alpha", "beta"],
+      country_code: "JP",
+      provider: "ProxyJP",
+      tags: ["mobile"],
+    });
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/proxies/assign/random");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      profile_ids: ["alpha", "beta"],
+      country_code: "JP",
+      provider: "ProxyJP",
+      tags: ["mobile"],
+    });
+  });
+});
+
 describe("api.saveProfileProxyAsAsset", () => {
   it("sends proxy asset metadata without a URL to the profile proxy-asset endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({

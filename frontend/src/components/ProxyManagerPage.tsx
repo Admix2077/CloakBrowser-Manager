@@ -1,6 +1,6 @@
-import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, RefreshCw, Search, Upload, UserPlus, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, RefreshCw, Search, Shuffle, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset } from "../lib/api";
+import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyRandomAssignRequestData } from "../lib/api";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
@@ -46,6 +46,12 @@ export function ProxyManagerPage({
   const [assigning, setAssigning] = useState(false);
   const [assignNotice, setAssignNotice] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [randomAssignDialogOpen, setRandomAssignDialogOpen] = useState(false);
+  const [randomAssignSearchQuery, setRandomAssignSearchQuery] = useState("");
+  const [selectedRandomAssignProfileIds, setSelectedRandomAssignProfileIds] = useState<Set<string>>(() => new Set());
+  const [randomAssigning, setRandomAssigning] = useState(false);
+  const [randomAssignNotice, setRandomAssignNotice] = useState<string | null>(null);
+  const [randomAssignError, setRandomAssignError] = useState<string | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [importSourceText, setImportSourceText] = useState("");
@@ -137,6 +143,20 @@ export function ProxyManagerPage({
       return getProxySearchText(proxy).includes(query);
     });
   }, [countryFilter, deferredSearchQuery, providerFilter, proxies, tagFilter]);
+
+  const randomAssignCandidateProxies = useMemo(() => (
+    proxies.filter((proxy) => {
+      if (!matchesOptionFilter(proxy.country_code, countryFilter)) return false;
+      if (!matchesOptionFilter(proxy.provider, providerFilter)) return false;
+      if (tagFilter !== FILTER_ALL && !proxy.tags.some((tag) => matchesOptionFilter(tag.tag, tagFilter))) return false;
+      return true;
+    })
+  ), [countryFilter, providerFilter, proxies, tagFilter]);
+
+  const randomAssignSelection = useMemo(
+    () => buildRandomAssignSelection(countryFilter, providerFilter, tagFilter),
+    [countryFilter, providerFilter, tagFilter],
+  );
 
   const hasActiveFilters = Boolean(searchQuery.trim())
     || countryFilter !== FILTER_ALL
@@ -304,6 +324,100 @@ export function ProxyManagerPage({
     }
   }, [assigning, onProfilesAssigned, selectedAssignProfileIds, selectedProxy]);
 
+  const randomAssignmentProfiles = useMemo(() => {
+    const query = normalizeFilterValue(randomAssignSearchQuery);
+    if (!query) return profiles;
+
+    return profiles.filter((profile) => getAssignmentProfileSearchText(profile).includes(query));
+  }, [profiles, randomAssignSearchQuery]);
+
+  const visibleRandomAssignmentProfileIds = useMemo(
+    () => randomAssignmentProfiles.map((profile) => profile.id),
+    [randomAssignmentProfiles],
+  );
+  const allVisibleRandomAssignmentProfilesSelected = visibleRandomAssignmentProfileIds.length > 0
+    && visibleRandomAssignmentProfileIds.every((id) => selectedRandomAssignProfileIds.has(id));
+
+  useEffect(() => {
+    setSelectedRandomAssignProfileIds((current) => {
+      const profileIds = new Set(profiles.map((profile) => profile.id));
+      const next = new Set([...current].filter((id) => profileIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [profiles]);
+
+  const openRandomAssignDialog = useCallback(() => {
+    if (profiles.length === 0 || randomAssignCandidateProxies.length === 0) return;
+    setRandomAssignSearchQuery("");
+    setSelectedRandomAssignProfileIds(new Set());
+    setRandomAssignError(null);
+    setRandomAssignDialogOpen(true);
+  }, [profiles.length, randomAssignCandidateProxies.length]);
+
+  const closeRandomAssignDialog = useCallback(() => {
+    if (randomAssigning) return;
+    setRandomAssignDialogOpen(false);
+    setRandomAssignError(null);
+  }, [randomAssigning]);
+
+  const toggleRandomAssignProfileSelection = useCallback((profileId: string) => {
+    setSelectedRandomAssignProfileIds((current) => {
+      const next = new Set(current);
+      if (next.has(profileId)) {
+        next.delete(profileId);
+      } else {
+        next.add(profileId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleVisibleRandomAssignmentProfiles = useCallback(() => {
+    setSelectedRandomAssignProfileIds((current) => {
+      const next = new Set(current);
+      if (visibleRandomAssignmentProfileIds.length > 0 && visibleRandomAssignmentProfileIds.every((id) => next.has(id))) {
+        visibleRandomAssignmentProfileIds.forEach((id) => next.delete(id));
+      } else {
+        visibleRandomAssignmentProfileIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [visibleRandomAssignmentProfileIds]);
+
+  const assignRandomProxyToProfiles = useCallback(async () => {
+    if (selectedRandomAssignProfileIds.size === 0 || randomAssigning) return;
+
+    setRandomAssigning(true);
+    setRandomAssignError(null);
+    setRandomAssignNotice(null);
+    const profileIds = [...selectedRandomAssignProfileIds];
+    const request: ProxyRandomAssignRequestData = {
+      ...randomAssignSelection,
+      profile_ids: profileIds,
+    };
+
+    try {
+      const response = await api.assignRandomProxyToProfiles(request);
+      const notice = `Random assigned proxy to ${response.succeeded} profile(s), ${response.failed} failed`;
+      setRandomAssignNotice(notice);
+      setRandomAssignDialogOpen(false);
+      setSelectedRandomAssignProfileIds(new Set());
+      setRandomAssignSearchQuery("");
+
+      try {
+        await onProfilesAssigned?.();
+      } catch (refreshErr) {
+        const message = refreshErr instanceof Error ? refreshErr.message : "Unable to refresh profile data";
+        setRandomAssignNotice(`${notice}. Refresh failed: ${redactUrlCredentials(message)}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to assign random proxy";
+      setRandomAssignError(`Random assign failed: ${redactUrlCredentials(message)}`);
+    } finally {
+      setRandomAssigning(false);
+    }
+  }, [onProfilesAssigned, randomAssigning, randomAssignSelection, selectedRandomAssignProfileIds]);
+
   const selectedImportPreset = useMemo(
     () => providerPresets.find((preset) => preset.id === selectedImportPresetId) ?? null,
     [providerPresets, selectedImportPresetId],
@@ -468,6 +582,17 @@ export function ProxyManagerPage({
             <button
               type="button"
               className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={openRandomAssignDialog}
+              disabled={profiles.length === 0 || randomAssignCandidateProxies.length === 0 || randomAssigning}
+              aria-label="Random assign"
+              title={randomAssignCandidateProxies.length > 0 ? "Randomly assign matching proxy assets to profiles" : "No proxy assets match the current country, provider, and tag filters"}
+            >
+              <Shuffle className="h-3.5 w-3.5" />
+              Random assign
+            </button>
+            <button
+              type="button"
+              className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
               onClick={openAssignDialog}
               disabled={!selectedProxy || profiles.length === 0 || assigning}
               aria-label="Assign to profiles"
@@ -526,6 +651,12 @@ export function ProxyManagerPage({
         {assignNotice && (
           <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
             {assignNotice}
+          </div>
+        )}
+
+        {randomAssignNotice && (
+          <div className="animate-notice-in border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
+            {randomAssignNotice}
           </div>
         )}
 
@@ -604,6 +735,24 @@ export function ProxyManagerPage({
           onToggleVisible={toggleVisibleAssignmentProfiles}
           onAssign={() => void assignSelectedProxyToProfiles()}
           onClose={closeAssignDialog}
+        />
+      )}
+      {randomAssignDialogOpen && (
+        <ProxyRandomAssignDialog
+          candidateCount={randomAssignCandidateProxies.length}
+          selection={randomAssignSelection}
+          profiles={randomAssignmentProfiles}
+          totalProfileCount={profiles.length}
+          searchQuery={randomAssignSearchQuery}
+          selectedProfileIds={selectedRandomAssignProfileIds}
+          allVisibleSelected={allVisibleRandomAssignmentProfilesSelected}
+          assigning={randomAssigning}
+          error={randomAssignError}
+          onSearchQueryChange={setRandomAssignSearchQuery}
+          onToggleProfile={toggleRandomAssignProfileSelection}
+          onToggleVisible={toggleVisibleRandomAssignmentProfiles}
+          onAssign={() => void assignRandomProxyToProfiles()}
+          onClose={closeRandomAssignDialog}
         />
       )}
       {importDialogOpen && (
@@ -1040,6 +1189,195 @@ function ProxyCsvPreviewRow({ row }: { row: ProxyCsvImportRow }) {
         )}
       </td>
     </tr>
+  );
+}
+
+function ProxyRandomAssignDialog({
+  candidateCount,
+  selection,
+  profiles,
+  totalProfileCount,
+  searchQuery,
+  selectedProfileIds,
+  allVisibleSelected,
+  assigning,
+  error,
+  onSearchQueryChange,
+  onToggleProfile,
+  onToggleVisible,
+  onAssign,
+  onClose,
+}: {
+  candidateCount: number;
+  selection: Omit<ProxyRandomAssignRequestData, "profile_ids">;
+  profiles: Profile[];
+  totalProfileCount: number;
+  searchQuery: string;
+  selectedProfileIds: Set<string>;
+  allVisibleSelected: boolean;
+  assigning: boolean;
+  error: string | null;
+  onSearchQueryChange: (value: string) => void;
+  onToggleProfile: (profileId: string) => void;
+  onToggleVisible: () => void;
+  onAssign: () => void;
+  onClose: () => void;
+}) {
+  const selectedCount = selectedProfileIds.size;
+  const filterPills = [
+    ["Country", selection.country_code ?? "All"],
+    ["Provider", selection.provider ?? "All"],
+    ["Tag", selection.tags && selection.tags.length > 0 ? selection.tags.join(", ") : "All"],
+  ];
+
+  return (
+    <div className="animate-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-label="Random proxy assignment"
+        aria-modal="true"
+        className="animate-dialog-in flex max-h-[calc(100vh-24px)] w-[min(760px,calc(100vw-24px))] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-blue-100 bg-blue-50 text-blue-700">
+                <Shuffle className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-slate-950">Random proxy assignment</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Choose profiles and assign a random proxy from the current country, provider, and tag pool.
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="icon-action h-7 w-7"
+            onClick={onClose}
+            disabled={assigning}
+            aria-label="Close random proxy assignment dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="border-b border-slate-200 bg-white px-4 py-3">
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-[999px] border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                  {candidateCount} candidate {candidateCount === 1 ? "proxy" : "proxies"}
+                </span>
+                {filterPills.map(([label, value]) => (
+                  <span
+                    key={label}
+                    className="inline-flex max-w-full items-center gap-1 rounded-[999px] border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600"
+                  >
+                    <span className="text-slate-400">{label}</span>
+                    <span className="truncate text-slate-800" title={value}>{value}</span>
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Search text is for choosing profiles only; proxy candidates come from the selected filters.
+              </p>
+            </div>
+            <span className="rounded-[999px] border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
+              {selectedCount} profiles selected
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-2 border-b border-slate-200 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <label className="min-w-0">
+            <span className="label">Search</span>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                aria-label="Search profiles for random assignment"
+                className="input pl-9"
+                value={searchQuery}
+                onChange={(event) => onSearchQueryChange(event.target.value)}
+                placeholder="Name, id, runtime, current proxy"
+              />
+            </div>
+          </label>
+          <label className="choice-card h-9 items-center px-2.5 py-2 text-xs">
+            <input
+              type="checkbox"
+              className="choice-checkbox m-0"
+              checked={allVisibleSelected}
+              onChange={onToggleVisible}
+              disabled={profiles.length === 0}
+              aria-label="Select all visible random assignment profiles"
+            />
+            Select visible
+          </label>
+        </div>
+
+        {error && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className="min-h-[220px] flex-1 overflow-auto bg-white p-2">
+          {profiles.length === 0 ? (
+            <div
+              role="status"
+              aria-label={totalProfileCount === 0 ? "No profiles available for random assignment" : "No random assignment profiles match search"}
+              className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-500"
+            >
+              {totalProfileCount === 0
+                ? "No profiles are available yet."
+                : "No profiles match this random assignment search."}
+            </div>
+          ) : (
+            <div role="list" aria-label="Random assignment profiles" className="grid gap-1.5">
+              {profiles.map((profile) => (
+                <AssignmentProfileRow
+                  key={profile.id}
+                  profile={profile}
+                  checked={selectedProfileIds.has(profile.id)}
+                  onToggle={() => onToggleProfile(profile.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="text-xs text-slate-500">
+            Each selected profile receives one random matching proxy through the Proxy Manager API.
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary h-8 text-xs"
+              onClick={onClose}
+              disabled={assigning}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={onAssign}
+              disabled={selectedCount === 0 || assigning}
+            >
+              {assigning ? (
+                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Shuffle className="h-3.5 w-3.5" />
+              )}
+              {assigning ? "Assigning" : "Assign random proxy"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1653,6 +1991,27 @@ function uniqueSorted(values: Array<string | null | undefined>): string[] {
 function matchesOptionFilter(value: string | null | undefined, filter: string): boolean {
   if (filter === FILTER_ALL) return true;
   return (value?.trim() ?? "") === filter;
+}
+
+function buildRandomAssignSelection(
+  countryFilter: string,
+  providerFilter: string,
+  tagFilter: string,
+): Omit<ProxyRandomAssignRequestData, "profile_ids"> {
+  const selection: Omit<ProxyRandomAssignRequestData, "profile_ids"> = {};
+  const country = normalizeRequestFilterValue(countryFilter);
+  const provider = normalizeRequestFilterValue(providerFilter);
+  const tag = normalizeRequestFilterValue(tagFilter);
+
+  if (country) selection.country_code = country.toUpperCase();
+  if (provider) selection.provider = provider;
+  if (tag) selection.tags = [tag];
+
+  return selection;
+}
+
+function normalizeRequestFilterValue(value: string): string {
+  return value === FILTER_ALL ? "" : value.trim();
 }
 
 function normalizeFilterValue(value: string | null | undefined): string {

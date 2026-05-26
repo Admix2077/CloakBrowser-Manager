@@ -28,12 +28,12 @@
   - [x] 前端接入/选择（Proxy CSV import preset 默认值）。
   - [x] 后端与国家/标签选择、随机分配策略联动。
   - [ ] 前端完整管理入口。
-- [ ] 支持按国家/标签选择 proxy。
+- [x] 支持按国家/标签选择 proxy。
   - [x] 后端候选过滤 API。
-  - [ ] 前端运营入口。
-- [ ] 支持随机分配策略。
+  - [x] 前端运营入口。
+- [x] 支持随机分配策略。
   - [x] 后端 random assignment API。
-  - [ ] 前端运营入口。
+  - [x] 前端运营入口。
 
 ### 批量创建
 
@@ -757,3 +757,76 @@ cd frontend && npm run build
 - tag match `any` 策略；当前后端为 all-match。
 - 随机分配并发限制和审计。
 - 批量启动/停止/GeoIP/tag/proxy/delete。
+
+## 2026-05-26 Proxy 随机分配前端运营入口小闭环
+
+背景：
+
+- 继续 Module 09 Proxy Template 和批量运营能力。
+- 后端已经具备 `POST /api/proxies/assign/random`，本轮补齐 Proxy Manager 前端入口。
+- 本轮不做 provider preset CRUD 管理页，不修改 runtime，不接 Project Mileage。
+
+已完成：
+
+- [x] `frontend/src/lib/api.ts`
+  - 新增 `ProxyRandomAssignRequestData` / `ProxyRandomAssignResponse` / `ProxyRandomAssignResult`。
+  - 新增 `api.assignRandomProxyToProfiles`，POST `/api/proxies/assign/random`。
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - Proxy Manager toolbar 新增 `Random assign`。
+  - 按当前 Country / Provider / Tag filter 形成后端 selection，内部 sentinel 不会提交给后端。
+  - 新增独立 `Random proxy assignment` 弹窗，选择 profiles 后随机分配匹配 proxy。
+  - 搜索框只用于筛选 profile，不影响 proxy candidate selection，避免与后端契约不一致。
+  - 成功后显示结果、关闭弹窗、清理选择，并调用 `onProfilesAssigned` 刷新 profile 数据。
+  - 错误信息继续通过 `redactUrlCredentials` 脱敏。
+- [x] `frontend/src/lib/api.test.ts`
+  - 覆盖 random assignment API endpoint 与 body shape。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖按 Country / Provider / Tag filter 随机分配给选中 profiles。
+  - 覆盖成功提示、profile refresh、弹窗关闭、凭证不渲染。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/lib/api.test.ts -t "assignRandomProxyToProfiles"
+# 1 passed, 28 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx -t "randomly assigns"
+# 1 passed, 19 skipped
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 20 passed
+
+cd frontend && npm test -- --run src/lib/api.test.ts
+# 29 passed
+
+cd frontend && npm test -- --run
+# 13 passed, 182 passed
+
+cd frontend && npm run build
+# built successfully
+```
+
+浏览器 UI/UE 验证：
+
+- 本地 QA 服务：`http://127.0.0.1:8095/`，进程 `1749057`。
+- 桌面 `1440x960`：
+  - Proxy Manager 选择 `JP` / `ProxyJP` / `mobile`。
+  - 点击 `Random assign` 打开 `Random proxy assignment`。
+  - 弹窗显示 `1 candidate proxy`，选择 2 个 profiles 后提交。
+  - 真实调用 `POST /api/proxies/assign/random`，请求体为 `country_code=JP`、`provider=ProxyJP`、`tags=["mobile"]` 和 2 个 profile ids。
+  - 响应 `200 OK`，显示 `Random assigned proxy to 2 profile(s), 0 failed`。
+- 移动 `390x844`：
+  - `Random assign` 在工具栏内换行可见。
+  - `body.scrollWidth=390`、`documentElement.scrollWidth=390`，页面本体不横向撑破。
+- Playwright MCP console：0 errors、0 warnings。
+- 截图：
+  - `/home/jeff/code/cloakbrowser-random-assign-desktop.png`
+  - `/home/jeff/code/cloakbrowser-random-assign-mobile.png`
+
+未覆盖范围：
+
+- Provider preset 前端 CRUD 管理页。
+- tag match `any` 策略；当前后端为 all-match。
+- 随机分配并发限制和审计。
+- Profile operations 主表里的批量 proxy 设置入口。
+- 批量启动/停止/GeoIP/tag/delete。

@@ -13,6 +13,7 @@ vi.mock("../lib/api", async (importOriginal) => {
       createProxy: vi.fn(),
       bulkCheckProxies: vi.fn(),
       assignProxyToProfiles: vi.fn(),
+      assignRandomProxyToProfiles: vi.fn(),
     },
   };
 });
@@ -22,6 +23,7 @@ const mockListProxyProviderPresets = api.listProxyProviderPresets as ReturnType<
 const mockCreateProxy = api.createProxy as ReturnType<typeof vi.fn>;
 const mockBulkCheckProxies = api.bulkCheckProxies as ReturnType<typeof vi.fn>;
 const mockAssignProxyToProfiles = api.assignProxyToProfiles as ReturnType<typeof vi.fn>;
+const mockAssignRandomProxyToProfiles = api.assignRandomProxyToProfiles as ReturnType<typeof vi.fn>;
 
 function proxy(overrides: Partial<ProxyAsset>): ProxyAsset {
   return {
@@ -96,6 +98,7 @@ beforeEach(() => {
   mockCreateProxy.mockReset();
   mockBulkCheckProxies.mockReset();
   mockAssignProxyToProfiles.mockReset();
+  mockAssignRandomProxyToProfiles.mockReset();
 });
 
 describe("ProxyManagerPage", () => {
@@ -678,6 +681,87 @@ describe("ProxyManagerPage", () => {
     );
     expect(`${document.body.textContent}`).not.toContain("hiddenpass");
     expect(mockAssignProxyToProfiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("randomly assigns proxies from the current country provider and tag filters to checked profiles", async () => {
+    const onProfilesAssigned = vi.fn().mockResolvedValue(undefined);
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-jp-1",
+        name: "JP Mobile A",
+        url: "http://user:hiddenpass@jp-a.proxy.example:8080",
+        country_code: "JP",
+        city: "Tokyo",
+        provider: "ProxyJP",
+        tags: [{ tag: "mobile", color: "#0ea5e9" }],
+      }),
+      proxy({
+        id: "proxy-us-1",
+        name: "US Stable",
+        country_code: "US",
+        provider: "ProxyUS",
+        tags: [{ tag: "stable", color: "#2563eb" }],
+      }),
+    ]);
+    mockAssignRandomProxyToProfiles.mockResolvedValue({
+      strategy: "random",
+      provider_preset_id: null,
+      provider: "ProxyJP",
+      country_code: "JP",
+      tags: ["mobile"],
+      candidate_count: 1,
+      total: 2,
+      succeeded: 2,
+      failed: 0,
+      results: [
+        { profile_id: "alpha", ok: true, error: null, proxy_id: "proxy-jp-1", proxy: null },
+        { profile_id: "beta", ok: true, error: null, proxy_id: "proxy-jp-1", proxy: null },
+      ],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({ id: "alpha", name: "Alpha Good" }),
+        profile({ id: "beta", name: "Beta Broken", status: "running" }),
+      ]}
+      onProfilesAssigned={onProfilesAssigned}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.change(within(page).getByLabelText("Country filter"), { target: { value: "JP" } });
+    fireEvent.change(within(page).getByLabelText("Provider filter"), { target: { value: "ProxyJP" } });
+    fireEvent.change(within(page).getByLabelText("Tag filter"), { target: { value: "mobile" } });
+
+    expect(within(page).getByText("1 of 2 visible")).toBeTruthy();
+    fireEvent.click(within(page).getByRole("button", { name: "Random assign" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Random proxy assignment" });
+    expect(within(dialog).getByText("1 candidate proxy")).toBeTruthy();
+    expect(within(dialog).getByText("JP")).toBeTruthy();
+    expect(within(dialog).getByText("ProxyJP")).toBeTruthy();
+    expect(within(dialog).getByText("mobile")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByLabelText("Assign Beta Broken"));
+    expect(within(dialog).getByText("2 profiles selected")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign random proxy" }));
+
+    await waitFor(() => expect(mockAssignRandomProxyToProfiles).toHaveBeenCalledWith({
+      profile_ids: ["alpha", "beta"],
+      country_code: "JP",
+      provider: "ProxyJP",
+      tags: ["mobile"],
+    }));
+    expect(onProfilesAssigned).toHaveBeenCalledTimes(1);
+    expect(await within(page).findByText("Random assigned proxy to 2 profile(s), 0 failed")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Random proxy assignment" })).toBeNull();
+
+    const renderedEvidence = [
+      page.textContent,
+      ...Array.from(document.body.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+    expect(renderedEvidence).not.toContain("hiddenpass");
+    expect(renderedEvidence).not.toContain("user:");
   });
 
   it("imports valid pasted CSV rows through createProxy and skips invalid rows", async () => {

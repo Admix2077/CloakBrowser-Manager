@@ -277,6 +277,32 @@ export interface ProxyAssignResponse {
   results: ProxyAssignResult[];
 }
 
+export interface ProxyRandomAssignRequestData {
+  profile_ids: string[];
+  provider_preset_id?: string | null;
+  provider?: string | null;
+  country_code?: string | null;
+  tags?: string[];
+}
+
+export interface ProxyRandomAssignResult extends ProxyAssignResult {
+  proxy_id: string | null;
+  proxy: ProxyAsset | null;
+}
+
+export interface ProxyRandomAssignResponse {
+  strategy: "random";
+  provider_preset_id: string | null;
+  provider: string | null;
+  country_code: string | null;
+  tags: string[];
+  candidate_count: number;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: ProxyRandomAssignResult[];
+}
+
 export type ProxyFromProfileCreateData = Omit<ProxyCreateData, "url">;
 
 export interface LaunchResult {
@@ -502,6 +528,12 @@ export const api = {
     request<ProxyAssignResponse>(`/api/proxies/${id}/assign`, {
       method: "POST",
       body: JSON.stringify({ profile_ids: profileIds }),
+    }),
+
+  assignRandomProxyToProfiles: (data: ProxyRandomAssignRequestData) =>
+    request<ProxyRandomAssignResponse>("/api/proxies/assign/random", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 
   saveProfileProxyAsAsset: (profileId: string, data: ProxyFromProfileCreateData) =>
