@@ -431,6 +431,31 @@ POST /api/tasks/{id}/cancel
 - 重复取消已 `cancelled` task 当前返回 `409`；是否改为幂等成功留给后续 API 版本决定。
 - 运行中 task 的中断、补偿和幂等语义留给后续 step runner 小闭环。
 
+### 运行 Task
+
+```http
+POST /api/tasks/{id}/run
+```
+
+当前行为：
+
+- 只允许运行 `queued` task；非 `queued` task 返回 `409`。
+- task 不存在时返回 `404`。
+- profile 不存在时返回 `404 Profile not found`。
+- profile 未运行时返回 `404 Profile not running`。
+- 第一版同步执行，响应返回最终 `AutomationTaskResponse`。
+- 不自动启动 profile，不读取 proxy/cookie/token/secret，不修改 Project Mileage 订单、钱包、权限或续期状态。
+- 状态机：
+  - 成功：`queued -> running -> succeeded`。
+  - 失败：`queued -> running -> failed`。
+- 当前支持的 step：
+  - `wait`：`{"type": "wait", "ms": 1..300000}`，内部执行 `asyncio.sleep(ms / 1000)`。
+- 当前不支持的 step 会让 task 进入 `failed`，并返回 `400`。
+- 当前非法 `wait.ms` 会让 task 进入 `failed`，并返回 `400`。
+- `run` 响应会对 `steps` 做白名单脱敏：只回显 step `type`，并仅对 `wait` 回显安全的 `ms`；未知 step 的其他字段不会出现在 run 响应中。
+- `result.steps[]` 只记录 `index`、`type`、`status`。
+- 当前不实现后台队列、并发限制、失败重试、running cancel、open_url/click/fill/scroll/evaluate/screenshot step。
+
 ## Script Runner 接入建议
 
 第一版 Script Runner 可以直接复用以下 endpoint 作为 step：
@@ -446,6 +471,8 @@ POST /api/tasks/{id}/cancel
 - `screenshot` -> `screenshot`
 
 Script Runner 的 task result/log 不应默认复制 console log、network URL、evaluate result、screenshot 或 clipboard 内容。需要展示时，应按白名单和长度上限返回。
+
+当前 `POST /api/tasks/{id}/run` 已实现第一版 `wait` step。后续接入 page 级 step 时继续复用现有 Automation REST helper，但不得把 `fill.value`、`keyboard_type.text`、`evaluate.expression/result`、screenshot 内容、clipboard 内容、console text、network URL/query/header/body 直接写入 task result/log。
 
 ## 安全边界
 

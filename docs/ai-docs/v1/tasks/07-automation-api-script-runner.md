@@ -51,13 +51,13 @@
 - [x] 新增 `GET /api/tasks/{id}`。
 - [x] 新增 `POST /api/tasks/{id}/cancel`。
 - [ ] 支持第一版 step：
-  - open_url。
-  - wait。
-  - click。
-  - fill。
-  - scroll。
-  - evaluate。
-  - screenshot。
+  - [ ] open_url。
+  - [x] wait。
+  - [ ] click。
+  - [ ] fill。
+  - [ ] scroll。
+  - [ ] evaluate。
+  - [ ] screenshot。
 - [ ] 支持并发限制。
 - [ ] 支持失败重试。
 - [ ] 前端新增 Automation 页面。
@@ -192,6 +192,36 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 73 passed
+```
+
+## 2026-05-27 Automation Script Runner wait step 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/tasks/{id}/run`。
+- 第一版 run endpoint 只执行已创建的 `queued` task，不让 `POST /api/tasks` 隐式执行脚本。
+- 第一版同步执行，响应返回最终 `AutomationTaskResponse`。
+- 已支持 `wait` step：
+  - step 格式：`{"type": "wait", "ms": 1..300000}`。
+  - 执行方式：`asyncio.sleep(ms / 1000)`。
+- 状态机：
+  - 成功：`queued -> running -> succeeded`。
+  - 失败：`queued -> running -> failed`。
+  - 非 `queued` task run 返回 `409`。
+- 执行前要求 profile 已存在且正在运行；profile 不存在返回 `404 Profile not found`，profile 未运行返回 `404 Profile not running`。
+- run 不自动启动 profile，不读取 proxy/cookie/token/secret，不写 Project Mileage 钱包、订单、权限或续期逻辑。
+- 当前 `run` 响应会对 `steps` 做白名单脱敏：只回显 step `type`，并仅对 `wait` 回显安全的 `ms`；未知 step 的其他字段不会出现在 run 响应中。
+- `result.steps[]` 只记录 `index`、`type`、`status`，不复制 console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
+- 当前仍未实现后台队列、并发限制、失败重试、running cancel、open_url/click/fill/scroll/evaluate/screenshot step。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_run_wait_automation_task_marks_succeeded backend/tests/test_api.py::test_run_automation_task_rejects_non_queued_status backend/tests/test_api.py::test_run_automation_task_requires_running_profile backend/tests/test_api.py::test_run_automation_task_fails_unknown_step_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 78 passed
 ```
 
 ## 2026-05-27 Automation wait-for-selector 小闭环

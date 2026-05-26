@@ -1093,6 +1093,90 @@ def test_cancel_running_automation_task_is_rejected(app_client: TestClient):
     assert resp.status_code == 409
 
 
+def test_run_wait_automation_task_marks_succeeded(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunWaitProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == task["id"]
+    assert data["status"] == "succeeded"
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]}
+    assert data["error"] is None
+    assert data["started_at"] is not None
+    assert data["finished_at"] is not None
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_automation_task_rejects_non_queued_status(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunNonQueuedProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    main.db.update_automation_task(task["id"], status="cancelled")
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 409
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_automation_task_requires_running_profile(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunStoppedProfile"})
+    pid = create.json()["id"]
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Profile not running"
+
+
+def test_run_automation_task_fails_unknown_step_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunUnknownProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    secret_value = "token=super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "unknown", "value": secret_value}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["id"] == task["id"]
+    assert data["status"] == "failed"
+    assert data["result"] == {"steps": [{"index": 0, "type": "unknown", "status": "failed"}]}
+    assert data["error"] == "Unsupported automation step type"
+    assert secret_value not in str(data)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_run_automation_task_marks_failed_for_invalid_wait_ms(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunInvalidWaitProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 0}]}).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["id"] == task["id"]
+    assert data["status"] == "failed"
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait", "status": "failed"}]}
+    assert data["error"] == "Invalid wait step"
+    assert data["started_at"] is not None
+    assert data["finished_at"] is not None
+    main.browser_mgr.running.pop(pid, None)
+
+
 def _mock_running_profile(pid: str) -> MagicMock:
     """Create a mock RunningProfile and register it in browser_mgr."""
     mock = MagicMock(spec=RunningProfile)

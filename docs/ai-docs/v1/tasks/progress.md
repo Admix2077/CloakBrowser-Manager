@@ -35,6 +35,17 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Script Runner wait step 小闭环：
+  - 新增 `POST /api/tasks/{id}/run`。
+  - 第一版 run endpoint 只执行已创建的 `queued` task，不让 `POST /api/tasks` 隐式执行脚本。
+  - 第一版同步执行并返回最终 `AutomationTaskResponse`。
+  - 支持 `wait` step，格式为 `{"type": "wait", "ms": 1..300000}`。
+  - 成功状态机：`queued -> running -> succeeded`；失败状态机：`queued -> running -> failed`。
+  - 非 `queued` task run 返回 `409`。
+  - 执行前要求 profile 已存在且正在运行；run 不自动启动 profile，不读取 proxy/cookie/token/secret。
+  - `run` 响应对 `steps` 做白名单脱敏：只回显 step `type`，并仅对 `wait` 回显安全的 `ms`。
+  - `result.steps[]` 只记录 `index`、`type`、`status`，不复制 console log、network URL、evaluate result、screenshot、clipboard、表单值或完整 step payload。
+  - 当前仍未实现后台队列、并发限制、失败重试、running cancel、open_url/click/fill/scroll/evaluate/screenshot step。
 - 本轮继续 07 Automation API 与脚本运行器，完成 task 列表与取消小闭环：
   - 新增 `AutomationTasksResponse`。
   - 新增 `GET /api/tasks`：返回所有已持久化 task，并按 `created_at desc` 让最新 task 在前。

@@ -1465,8 +1465,54 @@ async def get_system_status():
 # ── Automation Tasks ─────────────────────────────────────────────────────────
 
 
-def _automation_task_response(task: dict) -> AutomationTaskResponse:
+def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
+    redacted_steps = []
+    for step in steps:
+        step_type = str(step.get("type", ""))
+        redacted = {"type": step_type}
+        if step_type == "wait" and isinstance(step.get("ms"), int) and not isinstance(step.get("ms"), bool):
+            redacted["ms"] = step["ms"]
+        redacted_steps.append(redacted)
+    return redacted_steps
+
+
+def _automation_task_response(task: dict, *, redact_steps: bool = False) -> AutomationTaskResponse:
+    if redact_steps:
+        task = {**task, "steps": _automation_task_redacted_steps(task.get("steps") or [])}
     return AutomationTaskResponse(**task)
+
+
+def _automation_task_finished_response(
+    task: dict,
+    status_code: int = 200,
+    *,
+    redact_steps: bool = False,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content=jsonable_encoder(_automation_task_response(task, redact_steps=redact_steps)),
+    )
+
+
+def _automation_task_step_result(index: int, step: dict, status: str) -> dict:
+    return {
+        "index": index,
+        "type": str(step.get("type", "")),
+        "status": status,
+    }
+
+
+def _fail_automation_task(task_id: str, step_results: list[dict], error: str) -> dict:
+    failed = db.update_automation_task(
+        task_id,
+        status="failed",
+        result={"steps": step_results},
+        error=error,
+        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    if failed is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    return failed
 
 
 @app.post("/api/tasks", response_model=AutomationTaskResponse, status_code=201)
@@ -1506,6 +1552,54 @@ async def cancel_automation_task(task_id: str):
     if cancelled is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
     return _automation_task_response(cancelled)
+
+
+@app.post("/api/tasks/{task_id}/run", response_model=AutomationTaskResponse)
+async def run_automation_task(task_id: str):
+    task = db.get_automation_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    if task["status"] != "queued":
+        raise HTTPException(status_code=409, detail="Only queued automation tasks can be run")
+    if db.get_profile(task["profile_id"]) is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    _automation_running(task["profile_id"])
+
+    started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    running_task = db.update_automation_task(task_id, status="running", started_at=started_at)
+    if running_task is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+
+    step_results: list[dict] = []
+    for index, step in enumerate(running_task["steps"]):
+        step_type = step.get("type")
+        if step_type != "wait":
+            step_results.append(_automation_task_step_result(index, step, "failed"))
+            failed = _fail_automation_task(
+                task_id,
+                step_results,
+                "Unsupported automation step type",
+            )
+            return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+
+        wait_ms = step.get("ms")
+        if not isinstance(wait_ms, int) or isinstance(wait_ms, bool) or wait_ms < 1 or wait_ms > 300_000:
+            step_results.append(_automation_task_step_result(index, step, "failed"))
+            failed = _fail_automation_task(task_id, step_results, "Invalid wait step")
+            return _automation_task_finished_response(failed, status_code=400, redact_steps=True)
+
+        await asyncio.sleep(wait_ms / 1000)
+        step_results.append(_automation_task_step_result(index, step, "succeeded"))
+
+    finished = db.update_automation_task(
+        task_id,
+        status="succeeded",
+        result={"steps": step_results},
+        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    if finished is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    return _automation_task_response(finished, redact_steps=True)
 
 
 # ── Clipboard Relay ──────────────────────────────────────────────────────────
