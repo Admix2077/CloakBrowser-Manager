@@ -3,6 +3,23 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import App from "./App";
 import type { Profile, ProfileHealthResponse } from "./lib/api";
 
+const mockProxyManagerPage = vi.hoisted(() => vi.fn(({
+  profiles,
+  onProfilesAssigned,
+}: {
+  profiles: Profile[];
+  onProfilesAssigned?: () => void | Promise<void>;
+}) => (
+  <section role="region" aria-label="Proxy Manager">
+    <h2>Proxy Manager</h2>
+    <p>Proxy Manager page</p>
+    <p>Proxy profiles: {profiles.map((profile) => profile.name).join(", ")}</p>
+    <button type="button" onClick={() => void onProfilesAssigned?.()}>
+      Simulate profile assignment refresh
+    </button>
+  </section>
+)));
+
 vi.mock("./lib/api", () => ({
   api: {
     authStatus: vi.fn(),
@@ -37,12 +54,7 @@ vi.mock("./components/ProfileViewer", () => ({
 }));
 
 vi.mock("./components/ProxyManagerPage", () => ({
-  ProxyManagerPage: () => (
-    <section role="region" aria-label="Proxy Manager">
-      <h2>Proxy Manager</h2>
-      <p>Proxy Manager page</p>
-    </section>
-  ),
+  ProxyManagerPage: mockProxyManagerPage,
 }));
 
 import { api } from "./lib/api";
@@ -60,6 +72,7 @@ const mockRemove = vi.fn();
 const mockLaunch = vi.fn();
 const mockStop = vi.fn();
 const mockCheckHealth = vi.fn();
+const mockRefresh = vi.fn();
 const mockLaunchProfiles = vi.fn();
 const mockStopProfiles = vi.fn();
 const mockAddTagsToProfiles = vi.fn();
@@ -138,6 +151,9 @@ beforeEach(() => {
   mockStop.mockResolvedValue(undefined);
   mockCheckHealth.mockReset();
   mockCheckHealth.mockResolvedValue(undefined);
+  mockRefresh.mockReset();
+  mockRefresh.mockResolvedValue(undefined);
+  mockProxyManagerPage.mockClear();
   mockLaunchProfiles.mockReset();
   mockLaunchProfiles.mockResolvedValue(undefined);
   mockStopProfiles.mockReset();
@@ -169,6 +185,7 @@ beforeEach(() => {
     remove: mockRemove,
     launch: mockLaunch,
     stop: mockStop,
+    refresh: mockRefresh,
     checkHealth: mockCheckHealth,
     launchProfiles: mockLaunchProfiles,
     stopProfiles: mockStopProfiles,
@@ -199,6 +216,18 @@ describe("App operations console", () => {
 
     expect(await screen.findByRole("table")).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "New Profile" }).length).toBeGreaterThan(0);
+  });
+
+  it("passes profiles and refresh into the Proxy Manager section for assignment workflows", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Proxy Manager" }));
+
+    expect(screen.getByText("Proxy profiles: Beta Broken, Alpha Good")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Simulate profile assignment refresh" }));
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("keeps profile creation reachable from the operations console", async () => {

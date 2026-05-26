@@ -119,6 +119,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
     healthByProfileId,
     loading,
     error,
+    refresh,
     create,
     update,
     remove,
@@ -422,7 +423,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               <p className="text-xs text-slate-500">
                 {section === "profiles"
                   ? `${consoleStats.total} profiles · ${consoleStats.running} running · ${consoleStats.issues} need review`
-                  : "Proxy inventory · credential-safe URLs · read-only view"}
+                  : "Proxy inventory · credential-safe URLs · assignment controls"}
               </p>
             </div>
             {section === "profiles" && selected && (
@@ -472,7 +473,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
         {/* Content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {section === "proxies" && (
-            <ProxyManagerPage />
+            <ProxyManagerPage profiles={profiles} onProfilesAssigned={refresh} />
           )}
 
           {section === "profiles" && view === "empty" && (

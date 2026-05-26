@@ -1,12 +1,20 @@
-import { Database, Globe2, Network, RefreshCw, Search, X } from "lucide-react";
+import { Database, Globe2, Network, RefreshCw, Search, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
-import { api, type ProxyAsset } from "../lib/api";
+import { api, type Profile, type ProxyAsset } from "../lib/api";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
 const FILTER_ALL = "__all_proxy_filter__";
 
-export function ProxyManagerPage() {
+interface ProxyManagerPageProps {
+  profiles?: Profile[];
+  onProfilesAssigned?: () => Promise<unknown> | unknown;
+}
+
+export function ProxyManagerPage({
+  profiles = [],
+  onProfilesAssigned,
+}: ProxyManagerPageProps = {}) {
   const [proxies, setProxies] = useState<ProxyAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +22,12 @@ export function ProxyManagerPage() {
   const [bulkChecking, setBulkChecking] = useState(false);
   const [bulkCheckNotice, setBulkCheckNotice] = useState<string | null>(null);
   const [bulkCheckError, setBulkCheckError] = useState<string | null>(null);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignSearchQuery, setAssignSearchQuery] = useState("");
+  const [selectedAssignProfileIds, setSelectedAssignProfileIds] = useState<Set<string>>(() => new Set());
+  const [assigning, setAssigning] = useState(false);
+  const [assignNotice, setAssignNotice] = useState<string | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [countryFilter, setCountryFilter] = useState(FILTER_ALL);
   const [providerFilter, setProviderFilter] = useState(FILTER_ALL);
@@ -85,6 +99,9 @@ export function ProxyManagerPage() {
 
   const visibleProxyIds = useMemo(() => filteredProxies.map((proxy) => proxy.id), [filteredProxies]);
   const selectedCount = selectedProxyIds.size;
+  const selectedProxy = selectedCount === 1
+    ? proxies.find((proxy) => selectedProxyIds.has(proxy.id)) ?? null
+    : null;
   const allVisibleSelected = visibleProxyIds.length > 0
     && visibleProxyIds.every((id) => selectedProxyIds.has(id));
 
@@ -138,6 +155,102 @@ export function ProxyManagerPage() {
     }
   }, [bulkChecking, selectedProxyIds]);
 
+  const assignmentProfiles = useMemo(() => {
+    const query = normalizeFilterValue(assignSearchQuery);
+    if (!query) return profiles;
+
+    return profiles.filter((profile) => getAssignmentProfileSearchText(profile).includes(query));
+  }, [assignSearchQuery, profiles]);
+
+  const visibleAssignmentProfileIds = useMemo(
+    () => assignmentProfiles.map((profile) => profile.id),
+    [assignmentProfiles],
+  );
+  const allVisibleAssignmentProfilesSelected = visibleAssignmentProfileIds.length > 0
+    && visibleAssignmentProfileIds.every((id) => selectedAssignProfileIds.has(id));
+
+  useEffect(() => {
+    setSelectedAssignProfileIds((current) => {
+      const profileIds = new Set(profiles.map((profile) => profile.id));
+      const next = new Set([...current].filter((id) => profileIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [profiles]);
+
+  useEffect(() => {
+    if (selectedProxy) return;
+    setAssignDialogOpen(false);
+    setSelectedAssignProfileIds(new Set());
+  }, [selectedProxy]);
+
+  const openAssignDialog = useCallback(() => {
+    if (!selectedProxy || profiles.length === 0) return;
+    setAssignSearchQuery("");
+    setSelectedAssignProfileIds(new Set());
+    setAssignError(null);
+    setAssignDialogOpen(true);
+  }, [profiles.length, selectedProxy]);
+
+  const closeAssignDialog = useCallback(() => {
+    if (assigning) return;
+    setAssignDialogOpen(false);
+    setAssignError(null);
+  }, [assigning]);
+
+  const toggleAssignProfileSelection = useCallback((profileId: string) => {
+    setSelectedAssignProfileIds((current) => {
+      const next = new Set(current);
+      if (next.has(profileId)) {
+        next.delete(profileId);
+      } else {
+        next.add(profileId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleVisibleAssignmentProfiles = useCallback(() => {
+    setSelectedAssignProfileIds((current) => {
+      const next = new Set(current);
+      if (visibleAssignmentProfileIds.length > 0 && visibleAssignmentProfileIds.every((id) => next.has(id))) {
+        visibleAssignmentProfileIds.forEach((id) => next.delete(id));
+      } else {
+        visibleAssignmentProfileIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [visibleAssignmentProfileIds]);
+
+  const assignSelectedProxyToProfiles = useCallback(async () => {
+    if (!selectedProxy || selectedAssignProfileIds.size === 0 || assigning) return;
+
+    setAssigning(true);
+    setAssignError(null);
+    setAssignNotice(null);
+    const profileIds = [...selectedAssignProfileIds];
+
+    try {
+      const response = await api.assignProxyToProfiles(selectedProxy.id, profileIds);
+      const notice = `Assigned proxy to ${response.succeeded} profile(s), ${response.failed} failed`;
+      setAssignNotice(notice);
+      setAssignDialogOpen(false);
+      setSelectedAssignProfileIds(new Set());
+      setAssignSearchQuery("");
+
+      try {
+        await onProfilesAssigned?.();
+      } catch (refreshErr) {
+        const message = refreshErr instanceof Error ? refreshErr.message : "Unable to refresh profile data";
+        setAssignNotice(`${notice}. Refresh failed: ${redactUrlCredentials(message)}`);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to assign proxy";
+      setAssignError(`Assign failed: ${redactUrlCredentials(message)}`);
+    } finally {
+      setAssigning(false);
+    }
+  }, [assigning, onProfilesAssigned, selectedAssignProfileIds, selectedProxy]);
+
   return (
     <section
       role="region"
@@ -153,7 +266,7 @@ export function ProxyManagerPage() {
             <div className="min-w-0">
               <h2 className="text-xl font-semibold tracking-tight text-slate-950">Proxy Manager</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Read-only proxy inventory. Mutation actions will be wired in later closed loops.
+                Proxy inventory with credential-safe checks and profile assignment controls.
               </p>
             </div>
           </div>
@@ -188,7 +301,7 @@ export function ProxyManagerPage() {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              URLs are rendered credential-safe. Add, edit, check, assign, and CSV import remain disabled in this view.
+              URLs are rendered credential-safe. Bulk check and profile assignment are active; add, edit, delete, and CSV import remain disabled.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -201,6 +314,17 @@ export function ProxyManagerPage() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${bulkChecking ? "animate-spin" : ""}`} />
               {bulkChecking ? "Checking" : "Check selected"}
+            </button>
+            <button
+              type="button"
+              className="btn-secondary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={openAssignDialog}
+              disabled={!selectedProxy || profiles.length === 0 || assigning}
+              aria-label="Assign to profiles"
+              title={selectedProxy ? "Assign selected proxy to profiles" : "Select exactly one proxy asset to assign"}
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Assign to profiles
             </button>
             <button
               type="button"
@@ -246,6 +370,12 @@ export function ProxyManagerPage() {
         {bulkCheckError && (
           <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
             {bulkCheckError}
+          </div>
+        )}
+
+        {assignNotice && (
+          <div className="border-b border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700" role="status">
+            {assignNotice}
           </div>
         )}
 
@@ -302,6 +432,23 @@ export function ProxyManagerPage() {
           </div>
         )}
       </div>
+      {assignDialogOpen && selectedProxy && (
+        <ProxyAssignDialog
+          proxy={selectedProxy}
+          profiles={assignmentProfiles}
+          totalProfileCount={profiles.length}
+          searchQuery={assignSearchQuery}
+          selectedProfileIds={selectedAssignProfileIds}
+          allVisibleSelected={allVisibleAssignmentProfilesSelected}
+          assigning={assigning}
+          error={assignError}
+          onSearchQueryChange={setAssignSearchQuery}
+          onToggleProfile={toggleAssignProfileSelection}
+          onToggleVisible={toggleVisibleAssignmentProfiles}
+          onAssign={() => void assignSelectedProxyToProfiles()}
+          onClose={closeAssignDialog}
+        />
+      )}
     </section>
   );
 }
@@ -414,6 +561,216 @@ function FilterSelect({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+function ProxyAssignDialog({
+  proxy,
+  profiles,
+  totalProfileCount,
+  searchQuery,
+  selectedProfileIds,
+  allVisibleSelected,
+  assigning,
+  error,
+  onSearchQueryChange,
+  onToggleProfile,
+  onToggleVisible,
+  onAssign,
+  onClose,
+}: {
+  proxy: ProxyAsset;
+  profiles: Profile[];
+  totalProfileCount: number;
+  searchQuery: string;
+  selectedProfileIds: Set<string>;
+  allVisibleSelected: boolean;
+  assigning: boolean;
+  error: string | null;
+  onSearchQueryChange: (value: string) => void;
+  onToggleProfile: (profileId: string) => void;
+  onToggleVisible: () => void;
+  onAssign: () => void;
+  onClose: () => void;
+}) {
+  const safeProxyUrl = redactUrlCredentials(proxy.url);
+  const selectedCount = selectedProfileIds.size;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-3 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-label="Assign proxy to profiles"
+        aria-modal="true"
+        className="flex max-h-[calc(100vh-24px)] w-[min(760px,calc(100vw-24px))] min-w-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.22),inset_0_1px_0_rgba(255,255,255,0.9)]"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-blue-100 bg-blue-50 text-blue-700">
+                <UserPlus className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-slate-950">Assign proxy to profiles</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Choose profiles that should receive this proxy asset.
+                </p>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="icon-action h-7 w-7"
+            onClick={onClose}
+            disabled={assigning}
+            aria-label="Close assign proxy dialog"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="border-b border-slate-200 bg-white px-4 py-3">
+          <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-slate-950" title={proxy.name}>
+                {proxy.name}
+              </div>
+              <div className="mt-1 truncate font-mono text-[11px] text-slate-500" title={safeProxyUrl}>
+                {safeProxyUrl}
+              </div>
+            </div>
+            <span className="rounded-[999px] border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700">
+              {selectedCount} profiles selected
+            </span>
+          </div>
+        </div>
+
+        <div className="grid gap-2 border-b border-slate-200 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <label className="min-w-0">
+            <span className="label">Search</span>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                aria-label="Search profiles for assignment"
+                className="input pl-9"
+                value={searchQuery}
+                onChange={(event) => onSearchQueryChange(event.target.value)}
+                placeholder="Name, id, runtime, current proxy"
+              />
+            </div>
+          </label>
+          <label className="choice-card h-9 items-center px-2.5 py-2 text-xs">
+            <input
+              type="checkbox"
+              className="choice-checkbox m-0"
+              checked={allVisibleSelected}
+              onChange={onToggleVisible}
+              disabled={profiles.length === 0}
+              aria-label="Select all visible assignment profiles"
+            />
+            Select visible
+          </label>
+        </div>
+
+        {error && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className="min-h-[220px] flex-1 overflow-auto bg-white p-2">
+          {profiles.length === 0 ? (
+            <div
+              role="status"
+              aria-label={totalProfileCount === 0 ? "No profiles available for assignment" : "No assignment profiles match search"}
+              className="flex min-h-[180px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-6 text-center text-sm text-slate-500"
+            >
+              {totalProfileCount === 0
+                ? "No profiles are available yet."
+                : "No profiles match this assignment search."}
+            </div>
+          ) : (
+            <div role="list" aria-label="Assignment profiles" className="grid gap-1.5">
+              {profiles.map((profile) => (
+                <AssignmentProfileRow
+                  key={profile.id}
+                  profile={profile}
+                  checked={selectedProfileIds.has(profile.id)}
+                  onToggle={() => onToggleProfile(profile.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-[#fbfdff] px-4 py-3">
+          <div className="text-xs text-slate-500">
+            Assignment writes through the Proxy Manager API and stores the raw endpoint server-side only.
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary h-8 text-xs"
+              onClick={onClose}
+              disabled={assigning}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-primary inline-flex h-8 items-center gap-1.5 text-xs"
+              onClick={onAssign}
+              disabled={selectedCount === 0 || assigning}
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              {assigning ? "Assigning" : "Assign proxy"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssignmentProfileRow({
+  profile,
+  checked,
+  onToggle,
+}: {
+  profile: Profile;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  const safeProxy = profile.proxy ? redactUrlCredentials(profile.proxy) : "No proxy";
+
+  return (
+    <label className="choice-card items-center gap-2 px-3 py-2">
+      <input
+        type="checkbox"
+        className="choice-checkbox m-0"
+        checked={checked}
+        onChange={onToggle}
+        aria-label={`Assign ${profile.name}`}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-semibold text-slate-900" title={profile.name}>
+            {profile.name}
+          </span>
+          <span className={`rounded-[999px] border px-1.5 py-0.5 text-[10px] font-medium ${
+            profile.status === "running"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-slate-200 bg-slate-50 text-slate-500"
+          }`}>
+            {profile.status}
+          </span>
+        </span>
+        <span className="mt-1 grid min-w-0 gap-1 text-[11px] text-slate-500 sm:grid-cols-[120px_minmax(0,1fr)]">
+          <span className="truncate font-mono" title={profile.id}>{profile.id}</span>
+          <span className="truncate font-mono" title={safeProxy}>{safeProxy}</span>
+        </span>
+      </span>
     </label>
   );
 }
@@ -671,6 +1028,18 @@ function getProxySearchText(proxy: ProxyAsset): string {
     proxy.last_check_source,
     proxy.last_check_error ? redactUrlCredentials(proxy.last_check_error) : null,
     ...proxy.tags.map((tag) => tag.tag),
+  ]
+    .map(normalizeFilterValue)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function getAssignmentProfileSearchText(profile: Profile): string {
+  return [
+    profile.id,
+    profile.name,
+    profile.status,
+    profile.proxy ? redactUrlCredentials(profile.proxy) : "no proxy",
   ]
     .map(normalizeFilterValue)
     .filter(Boolean)

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ProxyManagerPage } from "./ProxyManagerPage";
-import { api, type ProxyAsset } from "../lib/api";
+import { api, type Profile, type ProxyAsset } from "../lib/api";
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -10,12 +10,14 @@ vi.mock("../lib/api", async (importOriginal) => {
     api: {
       listProxies: vi.fn(),
       bulkCheckProxies: vi.fn(),
+      assignProxyToProfiles: vi.fn(),
     },
   };
 });
 
 const mockListProxies = api.listProxies as ReturnType<typeof vi.fn>;
 const mockBulkCheckProxies = api.bulkCheckProxies as ReturnType<typeof vi.fn>;
+const mockAssignProxyToProfiles = api.assignProxyToProfiles as ReturnType<typeof vi.fn>;
 
 function proxy(overrides: Partial<ProxyAsset>): ProxyAsset {
   return {
@@ -42,13 +44,55 @@ function proxy(overrides: Partial<ProxyAsset>): ProxyAsset {
   };
 }
 
+function profile(overrides: Partial<Profile>): Profile {
+  return {
+    id: "profile-1",
+    name: "Alpha Good",
+    fingerprint_seed: 12345,
+    proxy: null,
+    timezone: null,
+    locale: null,
+    platform: "windows",
+    user_agent: null,
+    screen_width: 1920,
+    screen_height: 1080,
+    gpu_vendor: null,
+    gpu_renderer: null,
+    hardware_concurrency: null,
+    humanize: false,
+    human_preset: "default",
+    headless: false,
+    geoip: true,
+    last_geoip_ip: null,
+    last_geoip_country_code: null,
+    last_geoip_timezone: null,
+    last_geoip_locale: null,
+    last_geoip_source: null,
+    last_geoip_resolved_at: null,
+    clipboard_sync: true,
+    auto_launch: false,
+    color_scheme: null,
+    launch_args: [],
+    notes: null,
+    user_data_dir: "/data/profiles/profile-1",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    tags: [],
+    status: "stopped",
+    vnc_ws_port: null,
+    automation_url: null,
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockListProxies.mockReset();
   mockBulkCheckProxies.mockReset();
+  mockAssignProxyToProfiles.mockReset();
 });
 
 describe("ProxyManagerPage", () => {
-  it("renders a read-only proxy asset table with credential-safe endpoint labels", async () => {
+  it("renders a proxy asset table with credential-safe endpoint labels", async () => {
     mockListProxies.mockResolvedValue([
       proxy({
         id: "proxy-1",
@@ -90,7 +134,6 @@ describe("ProxyManagerPage", () => {
     expect(page.textContent).not.toContain("user:");
     expect(page.textContent).not.toContain("secret:");
     expect(within(page).queryByRole("button", { name: /delete/i })).toBeNull();
-    expect(within(page).queryByRole("button", { name: /assign/i })).toBeNull();
   });
 
   it("shows a non-destructive empty state when no proxy assets exist", async () => {
@@ -101,7 +144,7 @@ describe("ProxyManagerPage", () => {
     expect(await screen.findByRole("status", { name: "No proxy assets yet" })).toBeTruthy();
     expect(screen.getByText("Proxy assets created through the API will appear here.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /delete/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /assign/i })).toBeNull();
+    expect((screen.getByRole("button", { name: "Assign to profiles" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("keeps the table scroll isolated for dense proxy lists", async () => {
@@ -357,7 +400,6 @@ describe("ProxyManagerPage", () => {
     expect(`${page.textContent} ${titleText}`).not.toContain("user:");
     expect(`${page.textContent} ${titleText}`).not.toContain("secret:");
     expect(within(page).queryByRole("button", { name: /delete/i })).toBeNull();
-    expect(within(page).queryByRole("button", { name: /assign/i })).toBeNull();
   });
 
   it("selects all visible filtered proxy assets for bulk checking", async () => {
@@ -413,6 +455,219 @@ describe("ProxyManagerPage", () => {
     expect(page.textContent).not.toContain("hiddenpass");
     expect(mockBulkCheckProxies).toHaveBeenCalledTimes(1);
     expect(mockListProxies).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables proxy assignment only when one proxy asset is selected", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "US Stable" }),
+      proxy({ id: "proxy-2", name: "JP Backup", country_code: "JP" }),
+    ]);
+
+    render(<ProxyManagerPage profiles={[
+      profile({ id: "alpha", name: "Alpha Good" }),
+    ]} />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    const assignButton = within(page).getByRole("button", { name: "Assign to profiles" }) as HTMLButtonElement;
+    expect(assignButton.disabled).toBe(true);
+
+    fireEvent.click(within(page).getByLabelText("Select US Stable"));
+    expect(assignButton.disabled).toBe(false);
+
+    fireEvent.click(within(page).getByLabelText("Select JP Backup"));
+    expect(assignButton.disabled).toBe(true);
+  });
+
+  it("assigns the selected proxy to checked profiles and refreshes profile data", async () => {
+    const onProfilesAssigned = vi.fn().mockResolvedValue(undefined);
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-1",
+        name: "Credential Pool",
+        url: "http://user:hiddenpass@proxy.example:8080",
+      }),
+    ]);
+    mockAssignProxyToProfiles.mockResolvedValue({
+      proxy_id: "proxy-1",
+      proxy: proxy({
+        id: "proxy-1",
+        name: "Credential Pool",
+        url: "http://user:hiddenpass@proxy.example:8080",
+      }),
+      total: 2,
+      succeeded: 2,
+      failed: 0,
+      results: [
+        { profile_id: "alpha", ok: true, error: null },
+        { profile_id: "beta", ok: true, error: null },
+      ],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({ id: "alpha", name: "Alpha Good", proxy: "http://old-user:oldpass@old.proxy.example:8080" }),
+        profile({ id: "beta", name: "Beta Broken", status: "running" }),
+      ]}
+      onProfilesAssigned={onProfilesAssigned}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    expect(within(dialog).getByText("Credential Pool")).toBeTruthy();
+    expect(within(dialog).getByText("http://proxy.example:8080")).toBeTruthy();
+    expect(within(dialog).getByText("http://old.proxy.example:8080")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByLabelText("Assign Beta Broken"));
+    expect(within(dialog).getByText("2 profiles selected")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign proxy" }));
+
+    await waitFor(() => expect(mockAssignProxyToProfiles).toHaveBeenCalledWith("proxy-1", ["alpha", "beta"]));
+    expect(onProfilesAssigned).toHaveBeenCalledTimes(1);
+    expect(await within(page).findByText("Assigned proxy to 2 profile(s), 0 failed")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Assign proxy to profiles" })).toBeNull();
+
+    const titleText = Array.from(page.querySelectorAll("[title]"))
+      .map((element) => element.getAttribute("title") ?? "")
+      .join(" ");
+    expect(`${page.textContent} ${titleText}`).not.toContain("hiddenpass");
+    expect(`${page.textContent} ${titleText}`).not.toContain("oldpass");
+    expect(`${page.textContent} ${titleText}`).not.toContain("user:");
+    expect(`${page.textContent} ${titleText}`).not.toContain("old-user:");
+  });
+
+  it("redacts legacy current proxy credentials in the assignment dialog", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "Credential Pool" }),
+    ]);
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({
+          id: "legacy-profile",
+          name: "Legacy Proxy Profile",
+          proxy: "legacy.proxy.example:8080:legacy-user:legacypass",
+        }),
+      ]}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    expect(within(dialog).getByText("legacy.proxy.example:8080")).toBeTruthy();
+
+    const titleText = Array.from(dialog.querySelectorAll("[title]"))
+      .map((element) => element.getAttribute("title") ?? "")
+      .join(" ");
+    expect(`${dialog.textContent} ${titleText}`).not.toContain("legacypass");
+    expect(`${dialog.textContent} ${titleText}`).not.toContain("legacy-user");
+  });
+
+  it("does not turn a successful assignment into an assign failure when refresh fails", async () => {
+    const onProfilesAssigned = vi.fn().mockRejectedValue(new Error("refresh failed"));
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "Credential Pool" }),
+    ]);
+    mockAssignProxyToProfiles.mockResolvedValue({
+      proxy_id: "proxy-1",
+      proxy: proxy({ id: "proxy-1", name: "Credential Pool" }),
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [{ profile_id: "alpha", ok: true, error: null }],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({ id: "alpha", name: "Alpha Good" }),
+      ]}
+      onProfilesAssigned={onProfilesAssigned}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign proxy" }));
+
+    await waitFor(() => expect(mockAssignProxyToProfiles).toHaveBeenCalledWith("proxy-1", ["alpha"]));
+    expect(onProfilesAssigned).toHaveBeenCalledTimes(1);
+    expect(await within(page).findByText("Assigned proxy to 1 profile(s), 0 failed. Refresh failed: refresh failed")).toBeTruthy();
+    expect(screen.queryByRole("dialog", { name: "Assign proxy to profiles" })).toBeNull();
+    expect(page.textContent).not.toContain("Assign failed");
+  });
+
+  it("selects all visible assignment profiles after search", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "US Stable" }),
+    ]);
+    mockAssignProxyToProfiles.mockResolvedValue({
+      proxy_id: "proxy-1",
+      proxy: proxy({ id: "proxy-1", name: "US Stable" }),
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [{ profile_id: "beta", ok: true, error: null }],
+    });
+
+    render(<ProxyManagerPage profiles={[
+      profile({ id: "alpha", name: "Alpha Good" }),
+      profile({ id: "beta", name: "Beta Broken" }),
+    ]} />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select US Stable"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: "beta" },
+    });
+    expect(within(dialog).queryByText("Alpha Good")).toBeNull();
+    expect(within(dialog).getByText("Beta Broken")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByLabelText("Select all visible assignment profiles"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign proxy" }));
+
+    await waitFor(() => expect(mockAssignProxyToProfiles).toHaveBeenCalledWith("proxy-1", ["beta"]));
+  });
+
+  it("shows a credential-safe assign error when proxy assignment fails", async () => {
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-1",
+        name: "Credential Pool",
+        url: "http://user:hiddenpass@proxy.example:8080",
+      }),
+    ]);
+    mockAssignProxyToProfiles.mockRejectedValueOnce(
+      new Error("cannot assign http://user:hiddenpass@proxy.example:8080"),
+    );
+
+    render(<ProxyManagerPage profiles={[
+      profile({ id: "alpha", name: "Alpha Good" }),
+    ]} />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign proxy" }));
+
+    expect((await within(dialog).findByRole("alert")).textContent).toContain(
+      "Assign failed: cannot assign http://proxy.example:8080",
+    );
+    expect(`${document.body.textContent}`).not.toContain("hiddenpass");
+    expect(mockAssignProxyToProfiles).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces a retry action when proxy assets fail to load", async () => {

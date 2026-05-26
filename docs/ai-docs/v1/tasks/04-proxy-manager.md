@@ -41,9 +41,9 @@
   - last_check_*。
 - [x] proxy URL 保存时保留原始配置，但 UI 默认遮蔽用户名密码。
 - [x] 检测时复用 GeoIP resolver。
-- [ ] 支持将 proxy 分配到 profile。
+- [x] 支持将 proxy 分配到 profile。
   - [x] 后端 `POST /api/proxies/{id}/assign` 将 proxy asset 分配给 profiles。
-  - [ ] 前端 Proxy Manager 分配入口。
+  - [x] 前端 Proxy Manager 分配入口。
 - [x] 支持从 profile 当前 proxy 保存为 proxy asset。
 - [x] 前端新增 Proxy Manager 页面。
 - [x] 支持搜索、筛选、批量检测。
@@ -745,3 +745,97 @@ git diff --check
 
 - `/tmp/cloakbrowser-proxy-manager-bulk-check-screens/desktop-bulk-check-results.png`
 - `/tmp/cloakbrowser-proxy-manager-bulk-check-screens/mobile-bulk-check-results.png`
+
+## 2026-05-26 Proxy Manager 前端分配入口小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，在后端 `POST /api/proxies/{id}/assign` 和前端 API client 已完成后，补齐运营台里从 proxy asset 分配到 profiles 的入口。
+- 本小闭环只做“选择一个 proxy asset -> 搜索/勾选 profiles -> 调用 assign API -> 刷新 profile 数据”的闭环，不做单个检测 UI、新建/编辑/删除 proxy UI、CSV 导入或 `profiles.proxy` 到 `proxy_id` 的迁移。
+- 交互边界：只允许选择一个 proxy asset 时进入分配；批量检测仍可多选；profile 列表使用主 App 已加载的 profiles，不额外绕过 Profile 事实源。
+
+已完成：
+
+- [x] `frontend/src/App.tsx`
+  - 将 `useProfiles()` 的 `profiles` 和 `refresh` 传入 `ProxyManagerPage`。
+  - Proxy Manager 顶栏文案从只读库存改为包含 assignment controls，但不改变 Profile 运营台原有创建、编辑、VNC、批量操作语义。
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - 新增 `Assign to profiles` 操作；仅当恰好选择一个 proxy asset 且存在 profiles 时可用。
+  - 新增 `Assign proxy to profiles` dialog，展示当前 proxy asset 的 credential-safe URL。
+  - dialog 支持按 name、id、runtime status、current proxy 搜索 profiles。
+  - 支持单行勾选与 `Select visible`，只对当前搜索结果执行可见批量选择。
+  - 提交时调用 `api.assignProxyToProfiles(selectedProxy.id, profileIds)`，请求体仍由 API client 生成 `{profile_ids}`。
+  - 成功后展示 `Assigned proxy to X profile(s), Y failed`，关闭 dialog，清理临时选择并调用 `onProfilesAssigned()` 刷新 Profile 数据。
+  - 如果 assignment 已成功但 profile refresh 失败，不把写入成功误报为 `Assign failed`，而是保留成功提示并追加脱敏后的 refresh 失败信息。
+  - assignment 错误、当前 proxy URL、profile 当前 proxy、tooltip title 均走 `redactUrlCredentials()`。
+  - `redactUrlCredentials()` 补充兼容旧格式 `host:port:user:pass`，避免 assignment dialog 中 profile 当前 proxy 泄露历史凭据。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖 assignment action 仅在单选 proxy 时启用。
+  - 覆盖选择 profiles 后调用 `assignProxyToProfiles(proxyId, profileIds)` 并触发 profile refresh。
+  - 覆盖搜索后 `Select visible` 只选择当前可见 profiles。
+  - 覆盖 assignment 失败提示不泄露 URL 凭据。
+  - 覆盖旧格式 `host:port:user:pass` 当前 proxy 在正文与 `title` 中都不泄露凭据。
+  - 覆盖 assignment 成功但 refresh 失败时不误报为 assign failure。
+- [x] `frontend/src/App.test.tsx`
+  - 覆盖 App 向 Proxy Manager 传递 profiles 与 refresh callback。
+
+范围说明：
+
+- Proxy Manager 单个检测 UI 未做。
+- 新建 / 编辑 / 删除 proxy UI 未做。
+- CSV 粘贴导入未做。
+- `profiles.proxy` 到 `proxy_id` 的数据模型迁移未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 红灯：2 failed, 14 passed
+# legacy host:port:user:pass 当前 proxy 会泄露；refresh 失败会被误报为 Assign failed
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 passed, 16 passed
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx src/App.test.tsx
+# 2 passed, 34 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 145 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8095/`，由当前 `frontend/dist` 生产 build 服务，隔离数据库 `/tmp/cloakbrowser-user-test-8095/profiles.db`。
+- 桌面 `1440x900`：
+  - 进入 Proxy Manager 后选择 `Credential Pool`，`Assign to profiles` 从 disabled 变为可用。
+  - 打开 assignment dialog，搜索 `gamma` 后只显示 `Gamma Search Target`。
+  - dialog 中历史旧格式 proxy 显示为 `legacy.proxy.example:8080`，不显示 legacy user/pass。
+  - `Select visible` 后执行 `Assign proxy`，成功展示 `Assigned proxy to 1 profile(s), 0 failed`，dialog 关闭。
+  - API 验证 `Gamma Search Target.proxy` 已写入 `http://user:hiddenpass@proxy.example:8080`。
+  - 页面正文和全部 `[title]` 属性无 `hiddenpass`、`topsecret`、`user:`、`secret:`、`legacy-user`、`legacypass`；`document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- 移动 `390x844`：
+  - Proxy Manager 页面 body 未横向撑破：`document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 选择 `Credential Pool` 后打开 assignment dialog，搜索 `beta`、`Select visible`、执行 `Assign proxy` 成功。
+  - 成功后展示 `Assigned proxy to 1 profile(s), 0 failed`，dialog 关闭。
+  - API 验证 `Beta Running Candidate.proxy` 已写入 `http://user:hiddenpass@proxy.example:8080`。
+  - 页面正文和全部 `[title]` 属性无 proxy 凭据泄露。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-assign-final-screens/desktop-proxy-manager-before-assign.png`
+- `/tmp/cloakbrowser-proxy-manager-assign-final-screens/desktop-assign-dialog-search.png`
+- `/tmp/cloakbrowser-proxy-manager-assign-final-screens/desktop-assign-success.png`
+- `/tmp/cloakbrowser-proxy-manager-assign-final-screens/mobile-assign-dialog-search.png`
+- `/tmp/cloakbrowser-proxy-manager-assign-final-screens/mobile-assign-success.png`

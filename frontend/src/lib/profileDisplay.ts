@@ -10,6 +10,7 @@ export function formatProxyLabel(value: string | null | undefined): string {
 }
 
 const URL_PATTERN = /\b(?:https?|socks5):\/\/[^\s"'<>]+/gi;
+const LEGACY_PROXY_PATTERN = /(^|[\s"'(<>])([a-z0-9.-]+:\d{2,5}):[^:\s"'<>]+:[^:\s"'<>]+(?=$|[\s"')<>])/gi;
 
 export function redactUrlCredentials(value: string): string {
   return value.replace(URL_PATTERN, (match) => {
@@ -25,7 +26,7 @@ export function redactUrlCredentials(value: string): string {
         "$1",
       );
     }
-  });
+  }).replace(LEGACY_PROXY_PATTERN, "$1$2");
 }
 
 export function formatTimestamp(value: string | null | undefined): string {
