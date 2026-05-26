@@ -378,7 +378,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-950">Profiles</span>
-                <span className="rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500 shadow-[0_1px_1px_rgba(15,23,42,0.035)]">
+                <span className="rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
                   {consoleStats.visible} shown
                 </span>
               </div>
@@ -387,7 +387,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               </p>
             </div>
             {selected && (
-              <div className="hidden items-center gap-2 rounded-[7px] border border-slate-200 bg-slate-50 px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] md:flex">
+              <div className="hidden items-center gap-2 rounded-[7px] border border-slate-200 bg-slate-50 px-2.5 py-1.5 md:flex">
                 <StatusIndicator status={selected.status} size="md" />
                 <span className="max-w-[220px] truncate text-sm font-medium text-slate-700">{selected.name}</span>
               </div>
@@ -446,7 +446,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   <SummaryTile label="Unavailable" value={consoleStats.unavailable} tone="danger" />
                 </div>
               </section>
-              <section className="rounded-lg border border-slate-200/90 bg-slate-50/75 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.92)] ring-1 ring-slate-900/[0.015]">
+              <section className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                 <ProfileFilters
                   value={filters}
                   options={filterOptions}
@@ -455,7 +455,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 />
               </section>
               <section className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200/90 bg-white shadow-[0_8px_22px_rgba(15,23,42,0.055),0_1px_2px_rgba(15,23,42,0.045)] ring-1 ring-slate-900/[0.018] lg:min-h-0">
+                <div className="min-h-[420px] min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.035)] lg:min-h-0">
                   <ProfileTable
                     profiles={filteredProfiles}
                     healthByProfileId={healthByProfileId}

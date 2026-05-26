@@ -120,3 +120,16 @@ cd frontend && npm run build
 - `globals.css` 增加 form controls font inherit 与 `prefers-reduced-motion: reduce`。
 
 验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感四次 polish 小闭环`。
+
+## 2026-05-26 Profile 运营台控件质感五次降噪 polish
+
+本轮继续根据 Jeff 对 checkbox / bulk action / table row / toolbar / inspector 质感的反馈做小范围降噪 polish：
+
+- 使用 `ui-ux-pro-max` 和只读子 agent 审计，确认当前功能语义已稳，问题主要是阴影、ring、边框和卡片套卡片感偏重。
+- `BulkActionBar` 新增 `Primary bulk action` / `Secondary bulk actions` 可访问分组，保持 `Check health` 作为一级文字动作，其他批量命令保持次级图标动作。
+- `ProfileTable` 的 header、row、card、checkbox、tag chip、Open button 去掉过重 shadow，保留真实 input、半选态、focus ring、状态线和固定行高虚拟滚动。
+- `ProfileFilters` 降低 search/select 控件的 shadow / ring 堆叠。
+- `ProfileSummaryPanel` 改为更平的 inspector section，减少卡片套卡片感。
+- `App` 主区 filter band 和 table panel 继续降噪，保持主区 table + 右侧 inspector 信息架构。
+
+验证记录见 `03-profile-operations-console.md` 的 `2026-05-26 Profile 运营台控件质感五次降噪 polish 小闭环`。

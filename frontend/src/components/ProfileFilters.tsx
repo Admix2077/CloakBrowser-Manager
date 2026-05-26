@@ -41,7 +41,7 @@ export function ProfileFilters({
             placeholder="Search profiles..."
             value={value.search}
             onChange={(event) => update("search", event.target.value)}
-            className="input h-9 rounded-[6px] border-slate-200 bg-white/95 pl-8 text-xs shadow-[0_1px_1px_rgba(15,23,42,0.035),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-slate-900/[0.02] hover:border-slate-300 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
+            className="input h-9 rounded-[6px] border-slate-200 bg-white pl-8 text-xs shadow-none ring-0 hover:border-slate-300 focus:shadow-none"
           />
         </div>
       </div>
@@ -146,7 +146,7 @@ function FilterSelect({ label, visibleLabel, showVisibleLabel, value, options, o
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full rounded-[6px] border border-slate-200 bg-white/95 px-2.5 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.035),inset_0_1px_0_rgba(255,255,255,0.9)] ring-1 ring-slate-900/[0.02] outline-none transition-colors hover:border-slate-300 focus:border-blue-500 focus:shadow-[0_0_0_3px_rgba(37,99,235,0.08)] focus:ring-2 focus:ring-blue-500/15"
+        className="h-9 w-full rounded-[6px] border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
       >
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>

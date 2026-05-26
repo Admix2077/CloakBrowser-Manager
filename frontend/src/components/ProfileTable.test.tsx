@@ -303,6 +303,8 @@ describe("ProfileTable", () => {
     expect(screen.getByRole("toolbar", { name: "Bulk profile actions" }).getAttribute("aria-busy")).toBe("false");
     expect(screen.getByRole("group", { name: "Selected profile summary" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Bulk action commands" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Primary bulk action" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Secondary bulk actions" })).toBeTruthy();
     expect(screen.getByText("2 selected")).toBeTruthy();
     expect(screen.getByText("1 running")).toBeTruthy();
     expect(screen.getByText("1 stopped")).toBeTruthy();

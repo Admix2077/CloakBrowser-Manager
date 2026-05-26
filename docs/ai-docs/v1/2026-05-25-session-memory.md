@@ -2561,3 +2561,93 @@ git diff --check
 - 服务端分页、无限滚动或 Profile 数据架构变更。
 - 04 Proxy Manager 前端页面。
 - ProfileForm 页签、Viewer EnvironmentStrip。
+
+## 38. 2026-05-26 Profile 运营台控件质感五次降噪 polish 小闭环
+
+背景：
+
+- Jeff 继续反馈当前界面质感和细节还不够，尤其是 checkbox、bulk action、table row、toolbar、inspector。
+- 本轮暂停 04 Proxy Manager 前端功能推进，只做 Profile 运营台最小 UI polish。
+- 使用 `ui-ux-pro-max` 确认 data-dense operations console 方向，并派发只读子 agent 审计当前 Profile 运营台和 `/home/jeff/code/reference-repos/saas_kit`。结论：当前功能语义已满足，值得追加一个视觉层降噪小闭环。
+
+已完成：
+
+- `frontend/src/components/BulkActionBar.tsx`
+  - 降低 summary / commands 外层阴影和 ring，保留 sticky `top-0 h-11`。
+  - 新增 `Primary bulk action` / `Secondary bulk actions` 可访问分组，保持 `Check health` 作为一级文字动作。
+  - Launch / Stop / Tag / Delete / Clear 保持次级图标/文字命令；typed delete 和运行态过滤语义不变。
+- `frontend/src/components/ProfileTable.tsx`
+  - table header 改为更平的 white sticky header。
+  - row / card / checkbox / tag chip / Open button 去掉过重 shadow，保留 selected / previewed 状态线。
+  - 未改 `PROFILE_TABLE_ROW_HEIGHT = 64`、`PROFILE_CARD_ROW_HEIGHT = 188`、120 条虚拟滚动阈值、`min-w-[840px]` 桌面表格契约。
+- `frontend/src/components/ProfileFilters.tsx`
+  - search / select 控件减少 shadow / ring 堆叠，保留 `role="toolbar"`。
+- `frontend/src/components/ProfileSummaryPanel.tsx`
+  - inspector header、section icon、warning block、空态面板降噪，减少卡片套卡片感。
+- `frontend/src/App.tsx`
+  - top pill、filter band、table panel 降噪，保持主区表格 + 右侧 inspector。
+- `frontend/src/components/ProfileTable.test.tsx`
+  - TDD 新增 bulk toolbar primary/secondary 分组测试；先确认红灯后实现。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx
+# 1 failed, 35 passed
+# 红灯：缺少 Primary bulk action / Secondary bulk actions 分组
+
+cd frontend && npm test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileFilters.test.tsx src/App.test.tsx
+# 4 passed, 59 passed
+
+cd frontend && npm test -- --run
+# 11 passed, 122 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器验证：
+
+- `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8080/`，QA 数据 162 个 profiles。
+- 桌面 `1440x900`：
+  - dense table 可见，`Actions` / `Open` 首屏可见。
+  - bulk toolbar 显示 `Check health` 一级动作；Escape 可清空 selection。
+  - 主表滚动到中段后 table region 内早期 row 离开 DOM，可见 `Polish QA Profile 120`，窗口内 `Open` 按钮约 26 个。
+- 移动 `390x844`：
+  - card list 可见，desktop table 不渲染。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 首屏约 20 张 card，选择首张后 bulk toolbar 和 card selection toolbar 可见。
+  - 点击 `Check health` 后 `Last checked` 更新时间，selection 保留。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-ui-polish-v6-screens/desktop-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v6-screens/desktop-bulk-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v6-screens/desktop-virtual-scroll.png`
+- `/tmp/cloakbrowser-ui-polish-v6-screens/mobile-profile-ops.png`
+- `/tmp/cloakbrowser-ui-polish-v6-screens/mobile-card-selected.png`
+- `/tmp/cloakbrowser-ui-polish-v6-screens/mobile-check-health.png`
+
+仍未做：
+
+- 04 Proxy Manager 前端页面未推进。
+- 服务端分页 / 无限滚动未做；当前继续以固定行高虚拟滚动覆盖数百 profile。
+- ProfileForm 页签和 Viewer EnvironmentStrip 未改。
+
+注意：
+
+- 本轮开始前曾将无关的 Proxy Manager API client 红灯测试暂存到 stash：
+
+```bash
+stash@{0}: wip proxy manager api tests before profile ui polish
+```
+
+后续继续 04 Proxy Manager 前端小闭环时，需要先恢复该 stash 或重新写对应测试。
