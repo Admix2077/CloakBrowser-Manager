@@ -31,6 +31,27 @@
 - [ ] 12 部署、观测与资源治理：`12-deployment-observability.md`
 - [ ] 13 总回归、交付与上线门禁：`13-regression-release.md`
 
+## 当前接力状态（2026-05-27）
+
+最新已提交小闭环：
+
+- `087097a add proxy provider preset manager` 是本轮开始前最新 commit。
+- 本轮完成 05 的 CloakBrowser 侧最小 runtime session API，待提交本地 commit：
+  - `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token`。
+  - `runtime_sessions` 表和最小 CRUD。
+  - `POST /api/runtime/sessions`。
+  - `GET /api/runtime/sessions/{id}`。
+  - 从 profile 创建 runtime session。
+  - 从 template 创建 runtime session 并复制 template 指纹字段。
+  - runtime response 不包含 wallet/order/billing 字段，也不暴露内部 `viewer_token_hash`。
+- 05 模块整体仍保持未完成；不要勾选顶层 05。
+
+下一步建议：
+
+1. 继续 05 时优先做 viewer token 小闭环。
+2. 随后再做 terminate、renew、runtime audit。
+3. Project Mileage 跨仓联动仍需 Payload 侧授权、扣费、续期契约确认后再进入。
+
 ## 推荐执行顺序
 
 第一阶段：CloakBrowser 独立成熟化。

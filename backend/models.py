@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TagCreate(BaseModel):
@@ -412,6 +412,29 @@ class LaunchResponse(BaseModel):
     vnc_ws_port: int
     display: str
     automation_url: str | None = None
+
+
+class RuntimeSessionCreate(BaseModel):
+    external_session_id: str = Field(min_length=1)
+    profile_id: str | None = None
+    template_id: str | None = None
+    lease_seconds: int = Field(ge=1, le=86_400)
+
+    @model_validator(mode="after")
+    def validate_profile_source(self):
+        if bool(self.profile_id) == bool(self.template_id):
+            raise ValueError("Provide exactly one of profile_id or template_id")
+        return self
+
+
+class RuntimeSessionResponse(BaseModel):
+    id: str
+    profile_id: str
+    external_session_id: str
+    status: str
+    lease_expires_at: str
+    created_at: str
+    updated_at: str
 
 
 class StatusResponse(BaseModel):

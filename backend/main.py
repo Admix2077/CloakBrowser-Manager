@@ -76,6 +76,8 @@ from .models import (
     ProfileTemplateResponse,
     ProfileTemplateUpdate,
     ProfileUpdate,
+    RuntimeSessionCreate,
+    RuntimeSessionResponse,
     StatusResponse,
     TagResponse,
 )
@@ -100,6 +102,7 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 # If not set, all routes are open (local dev). If set, all /api/* routes
 # (except /api/auth/* and /api/status) require Bearer token or cookie.
 AUTH_TOKEN: str | None = os.environ.get("AUTH_TOKEN") or None
+RUNTIME_SERVICE_TOKEN: str | None = os.environ.get("RUNTIME_SERVICE_TOKEN") or None
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
@@ -205,8 +208,8 @@ class AuthMiddleware:
 
         path = scope["path"]
 
-        # Skip auth for exempt endpoints and non-API paths (static frontend)
-        if path in _AUTH_EXEMPT or not path.startswith("/api/"):
+        # Skip auth for exempt endpoints, runtime service endpoints, and non-API paths.
+        if path in _AUTH_EXEMPT or path.startswith("/api/runtime/") or not path.startswith("/api/"):
             await self.app(scope, receive, send)
             return
 
@@ -562,6 +565,21 @@ def _template_response(template: dict) -> ProfileTemplateResponse:
     return ProfileTemplateResponse(**template)
 
 
+def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
+    return RuntimeSessionResponse(**session)
+
+
+def _runtime_service_token_from_request(request: Request) -> str | None:
+    token = request.headers.get("X-Runtime-Service-Token")
+    return token or None
+
+
+def _require_runtime_service_token(request: Request) -> None:
+    token = _runtime_service_token_from_request(request)
+    if not RUNTIME_SERVICE_TOKEN or not token or not hmac.compare_digest(token, RUNTIME_SERVICE_TOKEN):
+        raise HTTPException(status_code=401, detail="Runtime service token required")
+
+
 def _safe_proxy_check_error(exc: Exception, raw_url: str) -> str:
     redacted_url = redact_proxy_asset_url(raw_url)
     message = str(exc).replace(raw_url, redacted_url)
@@ -870,6 +888,63 @@ async def delete_profile_template(template_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Profile template not found")
     return {"ok": True}
+
+
+@app.post("/api/runtime/sessions", response_model=RuntimeSessionResponse, status_code=201)
+async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
+    _require_runtime_service_token(request)
+
+    profile = None
+    if req.profile_id:
+        profile = db.get_profile(req.profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Profile not found")
+    else:
+        template = db.get_profile_template(req.template_id or "")
+        if not template:
+            raise HTTPException(status_code=404, detail="Profile template not found")
+        profile = db.create_profile(
+            name=f"Runtime {req.external_session_id}",
+            platform=template.get("platform", "windows"),
+            screen_width=template.get("screen_width", 1920),
+            screen_height=template.get("screen_height", 1080),
+            gpu_vendor=template.get("gpu_vendor"),
+            gpu_renderer=template.get("gpu_renderer"),
+            hardware_concurrency=template.get("hardware_concurrency"),
+            color_scheme=template.get("color_scheme"),
+            humanize=template.get("humanize", False),
+            human_preset=template.get("human_preset", "default"),
+            launch_args=template.get("launch_args") or [],
+            geoip=template.get("geoip", True),
+        )
+
+    profile_id = str(profile["id"])
+    if profile_id not in browser_mgr.running:
+        try:
+            running = await browser_mgr.launch(profile)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            logger.error("Failed to launch runtime session profile %s: %s", profile_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to launch browser") from exc
+        db.update_profile_geoip_result(profile_id, getattr(running, "resolved_geoip", None))
+
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id=req.external_session_id,
+        lease_seconds=req.lease_seconds,
+        status="active",
+    )
+    return _runtime_session_response(session)
+
+
+@app.get("/api/runtime/sessions/{session_id}", response_model=RuntimeSessionResponse)
+async def get_runtime_session(session_id: str, request: Request):
+    _require_runtime_service_token(request)
+    session = db.get_runtime_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Runtime session not found")
+    return _runtime_session_response(session)
 
 
 @app.post("/api/proxies/{proxy_id}/check", response_model=ProxyResponse)

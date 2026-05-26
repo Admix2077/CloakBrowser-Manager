@@ -4,6 +4,40 @@
 
 新开 Codex session 后，可以把下面这段作为 `/goal` 的目标说明。
 
+当前接力版本：2026-05-27。
+
+最新已提交 CloakBrowser commit：
+
+```text
+087097a add proxy provider preset manager
+```
+
+当前 05 已完成最小 runtime session API 小闭环，涉及文件：
+
+```text
+backend/database.py
+backend/main.py
+backend/models.py
+backend/tests/test_session_broker.py
+docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md
+docs/ai-docs/v1/2026-05-25-session-memory.md
+docs/ai-docs/v1/goal-prompt.md
+docs/ai-docs/v1/tasks/05-session-broker-project-mileage.md
+docs/ai-docs/v1/tasks/progress.md
+```
+
+`backend/tests/test_session_broker.py` 已覆盖并通过：
+
+- `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token`。
+- `runtime_sessions` 表和最小 CRUD。
+- `POST /api/runtime/sessions`。
+- `GET /api/runtime/sessions/{id}`。
+- 从 profile 创建 runtime session。
+- 从 template 创建 runtime session。
+- runtime response 不包含 wallet/order/billing 字段，也不暴露 `viewer_token_hash`。
+
+05 模块整体仍未完成，`tasks/progress.md` 顶层 05 不要勾选；viewer token、terminate、renew、audit、Payload 授权扣费联动仍待后续小闭环。
+
 ## Goal
 
 请自主推进 `/home/jeff/code/cloakbrowser-invisible-manager/docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md` 中定义的 CloakBrowser Invisible Manager V1 产品目标。
@@ -46,3 +80,22 @@
 6. 模板、批量创建与批量运营。
 
 Project Mileage 远程工作台联动必须等契约边界明确后再进入跨仓实现。
+
+## 当前接力点
+
+新会话启动后先执行：
+
+```bash
+cd /home/jeff/code/cloakbrowser-invisible-manager
+git status --short --branch
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+```
+
+`test_session_broker.py` 当前应通过。随后继续按 TDD 推进 05 的后续小闭环：
+
+1. `POST /api/runtime/sessions/{id}/viewer-token`。
+2. `POST /api/runtime/sessions/{id}/terminate`。
+3. `POST /api/runtime/sessions/{id}/renew`。
+4. runtime audit。
+
+后续小闭环不要改 Project Mileage app/payload，不要实现钱包、订单、用户权限判断，不要 push。

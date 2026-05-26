@@ -21,13 +21,13 @@ feature/invisible-playwright-engine
 当前最新关键提交：
 
 ```text
-aa84726 fix: sync geoip language timezone fingerprints
+087097a add proxy provider preset manager
 ```
 
-当前本地服务曾部署到：
+当前本地 QA 服务：
 
 ```text
-http://100.104.13.11:8080/
+http://127.0.0.1:8095/
 ```
 
 Docker 容器名：
@@ -45,9 +45,10 @@ invisible-browser-manager:latest
 最近验证时服务状态：
 
 - `/api/status` 可访问。
-- 当前 profile 总数为 1。
-- profile 名称/标识为 `1`。
-- profile 运行中。
+- `running_count=0`。
+- `binary_version=invisible-playwright`。
+- `profiles_total=6`。
+- 05 已完成 CloakBrowser 侧最小 runtime session API，详见文末最新接力记录。
 
 ## 2. 已完成的重要改造
 
@@ -5000,3 +5001,170 @@ git diff --check
 - 没有修改 Firefox/invisible_playwright runtime。
 - 没有修改 Project Mileage 仓库。
 - 没有 push 到任何远端仓库。
+
+## 68. 2026-05-26 会话切换前接力记录
+
+本节是 2026-05-26 的历史接力状态，已被 2026-05-27 第 69 节接续；其中“未提交/尚未运行/生产代码尚未实现”仅描述当时状态。
+
+背景：
+
+- 用户要求当前会话停止继续功能实现，先完整更新交接文档，并在 `/home/jeff/code` 根目录生成下一会话可直接发送的 goal prompt。
+- 当前 API 端点即将欠费，需要保留上下文，避免新会话丢失进度。
+
+最新已完成并提交：
+
+- Commit：`087097a add proxy provider preset manager`
+- 完成 Module 09 的 `Proxy Provider Preset 前端完整管理入口` 小闭环。
+- CloakBrowser 工作树在该提交后曾为干净状态。
+- 不 push。
+
+当时未提交工作：
+
+- 新增文件：`backend/tests/test_session_broker.py`
+- 这是 05 Session Broker 的 TDD 红灯测试草稿。
+- 测试尚未运行。
+- 生产代码尚未实现。
+- 05 仍未完成，相关 checkbox 未勾选。
+
+文档自查范围：
+
+- 已更新 `docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md`：
+  - 当前关键提交更新到 `087097a`。
+  - 增加 05 红灯测试草稿接力状态。
+  - 更新最近验证基线说明。
+- 已更新 `docs/ai-docs/v1/tasks/progress.md`：
+  - 增加当前接力状态和下一步建议。
+  - 05 仍保持未完成。
+- 已更新 `docs/ai-docs/v1/tasks/05-session-broker-project-mileage.md`：
+  - 增加 05 红灯测试草稿、边界和下一步。
+  - 所有 checkbox 仍保持未完成。
+- 已更新 `docs/ai-docs/v1/goal-prompt.md`：
+  - 增加当前接力版本、未提交文件和下一步命令。
+- 已更新 `docs/ai-docs/v1/2026-05-25-session-memory.md`：
+  - 顶部当前服务/提交信息更新。
+  - 文末追加本接力记录。
+- 已创建仓库外根目录提示词：
+  - `/home/jeff/code/CLOAKBROWSER_NEXT_GOAL_PROMPT.md`
+- 已检查但未修改：
+  - `proposal.md`
+  - `high-level-design.md`
+  - `detailed-design.md`
+  - 其他已完成模块任务文档。它们是需求/历史完成记录，当前 05 接力不改变其事实。
+
+当时红灯测试草稿意图：
+
+- `RUNTIME_SERVICE_TOKEN` 使用 `X-Runtime-Service-Token` header。
+- 无 runtime service token 不能创建 session。
+- `POST /api/runtime/sessions`：
+  - 输入 `external_session_id`。
+  - 输入 `profile_id` 或 `template_id`。
+  - 输入 `lease_seconds`。
+  - 返回 runtime session id、profile id、lease expires、status。
+- `GET /api/runtime/sessions/{id}` 返回已创建 session。
+- 如果 profile 未运行，创建 session 时调用 `browser_mgr.launch(profile)`。
+- template 创建路径会先创建 profile，再启动 profile。
+- response 不包含 `wallet`、`order`、`billing` 字段。
+
+只读子 agent 审计结论：
+
+- 建议新增 `RUNTIME_SERVICE_TOKEN = os.environ.get("RUNTIME_SERVICE_TOKEN") or None`，不要复用 UI `AUTH_TOKEN`。
+- Header 建议 `X-Runtime-Service-Token`，避免和 `Authorization: Bearer <AUTH_TOKEN>` 混淆。
+- 如果 `AUTH_TOKEN` 启用，`AuthMiddleware` 需要允许 `/api/runtime/*` 交给 runtime service token 自己鉴权，否则 service token 请求会被 UI auth 先拦截。
+- `runtime_sessions` 表字段按 05 文档：
+  - `id`
+  - `profile_id`
+  - `external_session_id`
+  - `status`
+  - `lease_expires_at`
+  - `viewer_token_hash`
+  - `created_at`
+  - `updated_at`
+- 建议沿用 `database.py` 的 `get_db()`、`init_db()`、`_now()`、`uuid.uuid4()` 风格。
+
+当时下一会话建议第一步：
+
+```bash
+cd /home/jeff/code/cloakbrowser-invisible-manager
+git status --short --branch
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+```
+
+当时预期：
+
+- `git status` 会看到 `backend/tests/test_session_broker.py` 以及文档/根目录 goal prompt 交接改动。
+- pytest 预期红灯，因为 runtime session API 尚未实现。
+
+当时实现边界：
+
+- 只做 CloakBrowser 侧最小 runtime session API。
+- 不改 Project Mileage app/payload。
+- 不做钱包、订单、用户权限判断。
+- 不让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。
+- viewer token、terminate、renew、audit、Payload 授权扣费联动留给后续小闭环。
+
+## 69. 2026-05-27 CloakBrowser 侧最小 runtime session API 小闭环
+
+背景：
+
+- 用户要求完成 05 的当前小闭环后更新 session memory、运行后端验证和 `git diff --check`，提交 CloakBrowser 仓库 commit，但不要 push。
+- 明确要求“全完则不要勾选 05”：本轮只完成 05 的最小 runtime session API，不代表 viewer token、terminate、renew、audit 和 Payload 联动完成，因此 `tasks/progress.md` 顶层 05 保持未勾选。
+
+已完成：
+
+- 保留并运行 `backend/tests/test_session_broker.py`，确认初始红灯：
+  - `/api/runtime/sessions` 返回 `405`。
+  - 4 个测试失败。
+- `backend/models.py`
+  - 新增 `RuntimeSessionCreate`。
+  - 新增 `RuntimeSessionResponse`。
+  - 校验 `profile_id` 与 `template_id` 必须且只能提供一个。
+  - Runtime session API 响应不暴露内部 `viewer_token_hash`。
+- `backend/database.py`
+  - 新增 `runtime_sessions` 表。
+  - 新增 `create_runtime_session()`。
+  - 新增 `get_runtime_session()`。
+- `backend/main.py`
+  - 新增 `RUNTIME_SERVICE_TOKEN`。
+  - `AuthMiddleware` 对 `/api/runtime/*` 放行到 runtime service token 自身鉴权，避免 UI `AUTH_TOKEN` 抢先拦截。
+  - 新增 `POST /api/runtime/sessions`。
+  - 新增 `GET /api/runtime/sessions/{session_id}`。
+  - 从 `template_id` 创建 runtime profile 时复制 template 指纹字段，并命名为 `Runtime <external_session_id>`。
+  - 创建 runtime session 时如果 profile 未运行，会调用 `browser_mgr.launch(profile)`。
+- `docs/ai-docs/v1/tasks/05-session-broker-project-mileage.md`
+  - 勾选已实际完成的 service token、`POST`、`GET`、runtime session 表、创建时启动 profile、无 service token 拒绝、Runtime session 不包含钱包逻辑。
+  - 追加本轮验证记录。
+- `docs/ai-docs/v1/tasks/progress.md`
+  - 记录 05 最小 runtime session API 已完成。
+  - 顶层 `05 Project Mileage 会话 Broker` 仍保持未勾选。
+- `docs/ai-docs/v1/2026-05-25-fingerprint-health-ops-plan.md`
+  - 更新当前接力状态，移除过期“红灯未实现”描述。
+- `docs/ai-docs/v1/goal-prompt.md`
+  - 更新为 2026-05-27 接力状态。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 262 passed
+
+git diff --check
+# passed
+```
+
+仍未完成：
+
+- `POST /api/runtime/sessions/{id}/viewer-token`。
+- `POST /api/runtime/sessions/{id}/terminate`。
+- `POST /api/runtime/sessions/{id}/renew`。
+- runtime audit。
+- viewer token 到期、session 终止后的 VNC 访问失效。
+- Project Mileage Payload 侧授权、扣费、续期后调用 runtime API。
+
+边界：
+
+- 没有修改 Project Mileage app/payload。
+- 没有把钱包、订单、用户权限判断写入 CloakBrowser。
+- 没有让 Project Mileage 前端绕过 Payload 直接访问 CloakBrowser runtime service API。

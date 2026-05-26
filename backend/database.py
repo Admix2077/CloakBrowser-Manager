@@ -123,6 +123,17 @@ def init_db():
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS runtime_sessions (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+                external_session_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                lease_expires_at TEXT NOT NULL,
+                viewer_token_hash TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
         """)
         conn.commit()
 
@@ -446,6 +457,52 @@ def delete_profile_template(template_id: str) -> bool:
         cursor = conn.execute("DELETE FROM profile_templates WHERE id = ?", (template_id,))
         conn.commit()
         return cursor.rowcount > 0
+
+
+def create_runtime_session(
+    *,
+    profile_id: str,
+    external_session_id: str,
+    lease_seconds: int,
+    status: str = "active",
+    viewer_token_hash: str | None = None,
+) -> dict[str, Any]:
+    session_id = str(uuid.uuid4())
+    now = _now()
+    lease_expires_at = (
+        datetime.datetime.now(datetime.timezone.utc)
+        + datetime.timedelta(seconds=lease_seconds)
+    ).isoformat()
+
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO runtime_sessions (
+                id, profile_id, external_session_id, status, lease_expires_at,
+                viewer_token_hash, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                session_id,
+                profile_id,
+                external_session_id,
+                status,
+                lease_expires_at,
+                viewer_token_hash,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+
+    return get_runtime_session(session_id)  # type: ignore[return-value]
+
+
+def get_runtime_session(session_id: str) -> dict[str, Any] | None:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM runtime_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def _proxy_from_row(row: sqlite3.Row) -> dict[str, Any]:
