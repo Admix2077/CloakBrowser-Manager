@@ -1,14 +1,20 @@
-import { Database, Globe2, Network, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Database, Globe2, Network, RefreshCw, Search, X } from "lucide-react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api, type ProxyAsset } from "../lib/api";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
+const FILTER_ALL = "__all_proxy_filter__";
 
 export function ProxyManagerPage() {
   const [proxies, setProxies] = useState<ProxyAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [countryFilter, setCountryFilter] = useState(FILTER_ALL);
+  const [providerFilter, setProviderFilter] = useState(FILTER_ALL);
+  const [tagFilter, setTagFilter] = useState(FILTER_ALL);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const loadProxies = useCallback(async () => {
     setLoading(true);
@@ -36,6 +42,37 @@ export function ProxyManagerPage() {
 
     return { total: proxies.length, good, needsReview, unchecked };
   }, [proxies]);
+
+  const filterOptions = useMemo(() => ({
+    countries: uniqueSorted(proxies.map((proxy) => proxy.country_code)),
+    providers: uniqueSorted(proxies.map((proxy) => proxy.provider)),
+    tags: uniqueSorted(proxies.flatMap((proxy) => proxy.tags.map((tag) => tag.tag))),
+  }), [proxies]);
+
+  const filteredProxies = useMemo(() => {
+    const query = normalizeFilterValue(deferredSearchQuery);
+
+    return proxies.filter((proxy) => {
+      if (!matchesOptionFilter(proxy.country_code, countryFilter)) return false;
+      if (!matchesOptionFilter(proxy.provider, providerFilter)) return false;
+      if (tagFilter !== FILTER_ALL && !proxy.tags.some((tag) => matchesOptionFilter(tag.tag, tagFilter))) return false;
+      if (!query) return true;
+
+      return getProxySearchText(proxy).includes(query);
+    });
+  }, [countryFilter, deferredSearchQuery, providerFilter, proxies, tagFilter]);
+
+  const hasActiveFilters = Boolean(searchQuery.trim())
+    || countryFilter !== FILTER_ALL
+    || providerFilter !== FILTER_ALL
+    || tagFilter !== FILTER_ALL;
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setCountryFilter(FILTER_ALL);
+    setProviderFilter(FILTER_ALL);
+    setTagFilter(FILTER_ALL);
+  }, []);
 
   return (
     <section
@@ -79,6 +116,9 @@ export function ProxyManagerPage() {
               <span className="rounded-[999px] border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
                 {stats.needsReview} needs review
               </span>
+              <span className="rounded-[999px] border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                {filteredProxies.length} of {stats.total} visible
+              </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
               URLs are rendered credential-safe. Add, edit, check, assign, and CSV import remain disabled in this view.
@@ -96,6 +136,22 @@ export function ProxyManagerPage() {
           </button>
         </div>
 
+        <ProxyFilterBar
+          searchQuery={searchQuery}
+          countryFilter={countryFilter}
+          providerFilter={providerFilter}
+          tagFilter={tagFilter}
+          countries={filterOptions.countries}
+          providers={filterOptions.providers}
+          tags={filterOptions.tags}
+          hasActiveFilters={hasActiveFilters}
+          onSearchQueryChange={setSearchQuery}
+          onCountryFilterChange={setCountryFilter}
+          onProviderFilterChange={setProviderFilter}
+          onTagFilterChange={setTagFilter}
+          onClearFilters={clearFilters}
+        />
+
         {error && (
           <div className="border-b border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
             {error}
@@ -108,6 +164,8 @@ export function ProxyManagerPage() {
           </div>
         ) : proxies.length === 0 ? (
           <ProxyEmptyState />
+        ) : filteredProxies.length === 0 ? (
+          <ProxyFilterEmptyState onClear={clearFilters} />
         ) : (
           <div
             role="region"
@@ -129,7 +187,7 @@ export function ProxyManagerPage() {
                 </tr>
               </thead>
               <tbody>
-                {proxies.map((proxy) => (
+                {filteredProxies.map((proxy) => (
                   <ProxyRow key={proxy.id} proxy={proxy} />
                 ))}
               </tbody>
@@ -141,8 +199,124 @@ export function ProxyManagerPage() {
   );
 }
 
+function ProxyFilterBar({
+  searchQuery,
+  countryFilter,
+  providerFilter,
+  tagFilter,
+  countries,
+  providers,
+  tags,
+  hasActiveFilters,
+  onSearchQueryChange,
+  onCountryFilterChange,
+  onProviderFilterChange,
+  onTagFilterChange,
+  onClearFilters,
+}: {
+  searchQuery: string;
+  countryFilter: string;
+  providerFilter: string;
+  tagFilter: string;
+  countries: string[];
+  providers: string[];
+  tags: string[];
+  hasActiveFilters: boolean;
+  onSearchQueryChange: (value: string) => void;
+  onCountryFilterChange: (value: string) => void;
+  onProviderFilterChange: (value: string) => void;
+  onTagFilterChange: (value: string) => void;
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="grid gap-2 border-b border-slate-200 bg-white px-3 py-3 lg:grid-cols-[minmax(220px,1fr)_repeat(3,minmax(140px,180px))_auto] lg:items-end">
+      <label className="min-w-0">
+        <span className="label">Search</span>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            aria-label="Search proxy assets"
+            className="input pl-9"
+            value={searchQuery}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            placeholder="Name, endpoint, provider, country, tag"
+          />
+        </div>
+      </label>
+      <FilterSelect
+        label="Country"
+        ariaLabel="Country filter"
+        value={countryFilter}
+        options={countries}
+        onChange={onCountryFilterChange}
+      />
+      <FilterSelect
+        label="Provider"
+        ariaLabel="Provider filter"
+        value={providerFilter}
+        options={providers}
+        onChange={onProviderFilterChange}
+      />
+      <FilterSelect
+        label="Tag"
+        ariaLabel="Tag filter"
+        value={tagFilter}
+        options={tags}
+        onChange={onTagFilterChange}
+      />
+      <button
+        type="button"
+        className="btn-secondary inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap text-xs"
+        onClick={onClearFilters}
+        disabled={!hasActiveFilters}
+        aria-label="Clear visible proxy filters"
+      >
+        <X className="h-3.5 w-3.5" />
+        Clear
+      </button>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  ariaLabel,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="min-w-0">
+      <span className="label">{label}</span>
+      <select
+        aria-label={ariaLabel}
+        className="input"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value={FILTER_ALL}>All</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function ProxyRow({ proxy }: { proxy: ProxyAsset }) {
   const safeUrl = redactUrlCredentials(proxy.url);
+  const safeCheckError = proxy.last_check_error
+    ? redactUrlCredentials(proxy.last_check_error)
+    : null;
+  const safeNotes = proxy.notes ? redactUrlCredentials(proxy.notes) : null;
   const location = [proxy.country_code, proxy.city].filter(Boolean).join(" · ") || "-";
   const checkLocation = [
     proxy.last_check_ip,
@@ -176,17 +350,17 @@ function ProxyRow({ proxy }: { proxy: ProxyAsset }) {
         <span className="truncate text-sm font-medium text-slate-700" title={proxy.provider ?? "-"}>
           {proxy.provider ?? "-"}
         </span>
-        {proxy.notes && (
-          <p className="mt-1 line-clamp-1 text-[11px] text-slate-400" title={proxy.notes}>
-            {proxy.notes}
+        {safeNotes && (
+          <p className="mt-1 line-clamp-1 text-[11px] text-slate-400" title={safeNotes}>
+            {safeNotes}
           </p>
         )}
       </td>
       <td className="px-3 py-3 align-top">
         <ProxyStatusBadge status={proxy.last_check_status} />
-        {proxy.last_check_error && (
-          <div className="mt-1 truncate text-[11px] text-red-600" title={proxy.last_check_error}>
-            {redactUrlCredentials(proxy.last_check_error)}
+        {safeCheckError && (
+          <div className="mt-1 truncate text-[11px] text-red-600" title={safeCheckError}>
+            {safeCheckError}
           </div>
         )}
       </td>
@@ -267,6 +441,35 @@ function ProxyEmptyState() {
   );
 }
 
+function ProxyFilterEmptyState({ onClear }: { onClear: () => void }) {
+  return (
+    <div
+      role="status"
+      aria-label="No proxy assets match filters"
+      className="flex min-h-[320px] flex-1 items-center justify-center p-6"
+    >
+      <div className="mx-auto max-w-[440px] rounded-lg border border-dashed border-blue-200 bg-blue-50/60 px-6 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+        <span className="mx-auto mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-100 bg-white text-blue-600 shadow-hairline">
+          <Search className="h-4 w-4" />
+        </span>
+        <h3 className="text-sm font-semibold text-slate-950">No proxy assets match filters</h3>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          Clear the current filters to return to the full proxy inventory.
+        </p>
+        <button
+          type="button"
+          className="btn-secondary mt-4 inline-flex h-8 items-center gap-1.5 text-xs"
+          onClick={onClear}
+          aria-label="Clear proxy filters"
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear filters
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function HeaderCell({ children, className = "" }: { children: string; className?: string }) {
   return (
     <th className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] ${className}`}>
@@ -309,4 +512,41 @@ function getProxyStatusTone(status: string | null): ProxyStatusTone {
 
 function statusLabel(status: string): string {
   return status.replace(/_/g, " ");
+}
+
+function uniqueSorted(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function matchesOptionFilter(value: string | null | undefined, filter: string): boolean {
+  if (filter === FILTER_ALL) return true;
+  return (value?.trim() ?? "") === filter;
+}
+
+function normalizeFilterValue(value: string | null | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function getProxySearchText(proxy: ProxyAsset): string {
+  return [
+    proxy.name,
+    redactUrlCredentials(proxy.url),
+    proxy.country_code,
+    proxy.city,
+    proxy.asn,
+    proxy.provider,
+    proxy.notes ? redactUrlCredentials(proxy.notes) : null,
+    proxy.last_check_status,
+    proxy.last_check_ip,
+    proxy.last_check_country_code,
+    proxy.last_check_timezone,
+    proxy.last_check_locale,
+    proxy.last_check_source,
+    proxy.last_check_error ? redactUrlCredentials(proxy.last_check_error) : null,
+    ...proxy.tags.map((tag) => tag.tag),
+  ]
+    .map(normalizeFilterValue)
+    .filter(Boolean)
+    .join(" ");
 }

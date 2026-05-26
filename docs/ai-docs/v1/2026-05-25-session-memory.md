@@ -2916,3 +2916,90 @@ git diff --check
 - 前端 Proxy Manager 分配入口。
 - CSV 粘贴导入。
 - `profiles.proxy` 到 `proxy_id` 的数据模型迁移。
+
+## 42. 2026-05-26 Proxy Manager 搜索与筛选小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，基于已完成的只读 Proxy Manager 页面补齐客户端搜索与国家/provider/tag 筛选。
+- 本轮保持只读资产列表语义，不接线检测、批量检测、分配、新建、编辑、删除或 CSV 导入。
+- 派发 1 个只读子 agent 审计当前 Proxy Manager 页面、测试和脱敏边界；主 agent 本地按 TDD 实现。
+
+已完成：
+
+- `frontend/src/components/ProxyManagerPage.tsx`
+  - 新增 `Search proxy assets` 输入框。
+  - 新增 `Country filter`、`Provider filter`、`Tag filter`。
+  - 筛选选项从 `ProxyAsset` 本地数据派生、去重、排序，并忽略空值。
+  - 筛选选项和匹配逻辑共用 trim 后值；`All` 使用内部 sentinel，避免真实值 `all` 冲突。
+  - 筛选采用 AND 语义，表格渲染 `filteredProxies`。
+  - 新增 `{visible} of {total} visible` 结果计数，原 summary tiles 保持全量库存口径。
+  - 新增过滤空态 `No proxy assets match filters` 和 `Clear proxy filters`。
+  - 使用 `useDeferredValue(searchQuery)` 优化快速输入时的搜索渲染。
+  - 修复 `last_check_error` 和 notes 泄露 raw proxy 凭据问题，显示文本与 tooltip 都走 `redactUrlCredentials()`。
+- `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖搜索命中脱敏 endpoint、provider、tag。
+  - 覆盖 country/provider/tag 组合筛选 AND 语义。
+  - 覆盖筛选选项去重、忽略空值、trim 后仍能筛中来源行。
+  - 覆盖过滤空态和 clear filters 恢复列表。
+  - 覆盖 URL、`last_check_error` 和 notes 中的 proxy 凭据不会出现在正文或任何 `title` 属性。
+- `docs/ai-docs/v1/tasks/04-proxy-manager.md`
+  - 勾选 `支持按国家、provider、tag 筛选`。
+  - 追加本小闭环记录。
+  - 顶层 `支持搜索、筛选、批量检测` 仍未勾选，因为批量检测 UI 未完成。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 红灯：3 failed, 4 passed，筛选控件不存在
+
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 passed, 7 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 135 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8094/`，FastAPI 服务当前 `frontend/dist` 生产 build，数据库隔离在 `/tmp/cloakbrowser-proxy-manager-filters-data-8094/profiles.db`。
+- QA seed 额外覆盖了带空格的 country/provider/tag，以及真实 provider/tag 值为 `all` 的情况，验证 trim 匹配和内部 sentinel 不冲突。
+- 桌面 `1440x900`：
+  - Proxy Manager 可进入，3 条 proxy asset 可见。
+  - 搜索 `jp.proxy.example` 后 `1 of 3 visible`。
+  - 组合筛选 `JP + ProxyJP + asia` 后 `1 of 3 visible`，带空格来源字段可正确匹配。
+  - 搜索 `does-not-exist` 后出现过滤空态和 clear action。
+  - 正文和 `[title]` 属性均不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+  - body 未横向撑破：`document.documentElement.scrollWidth === window.innerWidth === 1440`。
+- 移动 `390x844`：
+  - 筛选栏与表格可用。
+  - 搜索 `proxyco` 后 `1 of 3 visible`。
+  - body 未横向撑破：`document.documentElement.scrollWidth === window.innerWidth === 390`。
+  - 正文和 `[title]` 属性均无 proxy 凭据泄露。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/desktop-filtered-search.png`
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/desktop-empty-state.png`
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/mobile-full-list.png`
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/mobile-filtered-search.png`
+
+仍未做：
+
+- Proxy Manager 单个检测 / 批量检测 UI。
+- Proxy Manager 分配入口。
+- 新建 / 编辑 / 删除 proxy UI。
+- CSV 粘贴导入。
+- `profiles.proxy` 到 `proxy_id` 的数据模型迁移。

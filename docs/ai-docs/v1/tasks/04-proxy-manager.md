@@ -47,7 +47,7 @@
 - [x] 支持从 profile 当前 proxy 保存为 proxy asset。
 - [x] 前端新增 Proxy Manager 页面。
 - [ ] 支持搜索、筛选、批量检测。
-- [ ] 支持按国家、provider、tag 筛选。
+- [x] 支持按国家、provider、tag 筛选。
 - [ ] 支持 CSV 粘贴导入第一版。
 
 ## 验证命令
@@ -575,3 +575,102 @@ git diff --check
 
 - `/tmp/cloakbrowser-proxy-manager-v1-screens/desktop-proxy-manager-real-api.png`
 - `/tmp/cloakbrowser-proxy-manager-v1-screens/mobile-proxy-manager-real-api.png`
+
+## 2026-05-26 Proxy Manager 搜索与筛选小闭环
+
+背景：
+
+- 继续 04 Proxy Manager，在只读 Proxy Manager 页面基础上补齐纯客户端搜索与运营筛选能力。
+- 本小闭环只做搜索、国家/provider/tag 筛选、过滤空态和清空筛选，不接线单个检测、批量检测、分配、新建、编辑、删除或 CSV 导入。
+- 设计方向延续 B2B data-dense operations console：筛选栏放在表格上方，主库存统计保持全量口径，新增 visible count 说明当前筛选结果。
+
+红灯确认：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 3 failed, 4 passed
+# 红灯：Search proxy assets、Country filter 等筛选控件尚不存在
+```
+
+已完成：
+
+- [x] `frontend/src/components/ProxyManagerPage.tsx`
+  - 新增 `Search proxy assets` 输入框。
+  - 新增 `Country filter`、`Provider filter`、`Tag filter` 下拉筛选。
+  - 筛选选项从 `ProxyAsset` 本地数据派生并去重排序，忽略空值。
+  - 筛选选项和匹配逻辑使用同一套 trim 后值，避免字段带前后空格时选项可见但匹配不到行。
+  - `All` 使用不可与真实 provider/tag 冲突的内部 sentinel，不占用真实字段值 `all`。
+  - 搜索匹配 name、脱敏 endpoint、country、city、ASN、provider、脱敏 notes、health、last check metadata 和 tag。
+  - 使用 `useDeferredValue(searchQuery)` 降低快速输入时的渲染压力。
+  - 筛选采用 AND 语义，表格渲染 `filteredProxies`。
+  - 新增 `{visible} of {total} visible` badge。
+  - 新增过滤空态 `No proxy assets match filters` 和 `Clear proxy filters`。
+  - 保留只读语义：本轮没有调用 `checkProxy`、`bulkCheckProxies`、`assignProxyToProfiles` 或其它 mutation API。
+  - 修复浏览器验证发现的细节：`last_check_error` 与 notes 的可见文本 / `title` 属性都必须使用脱敏文本，避免 hover tooltip 泄露 proxy 凭据。
+- [x] `frontend/src/components/ProxyManagerPage.test.tsx`
+  - 覆盖搜索命中脱敏 endpoint、provider、tag，且不触发额外 API 请求。
+  - 覆盖 country/provider/tag 组合筛选 AND 语义。
+  - 覆盖筛选选项去重、排序、忽略空值、trim 后仍可匹配来源行。
+  - 覆盖过滤空态和 `Clear proxy filters` 恢复列表。
+  - 覆盖 URL、`last_check_error` 和 notes 中的 proxy 凭据不会出现在页面正文或任何 `title` 属性。
+
+范围说明：
+
+- 顶层 `支持搜索、筛选、批量检测` 暂不勾选，因为本轮未做批量检测 UI。
+- 前端 Proxy Manager 分配入口未做，因此顶层 `支持将 proxy 分配到 profile` 暂不勾选完成。
+- 单个检测 / 批量检测按钮未接线。
+- 新建 / 编辑 / 删除 proxy UI 未做。
+- CSV 粘贴导入未做。
+- 04 模块仍未完成，不更新 `tasks/progress.md` 完成状态。
+
+验证：
+
+```bash
+cd frontend && npm test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 passed, 7 passed
+
+cd frontend && npm test -- --run
+# 12 passed, 135 passed
+
+cd frontend && npm run build
+# built successfully
+
+.venv/bin/python -m pytest backend/tests -q
+# 232 passed
+
+git diff --check
+# passed
+```
+
+浏览器 UI/UE 验证：
+
+- 使用 `agent-browser` + `AGENT_BROWSER_ARGS=--no-sandbox`。
+- QA 地址：`http://127.0.0.1:8094/`，由临时 FastAPI 进程服务当前 `frontend/dist` 生产 build，并使用 `/tmp/cloakbrowser-proxy-manager-filters-data-8094/profiles.db` 隔离 seed 数据。
+- QA seed：
+  - 1 个 profile。
+  - 3 个 proxy assets：`Credential Pool`、`Broken JP Pool`、`DE Backup`。
+  - `Credential Pool` 与 `Broken JP Pool` 的 URL / error 含凭据，用于验证正文和 tooltip 脱敏。
+  - `Broken JP Pool` 的 country/provider/tag 含前后空格，用于验证 trim 后选项仍可匹配来源行。
+  - `DE Backup` 的 provider/tag 使用真实值 `all`，用于验证内部 `All` sentinel 不与真实业务值冲突。
+- 桌面 `1440x900`：
+  - 顶栏可进入 `Proxy Manager`。
+  - 全量状态显示 `3 of 3 visible`。
+  - 搜索 `jp.proxy.example` 后显示 `1 of 3 visible`，只剩 `Broken JP Pool`。
+  - 组合筛选 `country=JP + provider=ProxyJP + tag=asia` 后只剩 `Broken JP Pool`，证明 trim 后匹配正常。
+  - 搜索 `does-not-exist` 后显示过滤空态和 `Clear proxy filters`。
+  - `document.body.innerText` 与全部 `[title]` 属性不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+  - `document.documentElement.scrollWidth === window.innerWidth === 1440`。
+  - `Proxy assets table` 区域 `overflowX` 为 `auto`。
+- 移动 `390x844`：
+  - Proxy Manager 筛选栏与表格可见。
+  - `document.documentElement.scrollWidth === window.innerWidth === 390`，body 未被表格撑宽。
+  - `document.body.innerText` 与全部 `[title]` 属性不包含 `hiddenpass`、`topsecret`、`user:`、`secret:`。
+  - 搜索 `proxyco` 后显示 `1 of 3 visible`。
+- `agent-browser errors --clear` 无输出；`agent-browser console --clear` 无相关前端错误。
+
+截图：
+
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/desktop-filtered-search.png`
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/desktop-empty-state.png`
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/mobile-full-list.png`
+- `/tmp/cloakbrowser-proxy-manager-filters-screens/mobile-filtered-search.png`
