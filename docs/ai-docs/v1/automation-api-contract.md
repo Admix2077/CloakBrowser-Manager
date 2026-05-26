@@ -431,6 +431,12 @@ GET /api/tasks
   - `result.steps[]` 低敏摘要。
   - task 固定错误文案。
   - created/finished 时间。
+- 支持本地 status filter segmented control：
+  - `All`：展示最近 50 条。
+  - `Running`：展示 `running | cancel_requested`。
+  - `Failed`：展示 `failed`。
+  - `Finished`：展示 `succeeded | cancelled`。
+- status filter 只过滤当前已加载的最近 50 条 task，不新增 API query，不改变 task 状态，不触发 run/cancel/retry。
 - 表格行提供只读详情入口，打开后在 drawer 中展示该 task 的完整低敏 `steps` 和完整低敏 `result.steps[]`，不再使用表格摘要的 4 条截断上限。
 - 前端只渲染 step 白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page`。
 - 前端只渲染 result 白名单字段：`index/type/status`。

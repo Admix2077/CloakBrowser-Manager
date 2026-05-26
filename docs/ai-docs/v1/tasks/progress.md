@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task log status filter 小闭环：
+  - `frontend/src/components/AutomationTaskLogViewer.tsx` 新增只读 status filter segmented control。
+  - `All` 展示当前加载的最近 50 条；`Running` 展示 `running | cancel_requested`；`Failed` 展示 `failed`；`Finished` 展示 `succeeded | cancelled`。
+  - 该过滤只作用于前端当前内存列表，不新增后端 API query，不调用新的后端接口，不修改 task 状态。
+  - 过滤控件不提供 `run`、`cancel`、`retry` 能力；原 task log 和 detail drawer 的脱敏边界保持不变。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成前端 Automation task detail drawer 小闭环：
   - `frontend/src/components/AutomationTaskLogViewer.tsx` 的 task log table 每行新增只读 `Details` 入口。
   - detail drawer 展示 task 短 ID、profile 短 ID、status、created/started/finished、固定错误文案、完整低敏 steps 和完整低敏 result steps。

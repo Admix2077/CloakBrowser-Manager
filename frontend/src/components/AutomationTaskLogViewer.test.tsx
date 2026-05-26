@@ -114,9 +114,9 @@ describe("AutomationTaskLogViewer", () => {
     expect(page.textContent).not.toContain("screenshot-secret");
     expect(page.textContent).not.toContain("result-secret");
     expect(page.textContent).not.toContain("result-value-secret");
-    expect(within(page).queryByRole("button", { name: /run/i })).toBeNull();
-    expect(within(page).queryByRole("button", { name: /cancel/i })).toBeNull();
-    expect(within(page).queryByRole("button", { name: /retry/i })).toBeNull();
+    expect(within(page).queryByRole("button", { name: /^run task$/i })).toBeNull();
+    expect(within(page).queryByRole("button", { name: /^cancel task$/i })).toBeNull();
+    expect(within(page).queryByRole("button", { name: /^retry task$/i })).toBeNull();
   });
 
   it("refreshes the read-only task list on demand", async () => {
@@ -132,6 +132,52 @@ describe("AutomationTaskLogViewer", () => {
     await waitFor(() => expect(mockListAutomationTasks).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("task-sec...")).toBeTruthy();
     expect(mockListAutomationTasks).toHaveBeenLastCalledWith({ limit: 50 });
+  });
+
+  it("filters the local read-only task list by status group", async () => {
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({ id: "task-queued-123456", status: "queued" }),
+        task({ id: "task-running-123456", status: "running" }),
+        task({ id: "task-cancel-requested-123456", status: "cancel_requested" }),
+        task({ id: "task-failed-123456", status: "failed" }),
+        task({ id: "task-succeeded-123456", status: "succeeded" }),
+        task({ id: "task-done-123456", status: "cancelled" }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getByText("task-que...")).toBeTruthy();
+    expect(within(page).getByText("task-run...")).toBeTruthy();
+    expect(within(page).getByText("task-can...")).toBeTruthy();
+    expect(within(page).getByText("task-fai...")).toBeTruthy();
+    expect(within(page).getByText("task-suc...")).toBeTruthy();
+    expect(within(page).getByText("task-don...")).toBeTruthy();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Show running automation tasks" }));
+    expect(within(page).getByText("task-run...")).toBeTruthy();
+    expect(within(page).getByText("task-can...")).toBeTruthy();
+    expect(within(page).queryByText("task-que...")).toBeNull();
+    expect(within(page).queryByText("task-fai...")).toBeNull();
+    expect(within(page).queryByText("task-suc...")).toBeNull();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Show failed automation tasks" }));
+    expect(within(page).getByText("task-fai...")).toBeTruthy();
+    expect(within(page).queryByText("task-run...")).toBeNull();
+    expect(within(page).queryByText("task-can...")).toBeNull();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Show finished automation tasks" }));
+    expect(within(page).getByText("task-suc...")).toBeTruthy();
+    expect(within(page).getByText("task-don...")).toBeTruthy();
+    expect(within(page).queryByText("task-fai...")).toBeNull();
+
+    fireEvent.click(within(page).getByRole("button", { name: "Show all automation tasks" }));
+    expect(within(page).getByText("task-que...")).toBeTruthy();
+    expect(within(page).getByText("task-run...")).toBeTruthy();
+    expect(within(page).getByText("task-fai...")).toBeTruthy();
+    expect(mockListAutomationTasks).toHaveBeenCalledTimes(1);
   });
 
   it("opens a read-only task detail drawer without rendering sensitive payloads", async () => {
@@ -229,9 +275,9 @@ describe("AutomationTaskLogViewer", () => {
     expect(drawer.textContent).not.toContain("do-not-render");
     expect(drawer.textContent).not.toContain("result-typed-secret");
     expect(drawer.textContent).not.toContain("result-do-not-render");
-    expect(within(drawer).queryByRole("button", { name: /run/i })).toBeNull();
-    expect(within(drawer).queryByRole("button", { name: /cancel/i })).toBeNull();
-    expect(within(drawer).queryByRole("button", { name: /retry/i })).toBeNull();
+    expect(within(drawer).queryByRole("button", { name: /^run task$/i })).toBeNull();
+    expect(within(drawer).queryByRole("button", { name: /^cancel task$/i })).toBeNull();
+    expect(within(drawer).queryByRole("button", { name: /^retry task$/i })).toBeNull();
 
     fireEvent.click(within(drawer).getByRole("button", { name: "Close task details" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Automation task details" })).toBeNull());

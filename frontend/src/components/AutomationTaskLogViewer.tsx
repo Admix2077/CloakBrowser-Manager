@@ -4,6 +4,7 @@ import { api, type AutomationTask, type AutomationTaskResultStep, type Automatio
 import { formatTimestamp } from "../lib/profileDisplay";
 
 const DEFAULT_TASK_LIMIT = 50;
+type TaskStatusFilter = "all" | "running" | "failed" | "finished";
 
 const STATUS_STYLES: Record<string, string> = {
   queued: "border-slate-200 bg-slate-50 text-slate-700",
@@ -20,6 +21,7 @@ export function AutomationTaskLogViewer() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("all");
 
   const loadTasks = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     if (quiet) {
@@ -57,6 +59,10 @@ export function AutomationTaskLogViewer() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) => taskMatchesStatusFilter(task.status, statusFilter)),
+    [statusFilter, tasks],
+  );
 
   return (
     <section
@@ -90,15 +96,27 @@ export function AutomationTaskLogViewer() {
               Showing latest {DEFAULT_TASK_LIMIT} tasks. Steps display only low-risk fields.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadTasks({ quiet: true })}
-            disabled={refreshing}
-            className="btn-secondary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh automation tasks
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div
+              role="group"
+              aria-label="Automation task status filter"
+              className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5"
+            >
+              <StatusFilterButton label="All" value="all" activeValue={statusFilter} onSelect={setStatusFilter} />
+              <StatusFilterButton label="Running" value="running" activeValue={statusFilter} onSelect={setStatusFilter} />
+              <StatusFilterButton label="Failed" value="failed" activeValue={statusFilter} onSelect={setStatusFilter} />
+              <StatusFilterButton label="Finished" value="finished" activeValue={statusFilter} onSelect={setStatusFilter} />
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadTasks({ quiet: true })}
+              disabled={refreshing}
+              className="btn-secondary inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh automation tasks
+            </button>
+          </div>
         </div>
       </div>
 
@@ -137,6 +155,18 @@ export function AutomationTaskLogViewer() {
               Queued scripts will appear here after they are created through the trusted management API.
             </p>
           </div>
+        ) : visibleTasks.length === 0 ? (
+          <div
+            role="status"
+            aria-label="No automation tasks match the selected filter"
+            className="flex h-full min-h-[320px] flex-col items-center justify-center px-4 text-center"
+          >
+            <Clock className="h-8 w-8 text-slate-300" />
+            <p className="mt-3 text-sm font-semibold text-slate-900">No matching tasks</p>
+            <p className="mt-1 max-w-md text-sm text-slate-500">
+              Change the status filter or refresh the latest task log.
+            </p>
+          </div>
         ) : (
           <table aria-label="Automation task log" className="min-w-[1080px] w-full border-separate border-spacing-0 bg-white text-left text-xs text-slate-700">
             <thead className="sticky top-0 z-10 bg-[#fbfdff]/95 backdrop-blur">
@@ -152,7 +182,7 @@ export function AutomationTaskLogViewer() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((task) => (
+              {visibleTasks.map((task) => (
                 <tr
                   key={task.id}
                   className="group transition-[background-color,box-shadow] odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/60"
@@ -203,6 +233,35 @@ export function AutomationTaskLogViewer() {
         <TaskDetailDrawer task={selectedTask} onClose={() => setSelectedTaskId(null)} />
       )}
     </section>
+  );
+}
+
+function StatusFilterButton({
+  label,
+  value,
+  activeValue,
+  onSelect,
+}: {
+  label: string;
+  value: TaskStatusFilter;
+  activeValue: TaskStatusFilter;
+  onSelect: (value: TaskStatusFilter) => void;
+}) {
+  const active = value === activeValue;
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`Show ${label.toLowerCase()} automation tasks`}
+      onClick={() => onSelect(value)}
+      className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+        active
+          ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+          : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -409,4 +468,11 @@ function shortId(value: string): string {
 
 function safeLabel(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 40) || "-";
+}
+
+function taskMatchesStatusFilter(status: string, filter: TaskStatusFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "running") return status === "running" || status === "cancel_requested";
+  if (filter === "failed") return status === "failed";
+  return status === "succeeded" || status === "cancelled";
 }
