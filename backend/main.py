@@ -100,6 +100,7 @@ from .models import (
     ProfileConfigImportResult,
     ProfileConfigExport,
     ProfileDeleteRequest,
+    ProfileLaunchRequest,
     ProfileBundleExportRequest,
     ProfileBundleExportResponse,
     ProfileExportRequest,
@@ -2283,7 +2284,21 @@ async def delete_profile(profile_id: str, request: Request):
 
 
 @app.post("/api/profiles/{profile_id}/launch", response_model=LaunchResponse)
-async def launch_profile(profile_id: str):
+async def launch_profile(profile_id: str, request: Request):
+    try:
+        req = ProfileLaunchRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile launch requires explicit confirmation",
+        ) from None
+
+    if req.confirm_launch is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile launch requires explicit confirmation",
+        )
+
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")

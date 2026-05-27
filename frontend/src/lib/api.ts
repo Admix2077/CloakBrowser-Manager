@@ -609,7 +609,10 @@ export const api = {
     }),
 
   launchProfile: (id: string) =>
-    request<LaunchResult>(`/api/profiles/${id}/launch`, { method: "POST" }),
+    request<LaunchResult>(`/api/profiles/${id}/launch`, {
+      method: "POST",
+      body: JSON.stringify({ confirm_launch: true }),
+    }),
 
   stopProfile: (id: string) =>
     request<{ ok: boolean }>(`/api/profiles/${id}/stop`, {

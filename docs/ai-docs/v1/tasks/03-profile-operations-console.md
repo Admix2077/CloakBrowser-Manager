@@ -812,6 +812,42 @@ git diff --check
 - 本小闭环不接入批量 stop / set tags / delete。
 - 批量 delete 仍必须单独确认闭环；批量 stop 需要下一轮定义 running-only、部分失败和选择保留语义。
 
+## 2026-05-27 Profile launch 强制确认小闭环
+
+背景：
+
+- `POST /api/profiles/{profile_id}/launch` 会启动浏览器、VNC 和 automation 运行环境，是远程工作台“启动环境”的核心路径。
+- 本小闭环只收口后端安全确认和前端 API body，不新增 bulk launch 后端 API，不改变 Profile 运营台现有启动交互。
+
+已完成：
+
+- [x] `backend/models.py`
+  - 新增 `ProfileLaunchRequest`，字段为 `confirm_launch: StrictBool = False`。
+- [x] `backend/main.py`
+  - `POST /api/profiles/{profile_id}/launch` 必须显式传入 JSON boolean `confirm_launch: true`。
+  - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Profile launch requires explicit confirmation`。
+  - 未确认时不调用 `browser_mgr.launch()`，不启动浏览器/VNC 运行环境，不更新运行状态或 GeoIP 结果。
+  - 确认后继续保留既有语义：不存在返回 404，已运行返回 409，成功返回 `LaunchResponse` 并带 `automation_url`。
+- [x] `frontend/src/lib/api.ts`
+  - `api.launchProfile()` 固定发送 `{ confirm_launch: true }`。
+
+范围说明：
+
+- 本轮不改 Project Mileage app/payload。
+- 本轮不新增 Project Mileage DTO，不实现订单、钱包、权限、扣费、续期或 viewer token 逻辑。
+- 本轮不改变 Profile 运营台 UI 文案、单 profile launch 或批量 launch 的现有交互。
+- 本轮不新增后端 bulk launch API；批量 launch 继续复用单 profile launch wrapper。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_requires_explicit_confirmation_without_side_effects backend/tests/test_api.py::test_launch_success_response_exposes_automation_url backend/tests/test_api.py::test_launch_persists_resolved_geoip_result -q
+# 3 passed
+
+cd frontend && npm test -- src/lib/api.test.ts --run
+# 37 passed
+```
+
 ## 2026-05-26 批量 stop 小闭环
 
 背景：

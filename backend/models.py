@@ -67,6 +67,10 @@ class ProfileDeleteRequest(BaseModel):
     confirm_delete: StrictBool = False
 
 
+class ProfileLaunchRequest(BaseModel):
+    confirm_launch: StrictBool = False
+
+
 class ProfileStopRequest(BaseModel):
     confirm_stop: StrictBool = False
 

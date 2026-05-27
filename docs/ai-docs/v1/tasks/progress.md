@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 profile launch 后端强制确认小闭环：
+  - `POST /api/profiles/{profile_id}/launch` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_launch: true`。
+  - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Profile launch requires explicit confirmation`。
+  - 未确认启动不会调用 `browser_mgr.launch()`，不会启动浏览器/VNC 运行环境，不会更新运行状态或 GeoIP 结果。
+  - 确认启动后继续保留既有语义：profile 不存在返回 404，已运行返回 409，成功返回 `LaunchResponse` 并保留 automation URL。
+  - 前端 `api.launchProfile()` 固定发送 `{ confirm_launch: true }`，既有单 profile launch 和批量 launch hook 复用该安全确认。
+  - 本小闭环只修改 CloakBrowser 本仓 profile launch 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 proxy bulk check 后端强制确认小闭环：
   - `POST /api/proxies/bulk/check` 新增请求体确认字段，必须显式传入 JSON boolean `confirm_bulk_check: true`。
   - 缺失请求体、空 JSON、非 object、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy bulk check requires explicit confirmation`。

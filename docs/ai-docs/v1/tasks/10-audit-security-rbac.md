@@ -146,4 +146,6 @@ cd frontend && npm test -- --run
   - [x] 缺失 automation page close 确认时返回固定 `422 Automation page close requires explicit confirmation`，不调用 `page.close()`，不关闭运行中 page。
   - [x] `POST /api/proxies/bulk/check` 后端强制要求 JSON boolean `confirm_bulk_check: true`。
   - [x] 缺失 proxy bulk check 确认时返回固定 `422 Proxy bulk check requires explicit confirmation`，不调用 `resolve_network_geo()`，不更新 proxy `last_check_*`，不写 `proxy.bulk_checked` audit；前端 `api.bulkCheckProxies()` 固定发送确认 body。
+  - [x] `POST /api/profiles/{profile_id}/launch` 后端强制要求 JSON boolean `confirm_launch: true`。
+  - [x] 缺失 profile launch 确认时返回固定 `422 Profile launch requires explicit confirmation`，不调用 `browser_mgr.launch()`，不启动浏览器/VNC 运行环境，不更新运行状态或 GeoIP 结果；前端 `api.launchProfile()` 固定发送确认 body。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

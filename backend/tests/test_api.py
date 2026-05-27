@@ -532,8 +532,29 @@ def test_get_profile_status_not_found(app_client: TestClient):
 
 
 def test_launch_not_found(app_client: TestClient):
-    resp = app_client.post("/api/profiles/nonexistent/launch")
+    resp = app_client.post("/api/profiles/nonexistent/launch", json={"confirm_launch": True})
     assert resp.status_code == 404
+
+
+def test_launch_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "LaunchConfirm"})
+    pid = create.json()["id"]
+
+    with patch.object(main.browser_mgr, "launch", new=AsyncMock()) as launch:
+        for payload in (
+            None,
+            {},
+            {"confirm_launch": False},
+            {"confirm_launch": "true"},
+        ):
+            kwargs = {} if payload is None else {"json": payload}
+            resp = app_client.post(f"/api/profiles/{pid}/launch", **kwargs)
+            assert resp.status_code == 422
+            assert resp.json() == {"detail": "Profile launch requires explicit confirmation"}
+
+    launch.assert_not_awaited()
+    assert pid not in main.browser_mgr.running
+    assert app_client.get(f"/api/profiles/{pid}/status").json()["status"] == "stopped"
 
 
 def test_launch_already_running(app_client: TestClient):
@@ -541,7 +562,7 @@ def test_launch_already_running(app_client: TestClient):
     pid = create.json()["id"]
     # Inject into running dict
     main.browser_mgr.running[pid] = MagicMock(spec=RunningProfile)
-    resp = app_client.post(f"/api/profiles/{pid}/launch")
+    resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
     assert resp.status_code == 409
     # Cleanup
     main.browser_mgr.running.pop(pid, None)
@@ -556,7 +577,7 @@ def test_launch_invalid_proxy_400(app_client: TestClient):
         "launch",
         new=AsyncMock(side_effect=ValueError("Invalid proxy scheme 'ftp'")),
     ):
-        resp = app_client.post(f"/api/profiles/{pid}/launch")
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
     assert resp.status_code == 400
     assert "ftp" in resp.json()["detail"]
 
@@ -571,7 +592,7 @@ def test_launch_invalid_proxy_real_validation_400(app_client: TestClient):
     with patch.object(main.browser_mgr.vnc, "allocate", new=AsyncMock(return_value=(100, 6100))), \
          patch.object(main.browser_mgr.vnc, "start_vnc", new=AsyncMock()), \
          patch.object(main.browser_mgr.vnc, "stop_vnc", new=AsyncMock()):
-        resp = app_client.post(f"/api/profiles/{pid}/launch")
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
 
     assert resp.status_code == 400
     assert "Invalid proxy scheme 'ftp'" in resp.json()["detail"]
@@ -586,7 +607,7 @@ def test_launch_failure_500(app_client: TestClient):
         "launch",
         new=AsyncMock(side_effect=RuntimeError("Xvnc failed")),
     ):
-        resp = app_client.post(f"/api/profiles/{pid}/launch")
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
     assert resp.status_code == 500
     assert resp.json()["detail"] == "Failed to launch browser"
 
@@ -603,7 +624,7 @@ def test_launch_success_response_exposes_automation_url(app_client: TestClient):
     )
 
     with patch.object(main.browser_mgr, "launch", new=AsyncMock(return_value=running)):
-        resp = app_client.post(f"/api/profiles/{pid}/launch")
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
 
     assert resp.status_code == 200
     assert resp.json() == {
@@ -634,7 +655,7 @@ def test_launch_persists_resolved_geoip_result(app_client: TestClient):
     )
 
     with patch.object(main.browser_mgr, "launch", new=AsyncMock(return_value=running)):
-        resp = app_client.post(f"/api/profiles/{pid}/launch")
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
 
     assert resp.status_code == 200
     profile = app_client.get(f"/api/profiles/{pid}").json()
