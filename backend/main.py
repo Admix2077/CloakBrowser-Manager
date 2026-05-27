@@ -84,6 +84,7 @@ from .models import (
     ProxyDeleteRequest,
     ProxyFromProfileCreate,
     ProxyProviderPresetCreate,
+    ProxyProviderPresetDeleteRequest,
     ProxyProviderPresetResponse,
     ProxyProviderPresetUpdate,
     ProxyRandomAssignRequest,
@@ -1160,7 +1161,21 @@ async def update_proxy_provider_preset(preset_id: str, req: ProxyProviderPresetU
 
 
 @app.delete("/api/proxy-provider-presets/{preset_id}")
-async def delete_proxy_provider_preset(preset_id: str):
+async def delete_proxy_provider_preset(preset_id: str, request: Request):
+    try:
+        req = ProxyProviderPresetDeleteRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy provider preset delete requires explicit confirmation",
+        ) from None
+
+    if req.confirm_delete is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy provider preset delete requires explicit confirmation",
+        )
+
     deleted = db.delete_proxy_provider_preset(preset_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Proxy provider preset not found")

@@ -202,6 +202,10 @@ class ProxyProviderPresetUpdate(BaseModel):
     notes: str | None = Field(default=None)
 
 
+class ProxyProviderPresetDeleteRequest(BaseModel):
+    confirm_delete: StrictBool = False
+
+
 class ProxyProviderPresetResponse(BaseModel):
     id: str
     name: str

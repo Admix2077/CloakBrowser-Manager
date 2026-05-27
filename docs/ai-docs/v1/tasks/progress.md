@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 proxy provider preset delete 后端强制确认小闭环：
+  - `DELETE /api/proxy-provider-presets/{preset_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy provider preset delete requires explicit confirmation`。
+  - 未确认删除不会删除 provider preset；确认删除继续保持“不级联删除 proxy assets”的既有契约。
+  - 前端 `api.deleteProxyProviderPreset()` 固定发送 `{ confirm_delete: true }`，既有 provider preset 管理弹窗删除确认流程继续保留。
+  - 本小闭环只修改 CloakBrowser 本仓 provider preset delete 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 proxy delete 后端强制确认小闭环：
   - `DELETE /api/proxies/{proxy_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
   - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy delete requires explicit confirmation`。

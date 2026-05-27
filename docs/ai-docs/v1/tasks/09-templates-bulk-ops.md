@@ -603,6 +603,7 @@ cd frontend && npm run build
   - 删除 preset 不级联删除已有 proxy assets。
 - [x] `backend/models.py`
   - 新增 `ProxyProviderPresetCreate` / `ProxyProviderPresetUpdate` / `ProxyProviderPresetResponse`。
+  - 10 审计安全阶段已补 `ProxyProviderPresetDeleteRequest`；删除 preset 必须传 JSON boolean `confirm_delete: true`。
   - 字段限制为 `name`、`provider`、`country_code`、`tags`、`notes` 和时间戳。
 - [x] `backend/main.py`
   - 新增 `/api/proxy-provider-presets` CRUD：
@@ -611,8 +612,10 @@ cd frontend && npm run build
     - `GET /api/proxy-provider-presets/{preset_id}`
     - `PUT /api/proxy-provider-presets/{preset_id}`
     - `DELETE /api/proxy-provider-presets/{preset_id}`
+  - 10 审计安全阶段已补删除确认：缺失、`false` 或字符串 `"true"` 返回固定 422，未确认不删除 preset。
 - [x] `backend/tests/test_proxy_provider_presets.py`
   - 覆盖表创建、DB CRUD、API CRUD、not found、空名称拒绝。
+  - 10 审计安全阶段已补 API 删除确认测试。
   - 覆盖删除 preset 不影响 proxy assets。
   - 覆盖传入 `api_key` / `password` / `billing_account` 等凭证或账务字段不会进入响应和列表。
 

@@ -123,10 +123,45 @@ def test_proxy_provider_preset_crud_api(app_client: TestClient):
     assert update.json()["tags"] == [{"tag": "priority", "color": None}]
     assert update.json()["notes"] is None
 
-    delete = app_client.delete(f"/api/proxy-provider-presets/{data['id']}")
+    delete = app_client.request(
+        "DELETE",
+        f"/api/proxy-provider-presets/{data['id']}",
+        json={"confirm_delete": True},
+    )
     assert delete.status_code == 200
     assert delete.json() == {"ok": True}
     assert app_client.get(f"/api/proxy-provider-presets/{data['id']}").status_code == 404
+
+
+def test_delete_proxy_provider_preset_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Japan mobile default",
+            "provider": "MobileProxy",
+            "country_code": "JP",
+            "tags": [{"tag": "jp", "color": "#0ea5e9"}],
+        },
+    )
+    assert create.status_code == 201
+    preset_id = create.json()["id"]
+
+    for payload in ({}, {"confirm_delete": False}, {"confirm_delete": "true"}):
+        resp = app_client.request(
+            "DELETE",
+            f"/api/proxy-provider-presets/{preset_id}",
+            json=payload,
+        )
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "detail": "Proxy provider preset delete requires explicit confirmation"
+        }
+
+    get = app_client.get(f"/api/proxy-provider-presets/{preset_id}")
+    assert get.status_code == 200
+    assert get.json()["id"] == preset_id
 
 
 def test_proxy_provider_preset_api_rejects_empty_name(app_client: TestClient):
@@ -170,4 +205,8 @@ def test_proxy_provider_preset_api_ignores_credential_and_billing_fields(app_cli
 def test_proxy_provider_preset_api_not_found(app_client: TestClient):
     assert app_client.get("/api/proxy-provider-presets/missing").status_code == 404
     assert app_client.put("/api/proxy-provider-presets/missing", json={"name": "x"}).status_code == 404
-    assert app_client.delete("/api/proxy-provider-presets/missing").status_code == 404
+    assert app_client.request(
+        "DELETE",
+        "/api/proxy-provider-presets/missing",
+        json={"confirm_delete": True},
+    ).status_code == 404

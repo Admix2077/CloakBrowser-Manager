@@ -639,7 +639,10 @@ export const api = {
     }),
 
   deleteProxyProviderPreset: (id: string) =>
-    request<{ ok: boolean }>(`/api/proxy-provider-presets/${id}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/api/proxy-provider-presets/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirm_delete: true }),
+    }),
 
   createProxy: (data: ProxyCreateData) =>
     request<ProxyAsset>("/api/proxies", {

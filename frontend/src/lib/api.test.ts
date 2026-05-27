@@ -408,7 +408,7 @@ describe("api.updateProxyProviderPreset", () => {
 });
 
 describe("api.deleteProxyProviderPreset", () => {
-  it("sends DELETE to a provider preset endpoint", async () => {
+  it("sends DELETE with explicit confirmation to a provider preset endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
 
     const result = await api.deleteProxyProviderPreset("preset-1");
@@ -417,6 +417,7 @@ describe("api.deleteProxyProviderPreset", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/proxy-provider-presets/preset-1");
     expect(options.method).toBe("DELETE");
+    expect(JSON.parse(options.body)).toEqual({ confirm_delete: true });
   });
 });
 
