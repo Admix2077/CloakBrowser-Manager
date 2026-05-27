@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 WebSocket viewer token / origin / VNC token hash 验收收口小闭环：
+  - runtime VNC `WebSocket /api/runtime/sessions/{id}/vnc` 已要求有效、未过期 viewer token；missing/wrong/expired token 会拒绝连接。
+  - viewer token 明文只在 `POST /api/runtime/sessions/{id}/viewer-token` 响应中返回一次；DB 只保存 `viewer_token_hash`，对外 `RuntimeSessionResponse` 不暴露 hash。
+  - terminate 会撤销 viewer token，renew 不延长既有短生命周期 viewer token。
+  - WebSocket Origin 检查仍拒绝跨源浏览器连接，允许同源和无 Origin 的非浏览器客户端。
+  - runtime viewer failure audit 只写固定 reason code，不记录 viewer token、viewer URL、token hash、Origin 原文、请求头、URL query、后端 VNC 地址或异常 message。
+  - 本小闭环只更新 CloakBrowser 本仓安全验收文档，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 proxy password 响应脱敏验收收口小闭环：
   - 复核 `GET /api/proxies`、`GET /api/proxies/{id}`、create/update/check/bulk-check/assign/random-assign/profile-proxy-asset 等返回 `ProxyResponse` 的路径均统一走 `_proxy_response()`。
   - `_proxy_response()` 会调用 `redact_proxy_asset_url()`，响应中的 `proxy.url` 只保留 scheme、host 和 port，不回显 username/password。

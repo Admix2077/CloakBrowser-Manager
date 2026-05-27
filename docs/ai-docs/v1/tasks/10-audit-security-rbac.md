@@ -15,7 +15,9 @@
   - 为避免本地已登录页面立刻失效，认证中间件暂时兼容读取旧明文 cookie；新登录不会再签发旧明文 cookie。
 - [ ] 新增 service token，用于 Payload 调用 runtime API。
 - [ ] 区分 user API、admin API、service API。
-- [ ] WebSocket viewer token 校验。
+- [x] WebSocket viewer token 校验：
+  - runtime VNC `WebSocket /api/runtime/sessions/{id}/vnc` 要求有效、未过期 viewer token。
+  - missing/wrong/expired viewer token 会拒绝连接并写低敏 `runtime.viewer.failed` reason code，不记录 token 明文、URL query、viewer URL 或 token hash。
 
 ### Sensitive Data
 
@@ -32,7 +34,10 @@
   - `/api/auth/login` 成功 JSON 只返回 `{ ok: true }`。
   - 登录成功 `Set-Cookie` 不再包含 `AUTH_TOKEN` 明文。
 - [ ] cookie 导出不写日志。
-- [ ] VNC token hash 存储，不存明文。
+- [x] VNC token hash 存储，不存明文：
+  - viewer token 明文只在 `POST /api/runtime/sessions/{id}/viewer-token` 响应中返回一次。
+  - `runtime_sessions.viewer_token_hash` 只保存 hash，且对外 `RuntimeSessionResponse` 不暴露 hash。
+  - terminate 会撤销 viewer token，renew 不延长既有短生命周期 viewer token。
 
 ### Audit
 
@@ -65,6 +70,6 @@ cd frontend && npm test -- --run
 ## 验收标准
 
 - [x] 未授权不能访问 protected API。
-- [ ] WebSocket origin 检查不退化。
+- [x] WebSocket origin 检查不退化。
 - [x] audit 中没有 proxy password、cookie value、token。
 - [ ] 删除、导出、终止等高风险操作有确认或权限限制。
