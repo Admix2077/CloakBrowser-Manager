@@ -25,6 +25,11 @@ EXISTING_PAGE_INIT_TIMEOUT_SECONDS = 2.0
 INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
 DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
+MAX_RUNNING_PROFILES_ENV = "MAX_RUNNING_PROFILES"
+
+
+class BrowserResourceLimitError(RuntimeError):
+    """Raised before launch when a configured browser resource limit is reached."""
 
 
 def _normalize_proxy(raw: str) -> str:
@@ -77,6 +82,21 @@ def _redact_proxy_url(url: str) -> str:
         port = None
     port_part = f":{port}" if port else ""
     return f"{parsed.scheme}://{host}{port_part}"
+
+
+def get_max_running_profiles_limit() -> int | None:
+    raw = os.environ.get(MAX_RUNNING_PROFILES_ENV)
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid integer config for %s", MAX_RUNNING_PROFILES_ENV)
+        return None
+    if value < 1:
+        logger.warning("Ignoring out-of-range integer config for %s", MAX_RUNNING_PROFILES_ENV)
+        return None
+    return value
 
 
 def _proxy_to_invisible(raw: str | None) -> dict[str, str] | None:
@@ -385,6 +405,9 @@ class BrowserManager:
         async with self._lock:
             if profile_id in self.running or profile_id in self._launching:
                 raise RuntimeError(f"Profile {profile_id} is already running")
+            max_running = get_max_running_profiles_limit()
+            if max_running is not None and len(self.running) + len(self._launching) >= max_running:
+                raise BrowserResourceLimitError("Maximum running profiles reached")
             self._launching.add(profile_id)
 
         display, ws_port = await self.vnc.allocate()

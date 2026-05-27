@@ -32,7 +32,7 @@ import starlette.requests
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import database as db
-from .browser_manager import BrowserManager
+from .browser_manager import BrowserManager, BrowserResourceLimitError, get_max_running_profiles_limit
 from .cookie_formats import (
     CookieJsonDocument,
     build_cookie_json_export,
@@ -1564,6 +1564,8 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
             running = await browser_mgr.launch(profile)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except BrowserResourceLimitError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
             logger.error("Failed to launch runtime session profile %s: %s", profile_id, exc)
             raise HTTPException(status_code=500, detail="Failed to launch browser") from exc
@@ -2381,10 +2383,12 @@ async def launch_profile(profile_id: str, request: Request):
     try:
         running = await browser_mgr.launch(profile)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except BrowserResourceLimitError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.error("Failed to launch profile %s: %s", profile_id, exc)
-        raise HTTPException(status_code=500, detail="Failed to launch browser")
+        raise HTTPException(status_code=500, detail="Failed to launch browser") from exc
 
     db.update_profile_geoip_result(profile_id, getattr(running, "resolved_geoip", None))
 
@@ -2547,6 +2551,7 @@ async def get_system_diagnostics():
         runtime=DiagnosticsRuntimeResponse(
             active_displays=sorted(running.display for running in running_profiles),
             active_vnc_ws_ports=sorted(running.ws_port for running in running_profiles),
+            max_running_profiles=get_max_running_profiles_limit(),
         ),
         automation_worker=_automation_worker_diagnostics(),
     )

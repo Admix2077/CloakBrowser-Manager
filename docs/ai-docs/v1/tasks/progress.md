@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 `MAX_RUNNING_PROFILES` 运行资源限制小闭环：
+  - 新增可选环境变量 `MAX_RUNNING_PROFILES`；默认未设置时不限制，合法正整数会限制 `running + launching` 的 profile 总数。
+  - 限制判断放在 `BrowserManager.launch()` 内部锁里，普通 profile launch 和 runtime session broker 共享同一资源闸门。
+  - 达到限制时在 VNC allocate 前返回固定 `409 Maximum running profiles reached`，不自动停止已有 profile，不创建 runtime session audit，不泄露 profile id、display、ws port、proxy、路径、env 原文或 token。
+  - `/api/diagnostics.runtime.max_running_profiles` 只返回解析后的正整数或 `null`，不回显原始环境变量。
+  - 该限制只是 CloakBrowser runtime 资源保护；Project Mileage 业务套餐/订单/并发权限仍必须由 Payload 作为事实源实现，App 不能直连 CloakBrowser API 判断权限。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 `/api/diagnostics` 低敏诊断小闭环：
   - 新增受保护的 `GET /api/diagnostics`；该接口不加入 healthcheck/auth exempt，`AUTH_TOKEN` 开启时未认证返回 401。
   - 响应只返回低敏诊断快照：`status`、`binary_version`、`data_dir_exists`、`db_exists`、运行/启动中/profile/proxy/task 计数、active display/ws port 数值列表，以及 automation worker 的解析后配置。

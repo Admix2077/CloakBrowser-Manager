@@ -17,7 +17,7 @@
 
 ### Resource Limits
 
-- [ ] 配置最大同时运行 profile 数。
+- [x] 配置最大同时运行 profile 数。
 - [ ] 配置批量启动并发。
 - [ ] 启动前检查可用 display / ws port。
 - [ ] 停止时释放 VNC 和 browser context。
@@ -148,5 +148,45 @@ git diff --check
 # RED: 2 failed, 1 passed; diagnostics API 返回 404
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows backend/tests/test_auth.py::test_diagnostics_requires_auth -q
+# 3 passed
+```
+
+## 2026-05-28 `MAX_RUNNING_PROFILES` 运行资源限制小闭环
+
+背景：
+
+- 远程工作台底层同时运行多个浏览器/VNC 会快速消耗 CPU、内存、display 和 ws port。
+- 限制必须放在 CloakBrowser runtime 启动入口内部，不能只放在前端批量启动逻辑里；否则 runtime session broker 仍可绕过限制。
+- 本轮只修改 CloakBrowser 本仓，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/browser_manager.py`
+  - 新增 `MAX_RUNNING_PROFILES` 可选环境变量。
+  - 默认未设置时不限制；设置为合法正整数时，`len(running) + len(launching) >= limit` 会在 VNC allocate 前拒绝新启动。
+  - 无效值、非整数、小于 1 的值会回退为不限制，并只记录配置名，不记录原始 env 值。
+  - 新增 `BrowserResourceLimitError("Maximum running profiles reached")`，作为资源闸门的固定错误。
+- `backend/main.py`
+  - 普通 `POST /api/profiles/{profile_id}/launch` 和 runtime `POST /api/runtime/sessions` 都把 `BrowserResourceLimitError` 映射为固定 `409 Maximum running profiles reached`。
+  - `/api/diagnostics.runtime.max_running_profiles` 返回解析后的正整数或 `null`，不回显原始环境变量。
+- `backend/tests/test_api.py`
+  - 覆盖普通 profile launch 达到限制时返回 409，且不调用 VNC allocate。
+  - 覆盖 diagnostics 返回解析后的 `max_running_profiles`。
+- `backend/tests/test_session_broker.py`
+  - 覆盖 runtime session broker 达到限制时返回 409，不调用 VNC allocate，不创建 runtime session audit。
+
+边界：
+
+- `MAX_RUNNING_PROFILES` 只限制新启动，不自动停止已有 profile，不修改订单、钱包、权限、续期或 runtime session 事实。
+- 返回错误固定为 `Maximum running profiles reached`，不包含 profile id、display、ws port、proxy、路径、环境变量原文、token 或 Project Mileage 订单/钱包/权限/审计事实。
+- 该限制是 CloakBrowser 本地 runtime 资源保护；未来 Project Mileage 业务侧套餐/订单并发限制仍必须由 Payload 作为事实源实现，App 不能直连 CloakBrowser API 作为权限判断。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc backend/tests/test_session_broker.py::test_runtime_session_create_respects_max_running_profiles -q
+# RED: 2 failed；当前会继续走到 VNC allocate 并最终 500
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc backend/tests/test_session_broker.py::test_runtime_session_create_respects_max_running_profiles -q
 # 3 passed
 ```

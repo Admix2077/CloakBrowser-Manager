@@ -140,6 +140,38 @@ def test_runtime_session_create_launches_profile_and_persists_session(
     assert get_resp.json() == data
 
 
+def test_runtime_session_create_respects_max_running_profiles(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("MAX_RUNNING_PROFILES", "1")
+    existing_profile_id = _create_profile(app_client, "Existing Runtime")
+    target_profile_id = _create_profile(app_client, "Blocked Runtime")
+    main.browser_mgr.running[existing_profile_id] = _mock_running_profile()
+
+    with patch.object(
+        main.browser_mgr.vnc,
+        "allocate",
+        new=AsyncMock(side_effect=AssertionError("must not allocate VNC when max running profiles is reached")),
+    ) as allocate:
+        resp = app_client.post(
+            "/api/runtime/sessions",
+            headers=runtime_headers,
+            json={
+                "external_session_id": "pm-session-limit",
+                "profile_id": target_profile_id,
+                "lease_seconds": 900,
+            },
+        )
+
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Maximum running profiles reached"}
+    allocate.assert_not_awaited()
+    assert target_profile_id not in main.browser_mgr.running
+    assert "runtime.session.created" not in _audit_event_types()
+
+
 def test_runtime_session_create_from_template_creates_profile_then_launches(
     app_client: TestClient,
     runtime_headers: dict[str, str],

@@ -554,6 +554,7 @@ class DiagnosticsCountsResponse(BaseModel):
 class DiagnosticsRuntimeResponse(BaseModel):
     active_displays: list[int] = Field(default_factory=list)
     active_vnc_ws_ports: list[int] = Field(default_factory=list)
+    max_running_profiles: int | None = None
 
 
 class DiagnosticsAutomationWorkerResponse(BaseModel):

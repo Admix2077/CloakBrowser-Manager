@@ -602,6 +602,40 @@ def test_launch_already_running(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("MAX_RUNNING_PROFILES", "1")
+    existing = app_client.post("/api/profiles", json={"name": "Already Running"}).json()
+    target = app_client.post("/api/profiles", json={"name": "Blocked By Limit"}).json()
+    main.browser_mgr.running[existing["id"]] = RunningProfile(
+        profile_id=existing["id"],
+        context=MagicMock(),
+        display=100,
+        ws_port=6100,
+        engine="invisible_playwright",
+    )
+
+    try:
+        with patch.object(
+            main.browser_mgr.vnc,
+            "allocate",
+            new=AsyncMock(side_effect=AssertionError("must not allocate VNC when max running profiles is reached")),
+        ) as allocate:
+            resp = app_client.post(
+                f"/api/profiles/{target['id']}/launch",
+                json={"confirm_launch": True},
+            )
+    finally:
+        main.browser_mgr.running.pop(existing["id"], None)
+        main.browser_mgr.running.pop(target["id"], None)
+
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Maximum running profiles reached"}
+    allocate.assert_not_awaited()
+
+
 def test_launch_invalid_proxy_400(app_client: TestClient):
     """ValueError from browser_mgr.launch should map to 400."""
     create = app_client.post("/api/profiles", json={"name": "BadProxy"})
@@ -857,6 +891,7 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     monkeypatch.setenv("RUNTIME_SERVICE_TOKEN", "secret-runtime-token")
     monkeypatch.setenv("AUTOMATION_WORKER_ENABLED", "true")
     monkeypatch.setenv("AUTOMATION_WORKER_LEASE_SECONDS", "secret-lease")
+    monkeypatch.setenv("MAX_RUNNING_PROFILES", "7")
 
     try:
         resp = app_client.get("/api/diagnostics")
@@ -878,6 +913,7 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert "lease_seconds" in data["automation_worker"]
     assert data["runtime"]["active_displays"] == [100]
     assert data["runtime"]["active_vnc_ws_ports"] == [6100]
+    assert data["runtime"]["max_running_profiles"] == 7
 
     serialized = json.dumps(data)
     assert str(main.db.DATA_DIR) not in serialized
