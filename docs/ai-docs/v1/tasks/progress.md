@@ -31,10 +31,16 @@
 - [ ] 12 部署、观测与资源治理：`12-deployment-observability.md`
 - [ ] 13 总回归、交付与上线门禁：`13-regression-release.md`
 
-## 当前接力状态（2026-05-27）
+## 当前接力状态（2026-05-28）
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 direct Automation API 错误响应稳定小闭环：
+  - `new_page/goto/evaluate/wait_for_selector/click/fill/keyboard_type/scroll/screenshot/close_page` 页面动作失败响应统一为固定 `400 Automation page action failed`。
+  - warning 日志统一为低敏 key-value：`action=automation.<action>_failed profile_id=... page_index=... error_type=...`，不再记录异常原文。
+  - 新增测试覆盖 `goto` 失败不泄露完整 URL、query token 或 fragment，`evaluate` 失败不泄露 expression 或 token 字样。
+  - 该能力仍是 CloakBrowser 本地可信管理 API，不能直接暴露给 Project Mileage App；未来远程工作台必须通过 Payload 安全 DTO 接入。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 profile 生命周期日志 action / profile_id 小闭环：
   - `BrowserManager.launch()` 成功日志改为稳定 key-value：`action=profile.launch_succeeded profile_id=... display=:... ws_port=... engine=...`。
   - `BrowserManager.stop()` 新增/调整 `action=profile.stop_requested profile_id=...` 与 `action=profile.stop_finished profile_id=...`。

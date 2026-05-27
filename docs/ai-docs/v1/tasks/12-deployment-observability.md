@@ -35,7 +35,7 @@
   - automation_task_counts。
 - [x] 新增 `/api/diagnostics`。
 - [x] 日志中包含 profile id 和 action。
-- [ ] 错误响应稳定。
+- [x] 错误响应稳定。
 - [ ] 前端 settings/diagnostics 页面显示系统状态。
 
 ### Backup
@@ -149,6 +149,43 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows backend/tests/test_auth.py::test_diagnostics_requires_auth -q
 # 3 passed
+```
+
+## 2026-05-28 direct Automation API 错误响应稳定小闭环
+
+背景：
+
+- direct Automation API 的页面动作失败路径此前会把 Playwright/运行时异常原文写入响应和 warning 日志。
+- `goto` 异常可能包含完整 URL、query token 或 fragment；`evaluate` 异常可能包含表达式和业务敏感值。
+- 本轮只修改 CloakBrowser 本仓，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/main.py`
+  - 新增 `_raise_automation_page_action_failed()` 统一处理 direct Automation page action 失败。
+  - `new_page/goto/evaluate/wait_for_selector/click/fill/keyboard_type/scroll/screenshot/close_page` 失败响应统一为固定 `400 Automation page action failed`。
+  - warning 日志统一为低敏 key-value：`action=automation.<action>_failed profile_id=... page_index=... error_type=...`。
+- `backend/tests/test_api.py`
+  - 覆盖 `goto` 失败时响应和日志都不泄露完整 URL、query token 或 fragment。
+  - 覆盖 `evaluate` 失败时响应和日志都不泄露 expression 或 token 字样。
+
+边界：
+
+- direct Automation API 仍属于 CloakBrowser 本地可信管理侧能力，不能直接暴露给 Project Mileage App。
+- 失败响应和日志不记录 URL/query/fragment、selector、fill value、keyboard text、evaluate expression/result、screenshot bytes/path、headers、body、cookie/local storage、viewer token、runtime service token、proxy password 或 Project Mileage 钱包/订单/权限/审计事实。
+- 正常成功路径保留既有返回；本小闭环只收口失败时的错误文案和日志。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_goto_failure_uses_fixed_error_without_leaking_url backend/tests/test_api.py::test_automation_evaluate_failure_uses_fixed_error_without_leaking_expression -q
+# RED: 2 failed；旧实现响应 detail 和 warning 日志均包含 secret URL / expression
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_goto_failure_uses_fixed_error_without_leaking_url backend/tests/test_api.py::test_automation_evaluate_failure_uses_fixed_error_without_leaking_expression -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "automation_goto or automation_evaluate or automation_wait_for_selector or automation_click or automation_fill or automation_keyboard_type or automation_scroll or automation_screenshot or automation_page_close or automation_create_page" -q
+# 10 passed, 196 deselected
 ```
 
 ## 2026-05-28 `MAX_RUNNING_PROFILES` 运行资源限制小闭环

@@ -2510,6 +2510,32 @@ def test_automation_goto_navigates_page(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_goto_failure_uses_fixed_error_without_leaking_url(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "AutomationGotoFail"})
+    pid = create.json()["id"]
+    secret_url = "https://example.com/private?token=super-secret#fragment"
+    page = _automation_page("about:blank", "Before")
+    page.goto.side_effect = RuntimeError(f"navigation failed for {secret_url}")
+    _automation_running_profile(pid, [page])
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/goto",
+        json={"url": secret_url, "wait_until": "domcontentloaded", "timeout_ms": 5000},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Automation page action failed"}
+    assert secret_url not in resp.text
+    assert "super-secret" not in resp.text
+    assert secret_url not in caplog.text
+    assert "super-secret" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_evaluate_returns_json_result(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationEval"})
     pid = create.json()["id"]
@@ -2525,6 +2551,32 @@ def test_automation_evaluate_returns_json_result(app_client: TestClient):
     assert resp.status_code == 200
     page.evaluate.assert_awaited_once_with("({ title: document.title, ok: true })")
     assert resp.json() == {"result": {"title": "Example", "ok": True}}
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_evaluate_failure_uses_fixed_error_without_leaking_expression(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "AutomationEvalFail"})
+    pid = create.json()["id"]
+    expression = "window.localStorage.getItem('super-secret-token')"
+    page = _automation_page("https://example.com/", "Example")
+    page.evaluate.side_effect = RuntimeError(f"eval failed for {expression}")
+    _automation_running_profile(pid, [page])
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/evaluate",
+        json={"expression": expression},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Automation page action failed"}
+    assert expression not in resp.text
+    assert "super-secret-token" not in resp.text
+    assert expression not in caplog.text
+    assert "super-secret-token" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
 
 

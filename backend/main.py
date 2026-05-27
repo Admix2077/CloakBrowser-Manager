@@ -4139,6 +4139,22 @@ def _automation_get_page(profile_id: str, page_ref: str):
     raise HTTPException(status_code=404, detail="Automation page not found")
 
 
+def _raise_automation_page_action_failed(
+    action: str,
+    profile_id: str,
+    page_index: int,
+    exc: Exception,
+) -> None:
+    logger.warning(
+        "action=automation.%s_failed profile_id=%s page_index=%d error_type=%s",
+        action,
+        profile_id,
+        page_index,
+        type(exc).__name__,
+    )
+    raise HTTPException(status_code=400, detail="Automation page action failed") from exc
+
+
 @app.get("/api/profiles/{profile_id}/automation", response_model=AutomationInfoResponse)
 async def automation_info(profile_id: str):
     running = _automation_running(profile_id)
@@ -4193,8 +4209,7 @@ async def automation_create_page(profile_id: str):
         page = await running.context.new_page()
         await _automation_apply_page_headers(running, page)
     except Exception as exc:
-        logger.warning("Automation new_page failed for %s: %s", profile_id, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("new_page", profile_id, -1, exc)
 
     pages = _automation_pages(running)
     try:
@@ -4214,8 +4229,7 @@ async def automation_goto(profile_id: str, page_ref: str, body: AutomationGotoRe
         await _automation_apply_page_headers(running, page)
         await page.goto(body.url, wait_until=body.wait_until, timeout=body.timeout_ms)
     except Exception as exc:
-        logger.warning("Automation goto failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("goto", profile_id, page_index, exc)
     return await _automation_page_summary(running, page_index, page)
 
 
@@ -4232,8 +4246,7 @@ async def automation_evaluate(
     try:
         result = await page.evaluate(body.expression)
     except Exception as exc:
-        logger.warning("Automation evaluate failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("evaluate", profile_id, page_index, exc)
     return AutomationEvaluateResponse(result=jsonable_encoder(result))
 
 
@@ -4254,13 +4267,7 @@ async def automation_wait_for_selector(
             timeout=body.timeout_ms,
         )
     except Exception as exc:
-        logger.warning(
-            "Automation wait_for_selector failed for %s page %d: %s",
-            profile_id,
-            page_index,
-            exc,
-        )
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("wait_for_selector", profile_id, page_index, exc)
     return await _automation_page_summary(running, page_index, page)
 
 
@@ -4277,8 +4284,7 @@ async def automation_click(
     try:
         await page.click(body.selector, timeout=body.timeout_ms)
     except Exception as exc:
-        logger.warning("Automation click failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("click", profile_id, page_index, exc)
     return await _automation_page_summary(running, page_index, page)
 
 
@@ -4295,8 +4301,7 @@ async def automation_fill(
     try:
         await page.fill(body.selector, body.value, timeout=body.timeout_ms)
     except Exception as exc:
-        logger.warning("Automation fill failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("fill", profile_id, page_index, exc)
     return await _automation_page_summary(running, page_index, page)
 
 
@@ -4313,13 +4318,7 @@ async def automation_keyboard_type(
     try:
         await page.keyboard.type(body.text, delay=body.delay_ms)
     except Exception as exc:
-        logger.warning(
-            "Automation keyboard type failed for %s page %d: %s",
-            profile_id,
-            page_index,
-            exc,
-        )
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("keyboard_type", profile_id, page_index, exc)
     return await _automation_page_summary(running, page_index, page)
 
 
@@ -4339,8 +4338,7 @@ async def automation_scroll(
             [body.delta_x, body.delta_y],
         )
     except Exception as exc:
-        logger.warning("Automation scroll failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("scroll", profile_id, page_index, exc)
     return await _automation_page_summary(running, page_index, page)
 
 
@@ -4354,8 +4352,7 @@ async def automation_screenshot(
     try:
         png = await page.screenshot(type="png", full_page=body.full_page)
     except Exception as exc:
-        logger.warning("Automation screenshot failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("screenshot", profile_id, page_index, exc)
     return Response(content=png, media_type="image/png")
 
 
@@ -4379,8 +4376,7 @@ async def automation_close_page(profile_id: str, page_ref: str, request: Request
     try:
         await page.close()
     except Exception as exc:
-        logger.warning("Automation page close failed for %s page %d: %s", profile_id, page_index, exc)
-        raise HTTPException(status_code=400, detail=str(exc))
+        _raise_automation_page_action_failed("close_page", profile_id, page_index, exc)
     return {"ok": True}
 
 
