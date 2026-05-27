@@ -2280,6 +2280,45 @@ def test_automation_worker_lifespan_starts_enabled_worker_and_stops_it(
     assert captured["stop_event"].is_set()
 
 
+def test_automation_worker_lifespan_uses_defaults_for_invalid_worker_config_without_leaking_values(
+    tmp_db,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    started = threading.Event()
+    stopped = threading.Event()
+    captured: dict = {}
+
+    async def fake_worker_loop(**kwargs):
+        captured.update(kwargs)
+        started.set()
+        await kwargs["stop_event"].wait()
+        stopped.set()
+        return {"claimed": 0, "succeeded": 0, "failed": 0, "cancelled": 0, "idle_cycles": 0}
+
+    monkeypatch.setenv("AUTOMATION_WORKER_ENABLED", "true")
+    monkeypatch.setenv("AUTOMATION_WORKER_LEASE_SECONDS", "0")
+    monkeypatch.setenv("AUTOMATION_WORKER_IDLE_SLEEP_SECONDS", "nan")
+    monkeypatch.setenv("AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS", "secret-timeout-value")
+    monkeypatch.setattr(main, "run_automation_worker_loop", fake_worker_loop)
+    monkeypatch.setattr(main.browser_mgr, "cleanup_stale", AsyncMock())
+    monkeypatch.setattr(main.browser_mgr, "cleanup_all", AsyncMock())
+    monkeypatch.setattr(main.browser_mgr, "auto_launch_all", AsyncMock())
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    with TestClient(main.app):
+        assert started.wait(timeout=1)
+        assert captured["lease_seconds"] == 60
+        assert captured["idle_sleep_seconds"] == 1.0
+
+    assert stopped.wait(timeout=1)
+    assert "AUTOMATION_WORKER_LEASE_SECONDS" in caplog.text
+    assert "AUTOMATION_WORKER_IDLE_SLEEP_SECONDS" in caplog.text
+    assert "AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS" in caplog.text
+    assert "secret-timeout-value" not in caplog.text
+    assert "nan" not in caplog.text
+
+
 def test_run_open_url_step_navigates_existing_page_without_leaking_query(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunOpenUrlProfile"})
     pid = create.json()["id"]

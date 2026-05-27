@@ -11,6 +11,7 @@ import datetime
 import hashlib
 import hmac
 import logging
+import math
 import os
 import random
 import secrets
@@ -159,7 +160,7 @@ def _env_float(name: str, *, default: float, minimum: float) -> float:
     except (TypeError, ValueError):
         logger.warning("Ignoring invalid float config for %s", name)
         return default
-    if value < minimum:
+    if not math.isfinite(value) or value < minimum:
         logger.warning("Ignoring out-of-range float config for %s", name)
         return default
     return value

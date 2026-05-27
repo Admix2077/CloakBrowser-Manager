@@ -572,7 +572,7 @@ POST /api/tasks/{id}/run
 - 应用 lifespan 已支持可选启动一个内部 worker loop：
   - 默认关闭：未设置 `AUTOMATION_WORKER_ENABLED=true` 时不会启动后台 worker，不会自动执行 queued task。
   - 显式启用后，lifespan 使用随机低敏 `lease_owner` 启动一个内部 `run_automation_worker_loop()` task。
-  - 可配置 `AUTOMATION_WORKER_LEASE_SECONDS`、`AUTOMATION_WORKER_IDLE_SLEEP_SECONDS`、`AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS`；无效值回退默认值。
+  - 可配置 `AUTOMATION_WORKER_LEASE_SECONDS`、`AUTOMATION_WORKER_IDLE_SLEEP_SECONDS`、`AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS`；无效值、低于最小值或 `NaN` / `Infinity` 等非有限浮点值回退默认值，告警只记录固定配置名，不记录原始 env 值。
   - shutdown 时先设置内部 `stop_event`，等待 worker 自然退出；超过 shutdown timeout 后取消内部 task。
   - 该能力不新增公开 REST API、调度器 API 或 Project Mileage DTO；不自动启动 profile，不写钱包、订单、权限、扣费、续期、viewer token 或屏幕流逻辑。
 - 内部 `lease_owner` / `lease_expires_at` 不属于前端或 Project Mileage DTO，不应出现在 task API、前端 task log、审计 metadata 或跨仓契约响应中。

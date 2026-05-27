@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lifecycle 配置无效值防护小闭环：
+  - `_env_float()` 现在会把 `NaN`、`Infinity`、`-Infinity` 这类非有限浮点配置视为无效值。
+  - `AUTOMATION_WORKER_LEASE_SECONDS` 低于最小值、`AUTOMATION_WORKER_IDLE_SLEEP_SECONDS` 非有限、`AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS` 非法字符串时，lifespan 回退默认值。
+  - worker 启动配置回退只写固定配置名告警，不记录原始 env 值、task payload、URL、selector、表单值或 secret。
+  - 默认关闭和显式启用 worker 的既有行为保持不变；该小闭环不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+  - 本小闭环不实现 worker 池、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lost lease summary 小闭环：
   - `run_automation_worker_loop()` 会识别内部固定 `409 Automation task lease no longer owned by worker`。
   - 如果单次 worker 因租约不再归当前 owner 而抛出该固定异常，loop 不再崩退出。

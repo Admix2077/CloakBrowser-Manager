@@ -317,7 +317,7 @@ cd frontend && npm run build
   - `AUTOMATION_WORKER_LEASE_SECONDS`：worker claim/续租使用的 lease 秒数，默认 `60`。
   - `AUTOMATION_WORKER_IDLE_SLEEP_SECONDS`：空队列轮询间隔，默认 `1.0`。
   - `AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS`：shutdown 等待 worker 自然退出的最长秒数，默认 `5.0`。
-- 配置值无效或低于最小值时回退默认值，只写固定配置名告警，不写 task payload、URL、selector、表单值或 secret。
+- 配置值无效、低于最小值或为 `NaN` / `Infinity` 等非有限浮点数时回退默认值，只写固定配置名告警，不写原始 env 值、task payload、URL、selector、表单值或 secret。
 - shutdown 时先设置内部 `stop_event`，让 worker 在下一轮 claim 前自然退出；超时后取消内部 task。
 - 该能力不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
 - 本小闭环不实现 worker 池、自动续租循环、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
@@ -326,8 +326,8 @@ cd frontend && npm run build
 验证记录：
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_lifespan_keeps_worker_disabled_by_default backend/tests/test_api.py::test_automation_worker_lifespan_starts_enabled_worker_and_stops_it -q
-# 2 passed
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_lifespan_uses_defaults_for_invalid_worker_config_without_leaking_values backend/tests/test_api.py::test_automation_worker_lifespan_keeps_worker_disabled_by_default backend/tests/test_api.py::test_automation_worker_lifespan_starts_enabled_worker_and_stops_it -q
+# 3 passed
 ```
 
 ## 2026-05-27 Automation task 最小 API 小闭环
