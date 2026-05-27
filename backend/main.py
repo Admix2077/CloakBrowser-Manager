@@ -58,6 +58,7 @@ from .models import (
     AutomationInfoResponse,
     AutomationKeyboardTypeRequest,
     AutomationNetworkSummaryResponse,
+    AutomationPageCloseRequest,
     AutomationPageResponse,
     AutomationPagesResponse,
     AutomationScreenshotRequest,
@@ -4199,7 +4200,21 @@ async def automation_screenshot(
 
 
 @app.delete("/api/profiles/{profile_id}/automation/pages/{page_ref}")
-async def automation_close_page(profile_id: str, page_ref: str):
+async def automation_close_page(profile_id: str, page_ref: str, request: Request):
+    try:
+        body = AutomationPageCloseRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Automation page close requires explicit confirmation",
+        ) from None
+
+    if body.confirm_close_page is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Automation page close requires explicit confirmation",
+        )
+
     _, page, page_index = _automation_get_page(profile_id, page_ref)
     try:
         await page.close()

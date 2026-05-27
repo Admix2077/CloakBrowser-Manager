@@ -2460,11 +2460,38 @@ def test_automation_close_page(app_client: TestClient):
     page = _automation_page("https://example.com/", "Example")
     _automation_running_profile(pid, [page])
 
-    resp = app_client.delete(f"/api/profiles/{pid}/automation/pages/0")
+    resp = app_client.request(
+        "DELETE",
+        f"/api/profiles/{pid}/automation/pages/0",
+        json={"confirm_close_page": True},
+    )
 
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     page.close.assert_awaited_once()
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_close_page_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "AutomationCloseConfirm"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    for payload in ({}, {"confirm_close_page": False}, {"confirm_close_page": "true"}):
+        resp = app_client.request(
+            "DELETE",
+            f"/api/profiles/{pid}/automation/pages/0",
+            json=payload,
+        )
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "detail": "Automation page close requires explicit confirmation"
+        }
+
+    page.close.assert_not_called()
     main.browser_mgr.running.pop(pid, None)
 
 

@@ -545,6 +545,10 @@ class AutomationPagesResponse(BaseModel):
     pages: list[AutomationPageResponse]
 
 
+class AutomationPageCloseRequest(BaseModel):
+    confirm_close_page: StrictBool = False
+
+
 class AutomationConsoleLogEntry(BaseModel):
     type: str
     text: str

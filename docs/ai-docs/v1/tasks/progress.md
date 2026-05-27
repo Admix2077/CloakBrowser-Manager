@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 automation page close 后端强制确认小闭环：
+  - `DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_close_page: true`。
+  - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Automation page close requires explicit confirmation`。
+  - 未确认 close 不会调用 `page.close()`，不会关闭运行中的 automation page。
+  - 确认 close 后继续保留既有语义：按 index 或 `page_id` 找到运行中 page，调用 Playwright `page.close()` 并返回 `{ ok: true }`。
+  - 本小闭环只修改 CloakBrowser 本仓 automation page close 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 runtime session terminate 后端强制确认小闭环：
   - `POST /api/runtime/sessions/{session_id}/terminate` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_terminate: true`。
   - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Runtime session terminate requires explicit confirmation`。

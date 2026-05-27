@@ -1003,3 +1003,21 @@ cd frontend && npm run build
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
 # 67 passed
 ```
+
+## 2026-05-27 Automation page close 强制确认小闭环
+
+当前状态：
+
+- `DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}` 已按高风险 page 状态变更操作收口。
+- 请求体必须显式传入 JSON boolean `confirm_close_page: true`。
+- 缺失确认、`false` 或字符串 `"true"` 返回固定 `422 Automation page close requires explicit confirmation`。
+- 未确认时不调用 `page.close()`，不关闭运行中 page。
+- 确认后保持既有语义：按 index 或 `page_id` 找到运行中 page，调用 Playwright `page.close()`，成功返回 `{ ok: true }`。
+- 本小闭环不新增前端入口，不接 Project Mileage DTO，不写钱包、订单、权限、viewer token 或审计事实。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_close_page_requires_explicit_confirmation_without_side_effects backend/tests/test_api.py::test_automation_close_page -q
+# 2 passed
+```
