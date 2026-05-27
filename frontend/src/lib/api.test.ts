@@ -479,7 +479,7 @@ describe("api.updateProxy", () => {
 });
 
 describe("api.deleteProxy", () => {
-  it("sends DELETE to a proxy asset endpoint", async () => {
+  it("sends DELETE with explicit confirmation to a proxy asset endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
 
     const result = await api.deleteProxy("proxy-1");
@@ -488,6 +488,7 @@ describe("api.deleteProxy", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/proxies/proxy-1");
     expect(options.method).toBe("DELETE");
+    expect(JSON.parse(options.body)).toEqual({ confirm_delete: true });
   });
 });
 

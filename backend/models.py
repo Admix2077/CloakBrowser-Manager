@@ -182,6 +182,10 @@ class ProxyUpdate(BaseModel):
     notes: str | None = Field(default=None)
 
 
+class ProxyDeleteRequest(BaseModel):
+    confirm_delete: StrictBool = False
+
+
 class ProxyProviderPresetCreate(BaseModel):
     name: str = Field(min_length=1)
     provider: str | None = None

@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 proxy delete 后端强制确认小闭环：
+  - `DELETE /api/proxies/{proxy_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy delete requires explicit confirmation`。
+  - 未确认删除不会删除 proxy asset，也不会写 `proxy.deleted` audit；确认删除继续写既有低敏 `proxy.deleted` audit。
+  - 前端 `api.deleteProxy()` 固定发送 `{ confirm_delete: true }`。
+  - 本小闭环只修改 CloakBrowser 本仓 proxy delete 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 sensitive proxy export 双确认小闭环：
   - `POST /api/profiles/export` 只有同时传入 JSON boolean `include_sensitive: true` 和 `confirm_sensitive_export: true` 时，才返回完整 proxy URL；只传 `include_sensitive: true` 会返回固定 `422 Profile export sensitive proxy requires explicit confirmation`。
   - `POST /api/profiles/{profile_id}/bundle/export` 只有同时传入 JSON boolean `include_sensitive_proxy: true` 和 `confirm_sensitive_proxy_export: true` 时，才在 bundle config 中包含完整 proxy；只传 `include_sensitive_proxy: true` 会返回固定 `422 Profile bundle sensitive proxy export requires explicit confirmation`。

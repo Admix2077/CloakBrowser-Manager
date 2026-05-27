@@ -81,6 +81,7 @@ from .models import (
     ProxyBulkCheckResponse,
     ProxyBulkCheckResult,
     ProxyCreate,
+    ProxyDeleteRequest,
     ProxyFromProfileCreate,
     ProxyProviderPresetCreate,
     ProxyProviderPresetResponse,
@@ -1094,7 +1095,21 @@ async def update_proxy(proxy_id: str, req: ProxyUpdate):
 
 
 @app.delete("/api/proxies/{proxy_id}")
-async def delete_proxy(proxy_id: str):
+async def delete_proxy(proxy_id: str, request: Request):
+    try:
+        req = ProxyDeleteRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy delete requires explicit confirmation",
+        ) from None
+
+    if req.confirm_delete is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy delete requires explicit confirmation",
+        )
+
     proxy = db.get_proxy(proxy_id)
     if not proxy:
         raise HTTPException(status_code=404, detail="Proxy not found")

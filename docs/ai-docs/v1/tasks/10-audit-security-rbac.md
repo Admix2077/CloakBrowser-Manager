@@ -126,4 +126,6 @@ cd frontend && npm test -- --run
   - [x] `POST /api/profiles/export` 只有同时传入 JSON boolean `include_sensitive: true` 和 `confirm_sensitive_export: true` 才返回完整 proxy。
   - [x] `POST /api/profiles/{profile_id}/bundle/export` 只有同时传入 JSON boolean `include_sensitive_proxy: true` 和 `confirm_sensitive_proxy_export: true` 才在 bundle config 中包含完整 proxy。
   - [x] 缺失敏感导出确认时返回固定 422，不导出 proxy password，不写 export audit。
+  - [x] `DELETE /api/proxies/{proxy_id}` 后端强制要求 JSON boolean `confirm_delete: true`。
+  - [x] 缺失 proxy 删除确认时返回固定 422，不删除 proxy asset，不写 `proxy.deleted` audit。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

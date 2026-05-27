@@ -654,7 +654,10 @@ export const api = {
     }),
 
   deleteProxy: (id: string) =>
-    request<{ ok: boolean }>(`/api/proxies/${id}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/api/proxies/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirm_delete: true }),
+    }),
 
   checkProxy: (id: string) =>
     request<ProxyAsset>(`/api/proxies/${id}/check`, { method: "POST" }),

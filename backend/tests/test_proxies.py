@@ -139,10 +139,36 @@ def test_proxy_crud_api(app_client: TestClient):
     assert update.json()["url"] == "socks5://jp.proxy.example:1080"
     assert update.json()["tags"] == [{"tag": "priority", "color": None}]
 
-    delete = app_client.delete(f"/api/proxies/{data['id']}")
+    delete = app_client.request(
+        "DELETE",
+        f"/api/proxies/{data['id']}",
+        json={"confirm_delete": True},
+    )
     assert delete.status_code == 200
     assert delete.json() == {"ok": True}
     assert app_client.get(f"/api/proxies/{data['id']}").status_code == 404
+
+
+def test_delete_proxy_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Confirm delete proxy",
+            "url": "http://user:hiddenpass@confirm-delete.example:8080",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+
+    for payload in ({}, {"confirm_delete": False}, {"confirm_delete": "true"}):
+        resp = app_client.request("DELETE", f"/api/proxies/{proxy_id}", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Proxy delete requires explicit confirmation"}
+
+    assert app_client.get(f"/api/proxies/{proxy_id}").status_code == 200
+    assert [event["event_type"] for event in db.list_audit_events()] == ["proxy.created"]
 
 
 def test_proxy_crud_api_writes_redacted_audit_events(app_client: TestClient):
@@ -169,7 +195,11 @@ def test_proxy_crud_api_writes_redacted_audit_events(app_client: TestClient):
     )
     assert update.status_code == 200
 
-    delete = app_client.delete(f"/api/proxies/{proxy_id}")
+    delete = app_client.request(
+        "DELETE",
+        f"/api/proxies/{proxy_id}",
+        json={"confirm_delete": True},
+    )
     assert delete.status_code == 200
 
     events = db.list_audit_events()
@@ -226,7 +256,11 @@ def test_proxy_api_rejects_invalid_url_without_leaking_credentials(app_client: T
 def test_proxy_api_not_found(app_client: TestClient):
     assert app_client.get("/api/proxies/missing").status_code == 404
     assert app_client.put("/api/proxies/missing", json={"name": "x"}).status_code == 404
-    assert app_client.delete("/api/proxies/missing").status_code == 404
+    assert app_client.request(
+        "DELETE",
+        "/api/proxies/missing",
+        json={"confirm_delete": True},
+    ).status_code == 404
     assert app_client.post("/api/proxies/missing/check").status_code == 404
 
 
