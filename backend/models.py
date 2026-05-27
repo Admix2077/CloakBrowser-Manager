@@ -653,8 +653,13 @@ class CookieImportResponse(BaseModel):
     summary: dict[str, Any]
 
 
+class CookieImportConfirmRequest(BaseModel):
+    confirm_import: StrictBool = False
+
+
 class NetscapeCookieImportRequest(BaseModel):
     text: str = Field(min_length=1, max_length=10_000_000)
+    confirm_import: StrictBool = False
 
 
 class CookieExportRequest(BaseModel):

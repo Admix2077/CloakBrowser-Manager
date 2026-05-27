@@ -554,7 +554,7 @@ export const api = {
   importProfileCookies: (profileId: string, document: CookieJsonDocument) =>
     request<CookieImportResponse>(`/api/profiles/${profileId}/cookies/import`, {
       method: "POST",
-      body: JSON.stringify(document),
+      body: JSON.stringify({ ...document, confirm_import: true }),
     }),
 
   exportProfileCookies: (profileId: string) =>
@@ -566,7 +566,7 @@ export const api = {
   importProfileCookiesNetscape: (profileId: string, text: string) =>
     request<CookieImportResponse>(`/api/profiles/${profileId}/cookies/import/netscape`, {
       method: "POST",
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, confirm_import: true }),
     }),
 
   exportProfileCookiesNetscape: (profileId: string) =>

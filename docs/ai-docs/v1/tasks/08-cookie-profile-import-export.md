@@ -83,9 +83,13 @@
 
 - 已新增 `POST /api/profiles/{profile_id}/cookies/import`。
 - 请求体复用 Cookie JSON v1 格式：
+  - `confirm_import`：必须显式传入 JSON boolean `true`。
   - `format`：可选，默认 `cloakbrowser.cookie-json.v1`。
   - `schema_version`：固定 `1`。
   - `cookies[]`：复用 `name/value/domain/url/path/expires/secure/httpOnly/sameSite`。
+- 后端会先校验 `confirm_import`，通过后再把该字段从 Cookie JSON document 中剥离，并交给格式模型校验。
+- 缺失请求体、空 JSON、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Cookie import requires explicit confirmation`。
+- 未确认时不调用运行中 browser context 的 `add_cookies()`，不写入 cookie。
 - 该 endpoint 只允许运行中 profile：
   - profile 未运行返回 `404 Profile not running`。
   - 停止状态 profile 不写 Firefox profile dir，不尝试直接修改磁盘 cookie 存储。
@@ -104,8 +108,8 @@
 验证记录：
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_api.py::test_import_cookie_json_requires_running_profile_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_rejects_invalid_document_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking_payload -q
-# 4 passed
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_requires_explicit_confirmation_without_side_effects backend/tests/test_api.py::test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_api.py::test_import_cookie_json_requires_running_profile_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_rejects_invalid_document_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking_payload -q
+# 5 passed
 ```
 
 ## 2026-05-27 JSON cookie export 显式确认与审计小闭环
@@ -289,9 +293,12 @@ cd frontend && npm run build
 当前状态：
 
 - 已新增 `POST /api/profiles/{profile_id}/cookies/import/netscape`。
-- 请求体为 `{ "text": "<Netscape cookie file text>" }`：
+- 请求体为 `{ "text": "<Netscape cookie file text>", "confirm_import": true }`：
   - `text` 必须非空。
+  - `confirm_import` 必须显式传入 JSON boolean `true`。
   - parser 复用 `parse_netscape_cookies()`，并转换为 Cookie JSON v1 document 后调用运行中 Playwright browser context `add_cookies()`。
+- 缺失请求体、空 JSON、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Cookie import requires explicit confirmation`。
+- 未确认时不解析 Netscape 文本，不调用运行中 browser context 的 `add_cookies()`，不写入 cookie。
 - import 只允许运行中 profile：
   - profile 未运行返回 `404 Profile not running`。
   - 停止状态 profile 不写 Firefox profile dir，不尝试直接修改磁盘 cookie 存储。
@@ -351,7 +358,7 @@ cd frontend && npm run build
   - `JSON`：沿用 `POST /api/profiles/{profile_id}/cookies/import` 和 `POST /api/profiles/{profile_id}/cookies/export`。
   - `Netscape`：新增调用 `POST /api/profiles/{profile_id}/cookies/import/netscape` 和 `POST /api/profiles/{profile_id}/cookies/export/netscape`。
 - 前端 API adapter 已新增：
-  - `api.importProfileCookiesNetscape(profileId, text)` -> `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体 `{ "text": ... }`。
+  - `api.importProfileCookiesNetscape(profileId, text)` -> `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体 `{ "text": ..., "confirm_import": true }`。
   - `api.exportProfileCookiesNetscape(profileId)` -> `POST /api/profiles/{profile_id}/cookies/export/netscape`，请求体固定 `{ "confirm_export": true }`。
 - `ProfileCookieManager` 新增 `JSON / Netscape` 分段模式：
   - 切换模式会清空 textarea、notice、error 和 summary，避免 cookie 明文跨模式残留。

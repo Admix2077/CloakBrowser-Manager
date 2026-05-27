@@ -152,7 +152,10 @@ describe("api.importProfileCookies", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/profiles/profile-1/cookies/import");
     expect(options.method).toBe("POST");
-    expect(JSON.parse(options.body)).toEqual(document);
+    expect(JSON.parse(options.body)).toEqual({
+      ...document,
+      confirm_import: true,
+    });
   });
 });
 
@@ -193,6 +196,7 @@ describe("api.importProfileCookiesNetscape", () => {
     expect(options.method).toBe("POST");
     expect(JSON.parse(options.body)).toEqual({
       text: "example.com\tFALSE\t/\tFALSE\t0\tsid\tsecret",
+      confirm_import: true,
     });
   });
 });

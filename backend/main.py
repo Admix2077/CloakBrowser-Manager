@@ -71,6 +71,7 @@ from .models import (
     ClipboardRequest,
     CookieExportRequest,
     CookieExportResponse,
+    CookieImportConfirmRequest,
     CookieImportResponse,
     NetscapeCookieExportResponse,
     NetscapeCookieImportRequest,
@@ -969,6 +970,26 @@ def _profile_config_import_errors(data: dict) -> list[str]:
     if not str(data.get("name", "")).strip():
         return ["name is required"]
     return []
+
+
+async def _cookie_import_payload_with_confirmation(request: Request) -> dict:
+    try:
+        payload = await request.json()
+        confirmation = CookieImportConfirmRequest.model_validate(payload)
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Cookie import requires explicit confirmation",
+        ) from None
+
+    if confirmation.confirm_import is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Cookie import requires explicit confirmation",
+        )
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="Invalid cookie JSON document")
+    return {key: value for key, value in payload.items() if key != "confirm_import"}
 
 
 def _runtime_service_token_from_request(request: Request) -> str | None:
@@ -1901,9 +1922,11 @@ async def import_profile_configs(req: ProfileConfigImportRequest):
 async def import_profile_cookies(profile_id: str, request: Request):
     running = _automation_running(profile_id)
     try:
-        req = await request.json()
-        document = CookieJsonDocument.model_validate(req)
+        payload = await _cookie_import_payload_with_confirmation(request)
+        document = CookieJsonDocument.model_validate(payload)
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise exc
         logger.warning("Cookie JSON import validation failed for %s: %s", profile_id, type(exc).__name__)
         raise HTTPException(status_code=422, detail="Invalid cookie JSON document") from exc
 
@@ -1925,9 +1948,12 @@ async def import_profile_cookies(profile_id: str, request: Request):
 async def import_profile_cookies_netscape(profile_id: str, request: Request):
     running = _automation_running(profile_id)
     try:
-        req = NetscapeCookieImportRequest.model_validate(await request.json())
+        payload = await _cookie_import_payload_with_confirmation(request)
+        req = NetscapeCookieImportRequest.model_validate({**payload, "confirm_import": True})
         document = parse_netscape_cookies(req.text)
     except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise exc
         logger.warning("Netscape cookie import validation failed for %s: %s", profile_id, type(exc).__name__)
         raise HTTPException(status_code=422, detail="Invalid Netscape cookie document") from exc
 

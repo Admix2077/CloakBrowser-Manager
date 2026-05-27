@@ -965,6 +965,7 @@ def test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_valu
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import",
         json={
+            "confirm_import": True,
             "format": "cloakbrowser.cookie-json.v1",
             "schema_version": 1,
             "cookies": [
@@ -1023,6 +1024,58 @@ def test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_valu
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_import_cookie_json_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "CookieImportConfirmProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    for payload in (
+        None,
+        {},
+        {
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                    "domain": "sensitive.example.com",
+                }
+            ],
+        },
+        {
+            "confirm_import": False,
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                    "domain": "sensitive.example.com",
+                }
+            ],
+        },
+        {
+            "confirm_import": "true",
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                    "domain": "sensitive.example.com",
+                }
+            ],
+        },
+    ):
+        kwargs = {} if payload is None else {"json": payload}
+        resp = app_client.post(f"/api/profiles/{pid}/cookies/import", **kwargs)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Cookie import requires explicit confirmation"}
+        assert "super-secret-cookie-value" not in resp.text
+        assert "sensitive.example.com" not in resp.text
+
+    running.context.add_cookies.assert_not_called()
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_import_cookie_json_requires_running_profile_without_leaking_payload(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "StoppedCookieImportProfile"})
     pid = create.json()["id"]
@@ -1030,6 +1083,7 @@ def test_import_cookie_json_requires_running_profile_without_leaking_payload(app
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import",
         json={
+            "confirm_import": True,
             "schema_version": 1,
             "cookies": [
                 {
@@ -1055,6 +1109,7 @@ def test_import_cookie_json_rejects_invalid_document_without_leaking_payload(app
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import",
         json={
+            "confirm_import": True,
             "schema_version": 1,
             "cookies": [
                 {
@@ -1079,9 +1134,9 @@ def test_import_cookie_json_rejects_invalid_request_shape_without_echoing_input(
     running = _automation_running_profile(pid)
 
     for payload in (
-        [],
-        ["sensitive.example.com", "sid", "super-secret-cookie-value"],
-        "sensitive.example.com sid super-secret-cookie-value",
+        {"confirm_import": True, "cookies": "sensitive.example.com sid super-secret-cookie-value"},
+        {"confirm_import": True, "schema_version": 1, "cookies": {"name": "sid"}},
+        {"confirm_import": True, "schema_version": 1, "cookies": [{"name": "sid"}]},
     ):
         resp = app_client.post(
             f"/api/profiles/{pid}/cookies/import",
@@ -1113,6 +1168,7 @@ def test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import",
         json={
+            "confirm_import": True,
             "schema_version": 1,
             "cookies": [
                 {
@@ -1147,7 +1203,7 @@ def test_import_cookie_netscape_adds_cookies_to_running_profile_without_leaking_
 
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import/netscape",
-        json={"text": text},
+        json={"text": text, "confirm_import": True},
     )
 
     assert resp.status_code == 200
@@ -1191,6 +1247,30 @@ def test_import_cookie_netscape_adds_cookies_to_running_profile_without_leaking_
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_import_cookie_netscape_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "NetscapeCookieImportConfirmProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    text = ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value"
+
+    for payload in (
+        None,
+        {},
+        {"text": text},
+        {"text": text, "confirm_import": False},
+        {"text": text, "confirm_import": "true"},
+    ):
+        kwargs = {} if payload is None else {"json": payload}
+        resp = app_client.post(f"/api/profiles/{pid}/cookies/import/netscape", **kwargs)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Cookie import requires explicit confirmation"}
+        assert "super-secret-cookie-value" not in resp.text
+        assert "sensitive.example.com" not in resp.text
+
+    running.context.add_cookies.assert_not_called()
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_import_cookie_netscape_rejects_malformed_text_without_leaking_payload(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "InvalidNetscapeCookieImportProfile"})
     pid = create.json()["id"]
@@ -1198,7 +1278,10 @@ def test_import_cookie_netscape_rejects_malformed_text_without_leaking_payload(a
 
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import/netscape",
-        json={"text": "sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid"},
+        json={
+            "text": "sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid",
+            "confirm_import": True,
+        },
     )
 
     assert resp.status_code == 422
@@ -1222,7 +1305,7 @@ def test_import_cookie_netscape_rejects_invalid_request_shape_without_echoing_in
     ):
         resp = app_client.post(
             f"/api/profiles/{pid}/cookies/import/netscape",
-            json=payload,
+            json={**payload, "confirm_import": True},
         )
 
         assert resp.status_code == 422
@@ -1242,7 +1325,8 @@ def test_import_cookie_netscape_requires_running_profile_without_leaking_payload
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import/netscape",
         json={
-            "text": ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value"
+            "text": ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value",
+            "confirm_import": True,
         },
     )
 
@@ -1267,7 +1351,8 @@ def test_import_cookie_netscape_add_cookies_failure_uses_fixed_error_without_lea
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/import/netscape",
         json={
-            "text": ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value"
+            "text": ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value",
+            "confirm_import": True,
         },
     )
 

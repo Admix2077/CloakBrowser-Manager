@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 cookie import 后端强制确认小闭环：
+  - `POST /api/profiles/{profile_id}/cookies/import` 和 `POST /api/profiles/{profile_id}/cookies/import/netscape` 必须显式传入 JSON boolean `confirm_import: true`。
+  - 缺失请求体、空 JSON、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Cookie import requires explicit confirmation`。
+  - JSON Cookie import 会先校验确认，通过后再把 `confirm_import` 从 Cookie JSON document 中剥离并交给格式模型校验。
+  - 未确认 import 不会调用运行中 browser context 的 `add_cookies()`，不会写入 cookie。
+  - 前端 `api.importProfileCookies()` 与 `api.importProfileCookiesNetscape()` 固定发送 `{ confirm_import: true }`，既有 Cookie 管理 UI 复用该安全确认。
+  - 本小闭环只修改 CloakBrowser 本仓 cookie import 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 profile launch 后端强制确认小闭环：
   - `POST /api/profiles/{profile_id}/launch` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_launch: true`。
   - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Profile launch requires explicit confirmation`。
