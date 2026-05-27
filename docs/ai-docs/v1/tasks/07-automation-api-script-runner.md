@@ -244,7 +244,7 @@ cd frontend && npm run build
 - loop 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。
 - 空队列时会增加 `idle_cycles`；如果还未达到上限且 `idle_sleep_seconds > 0`，才进行 sleep；达到最后一次允许空闲周期后直接退出，避免额外等待。
 - `stop_event` 在每轮 claim 前检查；如果已设置，不领取 queued task，不修改 task 状态。
-- 当前仍未在 FastAPI lifespan 启动后台常驻任务，不新增公开 REST API，不自动启动 profile，不接 Project Mileage DTO。
+- 当前已在后续小闭环中接入 FastAPI lifespan 可选启动；默认仍不启动后台 worker。
 - 本小闭环不实现 worker 池、自动续租循环、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
 - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 
@@ -256,6 +256,30 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_returns_none_without_queued_task backend/tests/test_api.py::test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload backend/tests/test_api.py::test_automation_worker_run_once_executes_claimed_task_and_clears_lease backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_automation_worker_loop_runs_multiple_claimed_tasks backend/tests/test_api.py::test_automation_worker_loop_stops_after_idle_cycles backend/tests/test_api.py::test_automation_worker_loop_honors_stop_event_before_claiming backend/tests/test_api.py::test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_honors_cancel_request_at_step_boundary_without_running_next_step backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png -q
 # 15 passed
+```
+
+## 2026-05-27 Automation worker lifespan 可选启动小闭环
+
+当前状态：
+
+- FastAPI lifespan 已支持可选启动一个内部 automation worker loop。
+- 默认关闭：未设置 `AUTOMATION_WORKER_ENABLED=true` 时，不启动 worker，不自动领取或执行 queued task。
+- 显式启用时，lifespan 会创建一个随机低敏 `lease_owner`，启动 `run_automation_worker_loop(max_runs=None, max_idle_cycles=None)`。
+- 支持内部运行配置：
+  - `AUTOMATION_WORKER_LEASE_SECONDS`：worker claim/续租使用的 lease 秒数，默认 `60`。
+  - `AUTOMATION_WORKER_IDLE_SLEEP_SECONDS`：空队列轮询间隔，默认 `1.0`。
+  - `AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS`：shutdown 等待 worker 自然退出的最长秒数，默认 `5.0`。
+- 配置值无效或低于最小值时回退默认值，只写固定配置名告警，不写 task payload、URL、selector、表单值或 secret。
+- shutdown 时先设置内部 `stop_event`，让 worker 在下一轮 claim 前自然退出；超时后取消内部 task。
+- 该能力不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+- 本小闭环不实现 worker 池、自动续租循环、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+- 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_lifespan_keeps_worker_disabled_by_default backend/tests/test_api.py::test_automation_worker_lifespan_starts_enabled_worker_and_stops_it -q
+# 2 passed
 ```
 
 ## 2026-05-27 Automation task 最小 API 小闭环

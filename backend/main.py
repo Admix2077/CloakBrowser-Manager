@@ -124,6 +124,44 @@ _AUTOMATION_NETWORK_EVENT_LIMIT = 200
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
+_AUTOMATION_WORKER_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _env_bool(name: str, *, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in _AUTOMATION_WORKER_TRUE_VALUES
+
+
+def _env_int(name: str, *, default: int, minimum: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid integer config for %s", name)
+        return default
+    if value < minimum:
+        logger.warning("Ignoring out-of-range integer config for %s", name)
+        return default
+    return value
+
+
+def _env_float(name: str, *, default: float, minimum: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logger.warning("Ignoring invalid float config for %s", name)
+        return default
+    if value < minimum:
+        logger.warning("Ignoring out-of-range float config for %s", name)
+        return default
+    return value
 
 
 def _check_auth(scope: Scope) -> bool:
@@ -453,13 +491,41 @@ async def lifespan(app: FastAPI):
     db.init_db()
     await browser_mgr.cleanup_stale()
     browser_mgr._auto_launch_task = asyncio.create_task(browser_mgr.auto_launch_all())
+    automation_worker_task: asyncio.Task | None = None
+    automation_worker_stop_event: asyncio.Event | None = None
+    if _env_bool("AUTOMATION_WORKER_ENABLED", default=False):
+        lease_seconds = _env_int("AUTOMATION_WORKER_LEASE_SECONDS", default=60, minimum=1)
+        idle_sleep_seconds = _env_float("AUTOMATION_WORKER_IDLE_SLEEP_SECONDS", default=1.0, minimum=0.0)
+        automation_worker_stop_event = asyncio.Event()
+        automation_worker_task = asyncio.create_task(
+            run_automation_worker_loop(
+                lease_owner=f"automation-worker-{secrets.token_hex(8)}",
+                lease_seconds=lease_seconds,
+                max_runs=None,
+                max_idle_cycles=None,
+                idle_sleep_seconds=idle_sleep_seconds,
+                stop_event=automation_worker_stop_event,
+            ),
+            name="automation-worker-loop",
+        )
     logger.info("Invisible Browser Manager started")
-    yield
-    logger.info("Shutting down — stopping all browsers...")
-    if browser_mgr._auto_launch_task and not browser_mgr._auto_launch_task.done():
-        browser_mgr._auto_launch_task.cancel()
-        await asyncio.gather(browser_mgr._auto_launch_task, return_exceptions=True)
-    await browser_mgr.cleanup_all()
+    try:
+        yield
+    finally:
+        logger.info("Shutting down — stopping all browsers...")
+        if automation_worker_stop_event is not None:
+            automation_worker_stop_event.set()
+        if automation_worker_task is not None and not automation_worker_task.done():
+            shutdown_timeout = _env_float("AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS", default=5.0, minimum=0.0)
+            try:
+                await asyncio.wait_for(automation_worker_task, timeout=shutdown_timeout)
+            except asyncio.TimeoutError:
+                automation_worker_task.cancel()
+                await asyncio.gather(automation_worker_task, return_exceptions=True)
+        if browser_mgr._auto_launch_task and not browser_mgr._auto_launch_task.done():
+            browser_mgr._auto_launch_task.cancel()
+            await asyncio.gather(browser_mgr._auto_launch_task, return_exceptions=True)
+        await browser_mgr.cleanup_all()
 
 
 app = FastAPI(title="Invisible Browser Manager", lifespan=lifespan)

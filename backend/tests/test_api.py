@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -2113,6 +2114,60 @@ async def test_automation_worker_loop_honors_stop_event_before_claiming(app_clie
     assert summary == {"claimed": 0, "succeeded": 0, "failed": 0, "cancelled": 0, "idle_cycles": 0}
     assert main.db.get_automation_task(task["id"])["status"] == "queued"
     main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_worker_lifespan_keeps_worker_disabled_by_default(
+    tmp_db,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    worker_loop = AsyncMock(return_value={"claimed": 0, "succeeded": 0, "failed": 0, "cancelled": 0, "idle_cycles": 0})
+    monkeypatch.delenv("AUTOMATION_WORKER_ENABLED", raising=False)
+    monkeypatch.setattr(main, "run_automation_worker_loop", worker_loop)
+    monkeypatch.setattr(main.browser_mgr, "cleanup_stale", AsyncMock())
+    monkeypatch.setattr(main.browser_mgr, "cleanup_all", AsyncMock())
+    monkeypatch.setattr(main.browser_mgr, "auto_launch_all", AsyncMock())
+
+    with TestClient(main.app):
+        pass
+
+    worker_loop.assert_not_called()
+
+
+def test_automation_worker_lifespan_starts_enabled_worker_and_stops_it(
+    tmp_db,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    started = threading.Event()
+    stopped = threading.Event()
+    captured: dict = {}
+
+    async def fake_worker_loop(**kwargs):
+        captured.update(kwargs)
+        started.set()
+        await kwargs["stop_event"].wait()
+        stopped.set()
+        return {"claimed": 0, "succeeded": 0, "failed": 0, "cancelled": 0, "idle_cycles": 0}
+
+    monkeypatch.setenv("AUTOMATION_WORKER_ENABLED", "true")
+    monkeypatch.setenv("AUTOMATION_WORKER_LEASE_SECONDS", "42")
+    monkeypatch.setenv("AUTOMATION_WORKER_IDLE_SLEEP_SECONDS", "0.25")
+    monkeypatch.setenv("AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS", "1")
+    monkeypatch.setattr(main, "run_automation_worker_loop", fake_worker_loop)
+    monkeypatch.setattr(main.browser_mgr, "cleanup_stale", AsyncMock())
+    monkeypatch.setattr(main.browser_mgr, "cleanup_all", AsyncMock())
+    monkeypatch.setattr(main.browser_mgr, "auto_launch_all", AsyncMock())
+
+    with TestClient(main.app):
+        assert started.wait(timeout=1)
+        assert captured["lease_owner"].startswith("automation-worker-")
+        assert captured["lease_seconds"] == 42
+        assert captured["idle_sleep_seconds"] == 0.25
+        assert captured["max_runs"] is None
+        assert captured["max_idle_cycles"] is None
+        assert not captured["stop_event"].is_set()
+
+    assert stopped.wait(timeout=1)
+    assert captured["stop_event"].is_set()
 
 
 def test_run_open_url_step_navigates_existing_page_without_leaking_query(app_client: TestClient):

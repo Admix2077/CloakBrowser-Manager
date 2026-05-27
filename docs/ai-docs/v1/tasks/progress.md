@@ -35,13 +35,23 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lifespan 可选启动小闭环：
+  - FastAPI lifespan 已支持可选启动一个内部 automation worker loop。
+  - 默认关闭：未设置 `AUTOMATION_WORKER_ENABLED=true` 时，不启动 worker，不自动领取或执行 queued task。
+  - 显式启用时，lifespan 会创建一个随机低敏 `lease_owner`，启动 `run_automation_worker_loop(max_runs=None, max_idle_cycles=None)`。
+  - 支持内部运行配置：`AUTOMATION_WORKER_LEASE_SECONDS`、`AUTOMATION_WORKER_IDLE_SLEEP_SECONDS`、`AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS`。
+  - 配置值无效或低于最小值时回退默认值，只写固定配置名告警，不写 task payload、URL、selector、表单值或 secret。
+  - shutdown 时先设置内部 `stop_event`，让 worker 在下一轮 claim 前自然退出；超时后取消内部 task。
+  - 该能力不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+  - 本小闭环不实现 worker 池、自动续租循环、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker loop 内部骨架小闭环：
   - 新增内部 `run_automation_worker_loop(lease_owner, lease_seconds=60, max_runs=None, max_idle_cycles=1, idle_sleep_seconds=1.0, stop_event=None)`，为后续后台常驻 worker 提供可测试 loop 骨架。
   - loop 持续调用 `run_automation_worker_once()`，直到达到 `max_runs`、达到 `max_idle_cycles` 或 `stop_event` 已设置。
   - loop 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。
   - 空队列时会增加 `idle_cycles`；如果还未达到上限且 `idle_sleep_seconds > 0`，才进行 sleep；达到最后一次允许空闲周期后直接退出，避免额外等待。
   - `stop_event` 在每轮 claim 前检查；如果已设置，不领取 queued task，不修改 task 状态。
-  - 当前仍未在 FastAPI lifespan 启动后台常驻任务，不新增公开 REST API，不自动启动 profile，不接 Project Mileage DTO。
+  - 当前已在后续小闭环中接入 FastAPI lifespan 可选启动；默认仍不启动后台 worker。
   - 本小闭环不实现 worker 池、自动续租循环、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
   - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker run-once 内部骨架小闭环：

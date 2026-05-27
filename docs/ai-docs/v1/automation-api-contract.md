@@ -566,7 +566,12 @@ POST /api/tasks/{id}/run
   - 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。
   - 空闲时仅按 `idle_sleep_seconds` sleep；达到最后一次允许空闲周期后直接退出，避免额外等待。
   - `stop_event` 在每轮 claim 前检查；如果已设置，不领取 queued task，不修改 task 状态。
-- 当前仍未在应用 lifespan 中启动后台常驻 worker 任务、调度器或全局 worker 池；该能力不新增 Project Mileage 对接面，不写钱包、订单、权限、扣费、续期、viewer token 或屏幕流逻辑。
+- 应用 lifespan 已支持可选启动一个内部 worker loop：
+  - 默认关闭：未设置 `AUTOMATION_WORKER_ENABLED=true` 时不会启动后台 worker，不会自动执行 queued task。
+  - 显式启用后，lifespan 使用随机低敏 `lease_owner` 启动一个内部 `run_automation_worker_loop()` task。
+  - 可配置 `AUTOMATION_WORKER_LEASE_SECONDS`、`AUTOMATION_WORKER_IDLE_SLEEP_SECONDS`、`AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS`；无效值回退默认值。
+  - shutdown 时先设置内部 `stop_event`，等待 worker 自然退出；超过 shutdown timeout 后取消内部 task。
+  - 该能力不新增公开 REST API、调度器 API 或 Project Mileage DTO；不自动启动 profile，不写钱包、订单、权限、扣费、续期、viewer token 或屏幕流逻辑。
 - 内部 `lease_owner` / `lease_expires_at` 不属于前端或 Project Mileage DTO，不应出现在 task API、前端 task log、审计 metadata 或跨仓契约响应中。
 
 ## Script Runner 接入建议
