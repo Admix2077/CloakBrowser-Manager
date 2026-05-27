@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成前端 System diagnostics 页面小闭环：
+  - 前端新增 `System` 分段入口和 `SystemDiagnosticsPage`，调用受保护的 `/api/diagnostics`。
+  - 页面只展示低敏 status、storage bool、运行/启动/profile/proxy/task 计数、active display/VNC port 数字、`MAX_RUNNING_PROFILES` 解析结果和 automation worker 解析后配置。
+  - 失败状态只显示固定 `Unable to load diagnostics`，不渲染后端异常原文。
+  - 不展示路径、profile id、proxy host/URL/password、automation payload、URL/query/fragment、selector、cookie/local storage、viewer/runtime token 或 Project Mileage 业务事实。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 06 远程工作台与 VNC 会话，补齐旧仓 GeoIP 出口 IP 注入 WebRTC 环境的小闭环：
   - 参考旧仓 `/home/jeff/local/repos/CloakBrowser`，`geoip=true` 时即使未配置 proxy 也走当前进程/容器出口解析 GeoIP。
   - `timezone` / `locale` 已手动填写时不覆盖手动值，但仍解析并记录 `_geoip_result.ip`。

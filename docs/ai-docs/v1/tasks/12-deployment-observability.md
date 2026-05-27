@@ -59,6 +59,82 @@ docker run --rm -p 8080:8080 -v invisible-browser-profiles-test:/data invisible-
 - [ ] 强杀后再次启动 profile 不因 lock/session restore 卡死。
 - [ ] status 能反映运行中数量。
 
+## 2026-05-28 前端 System diagnostics 页面小闭环
+
+背景：
+
+- 后端已提供受保护的 `/api/diagnostics` 低敏诊断快照，但前端还没有入口。
+- 远程工作台底层进入商业化运行前，运营侧需要能看到运行计数、worker 配置和 storage 基础状态，同时不能展示 profile/proxy/task 明细或任何 secret。
+- 本轮只修改 CloakBrowser 本仓，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `frontend/src/lib/api.ts`
+  - 新增 `SystemDiagnostics` DTO 类型。
+  - 新增 `api.getDiagnostics()`，调用受保护的 `GET /api/diagnostics`。
+- `frontend/src/components/SystemDiagnosticsPage.tsx`
+  - 新增只读 System diagnostics 页面。
+  - 展示低敏字段：status、binary version、storage bool、profile/proxy/task 计数、active display/VNC port 数字、`MAX_RUNNING_PROFILES` 解析结果、automation worker 解析后配置和 task status count。
+  - 支持手动刷新。
+  - 失败时只显示固定 `Unable to load diagnostics`，不渲染后端异常原文。
+- `frontend/src/App.tsx`
+  - 顶部新增 `System` 分段入口，和 Profiles / Proxy Manager / Automation 并列。
+  - 进入 System 时不显示 profile 创建、启动、停止等操作按钮。
+- 测试：
+  - `SystemDiagnosticsPage.test.tsx` 覆盖低敏渲染、刷新和错误脱敏。
+  - `App.test.tsx` 覆盖 System 分段切换。
+  - `api.test.ts` 覆盖 diagnostics API adapter。
+
+边界：
+
+- 页面不渲染真实 `DATA_DIR`/`DB_PATH` 路径、profile id、profile notes、proxy URL/host/username/password、automation steps/result/error、URL/query/fragment、selector、fill value、keyboard text、evaluate expression/result、cookie/local storage、viewer token、runtime service token、AUTH_TOKEN、headers 或 Project Mileage 钱包/订单/权限/审计事实。
+- 该页面仍是 CloakBrowser 本地可信管理台功能；未来 Project Mileage 远程工作台如需诊断能力，必须由 Payload 通过安全 DTO 重新定义，App 不能直连 CloakBrowser `/api/diagnostics`。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- --run src/App.test.tsx -t "System diagnostics"
+# RED: 1 failed；旧 UI 没有 System 入口
+
+cd frontend && npm test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# RED: import ./SystemDiagnosticsPage failed；页面尚不存在
+
+cd frontend && npm test -- --run src/lib/api.test.ts -t "api.getDiagnostics"
+# RED: api.getDiagnostics is not a function
+
+cd frontend && npm test -- --run src/App.test.tsx -t "System diagnostics"
+# 1 passed, 28 skipped
+
+cd frontend && npm test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 3 passed
+
+cd frontend && npm test -- --run src/lib/api.test.ts -t "api.getDiagnostics"
+# 1 passed, 38 skipped
+
+cd frontend && npm test -- --run src/App.test.tsx src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts
+# 3 files passed, 71 tests passed
+
+cd frontend && npm test -- --run
+# 16 files passed, 221 tests passed
+
+cd frontend && npm run build
+# tsc -b && vite build succeeded
+
+. .venv/bin/activate && python - <<'PY'
+# 临时把 backend.database.DATA_DIR / DB_PATH 指向 /tmp/cloakbrowser-system-diagnostics-ui，
+# 然后启动 uvicorn backend.main:app --host 127.0.0.1 --port 18083。
+PY
+# http://127.0.0.1:18083 可访问；/api/diagnostics 返回 200。
+
+Playwright MCP:
+# 打开 http://127.0.0.1:18083，页面标题 Invisible Browser Manager。
+# 点击顶部 System。
+# DOM 可见 System diagnostics、Status: ok、Profiles: 0、Running: 0、Max running: unlimited、Tasks: none。
+# 页面非空白，无 framework error overlay。
+# browser_console_messages(level=warning, all=false): Total messages: 0 (Errors: 0, Warnings: 0)。
+# 截图证据：cloakbrowser-system-diagnostics-page.png。
+```
+
 ## 2026-05-28 `/api/status` 低敏运行计数小闭环
 
 背景：

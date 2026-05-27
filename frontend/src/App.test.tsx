@@ -27,6 +27,13 @@ const mockAutomationTaskLogViewer = vi.hoisted(() => vi.fn(() => (
   </section>
 )));
 
+const mockSystemDiagnosticsPage = vi.hoisted(() => vi.fn(() => (
+  <section role="region" aria-label="System diagnostics">
+    <h2>System diagnostics</h2>
+    <p>System diagnostics page</p>
+  </section>
+)));
+
 vi.mock("./lib/api", () => ({
   api: {
     authStatus: vi.fn(),
@@ -72,6 +79,10 @@ vi.mock("./components/ProxyManagerPage", () => ({
 
 vi.mock("./components/AutomationTaskLogViewer", () => ({
   AutomationTaskLogViewer: mockAutomationTaskLogViewer,
+}));
+
+vi.mock("./components/SystemDiagnosticsPage", () => ({
+  SystemDiagnosticsPage: mockSystemDiagnosticsPage,
 }));
 
 import { api } from "./lib/api";
@@ -196,6 +207,7 @@ beforeEach(() => {
   mockRefresh.mockResolvedValue(undefined);
   mockProxyManagerPage.mockClear();
   mockAutomationTaskLogViewer.mockClear();
+  mockSystemDiagnosticsPage.mockClear();
   mockLaunchProfiles.mockReset();
   mockLaunchProfiles.mockResolvedValue(undefined);
   mockStopProfiles.mockReset();
@@ -322,6 +334,23 @@ describe("App operations console", () => {
     expect(screen.queryByRole("button", { name: "New Profile" })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
     expect(mockAutomationTaskLogViewer).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
+
+    expect(await screen.findByRole("table")).toBeTruthy();
+  });
+
+  it("switches to the read-only System diagnostics section", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("table")).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "System" }));
+
+    expect(screen.getByRole("region", { name: "System diagnostics" })).toBeTruthy();
+    expect(screen.getByText("Runtime counts · worker settings · storage checks")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "New Profile" })).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(mockSystemDiagnosticsPage).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Profiles" }));
 

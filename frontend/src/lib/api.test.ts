@@ -220,6 +220,45 @@ describe("api.exportProfileCookiesNetscape", () => {
   });
 });
 
+describe("api.getDiagnostics", () => {
+  it("requests the protected low-sensitive diagnostics endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      status: "ok",
+      binary_version: "invisible-playwright",
+      storage: {
+        data_dir_exists: true,
+        db_exists: true,
+      },
+      counts: {
+        running: 1,
+        launching: 0,
+        profiles_total: 3,
+        proxy_count: 4,
+        queued_tasks: 5,
+        failed_tasks: 2,
+        automation_task_counts: { queued: 5 },
+      },
+      runtime: {
+        active_displays: [100],
+        active_vnc_ws_ports: [6100],
+        max_running_profiles: 6,
+      },
+      automation_worker: {
+        enabled: false,
+        lease_seconds: 60,
+        idle_sleep_seconds: 1,
+        shutdown_timeout_seconds: 5,
+      },
+    }));
+
+    await api.getDiagnostics();
+
+    expect(mockFetch).toHaveBeenCalledWith("/api/diagnostics", {
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+});
+
 // ── updateProfile ───────────────────────────────────────────────────────────
 
 describe("api.updateProfile", () => {

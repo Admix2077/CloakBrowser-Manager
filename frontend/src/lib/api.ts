@@ -416,6 +416,35 @@ export interface SystemStatus {
   automation_task_counts: Record<string, number>;
 }
 
+export interface SystemDiagnostics {
+  status: "ok";
+  binary_version: string;
+  storage: {
+    data_dir_exists: boolean;
+    db_exists: boolean;
+  };
+  counts: {
+    running: number;
+    launching: number;
+    profiles_total: number;
+    proxy_count: number;
+    queued_tasks: number;
+    failed_tasks: number;
+    automation_task_counts: Record<string, number>;
+  };
+  runtime: {
+    active_displays: number[];
+    active_vnc_ws_ports: number[];
+    max_running_profiles: number | null;
+  };
+  automation_worker: {
+    enabled: boolean;
+    lease_seconds: number;
+    idle_sleep_seconds: number;
+    shutdown_timeout_seconds: number;
+  };
+}
+
 export interface AutomationTaskStep {
   type: string;
   page_ref?: string;
@@ -707,6 +736,8 @@ export const api = {
     }),
 
   getStatus: () => request<SystemStatus>("/api/status"),
+
+  getDiagnostics: () => request<SystemDiagnostics>("/api/diagnostics"),
 
   setClipboard: (id: string, text: string) =>
     request<{ ok: boolean }>(`/api/profiles/${id}/clipboard`, {

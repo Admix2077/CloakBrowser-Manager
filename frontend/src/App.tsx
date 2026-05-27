@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { FileSpreadsheet, ListChecks, Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
+import { Activity, FileSpreadsheet, ListChecks, Lock, Network, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { useProfiles, type BulkHealthResult } from "./hooks/useProfiles";
 import {
   api,
@@ -18,6 +18,7 @@ import { ProfileFilters } from "./components/ProfileFilters";
 import { ProfileSummaryPanel } from "./components/ProfileSummaryPanel";
 import { ProxyManagerPage } from "./components/ProxyManagerPage";
 import { AutomationTaskLogViewer } from "./components/AutomationTaskLogViewer";
+import { SystemDiagnosticsPage } from "./components/SystemDiagnosticsPage";
 import { LaunchButton } from "./components/LaunchButton";
 import { StatusIndicator } from "./components/StatusIndicator";
 import { LoginPage } from "./components/LoginPage";
@@ -30,7 +31,7 @@ import {
 
 type AuthState = "checking" | "required" | "ok" | "error";
 type View = "empty" | "create" | "edit" | "view";
-type ConsoleSection = "profiles" | "proxies" | "automation";
+type ConsoleSection = "profiles" | "proxies" | "automation" | "system";
 type BulkFeedback = {
   tone: "success" | "warning";
   message: string;
@@ -538,11 +539,30 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                 <ListChecks className="h-3.5 w-3.5" />
                 Automation
               </button>
+              <button
+                type="button"
+                aria-pressed={section === "system"}
+                onClick={() => setSection("system")}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-[6px] px-2.5 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-150 active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
+                  section === "system"
+                    ? "bg-white text-slate-950 shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                    : "text-slate-500 hover:bg-white/70 hover:text-slate-900"
+                }`}
+              >
+                <Activity className="h-3.5 w-3.5" />
+                System
+              </button>
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-950">
-                  {section === "profiles" ? "Profiles" : section === "proxies" ? "Proxy Manager" : "Automation"}
+                  {section === "profiles"
+                    ? "Profiles"
+                    : section === "proxies"
+                      ? "Proxy Manager"
+                      : section === "automation"
+                        ? "Automation"
+                        : "System"}
                 </span>
                 {section === "profiles" && (
                   <span className="rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
@@ -555,7 +575,9 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
                   ? `${consoleStats.total} profiles · ${consoleStats.running} running · ${consoleStats.issues} need review`
                   : section === "proxies"
                     ? "Proxy inventory · redacted URLs · assignment controls"
-                    : "Queued scripts · redacted task payloads"}
+                    : section === "automation"
+                      ? "Queued scripts · redacted task payloads"
+                      : "Runtime counts · worker settings · storage checks"}
               </p>
             </div>
             {section === "profiles" && selected && (
@@ -623,6 +645,12 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
           {section === "automation" && (
             <div data-console-section="automation" className="animate-console-section-in h-full min-h-0">
               <AutomationTaskLogViewer />
+            </div>
+          )}
+
+          {section === "system" && (
+            <div data-console-section="system" className="animate-console-section-in h-full min-h-0">
+              <SystemDiagnosticsPage />
             </div>
           )}
 
