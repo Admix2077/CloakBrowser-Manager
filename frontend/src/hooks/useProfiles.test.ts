@@ -391,6 +391,41 @@ describe("useProfiles", () => {
     expect(result.current.error).toBe("Failed to launch 1 profile(s): Launch failed");
   });
 
+  it("honors configured bulk launch concurrency", async () => {
+    vi.stubEnv("VITE_BULK_LAUNCH_CONCURRENCY", "1");
+    const profiles = [
+      { ...fakeProfile, id: "launch-1", name: "Launch 1" },
+      { ...fakeProfile, id: "launch-2", name: "Launch 2" },
+      { ...fakeProfile, id: "launch-3", name: "Launch 3" },
+    ];
+    mockApi.listProfiles.mockResolvedValue(profiles);
+    let inFlight = 0;
+    let maxInFlight = 0;
+    mockApi.launchProfile.mockImplementation(async (id: string) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      inFlight -= 1;
+      return {
+        profile_id: id,
+        status: "running",
+        vnc_ws_port: 6100,
+        display: ":100",
+        automation_url: `/api/profiles/${id}/automation`,
+      };
+    });
+
+    const { result } = renderHook(() => useProfiles());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.launchProfiles(["launch-1", "launch-2", "launch-3"]);
+    });
+
+    expect(mockApi.launchProfile).toHaveBeenCalledTimes(3);
+    expect(maxInFlight).toBe(1);
+  });
+
   it("keeps bulk launch failures visible across background profile refreshes", async () => {
     mockApi.launchProfile.mockRejectedValue(new Error("Failed to launch browser"));
 

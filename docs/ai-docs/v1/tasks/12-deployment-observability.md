@@ -18,7 +18,7 @@
 ### Resource Limits
 
 - [x] 配置最大同时运行 profile 数。
-- [ ] 配置批量启动并发。
+- [x] 配置批量启动并发。
 - [ ] 启动前检查可用 display / ws port。
 - [ ] 停止时释放 VNC 和 browser context。
 - [ ] 清理 stale process。
@@ -189,4 +189,38 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc backend/tests/test_session_broker.py::test_runtime_session_create_respects_max_running_profiles -q
 # 3 passed
+```
+
+## 2026-05-28 `VITE_BULK_LAUNCH_CONCURRENCY` 前端批量启动并发小闭环
+
+背景：
+
+- 前端批量启动此前写死为 2 并发。
+- 在低资源 Docker/VPS 或 Project Mileage 远程工作台内测环境中，需要能保守降低批量启动并发，避免 UI 一次性触发过多 launch 请求。
+- 本轮只修改 CloakBrowser 本仓，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `frontend/src/hooks/useProfiles.ts`
+  - 新增 `VITE_BULK_LAUNCH_CONCURRENCY` 构建时配置读取。
+  - 默认仍为 2。
+  - 非法值、缺失值回退默认 2；合法值钳制在 `1..8`。
+  - 批量启动 `launchProfiles()` 使用解析后的并发数。
+- `frontend/src/hooks/useProfiles.test.ts`
+  - 覆盖 `VITE_BULK_LAUNCH_CONCURRENCY=1` 时，3 个待启动 profile 的最大并发为 1。
+
+边界：
+
+- 该配置只影响 CloakBrowser 前端批量启动按钮触发的并发，不改变单个 `api.launchProfile()` 确认语义，不绕过后端 `MAX_RUNNING_PROFILES`。
+- 该配置不是 Project Mileage 套餐/订单/权限限制；业务侧能否启动、能启动多少环境，未来仍必须由 Payload 作为事实源判断，App 不能直连 CloakBrowser runtime API。
+- 不读取、不记录、不回显任何 secret、profile id、proxy、viewer token 或订单/钱包/审计事实。
+
+验证记录：
+
+```bash
+npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launch concurrency"
+# RED: expected 2 to be 1，说明旧实现仍固定 2 并发
+
+npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launch concurrency"
+# 1 passed, 26 skipped
 ```

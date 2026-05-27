@@ -9,10 +9,18 @@ import {
 import { redactUrlCredentials } from "../lib/profileDisplay";
 
 const HEALTH_CHECK_CONCURRENCY = 6;
-const BULK_LAUNCH_CONCURRENCY = 2;
 const BULK_STOP_CONCURRENCY = 2;
 const BULK_TAG_CONCURRENCY = 4;
 const BULK_DELETE_CONCURRENCY = 2;
+const DEFAULT_BULK_LAUNCH_CONCURRENCY = 2;
+const MAX_BULK_LAUNCH_CONCURRENCY = 8;
+
+function configuredBulkLaunchConcurrency() {
+  const raw = import.meta.env.VITE_BULK_LAUNCH_CONCURRENCY;
+  const parsed = Number.parseInt(typeof raw === "string" ? raw : "", 10);
+  if (!Number.isFinite(parsed)) return DEFAULT_BULK_LAUNCH_CONCURRENCY;
+  return Math.max(1, Math.min(parsed, MAX_BULK_LAUNCH_CONCURRENCY));
+}
 
 export interface BulkLaunchResult {
   requestedCount: number;
@@ -278,7 +286,7 @@ export function useProfiles() {
         return result;
       }
 
-      const workerCount = Math.min(BULK_LAUNCH_CONCURRENCY, launchableIds.length);
+      const workerCount = Math.min(configuredBulkLaunchConcurrency(), launchableIds.length);
       await Promise.all(
         Array.from({ length: workerCount }, async () => {
           while (cursor < launchableIds.length) {

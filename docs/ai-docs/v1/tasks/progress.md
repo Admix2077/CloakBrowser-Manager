@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 `VITE_BULK_LAUNCH_CONCURRENCY` 前端批量启动并发小闭环：
+  - 前端 `launchProfiles()` 不再硬编码批量启动并发 2，而是读取构建时环境变量 `VITE_BULK_LAUNCH_CONCURRENCY`。
+  - 默认仍为 2；缺失或非法值回退默认，合法值钳制在 `1..8`。
+  - 新增前端测试覆盖配置为 1 时，3 个待启动 profile 最大实际并发为 1。
+  - 该配置只影响 CloakBrowser 前端批量按钮的请求并发，不改变单 profile launch 确认、不绕过后端 `MAX_RUNNING_PROFILES`，也不作为 Project Mileage 套餐/订单/权限事实源。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 `MAX_RUNNING_PROFILES` 运行资源限制小闭环：
   - 新增可选环境变量 `MAX_RUNNING_PROFILES`；默认未设置时不限制，合法正整数会限制 `running + launching` 的 profile 总数。
   - 限制判断放在 `BrowserManager.launch()` 内部锁里，普通 profile launch 和 runtime session broker 共享同一资源闸门。
