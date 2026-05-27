@@ -17,6 +17,19 @@ def _bulk_audit_events() -> list[dict]:
     ]
 
 
+def _csv_import_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "csv_text": "\n".join(
+            [
+                "name,proxy,tags,notes,platform,locale,timezone",
+                "Confirmed Import,http://user:hiddenpass@import.example:8080,asia,secret-note,linux,ja-JP,Asia/Tokyo",
+            ]
+        )
+    }
+    payload.update(overrides)
+    return payload
+
+
 def test_profile_csv_import_preview_applies_template_and_explicit_overrides(app_client: TestClient):
     template = app_client.post(
         "/api/profile-templates",
@@ -176,6 +189,7 @@ def test_profile_csv_import_creates_valid_rows_and_keeps_invalid_row_errors(app_
     resp = app_client.post(
         "/api/profiles/import",
         json={
+            "confirm_import": True,
             "csv_text": "\n".join(
                 [
                     "name,proxy,tags,notes,template,platform,locale,timezone",
@@ -221,10 +235,28 @@ def test_profile_csv_import_creates_valid_rows_and_keeps_invalid_row_errors(app_
     assert [profile["name"] for profile in profiles] == ["Imported Good"]
 
 
+def test_profile_csv_import_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    for payload in (
+        _csv_import_payload(),
+        _csv_import_payload(confirm_import=False),
+        _csv_import_payload(confirm_import="true"),
+    ):
+        resp = app_client.post("/api/profiles/import", json=payload)
+
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Profile import requires explicit confirmation"}
+        assert "hiddenpass" not in resp.text
+        assert "import.example" not in resp.text
+        assert "secret-note" not in resp.text
+        assert db.list_profiles() == []
+        assert _bulk_audit_events() == []
+
+
 def test_profile_csv_import_writes_redacted_bulk_audit_event(app_client: TestClient):
     resp = app_client.post(
         "/api/profiles/import",
         json={
+            "confirm_import": True,
             "csv_text": "\n".join(
                 [
                     "name,proxy,tags,notes,platform,locale,timezone",
@@ -254,7 +286,10 @@ def test_profile_csv_import_writes_redacted_bulk_audit_event(app_client: TestCli
 
 
 def test_profile_csv_import_rejects_headerless_csv_without_creating_profiles(app_client: TestClient):
-    resp = app_client.post("/api/profiles/import", json={"csv_text": "just-one-cell"})
+    resp = app_client.post(
+        "/api/profiles/import",
+        json={"csv_text": "just-one-cell", "confirm_import": True},
+    )
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == "CSV header with profile columns is required"
@@ -397,6 +432,7 @@ def test_profile_config_export_can_round_trip_through_config_import(app_client: 
         "/api/profiles/config/import",
         json={
             "schema_version": exported["schema_version"],
+            "confirm_import": True,
             "configs": [exported["results"][0]["config"]],
         },
     )
@@ -420,6 +456,7 @@ def test_profile_config_import_writes_redacted_bulk_audit_event(app_client: Test
         "/api/profiles/config/import",
         json={
             "schema_version": 1,
+            "confirm_import": True,
             "configs": [
                 {
                     "name": "Config Import Audit",

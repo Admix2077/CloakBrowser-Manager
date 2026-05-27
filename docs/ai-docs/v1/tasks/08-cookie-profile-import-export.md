@@ -29,6 +29,7 @@
 - [x] 支持 profile bundle manifest/config-only 格式层。
 - [x] 支持 profile bundle config export API。
 - [x] 支持 profile bundle config import API。
+- [x] profile config import / bundle config import 创建 profile 前必须显式确认。
 - [x] 支持 running profile cookie bundle export。
 - [x] 完成 local storage 只读评估。
 - [x] 支持 running profile 当前 origin local storage bundle export。
@@ -173,7 +174,10 @@
 - 已新增 `POST /api/profiles/config/import`，独立于既有 CSV `POST /api/profiles/import`，避免破坏 CSV 粘贴导入契约。
 - 请求体：
   - `schema_version`：固定 `1`。
+  - `confirm_import`：必须显式传入 JSON boolean `true`。
   - `configs[]`：profile config JSON 数组。
+- 缺失请求体、空 JSON、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Profile config import requires explicit confirmation`。
+- 未确认时不创建 profile，不写 `profile.config_imported` audit。
 - 每条 config 只从白名单字段创建 profile：
   - `name/fingerprint_seed/proxy/timezone/locale/platform/user_agent/screen_width/screen_height/gpu_vendor/gpu_renderer/hardware_concurrency/humanize/human_preset/headless/geoip/clipboard_sync/auto_launch/color_scheme/launch_args/notes/tags`。
 - 明确不导入、不写库、不回显调用方附带的运行态或跨系统事实字段：
@@ -529,7 +533,9 @@ git diff --check
 当前状态：
 
 - 已新增 `POST /api/profiles/bundle/import`。
-- 请求体为 `{ "bundle": ... }`，只接受 `cloakbrowser.profile-bundle.v1` / `schema_version=1`。
+- 请求体为 `{ "bundle": ..., "confirm_import": true }`，只接受 `cloakbrowser.profile-bundle.v1` / `schema_version=1`。
+- `confirm_import` 必须显式传入 JSON boolean `true`；缺失请求体、空 JSON、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Profile bundle import requires explicit confirmation`。
+- 未确认时不创建新 profile，不读取/处理 bundle 内容，不写 audit。
 - import 只读取 `bundle.profile.config`：
   - 复用既有 `ProfileConfigExport` 和 `ProfileCreate` 校验。
   - 只按 profile config 白名单字段创建新 profile。

@@ -67,7 +67,7 @@ describe("api.previewProfileImport", () => {
 });
 
 describe("api.importProfiles", () => {
-  it("sends pasted CSV text to the profile import endpoint", async () => {
+  it("sends pasted CSV text with explicit confirmation to the profile import endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({
       total: 1,
       succeeded: 1,
@@ -82,6 +82,7 @@ describe("api.importProfiles", () => {
     expect(options.method).toBe("POST");
     expect(JSON.parse(options.body)).toEqual({
       csv_text: "name,platform\nImported,linux",
+      confirm_import: true,
     });
   });
 });

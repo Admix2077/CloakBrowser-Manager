@@ -150,4 +150,10 @@ cd frontend && npm test -- --run
   - [x] 缺失 profile launch 确认时返回固定 `422 Profile launch requires explicit confirmation`，不调用 `browser_mgr.launch()`，不启动浏览器/VNC 运行环境，不更新运行状态或 GeoIP 结果；前端 `api.launchProfile()` 固定发送确认 body。
   - [x] `POST /api/profiles/{profile_id}/cookies/import` 和 `/cookies/import/netscape` 后端强制要求 JSON boolean `confirm_import: true`。
   - [x] 缺失 cookie import 确认时返回固定 `422 Cookie import requires explicit confirmation`，不调用 `context.add_cookies()`，不写入运行中 browser context；前端 JSON/Netscape cookie import API 固定发送确认 body。
+  - [x] `POST /api/profiles/import` 后端强制要求 JSON boolean `confirm_import: true`。
+  - [x] 缺失 CSV profile import 确认时返回固定 `422 Profile import requires explicit confirmation`，不创建 profile，不写 `profile.imported` audit；前端 `api.importProfiles()` 固定发送确认 body。
+  - [x] `POST /api/profiles/config/import` 后端强制要求 JSON boolean `confirm_import: true`。
+  - [x] 缺失 profile config import 确认时返回固定 `422 Profile config import requires explicit confirmation`，不创建 profile，不写 `profile.config_imported` audit。
+  - [x] `POST /api/profiles/bundle/import` 后端强制要求 JSON boolean `confirm_import: true`。
+  - [x] 缺失 profile bundle import 确认时返回固定 `422 Profile bundle import requires explicit confirmation`，不创建新 profile；确认导入后仍只读取 `bundle.profile.config` 白名单字段，不导入 cookie/local storage/profile dir/runtime/viewer/automation/Project Mileage 字段。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

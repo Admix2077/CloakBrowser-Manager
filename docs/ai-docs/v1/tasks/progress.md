@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 profile 创建类导入后端强制确认小闭环：
+  - `POST /api/profiles/import`、`POST /api/profiles/config/import` 和 `POST /api/profiles/bundle/import` 都会创建新 profile，必须显式传入 JSON boolean `confirm_import: true`。
+  - 缺失请求体、空 JSON、非 object、缺失确认、`false` 或字符串 `"true"` 均返回固定 422；CSV import 返回 `Profile import requires explicit confirmation`，config import 返回 `Profile config import requires explicit confirmation`，bundle import 返回 `Profile bundle import requires explicit confirmation`。
+  - 未确认导入不会解析并创建 profile，不会写 `profile.imported` / `profile.config_imported` bulk audit；bundle import 仍不写 audit。
+  - 确认通过后继续保留既有语义：CSV import 支持部分成功并写 `profile.imported`，config import 支持行级结果并写 `profile.config_imported`，bundle import 只读取 `bundle.profile.config` 白名单字段并创建新 profile。
+  - 前端 `api.importProfiles()` 固定发送 `{ confirm_import: true }`，既有 CSV preview/import UI 复用该安全确认。
+  - 本小闭环只修改 CloakBrowser 本仓 profile 导入安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 cookie import 后端强制确认小闭环：
   - `POST /api/profiles/{profile_id}/cookies/import` 和 `POST /api/profiles/{profile_id}/cookies/import/netscape` 必须显式传入 JSON boolean `confirm_import: true`。
   - 缺失请求体、空 JSON、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Cookie import requires explicit confirmation`。
@@ -251,6 +258,7 @@
   - 本小闭环不导入 cookie、不导出 local storage、不读取 profile dir、不新增前端入口、不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle config import API 小闭环：
   - 新增 `POST /api/profiles/bundle/import`。
+  - 10 审计安全阶段已补导入确认：该接口必须显式传入 JSON boolean `confirm_import: true`；缺失确认、`false` 或字符串 `"true"` 返回固定 `422 Profile bundle import requires explicit confirmation`，不创建新 profile。
   - 请求体只接受 `cloakbrowser.profile-bundle.v1` / `schema_version=1` bundle。
   - import 只读取 `bundle.profile.config`，复用既有 `ProfileConfigExport` / `ProfileCreate` 校验和 profile config 白名单字段。
   - 成功导入会创建新 profile、新 UUID、新 `user_data_dir`；不会覆盖既有 profile 或调用方传入的 `user_data_dir`。
@@ -325,6 +333,7 @@
   - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 profile config import JSON 小闭环：
   - 新增 `POST /api/profiles/config/import`，独立于既有 CSV `POST /api/profiles/import`，避免破坏 CSV 粘贴导入契约。
+  - 10 审计安全阶段已补导入确认：该接口必须显式传入 JSON boolean `confirm_import: true`；缺失确认、`false` 或字符串 `"true"` 返回固定 `422 Profile config import requires explicit confirmation`，不创建 profile、不写 import audit。
   - 请求体固定 `schema_version=1`，`configs[]` 为 profile config JSON 数组。
   - 每条 config 只从白名单字段创建 profile：`name/fingerprint_seed/proxy/timezone/locale/platform/user_agent/screen_width/screen_height/gpu_vendor/gpu_renderer/hardware_concurrency/humanize/human_preset/headless/geoip/clipboard_sync/auto_launch/color_scheme/launch_args/notes/tags`。
   - 调用方附带的 cookie、local storage、profile dir、`user_data_dir`、runtime session、viewer token、VNC token、automation task、wallet/order/payment/permission/Project Mileage 业务字段不会被导入、写库或回显。

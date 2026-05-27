@@ -50,6 +50,7 @@
 - [x] 导入前预览（后端 API；前端导入 UI 另起闭环）。
 - [x] 无效行标红（Profile CSV preview 前端弹窗）。
 - [x] 部分导入成功，失败行保留原因（后端 API）。
+- [x] CSV profile import 创建 profile 前必须显式确认。
 
 ### 批量运营
 
@@ -494,8 +495,10 @@ cd frontend && npm run build
   - 新增 `ProfileImportResult` / `ProfileImportResponse`。
 - [x] `backend/main.py`
   - 新增 `POST /api/profiles/import`。
+  - 10 审计安全阶段已补导入确认：请求体必须包含 JSON boolean `confirm_import: true`；缺失确认、`false` 或字符串 `"true"` 返回固定 `422 Profile import requires explicit confirmation`。
   - 成功行调用 `db.create_profile`，不调用 `browser_mgr.launch`。
   - 成功行返回真实 `ProfileResponse`，失败行保留错误；只要 header 可解析，部分失败仍返回 `200`。
+  - 未确认导入不创建任何 profile，不写 `profile.imported` audit。
 
 验证：
 
@@ -531,7 +534,7 @@ cd frontend && npm run build
 
 - [x] `frontend/src/lib/api.ts`
   - 新增 `ProfileImportResult` / `ProfileImportResponse`。
-  - 新增 `api.importProfiles(csvText)`，调用 `/api/profiles/import`。
+  - 新增 `api.importProfiles(csvText)`，调用 `/api/profiles/import`，并固定发送 `{ confirm_import: true }`。
 - [x] `frontend/src/components/ProfileCsvPreviewDialog.tsx`
   - Preview 后若存在有效行，显示 `Create valid profiles`。
   - 点击后调用 `api.importProfiles`，进入 creating 状态并防重复提交。

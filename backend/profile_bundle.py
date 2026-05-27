@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from .cookie_formats import COOKIE_JSON_FORMAT, CookieJsonDocument, cookie_json_audit_summary
 from .models import ProfileConfigExport
@@ -98,6 +98,7 @@ class ProfileBundleImportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     bundle: ProfileBundleConfigImportDocument
+    confirm_import: StrictBool = False
 
 
 

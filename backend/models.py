@@ -136,6 +136,11 @@ class ProfileImportPreviewRequest(BaseModel):
     csv_text: str = Field(min_length=1)
 
 
+class ProfileImportRequest(BaseModel):
+    csv_text: str = Field(min_length=1)
+    confirm_import: StrictBool = False
+
+
 class ProfileImportPreviewProfile(BaseModel):
     name: str
     template_id: str | None = None
@@ -452,6 +457,7 @@ class ProfileBundleExportResponse(BaseModel):
 
 class ProfileConfigImportRequest(BaseModel):
     schema_version: Literal[1] = 1
+    confirm_import: StrictBool = False
     configs: list[dict[str, Any]] = Field(min_length=1, max_length=1000)
 
 

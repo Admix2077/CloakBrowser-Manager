@@ -108,6 +108,7 @@ from .models import (
     ProfileExportResponse,
     ProfileExportResult,
     ProfileImportResponse,
+    ProfileImportRequest,
     ProfileImportPreviewRequest,
     ProfileImportPreviewResponse,
     ProfileImportResult,
@@ -972,6 +973,16 @@ def _profile_config_import_errors(data: dict) -> list[str]:
     return []
 
 
+async def _import_payload_with_confirmation(request: Request, detail: str) -> dict:
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail=detail) from None
+    if not isinstance(payload, dict) or payload.get("confirm_import") is not True:
+        raise HTTPException(status_code=422, detail=detail)
+    return payload
+
+
 async def _cookie_import_payload_with_confirmation(request: Request) -> dict:
     try:
         payload = await request.json()
@@ -1716,7 +1727,16 @@ async def preview_profile_import(req: ProfileImportPreviewRequest):
 
 
 @app.post("/api/profiles/import", response_model=ProfileImportResponse)
-async def import_profiles(req: ProfileImportPreviewRequest):
+async def import_profiles(request: Request):
+    payload = await _import_payload_with_confirmation(
+        request,
+        "Profile import requires explicit confirmation",
+    )
+    try:
+        req = ProfileImportRequest.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Invalid profile import request") from exc
+
     try:
         rows = parse_profile_csv_import(req.csv_text)
     except ProfileImportHeaderError as exc:
@@ -1842,7 +1862,16 @@ async def export_profiles(req: ProfileExportRequest):
 
 
 @app.post("/api/profiles/config/import", response_model=ProfileConfigImportResponse)
-async def import_profile_configs(req: ProfileConfigImportRequest):
+async def import_profile_configs(request: Request):
+    payload = await _import_payload_with_confirmation(
+        request,
+        "Profile config import requires explicit confirmation",
+    )
+    try:
+        req = ProfileConfigImportRequest.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail="Invalid profile config import request") from exc
+
     results: list[ProfileConfigImportResult] = []
     for index, config in enumerate(req.configs):
         data = _profile_config_import_data(config)
@@ -2147,8 +2176,12 @@ async def export_profile_bundle(profile_id: str, request: Request):
 
 @app.post("/api/profiles/bundle/import", response_model=ProfileConfigImportResponse)
 async def import_profile_bundle(request: Request):
+    payload = await _import_payload_with_confirmation(
+        request,
+        "Profile bundle import requires explicit confirmation",
+    )
     try:
-        req = ProfileBundleImportRequest.model_validate(await request.json())
+        req = ProfileBundleImportRequest.model_validate(payload)
     except Exception as exc:
         logger.warning("Profile bundle import validation failed: %s", type(exc).__name__)
         raise HTTPException(status_code=422, detail="Invalid profile bundle document") from exc

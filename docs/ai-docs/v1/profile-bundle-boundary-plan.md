@@ -172,6 +172,7 @@ bundle 默认不能包含以下内容：
 ### 切片 3：bundle config import API
 
 - 从 manifest 导入 profile config。
+- 创建新 profile 前必须显式传入 JSON boolean `confirm_import: true`；缺失确认、`false` 或字符串 `"true"` 必须返回固定 422，且不创建 profile。
 - 复用当前 profile config import 白名单。
 - 忽略调用方附带的 runtime/viewer/automation/Project Mileage 字段。
 - 不导入 cookie/local storage/profile dir。

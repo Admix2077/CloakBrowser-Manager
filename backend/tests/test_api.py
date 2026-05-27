@@ -389,11 +389,44 @@ def test_export_profiles_rejects_coerced_sensitive_flag(app_client: TestClient):
     assert resp.status_code == 422
 
 
+def _config_import_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "schema_version": 1,
+        "configs": [
+            {
+                "name": "Confirmed Config Import",
+                "proxy": "http://user:hiddenpass@config-import.example:8080",
+                "notes": "config-secret-note",
+            }
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_import_profile_configs_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    for payload in (
+        _config_import_payload(),
+        _config_import_payload(confirm_import=False),
+        _config_import_payload(confirm_import="true"),
+    ):
+        resp = app_client.post("/api/profiles/config/import", json=payload)
+
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Profile config import requires explicit confirmation"}
+        assert "hiddenpass" not in resp.text
+        assert "config-import.example" not in resp.text
+        assert "config-secret-note" not in resp.text
+        assert app_client.get("/api/profiles").json() == []
+        assert _audit_events_except("profile.created") == []
+
+
 def test_import_profile_configs_creates_profiles_from_safe_config_without_runtime_fields(app_client: TestClient):
     resp = app_client.post(
         "/api/profiles/config/import",
         json={
             "schema_version": 1,
+            "confirm_import": True,
             "configs": [
                 {
                     "name": "Imported Config",
@@ -480,6 +513,7 @@ def test_import_profile_configs_reports_invalid_rows_without_creating_them(app_c
         "/api/profiles/config/import",
         json={
             "schema_version": 1,
+            "confirm_import": True,
             "configs": [
                 {"name": "Good Config", "platform": "macos"},
                 {"name": "", "platform": "android"},
@@ -505,7 +539,7 @@ def test_import_profile_configs_reports_invalid_rows_without_creating_them(app_c
 def test_import_profile_configs_rejects_invalid_schema_without_side_effects(app_client: TestClient):
     resp = app_client.post(
         "/api/profiles/config/import",
-        json={"schema_version": 2, "configs": [{"name": "Wrong Schema"}]},
+        json={"schema_version": 2, "confirm_import": True, "configs": [{"name": "Wrong Schema"}]},
     )
 
     assert resp.status_code == 422
@@ -2080,7 +2114,10 @@ def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app
     bundle["metadata"]["order_id"] = "order-secret"
     bundle["metadata"]["viewer_token"] = "viewer-token-secret"
 
-    resp = app_client.post("/api/profiles/bundle/import", json={"bundle": bundle})
+    resp = app_client.post(
+        "/api/profiles/bundle/import",
+        json={"bundle": bundle, "confirm_import": True},
+    )
 
     assert resp.status_code == 200
     data = resp.json()
@@ -2110,10 +2147,29 @@ def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app
     assert "viewer-token-secret" not in response_text
 
 
+def test_import_profile_bundle_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    source = app_client.post("/api/profiles", json={"name": "Bundle Confirm Source"}).json()
+    exported = app_client.post(f"/api/profiles/{source['id']}/bundle/export", json={}).json()
+    bundle = exported["bundle"]
+
+    for payload in (
+        {"bundle": bundle},
+        {"bundle": bundle, "confirm_import": False},
+        {"bundle": bundle, "confirm_import": "true"},
+    ):
+        resp = app_client.post("/api/profiles/bundle/import", json=payload)
+
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Profile bundle import requires explicit confirmation"}
+        assert [profile["name"] for profile in app_client.get("/api/profiles").json()] == ["Bundle Confirm Source"]
+        assert _audit_events_except("profile.created") == []
+
+
 def test_import_profile_bundle_rejects_invalid_bundle_without_echoing_payload(app_client: TestClient):
     resp = app_client.post(
         "/api/profiles/bundle/import",
         json={
+            "confirm_import": True,
             "bundle": {
                 "format": "wrong-format",
                 "schema_version": 1,

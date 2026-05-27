@@ -534,7 +534,7 @@ export const api = {
   importProfiles: (csvText: string) =>
     request<ProfileImportResponse>("/api/profiles/import", {
       method: "POST",
-      body: JSON.stringify({ csv_text: csvText }),
+      body: JSON.stringify({ csv_text: csvText, confirm_import: true }),
     }),
 
   exportProfiles: (
