@@ -84,7 +84,7 @@
   - metadata 不记录 CSV 原文、导出 config 内容、proxy URL/host/username/password、notes、last_check_error、IP、timezone/locale 原文、cookie/local storage、token、headers、路径或 Project Mileage 业务字段。
 - [x] automation task 写 audit：
   - `POST /api/tasks` 成功创建 queued task 后写 `automation.task.created`。
-  - `POST /api/tasks/{id}/cancel` 对 queued task 成功终止写 `automation.task.cancelled`；对 running task 成功接受协作取消写 `automation.task.cancel_requested`。
+  - `POST /api/tasks/{id}/cancel` 必须显式传入 JSON boolean `confirm_cancel: true`；对 queued task 成功终止写 `automation.task.cancelled`；对 running task 成功接受协作取消写 `automation.task.cancel_requested`。
   - `POST /api/tasks/{id}/retry` 成功创建新 queued task 后写 `automation.task.retried`。
   - `POST /api/tasks/{id}/run` 同步 runner 终态写 `automation.task.succeeded`、`automation.task.failed` 或 `automation.task.cancelled_by_runner`。
   - 内部 `run_automation_worker_once()` worker 终态同样写任务级低敏 audit。
@@ -132,4 +132,6 @@ cd frontend && npm test -- --run
   - [x] 缺失 provider preset 删除确认时返回固定 `422 Proxy provider preset delete requires explicit confirmation`，不删除 preset；前端 `api.deleteProxyProviderPreset()` 固定发送确认 body。
   - [x] `DELETE /api/profile-templates/{template_id}` 后端强制要求 JSON boolean `confirm_delete: true`。
   - [x] 缺失 profile template 删除确认时返回固定 `422 Profile template delete requires explicit confirmation`，不删除 template；前端 `api.deleteProfileTemplate()` 固定发送确认 body。
+  - [x] `POST /api/tasks/{id}/cancel` 后端强制要求 JSON boolean `confirm_cancel: true`。
+  - [x] 缺失 automation task cancel 确认时返回固定 `422 Automation task cancel requires explicit confirmation`，不改变 task 状态，不写 cancel audit。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

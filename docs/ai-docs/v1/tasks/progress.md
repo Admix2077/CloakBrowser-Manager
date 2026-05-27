@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 automation task cancel 后端强制确认小闭环：
+  - `POST /api/tasks/{task_id}/cancel` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_cancel: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Automation task cancel requires explicit confirmation`。
+  - 未确认取消不会把 queued task 改为 `cancelled`，不会把 running task 改为 `cancel_requested`，也不会写 `automation.task.cancelled` / `automation.task.cancel_requested` audit。
+  - 确认取消后继续保留 queued 直接 cancelled、running 协作式 cancel_requested、cancel_requested 幂等返回当前 task 的既有语义；对外响应继续统一脱敏。
+  - 本小闭环只修改 CloakBrowser 本仓 automation task cancel 安全边界，不新增前端取消入口，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 profile template delete 后端强制确认小闭环：
   - `DELETE /api/profile-templates/{template_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
   - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Profile template delete requires explicit confirmation`。

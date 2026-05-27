@@ -62,6 +62,7 @@ from .models import (
     AutomationPagesResponse,
     AutomationScreenshotRequest,
     AutomationScrollRequest,
+    AutomationTaskCancelRequest,
     AutomationTaskCreate,
     AutomationTaskResponse,
     AutomationTasksResponse,
@@ -2819,10 +2820,23 @@ async def get_automation_task(task_id: str):
 
 
 @app.post("/api/tasks/{task_id}/cancel", response_model=AutomationTaskResponse)
-async def cancel_automation_task(task_id: str):
+async def cancel_automation_task(task_id: str, request: Request):
+    try:
+        req = AutomationTaskCancelRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Automation task cancel requires explicit confirmation",
+        ) from None
+
     task = db.get_automation_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
+    if req.confirm_cancel is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Automation task cancel requires explicit confirmation",
+        )
     if task["status"] == "cancel_requested":
         return _automation_task_response(task)
     if task["status"] not in {"queued", "running"}:

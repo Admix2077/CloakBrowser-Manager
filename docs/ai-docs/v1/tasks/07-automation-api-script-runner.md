@@ -490,8 +490,9 @@ cd frontend && npm run build
 
 当前状态：
 
-- `POST /api/tasks/{id}/cancel` 仍支持 queued task 直接取消：`queued -> cancelled`，并写入 `finished_at`。
-- `POST /api/tasks/{id}/cancel` 现在支持 running task 请求取消：`running -> cancel_requested`，`finished_at` 保持 `null`，不伪造已经停止。
+- `POST /api/tasks/{id}/cancel` 必须显式传入 JSON boolean `confirm_cancel: true`；缺失、`false` 或字符串 `"true"` 返回固定 422，且不改变 task 状态、不写 cancel audit。
+- 确认后，`POST /api/tasks/{id}/cancel` 仍支持 queued task 直接取消：`queued -> cancelled`，并写入 `finished_at`。
+- 确认后，`POST /api/tasks/{id}/cancel` 支持 running task 请求取消：`running -> cancel_requested`，`finished_at` 保持 `null`，不伪造已经停止。
 - 已经处于 `cancel_requested` 的 task 重复取消会幂等返回当前 task。
 - 已结束 task 取消返回 `409 Only queued or running automation tasks can be cancelled`。
 - `cancel_requested` task 会继续占用同一 `profile_id` 的执行槽；同 profile 新 queued task run 返回 `409 Automation profile already has a running task`，直到原 task 被 runner 收束。

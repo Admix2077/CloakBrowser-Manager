@@ -40,6 +40,10 @@ def _automation_task_audit_events() -> list[dict]:
     ]
 
 
+def _confirm_cancel_payload() -> dict[str, bool]:
+    return {"confirm_cancel": True}
+
+
 # ── Profile CRUD ─────────────────────────────────────────────────────────────
 
 
@@ -2520,7 +2524,10 @@ def test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events
     ]
 
     created = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps}).json()
-    cancel_resp = app_client.post(f"/api/tasks/{created['id']}/cancel")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{created['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
     retry_resp = app_client.post(f"/api/tasks/{created['id']}/retry")
     run_resp = app_client.post(f"/api/tasks/{retry_resp.json()['id']}/run")
 
@@ -2532,7 +2539,10 @@ def test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events
 
     running_task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
     main.db.update_automation_task(running_task["id"], status="running")
-    cancel_requested_resp = app_client.post(f"/api/tasks/{running_task['id']}/cancel")
+    cancel_requested_resp = app_client.post(
+        f"/api/tasks/{running_task['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert cancel_resp.status_code == 200
     assert retry_resp.status_code == 201
@@ -2702,7 +2712,10 @@ def test_automation_task_responses_redact_open_url_steps(app_client: TestClient)
     task_id = create_resp.json()["id"]
     get_resp = app_client.get(f"/api/tasks/{task_id}")
     list_resp = app_client.get("/api/tasks")
-    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task_id}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert create_resp.status_code == 201
     assert create_resp.json()["steps"] == expected_steps
@@ -2753,7 +2766,10 @@ def test_automation_task_responses_redact_wait_for_selector_steps(app_client: Te
     task_id = create_resp.json()["id"]
     get_resp = app_client.get(f"/api/tasks/{task_id}")
     list_resp = app_client.get("/api/tasks")
-    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task_id}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert create_resp.status_code == 201
     assert create_resp.json()["steps"] == expected_steps
@@ -2799,7 +2815,10 @@ def test_automation_task_responses_redact_evaluate_steps(app_client: TestClient)
     task_id = create_resp.json()["id"]
     get_resp = app_client.get(f"/api/tasks/{task_id}")
     list_resp = app_client.get("/api/tasks")
-    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task_id}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert create_resp.status_code == 201
     assert create_resp.json()["steps"] == expected_steps
@@ -2847,7 +2866,10 @@ def test_automation_task_responses_redact_screenshot_steps(app_client: TestClien
     task_id = create_resp.json()["id"]
     get_resp = app_client.get(f"/api/tasks/{task_id}")
     list_resp = app_client.get("/api/tasks")
-    cancel_resp = app_client.post(f"/api/tasks/{task_id}/cancel")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task_id}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert create_resp.status_code == 201
     assert create_resp.json()["steps"] == expected_steps
@@ -3144,13 +3166,42 @@ def test_cancel_queued_automation_task_marks_cancelled(app_client: TestClient):
     pid = create.json()["id"]
     task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
 
-    resp = app_client.post(f"/api/tasks/{task['id']}/cancel")
+    resp = app_client.post(
+        f"/api/tasks/{task['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == task["id"]
     assert data["status"] == "cancelled"
     assert data["finished_at"] is not None
+
+
+def test_cancel_automation_task_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskCancelConfirmProfile"})
+    pid = create.json()["id"]
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+
+    for payload in ({}, {"confirm_cancel": False}, {"confirm_cancel": "true"}):
+        resp = app_client.post(f"/api/tasks/{task['id']}/cancel", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "detail": "Automation task cancel requires explicit confirmation"
+        }
+
+    stored = app_client.get(f"/api/tasks/{task['id']}").json()
+    assert stored["status"] == "queued"
+    assert stored["finished_at"] is None
+    assert [
+        event["event_type"]
+        for event in _automation_task_audit_events()
+    ] == ["automation.task.created"]
 
 
 def test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload(app_client: TestClient):
@@ -3169,7 +3220,10 @@ def test_cancel_running_automation_task_requests_cooperative_cancel_without_leak
     ).json()
     main.db.update_automation_task(task["id"], status="running")
 
-    resp = app_client.post(f"/api/tasks/{task['id']}/cancel")
+    resp = app_client.post(
+        f"/api/tasks/{task['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
 
     assert resp.status_code == 200
     data = resp.json()

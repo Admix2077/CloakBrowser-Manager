@@ -608,6 +608,10 @@ class AutomationTaskCreate(BaseModel):
     steps: list[dict[str, Any]] = Field(min_length=1, max_length=200)
 
 
+class AutomationTaskCancelRequest(BaseModel):
+    confirm_cancel: StrictBool = False
+
+
 class AutomationTaskResponse(BaseModel):
     id: str
     profile_id: str
