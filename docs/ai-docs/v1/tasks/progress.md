@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 health check audit 小闭环：
+  - `POST /api/profiles/{profile_id}/health/check` 主动检测完成后写 `profile.health_checked` audit event。
+  - `GET /api/profiles/{profile_id}/health` 不写 audit，避免前端只读刷新产生噪声；missing profile 不写 audit，避免扫描 path 或伪造 ID 落库。
+  - audit actor 固定为 `local_admin`；顶层 `profile_id` 指向目标 profile。
+  - metadata 只记录 `status/warning_codes/warning_count/lookup_attempted/lookup_result/geoip_source/geoip_country_code/manual_*_override/runtime_status` 等低敏字段。
+  - metadata 不记录 proxy URL、proxy host、proxy username/password、IP、timezone/locale 原文、warning message/action、异常 message、请求体、headers、token、cookie、`user_data_dir`、viewer URL、VNC 地址、automation URL 或 Project Mileage 钱包/订单/权限/审计事实。
+  - 新增 health audit 测试覆盖成功 GeoIP、invalid proxy 未查询、GeoIP provider 失败、GET 不写 audit、missing profile 不写 audit，并断言 proxy/IP/异常/token/runtime URL 不泄露。
+  - 本小闭环只修改 CloakBrowser 本仓 health check 审计，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 profile mutation audit 小闭环：
   - `POST /api/profiles` 成功后写 `profile.created` audit event。
   - `PUT /api/profiles/{id}` 成功后写 `profile.updated` audit event。

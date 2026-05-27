@@ -687,6 +687,49 @@ def _audit_profile_event(
     )
 
 
+def _health_check_audit_metadata(
+    health: ProfileHealthResponse,
+    *,
+    lookup_attempted: bool,
+    lookup_result: str,
+) -> dict:
+    metadata = {
+        "status": health.status,
+        "warning_codes": [warning.code for warning in health.warnings],
+        "warning_count": len(health.warnings),
+        "lookup_attempted": lookup_attempted,
+        "lookup_result": lookup_result,
+        "manual_timezone_override": health.manual_overrides.get("timezone", False),
+        "manual_locale_override": health.manual_overrides.get("locale", False),
+        "runtime_status": health.runtime.get("status"),
+    }
+    if health.geoip and lookup_result == "success":
+        if health.geoip.source:
+            metadata["geoip_source"] = health.geoip.source
+        if health.geoip.country_code:
+            metadata["geoip_country_code"] = health.geoip.country_code
+    return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _audit_health_check(
+    profile_id: str,
+    health: ProfileHealthResponse,
+    *,
+    lookup_attempted: bool,
+    lookup_result: str,
+) -> None:
+    db.create_audit_event(
+        event_type="profile.health_checked",
+        actor_type="local_admin",
+        profile_id=profile_id,
+        metadata=_health_check_audit_metadata(
+            health,
+            lookup_attempted=lookup_attempted,
+            lookup_result=lookup_result,
+        ),
+    )
+
+
 def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
     safe = dict(preset)
     safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
@@ -2061,31 +2104,59 @@ async def check_profile_health(profile_id: str):
     try:
         proxy_url = validate_profile_proxy(profile)
     except ValueError as exc:
-        return compute_profile_health(
+        health = compute_profile_health(
             profile,
             runtime_status,
             proxy_error=str(exc),
         )
+        _audit_health_check(
+            profile_id,
+            health,
+            lookup_attempted=False,
+            lookup_result="skipped_invalid_proxy",
+        )
+        return health
 
     try:
         geo = await resolve_network_geo(proxy_url)
     except Exception as exc:
         logger.warning("Health GeoIP lookup failed for %s: %s", profile_id, exc)
-        return compute_profile_health(
+        health = compute_profile_health(
             profile,
             runtime_status,
             geoip_lookup_failed=True,
         )
+        _audit_health_check(
+            profile_id,
+            health,
+            lookup_attempted=True,
+            lookup_result="failed",
+        )
+        return health
 
     if any((geo.timezone, geo.locale, geo.ip, geo.country_code)):
         profile = db.update_profile_geoip_result(profile_id, geo.as_dict()) or profile
-        return compute_profile_health(profile, runtime_status)
+        health = compute_profile_health(profile, runtime_status)
+        _audit_health_check(
+            profile_id,
+            health,
+            lookup_attempted=True,
+            lookup_result="success",
+        )
+        return health
 
-    return compute_profile_health(
+    health = compute_profile_health(
         profile,
         runtime_status,
         geoip_lookup_failed=True,
     )
+    _audit_health_check(
+        profile_id,
+        health,
+        lookup_attempted=True,
+        lookup_result="empty",
+    )
+    return health
 
 
 # ── System Status ─────────────────────────────────────────────────────────────

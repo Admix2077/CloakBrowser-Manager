@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -42,6 +43,14 @@ def _runtime(**overrides):
 
 def _warning_codes(result):
     return {warning.code for warning in result.warnings}
+
+
+def _health_audit_events() -> list[dict]:
+    return [
+        event
+        for event in db.list_audit_events()
+        if event["event_type"] == "profile.health_checked"
+    ]
 
 
 def test_health_warning_code_catalog_matches_task_contract():
@@ -192,6 +201,67 @@ def test_health_check_success_persists_geoip_without_overwriting_manual_fields(
     assert profile["last_geoip_source"] == "ipwho.is"
 
 
+def test_health_check_success_writes_redacted_audit_event(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Health Audit Success",
+            "proxy": "http://audit-user:secret-proxy-password@audit-proxy.example:8080",
+            "timezone": "America/New_York",
+            "locale": "en-US",
+        },
+    )
+    pid = create.json()["id"]
+
+    with patch(
+        "backend.main.resolve_network_geo",
+        new=AsyncMock(
+            return_value=GeoIPResult(
+                timezone="Asia/Tokyo",
+                locale="ja-JP",
+                ip="203.0.113.20",
+                country_code="JP",
+                source="ipwho.is",
+            )
+        ),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+
+    events = _health_audit_events()
+    assert len(events) == 1
+    event = events[0]
+    assert event["actor_type"] == "local_admin"
+    assert event["profile_id"] == pid
+    assert event["runtime_session_id"] is None
+    assert event["metadata"] == {
+        "status": "warning",
+        "warning_codes": ["manual_timezone_mismatch", "manual_locale_mismatch"],
+        "warning_count": 2,
+        "lookup_attempted": True,
+        "lookup_result": "success",
+        "geoip_source": "ipwho.is",
+        "geoip_country_code": "JP",
+        "manual_timezone_override": True,
+        "manual_locale_override": True,
+        "runtime_status": "stopped",
+    }
+
+    serialized_event = json.dumps(event, sort_keys=True)
+    assert "secret-proxy-password" not in serialized_event
+    assert "audit-user" not in serialized_event
+    assert "audit-proxy.example" not in serialized_event
+    assert "203.0.113.20" not in serialized_event
+    assert "America/New_York" not in serialized_event
+    assert "Asia/Tokyo" not in serialized_event
+    assert "en-US" not in serialized_event
+    assert "ja-JP" not in serialized_event
+    assert "token" not in serialized_event.lower()
+    assert "automation_url" not in serialized_event
+    assert "vnc_ws_port" not in serialized_event
+
+
 def test_health_check_fallback_success_persists_last_geoip(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -272,6 +342,35 @@ def test_health_check_invalid_proxy_returns_health_error_without_lookup(app_clie
     assert resp.json()["warnings"][0]["code"] == "proxy_invalid"
 
 
+def test_health_check_invalid_proxy_writes_redacted_audit_without_lookup(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={"name": "Bad Proxy Audit", "proxy": "ftp://proxy-secret.example:21"},
+    )
+    pid = create.json()["id"]
+
+    with patch("backend.main.resolve_network_geo", new=AsyncMock(side_effect=AssertionError("network"))):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+
+    events = _health_audit_events()
+    assert len(events) == 1
+    assert events[0]["metadata"] == {
+        "status": "error",
+        "warning_codes": ["proxy_invalid", "geoip_missing"],
+        "warning_count": 2,
+        "lookup_attempted": False,
+        "lookup_result": "skipped_invalid_proxy",
+        "manual_timezone_override": False,
+        "manual_locale_override": False,
+        "runtime_status": "stopped",
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "proxy-secret.example" not in serialized_event
+    assert "ftp://proxy-secret.example:21" not in serialized_event
+
+
 def test_health_check_lookup_failure_keeps_existing_last_geoip(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Health Failure Keeps Cache"})
     pid = create.json()["id"]
@@ -302,3 +401,57 @@ def test_health_check_lookup_failure_keeps_existing_last_geoip(app_client: TestC
     assert profile["last_geoip_timezone"] == "America/Los_Angeles"
     assert profile["last_geoip_locale"] == "en-US"
     assert profile["last_geoip_source"] == "ip-api"
+
+
+def test_health_check_lookup_failure_writes_redacted_audit_event(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Health Audit Failure",
+            "proxy": "http://audit-user:secret-proxy-password@audit-failure.example:8080",
+        },
+    )
+    pid = create.json()["id"]
+
+    with patch(
+        "backend.main.resolve_network_geo",
+        new=AsyncMock(side_effect=RuntimeError("provider unavailable secret-token")),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+
+    events = _health_audit_events()
+    assert len(events) == 1
+    assert events[0]["metadata"] == {
+        "status": "error",
+        "warning_codes": ["geoip_lookup_failed", "geoip_missing"],
+        "warning_count": 2,
+        "lookup_attempted": True,
+        "lookup_result": "failed",
+        "manual_timezone_override": False,
+        "manual_locale_override": False,
+        "runtime_status": "stopped",
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "secret-proxy-password" not in serialized_event
+    assert "audit-failure.example" not in serialized_event
+    assert "provider unavailable" not in serialized_event
+    assert "secret-token" not in serialized_event
+
+
+def test_get_profile_health_does_not_write_audit(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Health GET Audit"})
+    pid = create.json()["id"]
+
+    resp = app_client.get(f"/api/profiles/{pid}/health")
+
+    assert resp.status_code == 200
+    assert _health_audit_events() == []
+
+
+def test_health_check_missing_profile_does_not_write_audit(app_client: TestClient):
+    resp = app_client.post("/api/profiles/missing-health-profile/health/check")
+
+    assert resp.status_code == 404
+    assert _health_audit_events() == []

@@ -55,7 +55,13 @@
   - `DELETE /api/proxies/{id}` 成功写 `proxy.deleted`。
   - actor 固定为 `local_admin`；metadata 只含 `proxy_id/name/provider/country_code/tag_count/updated_fields` 等低敏字段。
   - metadata 不记录 proxy URL、username/password、notes、请求体、错误详情或 Project Mileage 业务字段。
-- [ ] health check 写 audit。
+- [x] health check 写 audit：
+  - `POST /api/profiles/{profile_id}/health/check` 完成主动检测后写 `profile.health_checked`。
+  - `GET /api/profiles/{profile_id}/health` 仍是只读派生计算，不写 audit，避免前端自动刷新产生噪声。
+  - missing profile 不写 audit，避免扫描 path 或伪造 ID 落库。
+  - actor 固定为 `local_admin`；顶层 `profile_id` 指向目标 profile。
+  - metadata 只含 `status/warning_codes/warning_count/lookup_attempted/lookup_result/geoip_source/geoip_country_code/manual_*_override/runtime_status` 等低敏字段。
+  - metadata 不记录 proxy URL、proxy host、proxy username/password、IP、timezone/locale 原文、warning message/action、异常 message、请求体、headers、token、cookie、`user_data_dir`、viewer URL、VNC 地址、automation URL 或 Project Mileage 业务字段。
 - [ ] bulk action 写 audit。
 - [ ] automation task 写 audit。
 - [x] runtime session 写 audit：
