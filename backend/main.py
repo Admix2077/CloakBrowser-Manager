@@ -1614,6 +1614,22 @@ def _automation_task_step_result(index: int, step: dict, status: str) -> dict:
     }
 
 
+def _fail_automation_worker_http_step(
+    task_id: str,
+    lease_owner: str,
+    step_results: list[dict],
+    index: int,
+    step: dict,
+) -> dict:
+    step_results.append(_automation_task_step_result(index, step, "failed"))
+    return _fail_automation_task(
+        task_id,
+        step_results,
+        "Automation step failed",
+        lease_owner=lease_owner,
+    )
+
+
 def _cancel_automation_task(task_id: str, step_results: list[dict]) -> dict:
     cancelled = db.update_automation_task(
         task_id,
@@ -1631,6 +1647,8 @@ def _finish_cancel_requested_automation_task(
     step_results: list[dict],
     index: int | None = None,
     step: dict | None = None,
+    *,
+    lease_owner: str | None = None,
 ) -> dict | None:
     latest = db.get_automation_task(task_id)
     if latest is None:
@@ -1640,10 +1658,39 @@ def _finish_cancel_requested_automation_task(
     final_step_results = list(step_results)
     if index is not None and step is not None:
         final_step_results.append(_automation_task_step_result(index, step, "cancelled"))
+    if lease_owner is not None:
+        cancelled = db.finish_claimed_automation_task(
+            task_id,
+            lease_owner=lease_owner,
+            status="cancelled",
+            result={"steps": final_step_results},
+            error=None,
+            allowed_statuses={"running", "cancel_requested"},
+        )
+        if cancelled is None:
+            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+        return cancelled
     return _cancel_automation_task(task_id, final_step_results)
 
 
-def _fail_automation_task(task_id: str, step_results: list[dict], error: str) -> dict:
+def _fail_automation_task(
+    task_id: str,
+    step_results: list[dict],
+    error: str,
+    *,
+    lease_owner: str | None = None,
+) -> dict:
+    if lease_owner is not None:
+        failed = db.finish_claimed_automation_task(
+            task_id,
+            lease_owner=lease_owner,
+            status="failed",
+            result={"steps": step_results},
+            error=error,
+        )
+        if failed is None:
+            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+        return failed
     failed = db.update_automation_task(
         task_id,
         status="failed",
@@ -1654,6 +1701,34 @@ def _fail_automation_task(task_id: str, step_results: list[dict], error: str) ->
     if failed is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
     return failed
+
+
+def _succeed_automation_task(
+    task_id: str,
+    step_results: list[dict],
+    *,
+    lease_owner: str | None = None,
+) -> dict:
+    if lease_owner is not None:
+        finished = db.finish_claimed_automation_task(
+            task_id,
+            lease_owner=lease_owner,
+            status="succeeded",
+            result={"steps": step_results},
+            error=None,
+        )
+        if finished is None:
+            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+        return finished
+    finished = db.update_automation_task(
+        task_id,
+        status="succeeded",
+        result={"steps": step_results},
+        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+    if finished is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+    return finished
 
 
 def _automation_step_str(step: dict, key: str, default: str | None = None) -> str | None:
@@ -1747,29 +1822,23 @@ async def retry_automation_task(task_id: str):
     return _automation_task_response(retry_task)
 
 
-@app.post("/api/tasks/{task_id}/run", response_model=AutomationTaskResponse)
-async def run_automation_task(task_id: str):
-    task = db.get_automation_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Automation task not found")
-    if task["status"] != "queued":
-        raise HTTPException(status_code=409, detail="Only queued automation tasks can be run")
-    if db.get_profile(task["profile_id"]) is None:
-        raise HTTPException(status_code=404, detail="Profile not found")
-    _automation_running(task["profile_id"])
-    if _automation_profile_has_running_task(task["profile_id"], task_id):
-        raise HTTPException(status_code=409, detail="Automation profile already has a running task")
-
-    started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    running_task = db.update_automation_task(task_id, status="running", started_at=started_at)
-    if running_task is None:
-        raise HTTPException(status_code=404, detail="Automation task not found")
-
+async def _execute_running_automation_task(
+    running_task: dict,
+    *,
+    lease_owner: str | None = None,
+) -> tuple[dict, int]:
+    task_id = running_task["id"]
     step_results: list[dict] = []
     for index, step in enumerate(running_task["steps"]):
-        cancelled = _finish_cancel_requested_automation_task(task_id, step_results, index, step)
+        cancelled = _finish_cancel_requested_automation_task(
+            task_id,
+            step_results,
+            index,
+            step,
+            lease_owner=lease_owner,
+        )
         if cancelled is not None:
-            return _automation_task_response(cancelled)
+            return cancelled, 200
 
         step_type = step.get("type")
         if step_type != "wait":
@@ -1788,8 +1857,9 @@ async def run_automation_task(task_id: str):
                     task_id,
                     step_results,
                     "Unsupported automation step type",
+                    lease_owner=lease_owner,
                 )
-                return _automation_task_finished_response(failed, status_code=400)
+                return failed, 400
 
             if step_type == "wait_for_selector":
                 selector = _automation_step_str(step, "selector")
@@ -1807,17 +1877,30 @@ async def run_automation_task(task_id: str):
                     or raw_timeout_ms > 300_000
                 ):
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid wait_for_selector step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid wait_for_selector step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.wait_for_selector(selector, state=state, timeout=raw_timeout_ms)
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Wait for selector step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Wait for selector step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1826,17 +1909,30 @@ async def run_automation_task(task_id: str):
                 page_ref = _automation_step_str(step, "page_ref", "0") or "0"
                 if expression is None or not expression or len(expression) > 200_000:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid evaluate step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid evaluate step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.evaluate(expression)
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Evaluate step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Evaluate step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1845,17 +1941,30 @@ async def run_automation_task(task_id: str):
                 page_ref = _automation_step_str(step, "page_ref", "0") or "0"
                 if not isinstance(raw_full_page, bool):
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid screenshot step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid screenshot step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.screenshot(type="png", full_page=raw_full_page)
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Screenshot step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Screenshot step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1873,17 +1982,30 @@ async def run_automation_task(task_id: str):
                     or raw_timeout_ms > 300_000
                 ):
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid click step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid click step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.click(selector, timeout=raw_timeout_ms)
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Click step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Click step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1904,17 +2026,30 @@ async def run_automation_task(task_id: str):
                     or raw_timeout_ms > 300_000
                 ):
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid fill step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid fill step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.fill(selector, value, timeout=raw_timeout_ms)
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Fill step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Fill step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1932,17 +2067,30 @@ async def run_automation_task(task_id: str):
                     or raw_delay_ms > 10_000
                 ):
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid keyboard_type step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid keyboard_type step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.keyboard.type(text, delay=raw_delay_ms)
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Keyboard type step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Keyboard type step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1952,8 +2100,13 @@ async def run_automation_task(task_id: str):
                 page_ref = _automation_step_str(step, "page_ref", "0") or "0"
                 if delta_x < -100_000 or delta_x > 100_000 or delta_y < -100_000 or delta_y > 100_000:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Invalid scroll step")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Invalid scroll step",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 try:
                     _, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                     await page.evaluate(
@@ -1961,11 +2114,19 @@ async def run_automation_task(task_id: str):
                         [delta_x, delta_y],
                     )
                 except HTTPException:
+                    if lease_owner is not None:
+                        failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                        return failed, 400
                     raise
                 except Exception:
                     step_results.append(_automation_task_step_result(index, step, "failed"))
-                    failed = _fail_automation_task(task_id, step_results, "Scroll step failed")
-                    return _automation_task_finished_response(failed, status_code=400)
+                    failed = _fail_automation_task(
+                        task_id,
+                        step_results,
+                        "Scroll step failed",
+                        lease_owner=lease_owner,
+                    )
+                    return failed, 400
                 step_results.append(_automation_task_step_result(index, step, "succeeded"))
                 continue
 
@@ -1981,19 +2142,32 @@ async def run_automation_task(task_id: str):
                 or not _is_supported_automation_url(url)
             ):
                 step_results.append(_automation_task_step_result(index, step, "failed"))
-                failed = _fail_automation_task(task_id, step_results, "Invalid open_url step")
-                return _automation_task_finished_response(failed, status_code=400)
+                failed = _fail_automation_task(
+                    task_id,
+                    step_results,
+                    "Invalid open_url step",
+                    lease_owner=lease_owner,
+                )
+                return failed, 400
 
             try:
                 running, page, _ = _automation_get_page(running_task["profile_id"], page_ref)
                 await _automation_apply_page_headers(running, page)
                 await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
             except HTTPException:
+                if lease_owner is not None:
+                    failed = _fail_automation_worker_http_step(task_id, lease_owner, step_results, index, step)
+                    return failed, 400
                 raise
             except Exception:
                 step_results.append(_automation_task_step_result(index, step, "failed"))
-                failed = _fail_automation_task(task_id, step_results, "Open URL step failed")
-                return _automation_task_finished_response(failed, status_code=400)
+                failed = _fail_automation_task(
+                    task_id,
+                    step_results,
+                    "Open URL step failed",
+                    lease_owner=lease_owner,
+                )
+                return failed, 400
 
             step_results.append(_automation_task_step_result(index, step, "succeeded"))
             continue
@@ -2001,8 +2175,13 @@ async def run_automation_task(task_id: str):
         wait_ms = step.get("ms")
         if not isinstance(wait_ms, int) or isinstance(wait_ms, bool) or wait_ms < 1 or wait_ms > 300_000:
             step_results.append(_automation_task_step_result(index, step, "failed"))
-            failed = _fail_automation_task(task_id, step_results, "Invalid wait step")
-            return _automation_task_finished_response(failed, status_code=400)
+            failed = _fail_automation_task(
+                task_id,
+                step_results,
+                "Invalid wait step",
+                lease_owner=lease_owner,
+            )
+            return failed, 400
 
         await asyncio.sleep(wait_ms / 1000)
         step_results.append(_automation_task_step_result(index, step, "succeeded"))
@@ -2013,25 +2192,95 @@ async def run_automation_task(task_id: str):
                 step_results,
                 next_index,
                 running_task["steps"][next_index],
+                lease_owner=lease_owner,
             )
         else:
-            cancelled = _finish_cancel_requested_automation_task(task_id, step_results)
+            cancelled = _finish_cancel_requested_automation_task(
+                task_id,
+                step_results,
+                lease_owner=lease_owner,
+            )
         if cancelled is not None:
-            return _automation_task_response(cancelled)
+            return cancelled, 200
 
-    cancelled = _finish_cancel_requested_automation_task(task_id, step_results)
-    if cancelled is not None:
-        return _automation_task_response(cancelled)
-
-    finished = db.update_automation_task(
+    cancelled = _finish_cancel_requested_automation_task(
         task_id,
-        status="succeeded",
-        result={"steps": step_results},
-        finished_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        step_results,
+        lease_owner=lease_owner,
     )
-    if finished is None:
+    if cancelled is not None:
+        return cancelled, 200
+
+    finished = _succeed_automation_task(task_id, step_results, lease_owner=lease_owner)
+    return finished, 200
+
+
+async def run_automation_worker_once(
+    *,
+    lease_owner: str,
+    lease_seconds: int = 60,
+) -> dict | None:
+    claimed = db.claim_next_automation_task(lease_owner=lease_owner, lease_seconds=lease_seconds)
+    if claimed is None:
+        return None
+    if db.get_profile(claimed["profile_id"]) is None:
+        return db.finish_claimed_automation_task(
+            claimed["id"],
+            lease_owner=lease_owner,
+            status="failed",
+            result={"steps": []},
+            error="Profile not found",
+        )
+    try:
+        _automation_running(claimed["profile_id"])
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else "Profile not running"
+        return db.finish_claimed_automation_task(
+            claimed["id"],
+            lease_owner=lease_owner,
+            status="failed",
+            result={"steps": []},
+            error=detail,
+        )
+    try:
+        finished, _ = await _execute_running_automation_task(claimed, lease_owner=lease_owner)
+    except HTTPException:
+        latest = db.get_automation_task(claimed["id"]) or claimed
+        step_results = latest.get("result", {}).get("steps") if isinstance(latest.get("result"), dict) else None
+        finished = db.finish_claimed_automation_task(
+            claimed["id"],
+            lease_owner=lease_owner,
+            status="failed",
+            result={"steps": step_results if isinstance(step_results, list) else []},
+            error="Automation step failed",
+        )
+        if finished is None:
+            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+    return finished
+
+
+@app.post("/api/tasks/{task_id}/run", response_model=AutomationTaskResponse)
+async def run_automation_task(task_id: str):
+    task = db.get_automation_task(task_id)
+    if task is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
-    return _automation_task_response(finished)
+    if task["status"] != "queued":
+        raise HTTPException(status_code=409, detail="Only queued automation tasks can be run")
+    if db.get_profile(task["profile_id"]) is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    _automation_running(task["profile_id"])
+    if _automation_profile_has_running_task(task["profile_id"], task_id):
+        raise HTTPException(status_code=409, detail="Automation profile already has a running task")
+
+    started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    running_task = db.update_automation_task(task_id, status="running", started_at=started_at)
+    if running_task is None:
+        raise HTTPException(status_code=404, detail="Automation task not found")
+
+    finished, status_code = await _execute_running_automation_task(running_task)
+    if status_code == 200:
+        return _automation_task_response(finished)
+    return _automation_task_finished_response(finished, status_code=status_code)
 
 
 # ── Clipboard Relay ──────────────────────────────────────────────────────────

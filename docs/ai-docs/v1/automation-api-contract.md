@@ -540,11 +540,11 @@ POST /api/tasks/{id}/run
 - `cancel_requested` 只在 step 边界生效，不承诺中断正在执行或正在 await 的 Playwright 操作；收束为 `cancelled` 后 `result.steps[]` 只包含已执行 step 的 `succeeded/failed` 低敏摘要和一个未执行 step 的 `cancelled` 低敏摘要。
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前不实现后台队列或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
+- 当前已提供内部 worker 单次运行入口，但不启动后台循环或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
 
 ### 内部 Task Claim / Lease
 
-当前 DB 层已提供后台队列的前置 claim 能力，但没有开放公开 REST API：
+当前已提供后台队列的内部前置能力，但没有开放公开 REST API：
 
 - `automation_tasks` 内部字段：
   - `lease_owner`：内部 worker 标识。
@@ -555,7 +555,13 @@ POST /api/tasks/{id}/run
   - 如果同一 `profile_id` 已有 `running` 或 `cancel_requested` task 且租约仍有效，则跳过该 profile 的 queued task，避免同 profile 并发。
 - `renew_automation_task_lease(task_id, lease_owner, lease_seconds)` 只允许当前 lease owner 对仍处于允许状态的 task 续租，续租时间按服务器当前时间或调用方传入 `now` 重新计算为 `now + lease_seconds`。
 - `finish_claimed_automation_task(task_id, lease_owner, status, result, error)` 只允许当前 lease owner 把允许来源状态收束为 `succeeded | failed | cancelled`，并清空内部 lease 字段；默认来源状态是 `running`，worker 处理取消请求时可显式允许 `cancel_requested -> cancelled`。
-- 该能力只用于后续内部 worker 池，不自动启动 profile，不执行脚本，不新增 Project Mileage 对接面。
+- `run_automation_worker_once(lease_owner, lease_seconds=60)` 是内部单次 worker 入口：
+  - 无可领取 task 时返回 `None`，不修改 DB。
+  - 通过 `claim_next_automation_task()` 领取 task 后只复用已运行 profile 执行脚本，不自动启动 profile。
+  - profile 不存在或未运行时把已领取 task 用匹配 `lease_owner` 收束为 `failed`，`result.steps` 为空，错误固定为 `Profile not found` 或 `Profile not running`。
+  - 运行中遇到 page not found 等内部 HTTP step 错误时，收束为 `failed`，`error` 固定为 `Automation step failed`，`result.steps[]` 只记录当前 step 的 `index/type/status=failed`。
+  - 成功、失败或取消收束均通过 `finish_claimed_automation_task()` 校验当前 worker owner，并清空 `lease_owner` / `lease_expires_at`。
+- 当前仍未启动后台常驻 worker loop、调度器或全局 worker 池；该能力不新增 Project Mileage 对接面，不写钱包、订单、权限、扣费、续期、viewer token 或屏幕流逻辑。
 - 内部 `lease_owner` / `lease_expires_at` 不属于前端或 Project Mileage DTO，不应出现在 task API、前端 task log、审计 metadata 或跨仓契约响应中。
 
 ## Script Runner 接入建议

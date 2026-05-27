@@ -1946,6 +1946,111 @@ def test_run_automation_task_marks_failed_for_invalid_wait_ms(app_client: TestCl
     main.browser_mgr.running.pop(pid, None)
 
 
+@pytest.mark.asyncio
+async def test_automation_worker_run_once_returns_none_without_queued_task(app_client: TestClient):
+    result = await main.run_automation_worker_once(lease_owner="worker-a")
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerStoppedProfile"})
+    pid = create.json()["id"]
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "open_url", "url": secret_url, "note": "do-not-echo"}]},
+    ).json()
+
+    result = await main.run_automation_worker_once(lease_owner="worker-a")
+
+    assert result is not None
+    data = main._automation_task_response(result).model_dump()
+    assert data["id"] == task["id"]
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "open_url"}]
+    assert data["result"] == {"steps": []}
+    assert data["error"] == "Profile not running"
+    assert data["started_at"] is not None
+    assert data["finished_at"] is not None
+    assert "lease_owner" not in data
+    assert "lease_expires_at" not in data
+    assert secret_url not in str(data)
+    assert "super-secret" not in str(data)
+    assert "do-not-echo" not in str(data)
+
+    persisted = main.db.get_automation_task(task["id"])
+    assert persisted is not None
+    assert persisted["status"] == "failed"
+    assert persisted["lease_owner"] is None
+    assert persisted["lease_expires_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_automation_worker_run_once_executes_claimed_task_and_clears_lease(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerRunProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+
+    result = await main.run_automation_worker_once(lease_owner="worker-a")
+
+    assert result is not None
+    data = main._automation_task_response(result).model_dump()
+    assert data["id"] == task["id"]
+    assert data["status"] == "succeeded"
+    assert data["result"] == {"steps": [{"index": 0, "type": "wait", "status": "succeeded"}]}
+    assert data["started_at"] is not None
+    assert data["finished_at"] is not None
+    assert "lease_owner" not in data
+    assert "lease_expires_at" not in data
+
+    persisted = main.db.get_automation_task(task["id"])
+    assert persisted is not None
+    assert persisted["lease_owner"] is None
+    assert persisted["lease_expires_at"] is None
+    main.browser_mgr.running.pop(pid, None)
+
+
+@pytest.mark.asyncio
+async def test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerStepHttpErrorProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    secret_selector = "#token-super-secret"
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [{"type": "click", "selector": secret_selector, "page_ref": "99"}],
+        },
+    ).json()
+
+    result = await main.run_automation_worker_once(lease_owner="worker-a")
+
+    assert result is not None
+    data = main._automation_task_response(result).model_dump()
+    assert data["id"] == task["id"]
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "click", "page_ref": "99"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "click", "status": "failed"}]}
+    assert data["error"] == "Automation step failed"
+    assert data["finished_at"] is not None
+    assert secret_selector not in str(data)
+    assert "super-secret" not in str(data)
+
+    persisted = main.db.get_automation_task(task["id"])
+    assert persisted is not None
+    assert persisted["lease_owner"] is None
+    assert persisted["lease_expires_at"] is None
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_run_open_url_step_navigates_existing_page_without_leaking_query(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunOpenUrlProfile"})
     pid = create.json()["id"]

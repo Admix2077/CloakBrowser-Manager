@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker run-once 内部骨架小闭环：
+  - 新增内部 `run_automation_worker_once(lease_owner, lease_seconds=60)`，作为后续后台 worker loop 的单次执行骨架。
+  - worker 通过 `claim_next_automation_task()` 原子领取可执行 task；无可领取 task 时返回 `None`，不修改数据库。
+  - 同步 `POST /api/tasks/{id}/run` 的 step 执行逻辑已抽为内部 `_execute_running_automation_task()`，worker 和同步 run 复用同一套 step 校验、执行、低敏 result 和协作式取消边界。
+  - worker 领取 task 后只复用已运行 profile 执行脚本；profile 不存在或未运行时使用匹配 `lease_owner` 将 task 收束为 `failed`，并清空 `lease_owner` / `lease_expires_at`。
+  - worker 执行中遇到 page not found 等内部 HTTP step 错误时，收束为 `failed`，错误固定为 `Automation step failed`，不透传 selector、URL、异常原文或内部路径。
+  - worker 成功、失败或取消收束均走 `finish_claimed_automation_task()` owner 校验；owner 不匹配时不会覆盖 task 状态。
+  - 公开 task API 响应仍不暴露 `lease_owner`、`lease_expires_at`；`steps` 和 `result` 继续统一白名单脱敏。
+  - 当前仍未实现后台常驻 loop、调度器、worker 池、自动续租循环、自动启动 profile、跨系统补偿或 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation task lease renew/finish 数据层小闭环：
   - 新增 DB 层 `renew_automation_task_lease()`，只允许匹配当前 `lease_owner` 且状态允许的 task 续租。
   - 续租时间按当前服务器时间或传入 `now` 重新计算为 `now + lease_seconds`，不在旧 lease 上累加。

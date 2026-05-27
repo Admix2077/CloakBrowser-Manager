@@ -204,6 +204,37 @@ cd frontend && npm run build
 # 43 passed
 ```
 
+## 2026-05-27 Automation worker run-once 内部骨架小闭环
+
+当前状态：
+
+- 新增内部 `run_automation_worker_once(lease_owner, lease_seconds=60)`，作为后续后台 worker loop 的单次执行骨架。
+- 该入口不开放公开 REST API，不自动启动 profile，不新增 Project Mileage 对接面。
+- worker 通过 `claim_next_automation_task()` 原子领取可执行 task；无可领取 task 时返回 `None`，不修改数据库。
+- 同步 `POST /api/tasks/{id}/run` 的 step 执行逻辑已抽为内部 `_execute_running_automation_task()`，worker 和同步 run 复用同一套 step 校验、执行、低敏 result 和协作式取消边界。
+- worker 领取 task 后只复用已运行 profile 执行脚本；profile 不存在或未运行时使用匹配 `lease_owner` 将 task 收束为 `failed`，并清空 `lease_owner` / `lease_expires_at`。
+- worker 执行中遇到 page not found 等内部 HTTP step 错误时，收束为 `failed`，错误固定为 `Automation step failed`，不透传 selector、URL、异常原文或内部路径。
+- worker 成功、失败或取消收束均走 `finish_claimed_automation_task()` owner 校验；owner 不匹配时不会覆盖 task 状态。
+- 公开 task API 响应仍不暴露 `lease_owner`、`lease_expires_at`；`steps` 和 `result` 继续统一白名单脱敏。
+- 当前仍未实现后台常驻 loop、调度器、worker 池、自动续租循环、自动启动 profile、跨系统补偿或 Project Mileage DTO。
+- 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_returns_none_without_queued_task backend/tests/test_api.py::test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_executes_claimed_task_and_clears_lease -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_returns_none_without_queued_task backend/tests/test_api.py::test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload backend/tests/test_api.py::test_automation_worker_run_once_executes_claimed_task_and_clears_lease backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_honors_cancel_request_at_step_boundary_without_running_next_step backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png -q
+# 12 passed
+```
+
 ## 2026-05-27 Automation task 最小 API 小闭环
 
 当前状态：
