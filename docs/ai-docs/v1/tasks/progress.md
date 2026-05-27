@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 profile delete 后端强制确认小闭环：
+  - `DELETE /api/profiles/{profile_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Profile delete requires explicit confirmation`。
+  - 未确认删除不会调用 `browser_mgr.stop()`，不会删除 DB 记录，不会删除 `user_data_dir`，也不会写 `profile.deleted` audit。
+  - 确认删除继续先停止运行 profile，再删除 DB，再清理磁盘，并写既有低敏 `profile.deleted` audit。
+  - 前端 `api.deleteProfile()` 固定发送 `{ confirm_delete: true }`，既有单 profile UI dialog 和 bulk delete 确认流程继续保留。
+  - 本小闭环只修改 CloakBrowser 本仓 profile delete 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 cookie export 不写日志小闭环：
   - `POST /api/profiles/{profile_id}/cookies/export`、`POST /api/profiles/{profile_id}/cookies/export/netscape` 和 `POST /api/profiles/{profile_id}/bundle/export` 的 cookie export 分支成功路径不写 logger。
   - 以上 cookie export 失败路径只返回固定错误，不写 manager logger，不写失败 audit，不记录异常类型、profile id、cookie value、cookie name、domain、URL、query 或 fragment。

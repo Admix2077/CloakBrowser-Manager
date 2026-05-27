@@ -211,13 +211,14 @@ describe("api.updateProfile", () => {
 // ── deleteProfile ───────────────────────────────────────────────────────────
 
 describe("api.deleteProfile", () => {
-  it("sends DELETE request", async () => {
+  it("sends DELETE request with explicit confirmation", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
     const result = await api.deleteProfile("1");
     expect(result).toEqual({ ok: true });
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/profiles/1");
     expect(options.method).toBe("DELETE");
+    expect(JSON.parse(options.body)).toEqual({ confirm_delete: true });
   });
 });
 

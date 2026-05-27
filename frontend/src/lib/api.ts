@@ -574,7 +574,10 @@ export const api = {
     }),
 
   deleteProfile: (id: string) =>
-    request<{ ok: boolean }>(`/api/profiles/${id}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/api/profiles/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirm_delete: true }),
+    }),
 
   listProfileTemplates: () =>
     request<ProfileTemplate[]>("/api/profile-templates"),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import sys
 import threading
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -129,15 +130,55 @@ def test_update_profile_not_found(app_client: TestClient):
 def test_delete_profile(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Delete Me"})
     pid = create.json()["id"]
-    resp = app_client.delete(f"/api/profiles/{pid}")
+    resp = app_client.request(
+        "DELETE",
+        f"/api/profiles/{pid}",
+        json={"confirm_delete": True},
+    )
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
     # Confirm gone
     assert app_client.get(f"/api/profiles/{pid}").status_code == 404
 
 
+def test_delete_profile_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Delete Needs Confirm"})
+    pid = create.json()["id"]
+    profile = main.db.get_profile(pid)
+    assert profile is not None
+    user_data_dir = Path(profile["user_data_dir"])
+    user_data_dir.mkdir(parents=True, exist_ok=True)
+    marker = user_data_dir / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    # Inject mock running profile; the unconfirmed delete must not stop it.
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = 100
+    mock_running.ws_port = 6100
+    mock_running.engine = "invisible_playwright"
+    main.browser_mgr.running[pid] = mock_running
+    main.browser_mgr.stop = AsyncMock()
+
+    for payload in ({}, {"confirm_delete": False}, {"confirm_delete": "true"}):
+        resp = app_client.request("DELETE", f"/api/profiles/{pid}", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Profile delete requires explicit confirmation"}
+
+    main.browser_mgr.stop.assert_not_called()
+    assert main.db.get_profile(pid) is not None
+    assert marker.read_text(encoding="utf-8") == "keep"
+    assert _audit_events_except("profile.created") == []
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_delete_profile_not_found(app_client: TestClient):
-    resp = app_client.delete("/api/profiles/nonexistent")
+    resp = app_client.request(
+        "DELETE",
+        "/api/profiles/nonexistent",
+        json={"confirm_delete": True},
+    )
     assert resp.status_code == 404
 
 
@@ -166,7 +207,11 @@ def test_profile_crud_api_writes_redacted_audit_events(app_client: TestClient):
     )
     assert update.status_code == 200
 
-    delete = app_client.delete(f"/api/profiles/{profile_id}")
+    delete = app_client.request(
+        "DELETE",
+        f"/api/profiles/{profile_id}",
+        json={"confirm_delete": True},
+    )
     assert delete.status_code == 200
 
     events = main.db.list_audit_events()
@@ -219,7 +264,11 @@ def test_delete_profile_stops_running(app_client: TestClient):
     main.browser_mgr.running[pid] = mock_running
     main.browser_mgr.stop = AsyncMock()
 
-    resp = app_client.delete(f"/api/profiles/{pid}")
+    resp = app_client.request(
+        "DELETE",
+        f"/api/profiles/{pid}",
+        json={"confirm_delete": True},
+    )
     assert resp.status_code == 200
     main.browser_mgr.stop.assert_called_once_with(pid)
 

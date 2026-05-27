@@ -119,4 +119,8 @@ cd frontend && npm test -- --run
 - [x] runtime service API 与 local admin API token 隔离。
 - [x] WebSocket origin 检查不退化。
 - [x] audit 中没有 proxy password、cookie value、token。
-- [ ] 删除、导出、终止等高风险操作有确认或权限限制。
+- [ ] 删除、导出、终止等高风险操作有确认或权限限制：
+  - [x] `DELETE /api/profiles/{profile_id}` 后端强制要求 JSON boolean `confirm_delete: true`。
+  - [x] 缺失确认、`false` 或字符串 `"true"` 返回固定 `422 Profile delete requires explicit confirmation`，不停止运行 profile、不删除 DB、不删除 `user_data_dir`、不写 delete audit。
+  - [x] 前端 `api.deleteProfile()` 固定发送 `{ confirm_delete: true }`，保留既有 UI 删除确认。
+  - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

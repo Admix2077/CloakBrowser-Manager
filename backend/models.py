@@ -63,6 +63,10 @@ class ProfileUpdate(BaseModel):
     tags: list[TagCreate] | None = None
 
 
+class ProfileDeleteRequest(BaseModel):
+    confirm_delete: StrictBool = False
+
+
 class TagResponse(BaseModel):
     tag: str
     color: str | None = None

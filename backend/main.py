@@ -95,6 +95,7 @@ from .models import (
     ProfileConfigImportResponse,
     ProfileConfigImportResult,
     ProfileConfigExport,
+    ProfileDeleteRequest,
     ProfileBundleExportRequest,
     ProfileBundleExportResponse,
     ProfileExportRequest,
@@ -2103,7 +2104,21 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
 
 
 @app.delete("/api/profiles/{profile_id}")
-async def delete_profile(profile_id: str):
+async def delete_profile(profile_id: str, request: Request):
+    try:
+        req = ProfileDeleteRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile delete requires explicit confirmation",
+        ) from None
+
+    if req.confirm_delete is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile delete requires explicit confirmation",
+        )
+
     # Stop browser if running
     if profile_id in browser_mgr.running:
         await browser_mgr.stop(profile_id)
