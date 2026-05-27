@@ -67,6 +67,10 @@ class ProfileDeleteRequest(BaseModel):
     confirm_delete: StrictBool = False
 
 
+class ProfileStopRequest(BaseModel):
+    confirm_stop: StrictBool = False
+
+
 class TagResponse(BaseModel):
     tag: str
     color: str | None = None

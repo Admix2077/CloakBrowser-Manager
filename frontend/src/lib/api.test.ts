@@ -270,10 +270,13 @@ describe("api.launchProfile", () => {
 // ── stopProfile ─────────────────────────────────────────────────────────────
 
 describe("api.stopProfile", () => {
-  it("sends POST to stop endpoint", async () => {
+  it("sends POST to stop endpoint with explicit confirmation", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
     await api.stopProfile("1");
-    expect(mockFetch.mock.calls[0][0]).toBe("/api/profiles/1/stop");
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/1/stop");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ confirm_stop: true });
   });
 });
 

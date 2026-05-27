@@ -819,6 +819,7 @@ git diff --check
 - `BulkActionBar` 已经接入批量 health check 和批量 launch，本小闭环继续接入批量 stop。
 - 不新增后端 bulk API，前端复用现有单 profile `/api/profiles/{id}/stop`。
 - 后端对非 running profile 的 stop 返回 404 `Profile is not running`，所以前端批量 stop 必须只作用当前选中且 `status === "running"` 的 profiles；stopped profiles 跳过，不作为错误。
+- 当前 stop profile 已按高风险运行时操作收口：后端要求 JSON boolean `confirm_stop: true`，前端 `api.stopProfile()` 会固定发送确认 body；缺失确认不会停止运行环境。
 
 已完成：
 

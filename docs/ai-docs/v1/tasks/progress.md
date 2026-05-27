@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 profile stop 后端强制确认小闭环：
+  - `POST /api/profiles/{profile_id}/stop` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_stop: true`。
+  - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Profile stop requires explicit confirmation`。
+  - 未确认停止不会调用 `browser_mgr.stop()`，不会停止运行中的 profile。
+  - 确认停止后继续保留既有语义：未运行返回 `404 Profile is not running`，运行中调用 `browser_mgr.stop(profile_id)` 并返回 `{ ok: true }`。
+  - 前端 `api.stopProfile()` 固定发送 `{ confirm_stop: true }`，既有单 profile stop 和批量 stop 流程复用该安全确认。
+  - 本小闭环只修改 CloakBrowser 本仓 profile stop 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 automation task cancel 后端强制确认小闭环：
   - `POST /api/tasks/{task_id}/cancel` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_cancel: true`。
   - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Automation task cancel requires explicit confirmation`。

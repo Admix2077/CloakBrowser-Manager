@@ -110,6 +110,7 @@ from .models import (
     ProfileImportResult,
     ProfileResponse,
     ProfileStatusResponse,
+    ProfileStopRequest,
     ProfileTemplateCreate,
     ProfileTemplateDeleteRequest,
     ProfileTemplateResponse,
@@ -2228,7 +2229,21 @@ async def launch_profile(profile_id: str):
 
 
 @app.post("/api/profiles/{profile_id}/stop")
-async def stop_profile(profile_id: str):
+async def stop_profile(profile_id: str, request: Request):
+    try:
+        req = ProfileStopRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile stop requires explicit confirmation",
+        ) from None
+
+    if req.confirm_stop is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile stop requires explicit confirmation",
+        )
+
     if profile_id not in browser_mgr.running:
         raise HTTPException(status_code=404, detail="Profile is not running")
     await browser_mgr.stop(profile_id)

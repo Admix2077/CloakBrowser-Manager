@@ -612,7 +612,10 @@ export const api = {
     request<LaunchResult>(`/api/profiles/${id}/launch`, { method: "POST" }),
 
   stopProfile: (id: string) =>
-    request<{ ok: boolean }>(`/api/profiles/${id}/stop`, { method: "POST" }),
+    request<{ ok: boolean }>(`/api/profiles/${id}/stop`, {
+      method: "POST",
+      body: JSON.stringify({ confirm_stop: true }),
+    }),
 
   getProfileHealth: (id: string) =>
     request<ProfileHealthResponse>(`/api/profiles/${id}/health`),

@@ -649,8 +649,34 @@ def test_launch_persists_resolved_geoip_result(app_client: TestClient):
 
 
 def test_stop_not_running(app_client: TestClient):
-    resp = app_client.post("/api/profiles/nonexistent/stop")
+    resp = app_client.post("/api/profiles/nonexistent/stop", json={"confirm_stop": True})
     assert resp.status_code == 404
+
+
+def test_stop_profile_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Stop Needs Confirm"})
+    pid = create.json()["id"]
+    main.browser_mgr.running[pid] = MagicMock(spec=RunningProfile)
+
+    try:
+        with patch.object(main.browser_mgr, "stop", new=AsyncMock()) as stop:
+            requests = [
+                lambda: app_client.post(f"/api/profiles/{pid}/stop"),
+                lambda: app_client.post(f"/api/profiles/{pid}/stop", json={}),
+                lambda: app_client.post(f"/api/profiles/{pid}/stop", json={"confirm_stop": False}),
+                lambda: app_client.post(f"/api/profiles/{pid}/stop", json={"confirm_stop": "true"}),
+            ]
+            for request in requests:
+                resp = request()
+                assert resp.status_code == 422
+                assert resp.json() == {"detail": "Profile stop requires explicit confirmation"}
+
+            stop.assert_not_called()
+            assert pid in main.browser_mgr.running
+    finally:
+        main.browser_mgr.running.pop(pid, None)
 
 
 def test_stop_success_calls_manager_and_returns_ok(app_client: TestClient):
@@ -659,7 +685,7 @@ def test_stop_success_calls_manager_and_returns_ok(app_client: TestClient):
     main.browser_mgr.running[pid] = MagicMock(spec=RunningProfile)
 
     with patch.object(main.browser_mgr, "stop", new=AsyncMock()) as stop:
-        resp = app_client.post(f"/api/profiles/{pid}/stop")
+        resp = app_client.post(f"/api/profiles/{pid}/stop", json={"confirm_stop": True})
 
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
