@@ -291,3 +291,42 @@ def test_bulk_export_profile_configs_requires_at_least_one_profile_id(app_client
     resp = app_client.post("/api/profiles/export", json={"profile_ids": []})
 
     assert resp.status_code == 422
+
+
+def test_profile_config_export_can_round_trip_through_config_import(app_client: TestClient):
+    created = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Round Trip Source",
+            "proxy": "http://user:hiddenpass@roundtrip.example:8080",
+            "platform": "macos",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "tags": [{"tag": "roundtrip", "color": "#0f766e"}],
+        },
+    ).json()
+    exported = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [created["id"]], "include_sensitive": True},
+    ).json()
+
+    import_resp = app_client.post(
+        "/api/profiles/config/import",
+        json={
+            "schema_version": exported["schema_version"],
+            "configs": [exported["results"][0]["config"]],
+        },
+    )
+
+    assert import_resp.status_code == 200
+    data = import_resp.json()
+    assert data["imported"] == 1
+    imported = data["results"][0]["profile"]
+    assert imported["id"] != created["id"]
+    assert imported["name"] == "Round Trip Source"
+    assert imported["proxy"] == "http://user:hiddenpass@roundtrip.example:8080"
+    assert imported["platform"] == "macos"
+    assert imported["screen_width"] == 1440
+    assert imported["screen_height"] == 900
+    assert imported["tags"] == [{"tag": "roundtrip", "color": "#0f766e"}]
+    assert imported["status"] == "stopped"

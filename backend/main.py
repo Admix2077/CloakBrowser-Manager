@@ -27,6 +27,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response, WebSocket,
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import ValidationError
 import starlette.requests
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -85,6 +86,9 @@ from .models import (
     ProxyResponse,
     ProxyUpdate,
     ProfileCreate,
+    ProfileConfigImportRequest,
+    ProfileConfigImportResponse,
+    ProfileConfigImportResult,
     ProfileConfigExport,
     ProfileExportRequest,
     ProfileExportResponse,
@@ -722,6 +726,55 @@ def _cookie_export_audit_metadata(summary: dict) -> dict:
         "persistent_count": summary.get("persistent_cookie_count"),
         "same_site_counts": summary.get("same_site_counts"),
     }
+
+
+_PROFILE_CONFIG_IMPORT_FIELDS = {
+    "name",
+    "fingerprint_seed",
+    "proxy",
+    "timezone",
+    "locale",
+    "platform",
+    "user_agent",
+    "screen_width",
+    "screen_height",
+    "gpu_vendor",
+    "gpu_renderer",
+    "hardware_concurrency",
+    "humanize",
+    "human_preset",
+    "headless",
+    "geoip",
+    "clipboard_sync",
+    "auto_launch",
+    "color_scheme",
+    "launch_args",
+    "notes",
+    "tags",
+}
+
+
+def _validation_error_messages(exc: ValidationError) -> list[str]:
+    errors = []
+    for error in exc.errors():
+        loc = ".".join(str(item) for item in error.get("loc", ()))
+        message = str(error.get("msg", "Invalid value"))
+        errors.append(f"{loc}: {message}" if loc else message)
+    return errors
+
+
+def _profile_config_import_data(config: dict) -> dict:
+    return {
+        field: config[field]
+        for field in _PROFILE_CONFIG_IMPORT_FIELDS
+        if field in config
+    }
+
+
+def _profile_config_import_errors(data: dict) -> list[str]:
+    if not str(data.get("name", "")).strip():
+        return ["name is required"]
+    return []
 
 
 def _runtime_service_token_from_request(request: Request) -> str | None:
@@ -1373,6 +1426,71 @@ async def export_profiles(req: ProfileExportRequest):
         total=len(results),
         exported=exported,
         failed=len(results) - exported,
+        results=results,
+    )
+
+
+@app.post("/api/profiles/config/import", response_model=ProfileConfigImportResponse)
+async def import_profile_configs(req: ProfileConfigImportRequest):
+    results: list[ProfileConfigImportResult] = []
+    for index, config in enumerate(req.configs):
+        data = _profile_config_import_data(config)
+        errors = _profile_config_import_errors(data)
+        try:
+            profile_create = ProfileCreate(**data)
+        except ValidationError as exc:
+            errors.extend(_validation_error_messages(exc))
+
+        if errors:
+            results.append(
+                ProfileConfigImportResult(
+                    index=index,
+                    ok=False,
+                    errors=errors,
+                    profile=None,
+                )
+            )
+            continue
+
+        create_data = profile_create.model_dump()
+        tags = create_data.pop("tags", None)
+        if tags:
+            create_data["tags"] = [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in tags]
+        else:
+            create_data["tags"] = []
+
+        try:
+            profile = db.create_profile(**create_data)
+        except Exception:
+            results.append(
+                ProfileConfigImportResult(
+                    index=index,
+                    ok=False,
+                    errors=["Failed to create profile"],
+                    profile=None,
+                )
+            )
+            continue
+
+        status = browser_mgr.get_status(profile["id"])
+        profile["status"] = status["status"]
+        profile["vnc_ws_port"] = status["vnc_ws_port"]
+        profile["automation_url"] = status["automation_url"]
+        profile["tags"] = [TagResponse(**tag) for tag in profile.get("tags", [])]
+        results.append(
+            ProfileConfigImportResult(
+                index=index,
+                ok=True,
+                errors=[],
+                profile=ProfileResponse(**profile),
+            )
+        )
+
+    imported = sum(1 for result in results if result.ok)
+    return ProfileConfigImportResponse(
+        total=len(results),
+        imported=imported,
+        failed=len(results) - imported,
         results=results,
     )
 

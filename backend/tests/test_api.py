@@ -218,6 +218,129 @@ def test_export_profiles_rejects_coerced_sensitive_flag(app_client: TestClient):
     assert resp.status_code == 422
 
 
+def test_import_profile_configs_creates_profiles_from_safe_config_without_runtime_fields(app_client: TestClient):
+    resp = app_client.post(
+        "/api/profiles/config/import",
+        json={
+            "schema_version": 1,
+            "configs": [
+                {
+                    "name": "Imported Config",
+                    "fingerprint_seed": 12345,
+                    "proxy": "http://proxy.example.com:8080",
+                    "platform": "linux",
+                    "screen_width": 1440,
+                    "screen_height": 900,
+                    "gpu_vendor": "Mesa",
+                    "gpu_renderer": "llvmpipe",
+                    "hardware_concurrency": 8,
+                    "humanize": True,
+                    "human_preset": "careful",
+                    "headless": False,
+                    "geoip": False,
+                    "clipboard_sync": False,
+                    "auto_launch": True,
+                    "color_scheme": "dark",
+                    "launch_args": ["--private-window"],
+                    "notes": "Imported notes",
+                    "tags": [{"tag": "imported", "color": "#2563eb"}],
+                    "cookies": [{"name": "sid", "value": "super-secret-cookie-value"}],
+                    "local_storage": {"token": "super-secret-local-storage"},
+                    "profile_dir": "/tmp/should-not-import",
+                    "user_data_dir": "/tmp/should-not-import",
+                    "runtime_session_id": "runtime-secret",
+                    "viewer_token": "viewer-secret",
+                    "automation_tasks": [{"id": "task-secret"}],
+                    "wallet_id": "wallet-secret",
+                    "order_id": "order-secret",
+                    "permission": "admin",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["imported"] == 1
+    assert data["failed"] == 0
+    result = data["results"][0]
+    assert result["ok"] is True
+    assert result["errors"] == []
+    profile = result["profile"]
+    assert profile["name"] == "Imported Config"
+    assert profile["fingerprint_seed"] == 12345
+    assert profile["proxy"] == "http://proxy.example.com:8080"
+    assert profile["platform"] == "linux"
+    assert profile["screen_width"] == 1440
+    assert profile["screen_height"] == 900
+    assert profile["gpu_vendor"] == "Mesa"
+    assert profile["gpu_renderer"] == "llvmpipe"
+    assert profile["hardware_concurrency"] == 8
+    assert profile["humanize"] is True
+    assert profile["human_preset"] == "careful"
+    assert profile["headless"] is False
+    assert profile["geoip"] is False
+    assert profile["clipboard_sync"] is False
+    assert profile["auto_launch"] is True
+    assert profile["color_scheme"] == "dark"
+    assert profile["launch_args"] == ["--private-window"]
+    assert profile["notes"] == "Imported notes"
+    assert profile["tags"] == [{"tag": "imported", "color": "#2563eb"}]
+    assert profile["status"] == "stopped"
+    assert profile["vnc_ws_port"] is None
+    assert profile["automation_url"] is None
+    response_text = resp.text
+    assert "super-secret-cookie-value" not in response_text
+    assert "super-secret-local-storage" not in response_text
+    assert "runtime-secret" not in response_text
+    assert "viewer-secret" not in response_text
+    assert "wallet-secret" not in response_text
+    assert "order-secret" not in response_text
+    assert "task-secret" not in response_text
+    stored = main.db.list_profiles()
+    assert len(stored) == 1
+    assert stored[0]["name"] == "Imported Config"
+    assert stored[0]["user_data_dir"] != "/tmp/should-not-import"
+
+
+def test_import_profile_configs_reports_invalid_rows_without_creating_them(app_client: TestClient):
+    resp = app_client.post(
+        "/api/profiles/config/import",
+        json={
+            "schema_version": 1,
+            "configs": [
+                {"name": "Good Config", "platform": "macos"},
+                {"name": "", "platform": "android"},
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 2
+    assert data["imported"] == 1
+    assert data["failed"] == 1
+    good, bad = data["results"]
+    assert good["ok"] is True
+    assert good["profile"]["name"] == "Good Config"
+    assert bad["ok"] is False
+    assert bad["profile"] is None
+    assert any("name" in error for error in bad["errors"])
+    assert any("platform" in error for error in bad["errors"])
+    assert [profile["name"] for profile in app_client.get("/api/profiles").json()] == ["Good Config"]
+
+
+def test_import_profile_configs_rejects_invalid_schema_without_side_effects(app_client: TestClient):
+    resp = app_client.post(
+        "/api/profiles/config/import",
+        json={"schema_version": 2, "configs": [{"name": "Wrong Schema"}]},
+    )
+
+    assert resp.status_code == 422
+    assert app_client.get("/api/profiles").json() == []
+
+
 # ── Profile Status ───────────────────────────────────────────────────────────
 
 

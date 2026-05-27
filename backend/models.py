@@ -407,6 +407,26 @@ class ProfileExportResponse(BaseModel):
     results: list[ProfileExportResult] = Field(default_factory=list)
 
 
+class ProfileConfigImportRequest(BaseModel):
+    schema_version: Literal[1] = 1
+    configs: list[dict[str, Any]] = Field(min_length=1, max_length=1000)
+
+
+class ProfileConfigImportResult(BaseModel):
+    index: int
+    ok: bool
+    errors: list[str] = Field(default_factory=list)
+    profile: ProfileResponse | None = None
+
+
+class ProfileConfigImportResponse(BaseModel):
+    schema_version: int = 1
+    total: int
+    imported: int
+    failed: int
+    results: list[ProfileConfigImportResult] = Field(default_factory=list)
+
+
 class LaunchResponse(BaseModel):
     profile_id: str
     status: str = "running"

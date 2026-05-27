@@ -18,7 +18,7 @@
 - [x] 支持 profile config export：
   - 不包含 cookie。
   - 不包含 proxy password，除非用户选择包含敏感字段。
-- [ ] 支持 profile config import。
+- [x] 支持 profile config import。
 - [ ] 后续支持完整 profile bundle：
   - profile dir。
   - cookies。
@@ -144,6 +144,41 @@
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_proxy_credentials_by_default backend/tests/test_api.py::test_export_profiles_can_include_sensitive_proxy_when_explicitly_requested backend/tests/test_api.py::test_export_profiles_rejects_coerced_sensitive_flag -q
 # 3 passed
+```
+
+## 2026-05-27 profile config import JSON 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/profiles/config/import`，独立于既有 CSV `POST /api/profiles/import`，避免破坏 CSV 粘贴导入契约。
+- 请求体：
+  - `schema_version`：固定 `1`。
+  - `configs[]`：profile config JSON 数组。
+- 每条 config 只从白名单字段创建 profile：
+  - `name/fingerprint_seed/proxy/timezone/locale/platform/user_agent/screen_width/screen_height/gpu_vendor/gpu_renderer/hardware_concurrency/humanize/human_preset/headless/geoip/clipboard_sync/auto_launch/color_scheme/launch_args/notes/tags`。
+- 明确不导入、不写库、不回显调用方附带的运行态或跨系统事实字段：
+  - cookie。
+  - local storage。
+  - profile dir / `user_data_dir`。
+  - runtime session / viewer token / VNC token。
+  - automation task。
+  - wallet/order/payment/permission/Project Mileage 业务字段。
+- 行级导入结果：
+  - 有效 config 创建新 profile，返回 `ProfileResponse`。
+  - 无效 config 返回 `ok=false` 和固定校验错误，不阻塞同批其他有效 config。
+  - `schema_version` 非 `1` 时整体返回 `422`，不产生数据库副作用。
+- 支持从 `POST /api/profiles/export` 的 `config` 结果 round-trip 导入；若导出时 `include_sensitive: true`，proxy 凭证会按可信本地管理 API 语义随 config 导入。
+- 本小闭环不新增前端入口、不写 audit、不导入 cookie/local storage/profile dir、不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser profile/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_profile_configs_creates_profiles_from_safe_config_without_runtime_fields backend/tests/test_api.py::test_import_profile_configs_reports_invalid_rows_without_creating_them backend/tests/test_api.py::test_import_profile_configs_rejects_invalid_schema_without_side_effects -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
+# 1 passed
 ```
 
 ## 验证

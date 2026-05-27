@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 profile config import JSON 小闭环：
+  - 新增 `POST /api/profiles/config/import`，独立于既有 CSV `POST /api/profiles/import`，避免破坏 CSV 粘贴导入契约。
+  - 请求体固定 `schema_version=1`，`configs[]` 为 profile config JSON 数组。
+  - 每条 config 只从白名单字段创建 profile：`name/fingerprint_seed/proxy/timezone/locale/platform/user_agent/screen_width/screen_height/gpu_vendor/gpu_renderer/hardware_concurrency/humanize/human_preset/headless/geoip/clipboard_sync/auto_launch/color_scheme/launch_args/notes/tags`。
+  - 调用方附带的 cookie、local storage、profile dir、`user_data_dir`、runtime session、viewer token、VNC token、automation task、wallet/order/payment/permission/Project Mileage 业务字段不会被导入、写库或回显。
+  - 有效 config 创建新 profile；无效 config 返回行级 `ok=false` 和校验错误，不阻塞同批其他有效 config。
+  - `schema_version` 非 `1` 时整体返回 `422`，不产生数据库副作用。
+  - 支持从 `POST /api/profiles/export` 的 `config` 结果 round-trip 导入；若导出时 `include_sensitive: true`，proxy 凭证会按可信本地管理 API 语义随 config 导入。
+  - 本小闭环不新增前端入口、不写 audit、不导入 cookie/local storage/profile dir、不接 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 profile config export 敏感字段默认脱敏小闭环：
   - 既有 `POST /api/profiles/export` 支持 `include_sensitive`，默认 `false`。
   - `include_sensitive` 必须是 JSON boolean，不接受字符串或数字宽松转换。
