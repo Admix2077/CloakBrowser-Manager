@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle 边界与分阶段方案小闭环：
+  - 新增 `docs/ai-docs/v1/profile-bundle-boundary-plan.md`。
+  - 明确后续 bundle 采用 `cloakbrowser.profile-bundle.v1` manifest 思路，先从 config/metadata 低风险能力开始，不直接整目录打包。
+  - 记录当前 `user_data_dir` / invisible_playwright `profile_dir` / Firefox startup cleanup / profile 删除行为。
+  - 默认允许包含 profile config 白名单字段、cookie summary 和低敏 manifest metadata。
+  - 默认禁止包含 `user_data_dir` 绝对路径、Firefox profile dir 原始目录、cookie/local storage 明文、browser cache/history/download/session restore/cert DB、runtime/viewer/VNC/automation/lease 字段、Project Mileage 钱包/订单/权限/支付/审计事实、`.env`、数据库 dump、secret、token 和 proxy password。
+  - 显式敏感导出必须拆成独立 JSON boolean，不接受字符串或数字宽松转换。
+  - 停止态 profile dir 当前只允许先做只读评估和 allowlist/denylist，不实现整目录 zip 导出/导入。
+  - 后续切片拆为 manifest 格式层、bundle config export/import API、running cookie bundle、local storage 只读评估和 profile dir archive 评估。
+  - 本小闭环只新增/更新 CloakBrowser 文档，不新增 API，不读取 profile dir，不导出 cookie/local storage 明文，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成前端 Netscape Cookie 管理入口小闭环：
   - `frontend/src/lib/api.ts` 新增 `api.importProfileCookiesNetscape(profileId, text)` 和 `api.exportProfileCookiesNetscape(profileId)`。
   - `api.importProfileCookiesNetscape()` 调用 `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体 `{ text }`。

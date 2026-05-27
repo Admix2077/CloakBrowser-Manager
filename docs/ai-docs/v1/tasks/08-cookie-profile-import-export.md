@@ -21,7 +21,12 @@
   - 不包含 cookie。
   - 不包含 proxy password，除非用户选择包含敏感字段。
 - [x] 支持 profile config import。
-- [ ] 后续支持完整 profile bundle：
+- [x] 完成完整 profile bundle 边界与分阶段方案：
+  - manifest。
+  - 默认包含/排除项。
+  - 显式敏感导出边界。
+  - 停止态 profile dir 风险。
+- [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
   - local storage。
@@ -375,6 +380,46 @@ cd frontend && npm test -- --run
 
 cd frontend && npm run build
 # built successfully
+```
+
+## 2026-05-27 Profile Bundle 边界与分阶段方案小闭环
+
+当前状态：
+
+- 已新增 `docs/ai-docs/v1/profile-bundle-boundary-plan.md`。
+- 该文档明确 profile bundle 的目标是迁移 profile config、cookie、local storage 和必要元数据，但不能把运行态、Project Mileage 业务事实、凭证或审计事实混进可复制包。
+- 当前事实已记录：
+  - `backend/database.py:create_profile()` 生成 `/data/profiles/{profile_id}` 作为 `user_data_dir`。
+  - `backend/browser_manager.py:_build_invisible_kwargs()` 把 `user_data_dir` 作为 invisible_playwright 的 `profile_dir`。
+  - `backend/browser_manager.py:_clean_firefox_startup_state()` 只清理 Firefox lock 和 session restore 文件。
+  - `backend/main.py:delete_profile()` 删除 profile 时会删除 `user_data_dir`。
+- 建议后续格式为 `cloakbrowser.profile-bundle.v1`，先从 manifest/config 低风险能力开始。
+- 默认允许包含 profile config 白名单字段、cookie summary 和低敏 manifest metadata。
+- 默认禁止包含：
+  - `user_data_dir` 绝对路径。
+  - Firefox profile dir 原始目录。
+  - cookie/local storage 明文。
+  - IndexedDB、Cache Storage、Service Worker cache、session restore、history、downloads、form history、cert/key DB。
+  - runtime/viewer/VNC/automation/lease 字段。
+  - Project Mileage 钱包、订单、支付、扣费、权限、续期、远程工作台 session 或审计事实。
+  - `.env`、数据库 dump、secret、token、proxy password。
+- 显式敏感导出必须拆成独立 JSON boolean，例如 `include_sensitive_proxy/include_cookies/include_local_storage/include_profile_dir_archive`，不得接受字符串或数字宽松转换。
+- 停止态 profile dir 当前只允许先做只读评估和 allowlist/denylist，不实现整目录 zip 导出/导入。
+- 后续最小切片已拆为：
+  - bundle manifest 格式层。
+  - bundle config export API。
+  - bundle config import API。
+  - running profile cookie bundle。
+  - local storage 只读评估。
+  - profile dir archive 评估。
+- 本小闭环只新增文档，不新增 API，不读取 profile dir，不导出 cookie/local storage 明文，不修改 Project Mileage app/payload。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser bundle/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+git diff --check
+# passed
 ```
 
 ## 验证
