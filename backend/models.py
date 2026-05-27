@@ -409,6 +409,8 @@ class ProfileExportResponse(BaseModel):
 
 class ProfileBundleExportRequest(BaseModel):
     include_sensitive_proxy: StrictBool = False
+    include_cookies: StrictBool = False
+    confirm_cookie_export: StrictBool = False
 
 
 class ProfileBundleExportResponse(BaseModel):

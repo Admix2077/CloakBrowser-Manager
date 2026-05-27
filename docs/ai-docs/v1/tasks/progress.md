@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 running profile cookie bundle export 小闭环：
+  - `POST /api/profiles/{profile_id}/bundle/export` 新增 `include_cookies` 和 `confirm_cookie_export`。
+  - 两个 flag 都必须是 JSON boolean，不接受字符串或数字宽松转换。
+  - 只有 `include_cookies=true` 且 `confirm_cookie_export=true` 时才读取 running browser context `cookies()`；未确认时返回固定 422，不读取 context、不写 audit。
+  - profile 未运行时返回固定 `404 Profile not running`，不读取停止态 Firefox profile dir。
+  - 成功响应把 Cookie JSON v1 document 嵌入 `bundle.cookies.document`，并设置低敏 summary 和 `metadata.cookies_included=true`；config-only 默认响应不输出 `cookies.document: null`。
+  - 成功写 `profile_bundle.cookie_exported` 低敏 audit，metadata 只含格式/schema/计数，不含 cookie value/name/domain/URL/query/fragment。
+  - 本小闭环不导入 cookie、不导出 local storage、不读取 profile dir、不新增前端入口、不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle config import API 小闭环：
   - 新增 `POST /api/profiles/bundle/import`。
   - 请求体只接受 `cloakbrowser.profile-bundle.v1` / `schema_version=1` bundle。

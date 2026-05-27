@@ -6,7 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .cookie_formats import COOKIE_JSON_FORMAT
+from .cookie_formats import COOKIE_JSON_FORMAT, CookieJsonDocument, cookie_json_audit_summary
 from .models import ProfileConfigExport
 from .proxies import redact_proxy_asset_url
 
@@ -26,7 +26,8 @@ class ProfileBundleCookies(BaseModel):
     included: bool = False
     format: Literal["cloakbrowser.cookie-json.v1"] = COOKIE_JSON_FORMAT
     schema_version: Literal[1] = 1
-    summary: dict[str, int] = Field(default_factory=lambda: {"cookie_count": 0})
+    summary: dict[str, Any] = Field(default_factory=lambda: {"cookie_count": 0})
+    document: dict[str, Any] | None = Field(default=None, repr=False)
 
 
 class ProfileBundleLocalStorage(BaseModel):
@@ -131,3 +132,16 @@ def build_profile_config_bundle(
             sensitive_proxy_included=include_sensitive_proxy and bool(config.proxy),
         ),
     )
+
+
+def add_cookie_document_to_bundle(
+    bundle: ProfileBundleDocument,
+    document: CookieJsonDocument,
+) -> ProfileBundleDocument:
+    bundle.cookies = ProfileBundleCookies(
+        included=True,
+        summary=cookie_json_audit_summary(document),
+        document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
+    )
+    bundle.metadata.cookies_included = True
+    return bundle

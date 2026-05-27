@@ -1455,6 +1455,103 @@ def test_export_profile_bundle_requires_existing_profile(app_client: TestClient)
     assert resp.json() == {"detail": "Profile not found"}
 
 
+def test_export_profile_bundle_cookie_bundle_requires_explicit_confirmation_without_reading_context(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle Cookie Confirm"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_cookies": True, "confirm_cookie_export": False},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Profile bundle cookie export requires explicit confirmation"}
+    running.context.cookies.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_profile_bundle_cookie_bundle_rejects_coerced_flags_without_reading_context(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle Cookie Coerced"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    for payload in (
+        {"include_cookies": "true", "confirm_cookie_export": True},
+        {"include_cookies": True, "confirm_cookie_export": "true"},
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/bundle/export", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Invalid profile bundle export request"}
+
+    running.context.cookies.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_profile_bundle_cookie_bundle_requires_running_profile(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Stopped Bundle Cookie"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_cookies": True, "confirm_cookie_export": True},
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not running"}
+    assert main.db.list_audit_events() == []
+
+
+def test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redacted_audit(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle Cookie Export"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.cookies.return_value = [
+        {
+            "name": "sid",
+            "value": "super-secret-cookie-value",
+            "domain": "sensitive.example.com",
+            "path": "/",
+            "secure": True,
+            "httpOnly": True,
+        }
+    ]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_cookies": True, "confirm_cookie_export": True},
+    )
+
+    assert resp.status_code == 200
+    running.context.cookies.assert_awaited_once()
+    data = resp.json()
+    bundle = data["bundle"]
+    assert bundle["cookies"]["included"] is True
+    assert bundle["cookies"]["format"] == "cloakbrowser.cookie-json.v1"
+    assert bundle["cookies"]["schema_version"] == 1
+    assert bundle["cookies"]["summary"]["cookie_count"] == 1
+    assert bundle["cookies"]["document"]["cookies"][0]["value"] == "super-secret-cookie-value"
+    assert bundle["metadata"]["cookies_included"] is True
+
+    events = main.db.list_audit_events()
+    assert [event["event_type"] for event in events] == ["profile_bundle.cookie_exported"]
+    assert events[0]["actor_type"] == "local_admin"
+    assert events[0]["profile_id"] == pid
+    audit_text = json.dumps(events, sort_keys=True)
+    assert "super-secret-cookie-value" not in audit_text
+    assert "sid" not in audit_text
+    assert "sensitive.example.com" not in audit_text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app_client: TestClient):
     source = app_client.post(
         "/api/profiles",

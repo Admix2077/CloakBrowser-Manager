@@ -29,6 +29,7 @@
 - [x] 支持 profile bundle manifest/config-only 格式层。
 - [x] 支持 profile bundle config export API。
 - [x] 支持 profile bundle config import API。
+- [x] 支持 running profile cookie bundle export。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -548,6 +549,50 @@ git diff --check
 
 git diff --check
 # passed
+```
+
+## 2026-05-27 running profile cookie bundle export 小闭环
+
+当前状态：
+
+- `POST /api/profiles/{profile_id}/bundle/export` 已支持 running profile cookie bundle。
+- 请求体新增：
+  - `include_cookies`：默认 `false`，必须是 JSON boolean。
+  - `confirm_cookie_export`：默认 `false`，必须是 JSON boolean。
+- 只有 `include_cookies=true` 且 `confirm_cookie_export=true` 时，才读取运行中 browser context 的 `cookies()`。
+- `include_cookies=true` 但未显式确认时返回固定 `422 Profile bundle cookie export requires explicit confirmation`，不读取 context、不写 audit。
+- `include_cookies=true` 但 profile 未运行时返回固定 `404 Profile not running`，不读取停止态 Firefox profile dir。
+- 成功响应中：
+  - `bundle.cookies.included=true`。
+  - `bundle.cookies.document` 为 Cookie JSON v1 文档，包含 cookie 明文；该能力仅限可信本地管理 API 和显式确认。
+  - `bundle.cookies.summary` 为低敏计数。
+  - `bundle.metadata.cookies_included=true`。
+- config-only 默认响应不输出 `cookies.document: null`，避免误导调用方认为存在 cookie payload。
+- 成功 cookie bundle export 写低敏 audit：
+  - `event_type=profile_bundle.cookie_exported`。
+  - `actor_type=local_admin`。
+  - `profile_id` 为目标 profile。
+  - metadata 只包含格式、schema 和计数，不包含 cookie value、cookie name、domain、URL、query 或 fragment。
+- 本小闭环不导入 cookie，不读取停止态 profile dir，不导出 local storage，不新增前端入口，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser bundle/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_requires_explicit_confirmation_without_reading_context backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_rejects_coerced_flags_without_reading_context backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_requires_running_profile backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redacted_audit -q
+# failed before implementation: 4 failed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_requires_explicit_confirmation_without_reading_context backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_rejects_coerced_flags_without_reading_context backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_requires_running_profile backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redacted_audit -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redacted_audit -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py backend/tests/test_api.py -q
+# 183 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
+# 8 passed
 ```
 
 ## 验证

@@ -126,7 +126,11 @@ from .profile_import import (
     profile_create_data_for_import,
     preview_profile_csv_import,
 )
-from .profile_bundle import ProfileBundleImportRequest, build_profile_config_bundle
+from .profile_bundle import (
+    ProfileBundleImportRequest,
+    add_cookie_document_to_bundle,
+    build_profile_config_bundle,
+)
 from .proxies import redact_proxy_asset_url
 
 logger = logging.getLogger("invisible_browser.manager")
@@ -1642,15 +1646,45 @@ async def export_profile_bundle(profile_id: str, request: Request):
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
+    cookie_document = None
+    if req.include_cookies:
+        if req.confirm_cookie_export is not True:
+            raise HTTPException(
+                status_code=422,
+                detail="Profile bundle cookie export requires explicit confirmation",
+            )
+        running = _automation_running(profile_id)
+        try:
+            cookies = await running.context.cookies()
+            cookie_document = build_cookie_json_export(
+                cookies,
+                profile_id=profile_id,
+                exported_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            )
+        except Exception as exc:
+            logger.warning("Profile bundle cookie export failed for %s: %s", profile_id, type(exc).__name__)
+            raise HTTPException(status_code=400, detail="Profile bundle cookie export failed") from exc
+
     exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     bundle = build_profile_config_bundle(
         profile,
         exported_at=exported_at,
         include_sensitive_proxy=req.include_sensitive_proxy,
     )
+    if cookie_document is not None:
+        bundle = add_cookie_document_to_bundle(bundle, cookie_document)
+        db.create_audit_event(
+            event_type="profile_bundle.cookie_exported",
+            actor_type="local_admin",
+            profile_id=profile_id,
+            metadata=_cookie_export_audit_metadata(cookie_json_audit_summary(cookie_document)),
+        )
+    bundle_payload = bundle.model_dump(mode="json", by_alias=True)
+    if bundle_payload.get("cookies", {}).get("document") is None:
+        bundle_payload["cookies"].pop("document", None)
     return ProfileBundleExportResponse(
         profile_id=profile_id,
-        bundle=bundle.model_dump(mode="json", by_alias=True),
+        bundle=bundle_payload,
     )
 
 
