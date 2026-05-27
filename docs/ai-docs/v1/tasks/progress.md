@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 stale process 清理验收收口小闭环：
+  - 补充 `VNCManager.cleanup_stale()` 测试，确认只调用 scoped `pkill -f "Xvnc :[0-9]"`，不使用通用 `firefox` 或 `.*` 模式。
+  - 既有 `BrowserManager.cleanup_stale()` 测试继续覆盖先调用 VNC stale 清理，再清理 `INVISIBLE_FIREFOX_PROCESS_PATTERN` 匹配的 invisible_playwright Firefox。
+  - lifespan 启动阶段已有 `await browser_mgr.cleanup_stale()`；生产代码无需修改。
+  - stale 清理只针对 CloakBrowser runtime 相关本地进程，不读取 profile dir 内容，不删除 profile 数据，不修改 Project Mileage 订单/钱包/支付/权限/续期/审计事实。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 stop 释放 browser context / VNC 验收收口小闭环：
   - 补充 `BrowserManager.stop()` 无 runner 分支测试：直接持有 Playwright browser context 时，stop 会 await `context.close()`，随后 await `vnc.stop_vnc(display)`，并从 running map 移除 profile。
   - 既有测试已覆盖 runner 分支：通过 invisible_playwright runner `__aexit__()` 关闭浏览器，再释放 VNC。

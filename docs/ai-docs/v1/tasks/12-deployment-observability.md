@@ -21,7 +21,7 @@
 - [x] 配置批量启动并发。
 - [x] 启动前检查可用 display / ws port。
 - [x] 停止时释放 VNC 和 browser context。
-- [ ] 清理 stale process。
+- [x] 清理 stale process。
 
 ### Observability
 
@@ -290,4 +290,38 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stop_without_runner_closes_context_and_releases_vnc -q
 # 1 passed
+```
+
+## 2026-05-28 stale process 清理验收收口小闭环
+
+背景：
+
+- 容器重启或异常退出后可能残留 Xvnc 或 invisible_playwright Firefox 进程。
+- 12 Resource Limits 要求启动时清理 stale process。
+- 现有 lifespan 已调用 `browser_mgr.cleanup_stale()`；`BrowserManager.cleanup_stale()` 已先调用 `vnc.cleanup_stale()`，再清理 scoped invisible_playwright Firefox 进程。
+- 本轮补齐 VNC stale 清理命令测试，并整理文档证据；生产代码无需修改。
+- 本轮只修改 CloakBrowser 本仓测试和文档，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/tests/test_vnc_manager.py`
+  - 新增 `test_cleanup_stale_kills_scoped_xvnc_processes`。
+  - mock `subprocess.run()`，断言 VNC 清理只调用 `["pkill", "-f", r"Xvnc :[0-9]"]`。
+  - 断言没有使用泛化 `firefox` 或 `.*` 模式。
+- `backend/tests/test_browser_manager.py`
+  - 既有 `test_cleanup_stale_kills_scoped_invisible_playwright_firefox` 覆盖 BrowserManager 会调用 VNC stale 清理，并只清理 `INVISIBLE_FIREFOX_PROCESS_PATTERN` 匹配的 invisible_playwright Firefox。
+- `backend/main.py`
+  - 既有 lifespan 启动阶段调用 `await browser_mgr.cleanup_stale()`。
+
+边界：
+
+- stale 清理只针对 CloakBrowser runtime 相关本地进程，不读取 profile dir 内容，不删除 profile 数据，不修改 runtime session、订单、钱包、支付、权限或审计事实。
+- 测试要求清理命令保持 scoped，不允许退化为通用 `pkill firefox`。
+- Project Mileage 远程工作台如果需要展示 stale cleanup 结果，仍必须由 Payload 安全 DTO 定义，不允许 App 直连 CloakBrowser runtime API。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_cleanup_stale_kills_scoped_xvnc_processes backend/tests/test_browser_manager.py::test_cleanup_stale_kills_scoped_invisible_playwright_firefox -q
+# 2 passed
 ```

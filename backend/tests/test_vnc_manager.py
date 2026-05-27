@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
+from backend import vnc_manager as vm
 from backend.vnc_manager import VNCInstance, VNCManager
 
 
@@ -106,6 +109,30 @@ async def test_active_displays_after_allocate(vnc: VNCManager):
     await vnc.allocate()
     await vnc.allocate()
     assert sorted(vnc.active_displays) == [100, 101]
+
+
+# ── cleanup_stale ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_cleanup_stale_kills_scoped_xvnc_processes(
+    vnc: VNCManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], capture_output: bool):
+        calls.append(cmd)
+        assert capture_output is True
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(vm.subprocess, "run", fake_run)
+
+    await vnc.cleanup_stale()
+
+    assert calls == [["pkill", "-f", r"Xvnc :[0-9]"]]
+    assert "firefox" not in calls[0]
+    assert ".*" not in calls[0][-1]
 
 
 # ── BrowserManager.get_status ────────────────────────────────────────────────
