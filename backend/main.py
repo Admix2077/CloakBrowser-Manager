@@ -1637,6 +1637,12 @@ async def import_profiles(req: ProfileImportPreviewRequest):
 
 @app.post("/api/profiles/export", response_model=ProfileExportResponse)
 async def export_profiles(req: ProfileExportRequest):
+    if req.include_sensitive and req.confirm_sensitive_export is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile export sensitive proxy requires explicit confirmation",
+        )
+
     results: list[ProfileExportResult] = []
     for profile_id in req.profile_ids:
         profile = db.get_profile(profile_id)
@@ -1885,6 +1891,11 @@ async def export_profile_bundle(profile_id: str, request: Request):
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+    if req.include_sensitive_proxy and req.confirm_sensitive_proxy_export is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile bundle sensitive proxy export requires explicit confirmation",
+        )
 
     cookie_document = None
     if req.include_cookies:

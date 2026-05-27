@@ -149,7 +149,8 @@
   - 默认 `false`。
   - 必须是 JSON boolean，不接受字符串或数字宽松转换。
   - `false` 时，导出的 `config.proxy` 会移除 `username:password@`，只保留 scheme、host、port。
-  - `true` 时，才返回完整 proxy URL，用于可信本地管理侧明确选择导出敏感配置。
+  - `true` 时，还必须同时传入 JSON boolean `confirm_sensitive_export: true`，才返回完整 proxy URL，用于可信本地管理侧明确选择导出敏感配置。
+  - `include_sensitive: true` 但缺失确认时返回固定 `422 Profile export sensitive proxy requires explicit confirmation`。
 - profile config export 仍只导出 profile 配置字段，不包含 cookie、local storage、profile dir、viewer token、runtime session、automation task、钱包、订单、权限或 Project Mileage 业务事实源。
 - 本小闭环不新增前端入口、不新增 audit 事件、不实现 profile config import、不接 Project Mileage DTO。
 - Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser profile/cookie/runtime API，必须通过 Payload 安全 DTO。
@@ -157,7 +158,7 @@
 验证记录：
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_proxy_credentials_by_default backend/tests/test_api.py::test_export_profiles_can_include_sensitive_proxy_when_explicitly_requested backend/tests/test_api.py::test_export_profiles_rejects_coerced_sensitive_flag -q
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_proxy_credentials_by_default backend/tests/test_api.py::test_export_profiles_sensitive_proxy_requires_independent_confirmation backend/tests/test_api.py::test_export_profiles_can_include_sensitive_proxy_when_confirmed backend/tests/test_api.py::test_export_profiles_rejects_coerced_sensitive_flag -q
 # 3 passed
 ```
 
@@ -182,7 +183,7 @@
   - 有效 config 创建新 profile，返回 `ProfileResponse`。
   - 无效 config 返回 `ok=false` 和固定校验错误，不阻塞同批其他有效 config。
   - `schema_version` 非 `1` 时整体返回 `422`，不产生数据库副作用。
-- 支持从 `POST /api/profiles/export` 的 `config` 结果 round-trip 导入；若导出时 `include_sensitive: true`，proxy 凭证会按可信本地管理 API 语义随 config 导入。
+- 支持从 `POST /api/profiles/export` 的 `config` 结果 round-trip 导入；若导出时同时传入 `include_sensitive: true` 和 `confirm_sensitive_export: true`，proxy 凭证会按可信本地管理 API 语义随 config 导入。
 - 本小闭环不新增前端入口、不写 audit、不导入 cookie/local storage/profile dir、不接 Project Mileage DTO。
 - Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser profile/cookie/runtime API，必须通过 Payload 安全 DTO。
 
@@ -439,7 +440,7 @@ git diff --check
   - 只构造 manifest/config-only bundle 文档。
   - 复用既有 `ProfileConfigExport` 白名单字段。
   - 默认对 `config.proxy` 调用 `redact_proxy_asset_url()` 脱敏，移除 `username:password@`。
-  - 只有显式 `include_sensitive_proxy=True` 时，才在 `profile.config.proxy` 中保留完整 proxy。
+  - 只有显式 `include_sensitive_proxy=True` 时，才在 `profile.config.proxy` 中保留完整 proxy；公开 route 级导出还要求 `confirm_sensitive_proxy_export=true`。
 - 默认 bundle 结构包含：
   - `profile.config`：profile config 白名单字段。
   - `cookies`：`included=false` 和低敏 `cookie_count=0`。
@@ -483,6 +484,7 @@ git diff --check
 - 请求体：
   - `include_sensitive_proxy`：默认 `false`。
   - 必须是 JSON boolean，不接受字符串或数字宽松转换。
+  - `include_sensitive_proxy: true` 时，还必须同时传入 JSON boolean `confirm_sensitive_proxy_export: true`。
 - 成功响应返回：
   - `profile_id`。
   - `bundle`：`cloakbrowser.profile-bundle.v1` config-only manifest。
@@ -492,7 +494,8 @@ git diff --check
   - `cookies.included=false`，只返回低敏空统计。
   - `local_storage.included=false`，只返回低敏空统计。
   - `profile_dir.included=false`，`archive=null`，不读取磁盘 profile 目录。
-- 显式 `include_sensitive_proxy: true` 时，才在可信本地管理 API 响应中保留完整 proxy。
+- 显式 `include_sensitive_proxy: true` 且 `confirm_sensitive_proxy_export: true` 时，才在可信本地管理 API 响应中保留完整 proxy。
+- 缺失敏感 proxy 导出确认时返回固定 `422 Profile bundle sensitive proxy export requires explicit confirmation`。
 - 请求体 shape 或 `include_sensitive_proxy` 类型非法时，返回固定 `422 Invalid profile bundle export request`，不使用 FastAPI 默认 validation response 回显调用方 payload。
 - profile 不存在返回固定 `404 Profile not found`。
 - 本小闭环不导出 cookie/local storage 明文，不读取 profile dir，不写 audit，不新增前端入口，不实现 bundle import，不接 Project Mileage DTO。
@@ -501,10 +504,10 @@ git diff --check
 验证记录：
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit backend/tests/test_api.py::test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload backend/tests/test_api.py::test_export_profile_bundle_requires_existing_profile -q
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_sensitive_proxy_requires_independent_confirmation backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_when_confirmed backend/tests/test_api.py::test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload backend/tests/test_api.py::test_export_profile_bundle_requires_existing_profile -q
 # failed before implementation: 4 failed with 405 Method Not Allowed
 
-. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit backend/tests/test_api.py::test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload backend/tests/test_api.py::test_export_profile_bundle_requires_existing_profile -q
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_sensitive_proxy_requires_independent_confirmation backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_when_confirmed backend/tests/test_api.py::test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload backend/tests/test_api.py::test_export_profile_bundle_requires_existing_profile -q
 # 4 passed
 
 . .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py backend/tests/test_api.py -q

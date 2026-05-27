@@ -105,6 +105,25 @@ describe("api.exportProfiles", () => {
       profile_ids: ["profile-1", "missing"],
     });
   });
+
+  it("sends independent confirmation when sensitive proxy export is requested", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      schema_version: 1,
+      total: 1,
+      exported: 1,
+      failed: 0,
+      results: [],
+    }));
+
+    await api.exportProfiles(["profile-1"], { includeSensitive: true });
+
+    const [, options] = mockFetch.mock.calls[0];
+    expect(JSON.parse(options.body)).toEqual({
+      profile_ids: ["profile-1"],
+      include_sensitive: true,
+      confirm_sensitive_export: true,
+    });
+  });
 });
 
 describe("api.importProfileCookies", () => {

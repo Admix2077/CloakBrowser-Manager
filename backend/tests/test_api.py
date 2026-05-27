@@ -317,7 +317,31 @@ def test_export_profiles_redacts_proxy_credentials_by_default(app_client: TestCl
     assert "user:super-secret-proxy-password" not in response_text
 
 
-def test_export_profiles_can_include_sensitive_proxy_when_explicitly_requested(app_client: TestClient):
+def test_export_profiles_sensitive_proxy_requires_independent_confirmation(
+    app_client: TestClient,
+):
+    proxy = "http://user:super-secret-proxy-password@proxy.example.com:8080"
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "ExportProxySensitiveConfirm",
+            "proxy": proxy,
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [pid], "include_sensitive": True},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Profile export sensitive proxy requires explicit confirmation"}
+    assert "super-secret-proxy-password" not in resp.text
+    assert _audit_events_except("profile.created") == []
+
+
+def test_export_profiles_can_include_sensitive_proxy_when_confirmed(app_client: TestClient):
     proxy = "http://user:super-secret-proxy-password@proxy.example.com:8080"
     create = app_client.post(
         "/api/profiles",
@@ -330,7 +354,11 @@ def test_export_profiles_can_include_sensitive_proxy_when_explicitly_requested(a
 
     resp = app_client.post(
         "/api/profiles/export",
-        json={"profile_ids": [pid], "include_sensitive": True},
+        json={
+            "profile_ids": [pid],
+            "include_sensitive": True,
+            "confirm_sensitive_export": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -1546,7 +1574,30 @@ def test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fi
     assert _audit_events_except("profile.created") == []
 
 
-def test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit(app_client: TestClient):
+def test_export_profile_bundle_sensitive_proxy_requires_independent_confirmation(
+    app_client: TestClient,
+):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bundle Sensitive Proxy Confirm",
+            "proxy": "http://user:super-secret-proxy-password@bundle.example:8080",
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_sensitive_proxy": True},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Profile bundle sensitive proxy export requires explicit confirmation"}
+    assert "super-secret-proxy-password" not in resp.text
+    assert _audit_events_except("profile.created") == []
+
+
+def test_export_profile_bundle_can_include_sensitive_proxy_when_confirmed(app_client: TestClient):
     create = app_client.post(
         "/api/profiles",
         json={
@@ -1558,7 +1609,10 @@ def test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit(ap
 
     resp = app_client.post(
         f"/api/profiles/{pid}/bundle/export",
-        json={"include_sensitive_proxy": True},
+        json={
+            "include_sensitive_proxy": True,
+            "confirm_sensitive_proxy_export": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -1864,7 +1918,10 @@ def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app
     ).json()
     exported = app_client.post(
         f"/api/profiles/{source['id']}/bundle/export",
-        json={"include_sensitive_proxy": True},
+        json={
+            "include_sensitive_proxy": True,
+            "confirm_sensitive_proxy_export": True,
+        },
     ).json()
 
     bundle = exported["bundle"]

@@ -123,4 +123,7 @@ cd frontend && npm test -- --run
   - [x] `DELETE /api/profiles/{profile_id}` 后端强制要求 JSON boolean `confirm_delete: true`。
   - [x] 缺失确认、`false` 或字符串 `"true"` 返回固定 `422 Profile delete requires explicit confirmation`，不停止运行 profile、不删除 DB、不删除 `user_data_dir`、不写 delete audit。
   - [x] 前端 `api.deleteProfile()` 固定发送 `{ confirm_delete: true }`，保留既有 UI 删除确认。
+  - [x] `POST /api/profiles/export` 只有同时传入 JSON boolean `include_sensitive: true` 和 `confirm_sensitive_export: true` 才返回完整 proxy。
+  - [x] `POST /api/profiles/{profile_id}/bundle/export` 只有同时传入 JSON boolean `include_sensitive_proxy: true` 和 `confirm_sensitive_proxy_export: true` 才在 bundle config 中包含完整 proxy。
+  - [x] 缺失敏感导出确认时返回固定 422，不导出 proxy password，不写 export audit。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

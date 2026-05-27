@@ -537,10 +537,18 @@ export const api = {
       body: JSON.stringify({ csv_text: csvText }),
     }),
 
-  exportProfiles: (profileIds: string[]) =>
+  exportProfiles: (
+    profileIds: string[],
+    options?: { includeSensitive?: boolean },
+  ) =>
     request<ProfileExportResponse>("/api/profiles/export", {
       method: "POST",
-      body: JSON.stringify({ profile_ids: profileIds }),
+      body: JSON.stringify({
+        profile_ids: profileIds,
+        ...(options?.includeSensitive
+          ? { include_sensitive: true, confirm_sensitive_export: true }
+          : {}),
+      }),
     }),
 
   importProfileCookies: (profileId: string, document: CookieJsonDocument) =>

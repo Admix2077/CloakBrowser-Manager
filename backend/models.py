@@ -369,6 +369,7 @@ class ProfileImportResponse(BaseModel):
 class ProfileExportRequest(BaseModel):
     profile_ids: list[str] = Field(min_length=1)
     include_sensitive: StrictBool = False
+    confirm_sensitive_export: StrictBool = False
 
 
 class ProfileConfigExport(BaseModel):
@@ -413,6 +414,7 @@ class ProfileExportResponse(BaseModel):
 
 class ProfileBundleExportRequest(BaseModel):
     include_sensitive_proxy: StrictBool = False
+    confirm_sensitive_proxy_export: StrictBool = False
     include_cookies: StrictBool = False
     confirm_cookie_export: StrictBool = False
     include_local_storage: StrictBool = False

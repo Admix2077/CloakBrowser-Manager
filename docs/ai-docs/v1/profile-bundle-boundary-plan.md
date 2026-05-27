@@ -14,7 +14,7 @@
 - profile 启动前，`backend/browser_manager.py:_clean_firefox_startup_state()` 只清理 Firefox lock 和 session restore 文件，不触碰站点数据。
 - profile 删除时，`backend/main.py:delete_profile()` 会先删 DB，再删除 `user_data_dir` 目录。
 - 当前已有安全能力：
-  - profile config export 默认脱敏 proxy password，只有 `include_sensitive: true` 才包含完整 proxy。
+  - profile config export 默认脱敏 proxy password，只有 `include_sensitive: true` 且 `confirm_sensitive_export: true` 才包含完整 proxy。
   - profile config import 只导入白名单配置字段，不导入 cookie/local storage/profile dir/runtime/viewer/automation/Project Mileage 字段。
   - running profile cookie import/export 已支持 Cookie JSON v1 和 Netscape 格式，导出必须显式确认，audit 只写低敏计数。
 
@@ -118,6 +118,7 @@ bundle 默认不能包含以下内容：
 建议将敏感选项拆开：
 
 - `include_sensitive_proxy: true`
+- `confirm_sensitive_proxy_export: true`
 - `include_cookies: true`
 - `include_local_storage: true`
 - `include_profile_dir_archive: true`

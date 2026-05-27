@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 sensitive proxy export 双确认小闭环：
+  - `POST /api/profiles/export` 只有同时传入 JSON boolean `include_sensitive: true` 和 `confirm_sensitive_export: true` 时，才返回完整 proxy URL；只传 `include_sensitive: true` 会返回固定 `422 Profile export sensitive proxy requires explicit confirmation`。
+  - `POST /api/profiles/{profile_id}/bundle/export` 只有同时传入 JSON boolean `include_sensitive_proxy: true` 和 `confirm_sensitive_proxy_export: true` 时，才在 bundle config 中包含完整 proxy；只传 `include_sensitive_proxy: true` 会返回固定 `422 Profile bundle sensitive proxy export requires explicit confirmation`。
+  - 缺失敏感导出确认时不导出 proxy password、不写 export audit；字符串或数字类型仍不被宽松转换。
+  - 前端 `api.exportProfiles(profileIds, { includeSensitive: true })` 会同时发送 `include_sensitive` 与 `confirm_sensitive_export`，默认导出继续只发送 profile ids 并保持 proxy 脱敏。
+  - 本小闭环只修改 CloakBrowser 本仓敏感 proxy 导出确认边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 profile delete 后端强制确认小闭环：
   - `DELETE /api/profiles/{profile_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
   - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Profile delete requires explicit confirmation`。
@@ -181,7 +187,7 @@
   - 本小闭环不读取磁盘 profile dir、不导入 cookie/local storage 明文、不写 audit、不新增前端入口、不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle config export API 小闭环：
   - 新增 `POST /api/profiles/{profile_id}/bundle/export`。
-  - 请求体支持 `include_sensitive_proxy`，默认 `false`，必须是 JSON boolean，不接受字符串或数字宽松转换。
+  - 请求体支持 `include_sensitive_proxy`，默认 `false`，必须是 JSON boolean，不接受字符串或数字宽松转换；route 级敏感 proxy 导出还必须同时传入 `confirm_sensitive_proxy_export=true`。
   - 成功响应返回 `profile_id` 和 `cloakbrowser.profile-bundle.v1` config-only `bundle`。
   - 默认 `profile.config` 只包含 `ProfileConfigExport` 白名单字段，proxy 默认脱敏；`cookies/local_storage/profile_dir` 均为 `included=false` 和低敏空统计。
   - endpoint 不读取磁盘 profile dir，不导出 cookie/local storage 明文，不写 audit，不新增前端入口，不实现 bundle import。
@@ -191,7 +197,7 @@
   - 新增 `backend/profile_bundle.py` 和 `backend/tests/test_profile_bundle.py`。
   - 定义 `cloakbrowser.profile-bundle.v1` / `schema_version=1` 格式模型。
   - 新增 `build_profile_config_bundle()`，只构造 manifest/config-only bundle，不新增公开 API，不读取 profile dir。
-  - `profile.config` 复用既有 `ProfileConfigExport` 白名单字段；默认 proxy 脱敏，只有显式 `include_sensitive_proxy=True` 才保留完整 proxy。
+  - `profile.config` 复用既有 `ProfileConfigExport` 白名单字段；默认 proxy 脱敏；内部 builder 只有显式 `include_sensitive_proxy=True` 才保留完整 proxy，公开 route 级导出还需要 `confirm_sensitive_proxy_export=true`。
   - 默认 bundle 只包含低敏 metadata、`cookies.included=false`、`local_storage.included=false`、`profile_dir.included=false` 和空统计。
   - 默认不包含 `user_data_dir`、Firefox profile dir 原始目录、cookie/local storage 明文、runtime/viewer/VNC/automation/lease 字段、Project Mileage 钱包/订单/支付/权限/审计事实或 secret/token。
   - `ProfileBundleDocument.profile` 设置为 `repr=False`，避免显式敏感 proxy 通过模型 repr 出现在测试失败或调试输出中。
@@ -252,14 +258,14 @@
   - 调用方附带的 cookie、local storage、profile dir、`user_data_dir`、runtime session、viewer token、VNC token、automation task、wallet/order/payment/permission/Project Mileage 业务字段不会被导入、写库或回显。
   - 有效 config 创建新 profile；无效 config 返回行级 `ok=false` 和校验错误，不阻塞同批其他有效 config。
   - `schema_version` 非 `1` 时整体返回 `422`，不产生数据库副作用。
-  - 支持从 `POST /api/profiles/export` 的 `config` 结果 round-trip 导入；若导出时 `include_sensitive: true`，proxy 凭证会按可信本地管理 API 语义随 config 导入。
+  - 支持从 `POST /api/profiles/export` 的 `config` 结果 round-trip 导入；若导出时同时传入 `include_sensitive: true` 和 `confirm_sensitive_export: true`，proxy 凭证会按可信本地管理 API 语义随 config 导入。
   - 本小闭环不新增前端入口、不写 audit、不导入 cookie/local storage/profile dir、不接 Project Mileage DTO。
   - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 profile config export 敏感字段默认脱敏小闭环：
   - 既有 `POST /api/profiles/export` 支持 `include_sensitive`，默认 `false`。
   - `include_sensitive` 必须是 JSON boolean，不接受字符串或数字宽松转换。
   - 默认导出的 `config.proxy` 会移除 `username:password@`，只保留 scheme、host、port。
-  - 显式 `include_sensitive: true` 时，才返回完整 proxy URL，用于可信本地管理侧明确选择导出敏感配置。
+  - 显式 `include_sensitive: true` 且 `confirm_sensitive_export: true` 时，才返回完整 proxy URL，用于可信本地管理侧明确选择导出敏感配置。
   - profile config export 仍只导出 profile 配置字段，不包含 cookie、local storage、profile dir、viewer token、runtime session、automation task、钱包、订单、权限或 Project Mileage 业务事实源。
   - 本小闭环不新增前端入口、不新增 audit 事件、不实现 profile config import、不接 Project Mileage DTO。
   - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。

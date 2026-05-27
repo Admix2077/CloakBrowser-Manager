@@ -348,7 +348,11 @@ def test_bulk_export_profile_configs_writes_redacted_audit_event(app_client: Tes
 
     resp = app_client.post(
         "/api/profiles/export",
-        json={"profile_ids": [profile["id"], "missing"], "include_sensitive": True},
+        json={
+            "profile_ids": [profile["id"], "missing"],
+            "include_sensitive": True,
+            "confirm_sensitive_export": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -382,7 +386,11 @@ def test_profile_config_export_can_round_trip_through_config_import(app_client: 
     ).json()
     exported = app_client.post(
         "/api/profiles/export",
-        json={"profile_ids": [created["id"]], "include_sensitive": True},
+        json={
+            "profile_ids": [created["id"]],
+            "include_sensitive": True,
+            "confirm_sensitive_export": True,
+        },
     ).json()
 
     import_resp = app_client.post(
