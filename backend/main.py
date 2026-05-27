@@ -634,6 +634,31 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     return ProxyResponse(**safe)
 
 
+def _proxy_audit_metadata(proxy: dict, *, updated_fields: list[str] | None = None) -> dict:
+    metadata = {
+        "proxy_id": str(proxy["id"]),
+        "name": proxy.get("name"),
+        "provider": proxy.get("provider"),
+        "country_code": proxy.get("country_code"),
+        "tag_count": len(proxy.get("tags") or []),
+    }
+    if updated_fields is not None:
+        metadata = {
+            "proxy_id": str(proxy["id"]),
+            "updated_fields": sorted(updated_fields),
+            "tag_count": len(proxy.get("tags") or []),
+        }
+    return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _audit_proxy_event(event_type: str, proxy: dict, *, updated_fields: list[str] | None = None) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="local_admin",
+        metadata=_proxy_audit_metadata(proxy, updated_fields=updated_fields),
+    )
+
+
 def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
     safe = dict(preset)
     safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
@@ -954,6 +979,7 @@ async def create_proxy(req: ProxyCreate):
         proxy = db.create_proxy(**data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _audit_proxy_event("proxy.created", proxy)
     return _proxy_response(proxy)
 
 
@@ -968,6 +994,7 @@ async def get_proxy(proxy_id: str):
 @app.put("/api/proxies/{proxy_id}", response_model=ProxyResponse)
 async def update_proxy(proxy_id: str, req: ProxyUpdate):
     data = req.model_dump(exclude_unset=True)
+    audit_fields = sorted(data.keys())
     if "tags" in data and data["tags"] is not None:
         data["tags"] = _tag_payloads(data["tags"])
     try:
@@ -976,14 +1003,19 @@ async def update_proxy(proxy_id: str, req: ProxyUpdate):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not proxy:
         raise HTTPException(status_code=404, detail="Proxy not found")
+    _audit_proxy_event("proxy.updated", proxy, updated_fields=audit_fields)
     return _proxy_response(proxy)
 
 
 @app.delete("/api/proxies/{proxy_id}")
 async def delete_proxy(proxy_id: str):
+    proxy = db.get_proxy(proxy_id)
+    if not proxy:
+        raise HTTPException(status_code=404, detail="Proxy not found")
     deleted = db.delete_proxy(proxy_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Proxy not found")
+    _audit_proxy_event("proxy.deleted", proxy)
     return {"ok": True}
 
 

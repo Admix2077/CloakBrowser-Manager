@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 proxy mutation audit 小闭环：
+  - `POST /api/proxies` 成功后写 `proxy.created` audit event。
+  - `PUT /api/proxies/{id}` 成功后写 `proxy.updated` audit event。
+  - `DELETE /api/proxies/{id}` 成功后写 `proxy.deleted` audit event。
+  - audit actor 固定为 `local_admin`；metadata 只记录 `proxy_id/name/provider/country_code/tag_count/updated_fields` 等低敏字段。
+  - metadata 不记录 proxy URL、username/password、notes、请求体、错误详情或 Project Mileage 钱包/订单/权限/审计事实。
+  - 新增 `test_proxy_crud_api_writes_redacted_audit_events` 覆盖 create/update/delete audit 顺序、metadata 内容和 proxy password/host 不泄露。
+  - 本小闭环只修改 CloakBrowser 本仓 proxy API 审计，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 WebSocket viewer token / origin / VNC token hash 验收收口小闭环：
   - runtime VNC `WebSocket /api/runtime/sessions/{id}/vnc` 已要求有效、未过期 viewer token；missing/wrong/expired token 会拒绝连接。
   - viewer token 明文只在 `POST /api/runtime/sessions/{id}/viewer-token` 响应中返回一次；DB 只保存 `viewer_token_hash`，对外 `RuntimeSessionResponse` 不暴露 hash。

@@ -43,7 +43,12 @@
 
 - [x] 新增 audit_events 表。
 - [ ] profile mutation 写 audit。
-- [ ] proxy mutation 写 audit。
+- [x] proxy mutation 写 audit：
+  - `POST /api/proxies` 成功写 `proxy.created`。
+  - `PUT /api/proxies/{id}` 成功写 `proxy.updated`。
+  - `DELETE /api/proxies/{id}` 成功写 `proxy.deleted`。
+  - actor 固定为 `local_admin`；metadata 只含 `proxy_id/name/provider/country_code/tag_count/updated_fields` 等低敏字段。
+  - metadata 不记录 proxy URL、username/password、notes、请求体、错误详情或 Project Mileage 业务字段。
 - [ ] health check 写 audit。
 - [ ] bulk action 写 audit。
 - [ ] automation task 写 audit。

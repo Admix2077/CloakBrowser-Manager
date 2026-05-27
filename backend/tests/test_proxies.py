@@ -136,6 +136,68 @@ def test_proxy_crud_api(app_client: TestClient):
     assert app_client.get(f"/api/proxies/{data['id']}").status_code == 404
 
 
+def test_proxy_crud_api_writes_redacted_audit_events(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Audited proxy",
+            "url": "http://user:hiddenpass@audit-proxy.example:8080",
+            "country_code": "US",
+            "provider": "AuditPool",
+            "tags": [{"tag": "ops", "color": None}],
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+
+    update = app_client.put(
+        f"/api/proxies/{proxy_id}",
+        json={
+            "name": "Audited proxy updated",
+            "url": "http://user:newhiddenpass@audit-proxy.example:8080",
+            "tags": [{"tag": "priority", "color": "#2563eb"}],
+        },
+    )
+    assert update.status_code == 200
+
+    delete = app_client.delete(f"/api/proxies/{proxy_id}")
+    assert delete.status_code == 200
+
+    events = db.list_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "proxy.created",
+        "proxy.updated",
+        "proxy.deleted",
+    ]
+    assert all(event["actor_type"] == "local_admin" for event in events)
+    assert [event["metadata"]["proxy_id"] for event in events] == [proxy_id, proxy_id, proxy_id]
+    assert events[0]["metadata"] == {
+        "proxy_id": proxy_id,
+        "name": "Audited proxy",
+        "provider": "AuditPool",
+        "country_code": "US",
+        "tag_count": 1,
+    }
+    assert events[1]["metadata"] == {
+        "proxy_id": proxy_id,
+        "updated_fields": ["name", "tags", "url"],
+        "tag_count": 1,
+    }
+    assert events[2]["metadata"] == {
+        "proxy_id": proxy_id,
+        "name": "Audited proxy updated",
+        "provider": "AuditPool",
+        "country_code": "US",
+        "tag_count": 1,
+    }
+
+    serialized_events = str(events)
+    assert "hiddenpass" not in serialized_events
+    assert "newhiddenpass" not in serialized_events
+    assert "user:" not in serialized_events
+    assert "audit-proxy.example" not in serialized_events
+
+
 def test_proxy_api_rejects_invalid_url_without_leaking_credentials(app_client: TestClient):
     resp = app_client.post(
         "/api/proxies",
