@@ -35,6 +35,15 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 JSON cookie import 运行中 profile 小闭环：
+  - 新增 `POST /api/profiles/{profile_id}/cookies/import`。
+  - 请求体复用 Cookie JSON v1 格式，执行时调用运行中 Playwright browser context 的 `add_cookies()`。
+  - profile 未运行返回 `404 Profile not running`；停止状态 profile 不写 Firefox profile dir，不尝试直接修改磁盘 cookie 存储。
+  - 响应只返回 `profile_id`、`imported` 和低敏 `summary` 计数。
+  - 非法文档返回固定 `422 Invalid cookie JSON document`；`add_cookies()` 失败返回固定 `400 Cookie import failed`。
+  - 响应、固定错误和 logger warning 均不回显 cookie value、cookie name、domain、URL、query 或 Playwright 原始异常 message。
+  - 本小闭环不实现 cookie export、不写 `audit_events`、不新增前端入口、不接 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮进入 08 Cookie、Profile 导入导出，完成 Cookie JSON v1 格式层小闭环：
   - 新增 `backend/cookie_formats.py`，定义 `cloakbrowser.cookie-json.v1` / `schema_version=1`。
   - 单条 cookie 支持 `name/value/domain/url/path/expires/secure/httpOnly/sameSite`，并要求至少提供 `domain` 或 `url`。

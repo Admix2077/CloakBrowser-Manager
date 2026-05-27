@@ -10,7 +10,7 @@
 - [x] 定义 cookie JSON export 格式。
 - [ ] 支持 Netscape cookie import。
 - [ ] 支持 Netscape cookie export。
-- [ ] 仅运行中 profile 允许通过 browser context 导入 cookie。
+- [x] 仅运行中 profile 允许通过 browser context 导入 cookie。
 - [ ] 停止状态 profile 可通过 profile dir 方式导入 cookie 时必须先评估 Firefox 存储格式，不强行实现。
 - [ ] 导出 cookie 必须写 audit。
 - [ ] 导出 cookie 必须有显式确认。
@@ -60,6 +60,36 @@
 
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py -q
+# 4 passed
+```
+
+## 2026-05-27 JSON cookie import 运行中 profile 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/profiles/{profile_id}/cookies/import`。
+- 请求体复用 Cookie JSON v1 格式：
+  - `format`：可选，默认 `cloakbrowser.cookie-json.v1`。
+  - `schema_version`：固定 `1`。
+  - `cookies[]`：复用 `name/value/domain/url/path/expires/secure/httpOnly/sameSite`。
+- 该 endpoint 只允许运行中 profile：
+  - profile 未运行返回 `404 Profile not running`。
+  - 停止状态 profile 不写 Firefox profile dir，不尝试直接修改磁盘 cookie 存储。
+- 执行时调用运行中 Playwright browser context 的 `add_cookies()`。
+- 响应只返回：
+  - `profile_id`。
+  - `imported`。
+  - 低敏 `summary` 计数。
+- 响应、固定错误和 logger warning 均不回显 cookie value、cookie name、domain、URL、query 或 Playwright 原始异常 message。
+- 非法 Cookie JSON 文档返回固定 `422 Invalid cookie JSON document`。
+- `add_cookies()` 执行失败返回固定 `400 Cookie import failed`。
+- 本小闭环不实现 cookie export、不写 `audit_events`、不新增前端入口、不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_api.py::test_import_cookie_json_requires_running_profile_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_rejects_invalid_document_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking_payload -q
 # 4 passed
 ```
 

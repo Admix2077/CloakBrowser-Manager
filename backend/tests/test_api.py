@@ -516,6 +516,7 @@ def _automation_running_profile(pid: str, pages: list[MagicMock] | None = None) 
     context = MagicMock()
     context.pages = pages if pages is not None else []
     context.new_page = AsyncMock()
+    context.add_cookies = AsyncMock()
 
     running = MagicMock(spec=RunningProfile)
     running.profile_id = pid
@@ -544,6 +545,164 @@ def _automation_page(url: str = "about:blank", title: str = "Blank") -> MagicMoc
     page.screenshot = AsyncMock(return_value=b"png-bytes")
     page.close = AsyncMock()
     return page
+
+
+# ── Cookie import / export ───────────────────────────────────────────────────
+
+
+def test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "CookieImportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    cookie_value = "super-secret-cookie-value"
+    cookie_domain = "sensitive.example.com"
+    cookie_url = "https://example.org/account?token=hidden"
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import",
+        json={
+            "format": "cloakbrowser.cookie-json.v1",
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": cookie_value,
+                    "domain": cookie_domain,
+                    "path": "/",
+                    "secure": True,
+                    "httpOnly": True,
+                    "sameSite": "Lax",
+                },
+                {
+                    "name": "analytics_id",
+                    "value": "another-secret-cookie-value",
+                    "url": cookie_url,
+                    "expires": 1_893_456_000,
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    running.context.add_cookies.assert_awaited_once_with([
+        {
+            "name": "sid",
+            "value": cookie_value,
+            "domain": cookie_domain,
+            "path": "/",
+            "secure": True,
+            "httpOnly": True,
+            "sameSite": "Lax",
+        },
+        {
+            "name": "analytics_id",
+            "value": "another-secret-cookie-value",
+            "url": cookie_url,
+            "path": "/",
+            "expires": 1_893_456_000,
+            "secure": False,
+            "httpOnly": False,
+        },
+    ])
+    data = resp.json()
+    assert data["profile_id"] == pid
+    assert data["imported"] == 2
+    assert data["summary"]["cookie_count"] == 2
+    assert data["summary"]["domain_scoped_count"] == 1
+    assert data["summary"]["url_scoped_count"] == 1
+    response_text = str(data)
+    assert cookie_value not in response_text
+    assert "another-secret-cookie-value" not in response_text
+    assert "sid" not in response_text
+    assert "analytics_id" not in response_text
+    assert cookie_domain not in response_text
+    assert "token=hidden" not in response_text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_import_cookie_json_requires_running_profile_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "StoppedCookieImportProfile"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import",
+        json={
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                    "domain": "sensitive.example.com",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not running"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+
+
+def test_import_cookie_json_rejects_invalid_document_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "InvalidCookieImportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import",
+        json={
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Invalid cookie JSON document"}
+    running.context.add_cookies.assert_not_called()
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sid" not in resp.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking_payload(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "FailingCookieImportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.add_cookies.side_effect = RuntimeError(
+        "super-secret-cookie-value sensitive.example.com"
+    )
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import",
+        json={
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                    "domain": "sensitive.example.com",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Cookie import failed"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert "super-secret-cookie-value" not in caplog.text
+    assert "sensitive.example.com" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
 
 
 def test_automation_info_running(app_client: TestClient):

@@ -32,6 +32,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import database as db
 from .browser_manager import BrowserManager
+from .cookie_formats import CookieJsonDocument, cookie_json_audit_summary, cookies_for_playwright
 from .geoip import resolve_network_geo
 from .health import (
     ProfileHealthResponse,
@@ -57,6 +58,7 @@ from .models import (
     AutomationTasksResponse,
     AutomationWaitForSelectorRequest,
     ClipboardRequest,
+    CookieImportResponse,
     LaunchResponse,
     LoginRequest,
     ProxyAssignRequest,
@@ -1348,6 +1350,29 @@ async def export_profiles(req: ProfileExportRequest):
         exported=exported,
         failed=len(results) - exported,
         results=results,
+    )
+
+
+@app.post("/api/profiles/{profile_id}/cookies/import", response_model=CookieImportResponse)
+async def import_profile_cookies(profile_id: str, req: dict):
+    running = _automation_running(profile_id)
+    try:
+        document = CookieJsonDocument.model_validate(req)
+    except Exception as exc:
+        logger.warning("Cookie JSON import validation failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=422, detail="Invalid cookie JSON document") from exc
+
+    cookies = cookies_for_playwright(document)
+    try:
+        await running.context.add_cookies(cookies)
+    except Exception as exc:
+        logger.warning("Cookie import failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=400, detail="Cookie import failed") from exc
+
+    return CookieImportResponse(
+        profile_id=profile_id,
+        imported=len(cookies),
+        summary=cookie_json_audit_summary(document),
     )
 
 

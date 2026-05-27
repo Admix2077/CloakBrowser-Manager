@@ -571,6 +571,12 @@ class AutomationTasksResponse(BaseModel):
     tasks: list[AutomationTaskResponse]
 
 
+class CookieImportResponse(BaseModel):
+    profile_id: str
+    imported: int
+    summary: dict[str, Any]
+
+
 class ClipboardRequest(BaseModel):
     text: str = Field(max_length=1_048_576)  # 1MB max
 
