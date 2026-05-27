@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 proxy password 响应脱敏验收收口小闭环：
+  - 复核 `GET /api/proxies`、`GET /api/proxies/{id}`、create/update/check/bulk-check/assign/random-assign/profile-proxy-asset 等返回 `ProxyResponse` 的路径均统一走 `_proxy_response()`。
+  - `_proxy_response()` 会调用 `redact_proxy_asset_url()`，响应中的 `proxy.url` 只保留 scheme、host 和 port，不回显 username/password。
+  - proxy check 失败路径使用 `_safe_proxy_check_error()`，会替换完整 raw proxy URL 和 password 明文，`last_check_error` 不保存 proxy password。
+  - `backend/tests/test_proxies.py` 已覆盖列表、详情、创建、更新、单个检查、批量检查、分配、随机分配和从 profile 保存 proxy asset 的响应不泄露 `hiddenpass`。
+  - DB 内部仍保存完整 proxy URL，用于真实启动、健康检查和批量分配；该能力仍限定为 CloakBrowser 本地可信管理侧，不对 Project Mileage App 直连暴露。
+  - 本小闭环只更新 CloakBrowser 本仓安全验收文档，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 `AUTH_TOKEN` 登录响应脱敏小闭环：
   - 保留当前单机本地部署 `AUTH_TOKEN` 模式，`Authorization: Bearer <AUTH_TOKEN>` 仍可访问受保护 API。
   - `/api/auth/login` 仍要求用户提交 token，并与 `AUTH_TOKEN` 做常量时间比对。

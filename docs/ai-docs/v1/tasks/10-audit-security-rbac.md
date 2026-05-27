@@ -19,7 +19,11 @@
 
 ### Sensitive Data
 
-- [ ] proxy password 列表遮蔽。
+- [x] proxy password 列表遮蔽：
+  - `GET /api/proxies`、`GET /api/proxies/{id}`、create/update/check/bulk-check/assign/random-assign/profile-proxy-asset 等返回 `ProxyResponse` 的路径统一通过 `_proxy_response()` 调用 `redact_proxy_asset_url()`。
+  - 响应中的 `proxy.url` 只保留 scheme、host 和 port，不回显 username/password。
+  - proxy check 失败时 `last_check_error` 也会替换完整 raw proxy URL 和 password 明文。
+  - DB 内部仍保存完整 proxy URL，用于真实启动、健康检查和批量分配；这是 CloakBrowser 本地可信管理侧能力，不对 Project Mileage App 直连暴露。
 - [x] audit metadata 不记录敏感字段：
   - 当前已覆盖 runtime service audit metadata。
   - 已禁止 viewer token、viewer URL、viewer token hash、runtime service token、proxy URL/password、cookie 等进入 audit metadata。
@@ -62,5 +66,5 @@ cd frontend && npm test -- --run
 
 - [x] 未授权不能访问 protected API。
 - [ ] WebSocket origin 检查不退化。
-- [ ] audit 中没有 proxy password、cookie value、token。
+- [x] audit 中没有 proxy password、cookie value、token。
 - [ ] 删除、导出、终止等高风险操作有确认或权限限制。
