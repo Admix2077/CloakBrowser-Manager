@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 Netscape cookie 格式层小闭环：
+  - `backend/cookie_formats.py` 新增 `parse_netscape_cookies()`、`build_netscape_cookie_export()` 和 `netscape_cookie_audit_summary()`。
+  - parser 支持标准 7 列 Netscape cookie 行、普通注释/空行跳过和 `#HttpOnly_` 前缀，并转换为 `CookieJsonDocument`。
+  - parser 非法行只返回固定 `Invalid Netscape cookie line <line_number>`，不回显 cookie value、cookie name、domain、URL 或原始行内容。
+  - exporter 从 Cookie JSON v1 生成 Netscape cookie 文本；对只有 `url` 的 cookie 只提取 hostname，不把 query/fragment/token 写入 Netscape domain 字段。
+  - Netscape audit summary 只输出低敏计数，不包含 cookie value、cookie name、domain、URL、query 或 fragment。
+  - 本小闭环只实现格式层，不新增 REST API，不读写运行中 browser context，不写 `audit_events`，不新增前端入口，不接 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 profile config import JSON 小闭环：
   - 新增 `POST /api/profiles/config/import`，独立于既有 CSV `POST /api/profiles/import`，避免破坏 CSV 粘贴导入契约。
   - 请求体固定 `schema_version=1`，`configs[]` 为 profile config JSON 数组。

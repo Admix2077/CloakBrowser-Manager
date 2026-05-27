@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -83,4 +84,97 @@ def cookie_json_audit_summary(document: CookieJsonDocument) -> dict:
         "session_cookie_count": session_cookie_count,
         "persistent_cookie_count": persistent_cookie_count,
         "same_site_counts": same_site_counts,
+    }
+
+
+def parse_netscape_cookies(
+    text: str,
+    *,
+    profile_id: str | None = None,
+    exported_at: str | None = None,
+) -> CookieJsonDocument:
+    cookies = []
+    for line_number, raw_line in enumerate(text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or (line.startswith("#") and not line.startswith("#HttpOnly_")):
+            continue
+
+        http_only = line.startswith("#HttpOnly_")
+        if http_only:
+            line = line.removeprefix("#HttpOnly_")
+
+        parts = line.split("\t")
+        if len(parts) != 7:
+            raise ValueError(f"Invalid Netscape cookie line {line_number}")
+
+        domain, _include_subdomains, path, secure, expires, name, value = parts
+        try:
+            expires_value = int(expires)
+        except ValueError as exc:
+            raise ValueError(f"Invalid Netscape cookie line {line_number}") from exc
+
+        cookies.append(
+            CookieJsonCookie(
+                name=name,
+                value=value,
+                domain=domain,
+                path=path or "/",
+                expires=expires_value,
+                secure=secure.upper() == "TRUE",
+                httpOnly=http_only,
+            )
+        )
+
+    return CookieJsonDocument(
+        profile_id=profile_id,
+        exported_at=exported_at,
+        cookies=cookies,
+    )
+
+
+def build_netscape_cookie_export(document: CookieJsonDocument) -> str:
+    lines = ["# Netscape HTTP Cookie File"]
+    for cookie in document.cookies:
+        domain = cookie.domain
+        if not domain and cookie.url:
+            parsed = urlparse(cookie.url)
+            domain = parsed.hostname
+        if not domain:
+            continue
+
+        include_subdomains = "TRUE" if domain.startswith(".") else "FALSE"
+        prefix = "#HttpOnly_" if cookie.http_only else ""
+        expires = int(cookie.expires) if cookie.expires is not None else 0
+        lines.append(
+            "\t".join(
+                [
+                    f"{prefix}{domain}",
+                    include_subdomains,
+                    cookie.path or "/",
+                    "TRUE" if cookie.secure else "FALSE",
+                    str(expires),
+                    cookie.name,
+                    cookie.value,
+                ]
+            )
+        )
+    return "\n".join(lines)
+
+
+def netscape_cookie_audit_summary(document: CookieJsonDocument) -> dict:
+    session_cookie_count = 0
+    persistent_cookie_count = 0
+    for cookie in document.cookies:
+        if cookie.expires is None or cookie.expires <= 0:
+            session_cookie_count += 1
+        else:
+            persistent_cookie_count += 1
+
+    return {
+        "format": "netscape-cookie-file",
+        "cookie_count": len(document.cookies),
+        "secure_count": sum(1 for cookie in document.cookies if cookie.secure),
+        "session_cookie_count": session_cookie_count,
+        "persistent_cookie_count": persistent_cookie_count,
+        "http_only_count": sum(1 for cookie in document.cookies if cookie.http_only),
     }

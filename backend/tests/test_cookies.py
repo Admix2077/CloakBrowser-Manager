@@ -11,6 +11,9 @@ from backend.cookie_formats import (
     build_cookie_json_export,
     cookie_json_audit_summary,
     cookies_for_playwright,
+    build_netscape_cookie_export,
+    netscape_cookie_audit_summary,
+    parse_netscape_cookies,
 )
 
 
@@ -142,3 +145,103 @@ def test_build_cookie_json_export_and_playwright_payload_preserve_cookie_shape()
             "sameSite": "Strict",
         }
     ]
+
+
+def test_parse_netscape_cookies_to_cookie_json_without_leaking_values_in_summary():
+    text = "\n".join(
+        [
+            "# Netscape HTTP Cookie File",
+            ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value",
+            "example.org\tFALSE\t/account\tFALSE\t0\tanalytics_id\tanother-secret-cookie-value",
+        ]
+    )
+
+    doc = parse_netscape_cookies(text, profile_id="profile-123", exported_at="2026-05-27T00:00:00+00:00")
+    dumped = doc.model_dump(mode="json", by_alias=True, exclude_none=True)
+
+    assert dumped["format"] == COOKIE_JSON_FORMAT
+    assert dumped["schema_version"] == 1
+    assert dumped["profile_id"] == "profile-123"
+    assert dumped["exported_at"] == "2026-05-27T00:00:00+00:00"
+    assert dumped["cookies"] == [
+        {
+            "name": "sid",
+            "value": "super-secret-cookie-value",
+            "domain": ".sensitive.example.com",
+            "path": "/",
+            "expires": 1_893_456_000,
+            "secure": True,
+            "httpOnly": False,
+        },
+        {
+            "name": "analytics_id",
+            "value": "another-secret-cookie-value",
+            "domain": "example.org",
+            "path": "/account",
+            "expires": 0,
+            "secure": False,
+            "httpOnly": False,
+        },
+    ]
+    summary = netscape_cookie_audit_summary(doc)
+    assert summary == {
+        "format": "netscape-cookie-file",
+        "cookie_count": 2,
+        "secure_count": 1,
+        "session_cookie_count": 1,
+        "persistent_cookie_count": 1,
+        "http_only_count": 0,
+    }
+    summary_text = str(summary)
+    assert "super-secret-cookie-value" not in summary_text
+    assert "another-secret-cookie-value" not in summary_text
+    assert "sid" not in summary_text
+    assert "analytics_id" not in summary_text
+    assert "sensitive.example.com" not in summary_text
+
+
+def test_parse_netscape_cookies_rejects_malformed_line_without_echoing_payload():
+    text = "sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid"
+
+    with pytest.raises(ValueError) as excinfo:
+        parse_netscape_cookies(text)
+
+    message = str(excinfo.value)
+    assert message == "Invalid Netscape cookie line 1"
+    assert "sensitive.example.com" not in message
+    assert "sid" not in message
+
+
+def test_build_netscape_cookie_export_preserves_supported_cookie_shape():
+    doc = CookieJsonDocument.model_validate(
+        {
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "super-secret-cookie-value",
+                    "domain": ".example.com",
+                    "path": "/",
+                    "expires": 1_893_456_000,
+                    "secure": True,
+                },
+                {
+                    "name": "session",
+                    "value": "session-secret",
+                    "url": "https://app.example.org/dashboard?token=hidden",
+                    "path": "/dashboard",
+                    "secure": False,
+                    "httpOnly": True,
+                },
+            ],
+        }
+    )
+
+    text = build_netscape_cookie_export(doc)
+
+    assert text.splitlines() == [
+        "# Netscape HTTP Cookie File",
+        ".example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value",
+        "#HttpOnly_app.example.org\tFALSE\t/dashboard\tFALSE\t0\tsession\tsession-secret",
+    ]
+    assert "token=hidden" not in text

@@ -8,8 +8,8 @@
 
 - [x] 定义 cookie JSON import 格式。
 - [x] 定义 cookie JSON export 格式。
-- [ ] 支持 Netscape cookie import。
-- [ ] 支持 Netscape cookie export。
+- [x] 支持 Netscape cookie import。
+- [x] 支持 Netscape cookie export。
 - [x] 仅运行中 profile 允许通过 browser context 导入 cookie。
 - [ ] 停止状态 profile 可通过 profile dir 方式导入 cookie 时必须先评估 Firefox 存储格式，不强行实现。
 - [x] 导出 cookie 必须写 audit。
@@ -179,6 +179,34 @@
 
 . .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
 # 1 passed
+```
+
+## 2026-05-27 Netscape cookie 格式层小闭环
+
+当前状态：
+
+- 已在 `backend/cookie_formats.py` 新增 Netscape cookie 文件格式 helper。
+- `parse_netscape_cookies(text, profile_id=None, exported_at=None)`：
+  - 解析标准 7 列 Netscape cookie 行。
+  - 跳过空行和普通注释行。
+  - 支持 `#HttpOnly_` 前缀并映射为 Cookie JSON v1 的 `httpOnly=true`。
+  - 解析结果统一转换为 `CookieJsonDocument`，便于复用既有 Cookie JSON v1 导入链路。
+  - 非法行返回固定 `Invalid Netscape cookie line <line_number>`，不回显 cookie value、cookie name、domain、URL 或原始行内容。
+- `build_netscape_cookie_export(document)`：
+  - 从 `CookieJsonDocument` 生成 Netscape cookie 文本。
+  - 保留 cookie value 作为导出文件内容；该输出只用于调用方明确导出的文件文本，不写日志或 audit。
+  - 对只有 `url` 的 cookie 只提取 hostname，不把 query/fragment/token 写入 Netscape domain 字段。
+- `netscape_cookie_audit_summary(document)`：
+  - 只输出低敏计数：格式名、cookie 数、secure 数、session/persistent 数、httpOnly 数。
+  - 不包含 cookie value、cookie name、domain、URL、query 或 fragment。
+- 本小闭环只实现格式层，不新增 REST API，不读写运行中 browser context，不写 `audit_events`，不新增前端入口，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py -q
+# 7 passed
 ```
 
 ## 验证
