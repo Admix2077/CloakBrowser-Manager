@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
 
 
 class TagCreate(BaseModel):
@@ -575,6 +575,17 @@ class CookieImportResponse(BaseModel):
     profile_id: str
     imported: int
     summary: dict[str, Any]
+
+
+class CookieExportRequest(BaseModel):
+    confirm_export: StrictBool = False
+
+
+class CookieExportResponse(BaseModel):
+    profile_id: str
+    exported: int
+    summary: dict[str, Any]
+    document: dict[str, Any]
 
 
 class ClipboardRequest(BaseModel):

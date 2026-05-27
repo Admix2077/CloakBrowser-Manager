@@ -35,6 +35,18 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 JSON cookie export 显式确认与审计小闭环：
+  - 新增 `POST /api/profiles/{profile_id}/cookies/export`。
+  - 请求体必须显式传入 JSON boolean `confirm_export: true`，不接受字符串或数字宽松转换；缺失或 `false` 返回固定 `422 Cookie export requires explicit confirmation`，且不读取 browser context、不写 audit。
+  - 该 endpoint 只允许运行中 profile；profile 未运行返回 `404 Profile not running`，停止状态 profile 不读 Firefox profile dir。
+  - 执行时调用运行中 Playwright browser context 的 `cookies()`，再构造成 Cookie JSON v1 导出文档。
+  - 响应返回 `profile_id`、`exported`、低敏 `summary` 和 `document`；`document` 包含 cookie 明文，因此该 API 仅限可信本地管理侧并要求显式确认。
+  - 成功导出会写 `audit_events`：`event_type=cookie.exported`、`actor_type=local_admin`、`profile_id` 和低敏 metadata。
+  - audit metadata 使用 `total_count/session_count/persistent_count` 等不含 `cookie` 字样的 key，避免通用 audit sanitizer 删除统计字段。
+  - audit metadata、固定错误和 logger warning 均不回显 cookie value、cookie name、domain、URL、query 或 Playwright 原始异常 message。
+  - `cookies()` 执行失败返回固定 `400 Cookie export failed`，不写 audit。
+  - 本小闭环不实现 Netscape 格式、不新增前端入口、不接 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 JSON cookie import 运行中 profile 小闭环：
   - 新增 `POST /api/profiles/{profile_id}/cookies/import`。
   - 请求体复用 Cookie JSON v1 格式，执行时调用运行中 Playwright browser context 的 `add_cookies()`。

@@ -12,8 +12,8 @@
 - [ ] 支持 Netscape cookie export。
 - [x] 仅运行中 profile 允许通过 browser context 导入 cookie。
 - [ ] 停止状态 profile 可通过 profile dir 方式导入 cookie 时必须先评估 Firefox 存储格式，不强行实现。
-- [ ] 导出 cookie 必须写 audit。
-- [ ] 导出 cookie 必须有显式确认。
+- [x] 导出 cookie 必须写 audit。
+- [x] 导出 cookie 必须有显式确认。
 - [ ] 前端新增 Cookie 管理入口。
 - [ ] 支持 profile config export：
   - 不包含 cookie。
@@ -90,6 +90,38 @@
 
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_api.py::test_import_cookie_json_requires_running_profile_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_rejects_invalid_document_without_leaking_payload backend/tests/test_api.py::test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking_payload -q
+# 4 passed
+```
+
+## 2026-05-27 JSON cookie export 显式确认与审计小闭环
+
+当前状态：
+
+- 已新增 `POST /api/profiles/{profile_id}/cookies/export`。
+- 请求体必须显式传入 JSON boolean `confirm_export: true`，不接受字符串或数字宽松转换；缺失或 `false` 返回固定 `422 Cookie export requires explicit confirmation`，且不读取 browser context、不写 audit。
+- 该 endpoint 只允许运行中 profile：
+  - profile 未运行返回 `404 Profile not running`。
+  - 停止状态 profile 不读 Firefox profile dir，不尝试直接解析磁盘 cookie 存储。
+- 执行时调用运行中 Playwright browser context 的 `cookies()`，再构造成 Cookie JSON v1 导出文档。
+- 响应返回：
+  - `profile_id`。
+  - `exported`。
+  - 低敏 `summary` 计数。
+  - `document`：Cookie JSON v1 文档，包含 cookie 明文；该 API 仅限可信本地管理侧并要求显式确认。
+- 成功导出会写 `audit_events`：
+  - `event_type`：`cookie.exported`。
+  - `actor_type`：`local_admin`。
+  - `profile_id`：目标 profile。
+  - `metadata`：只包含低敏计数，使用 `total_count/session_count/persistent_count` 等不含 `cookie` 字样的 key，避免通用 audit sanitizer 删除统计字段。
+- audit metadata、固定错误和 logger warning 均不回显 cookie value、cookie name、domain、URL、query 或 Playwright 原始异常 message。
+- `cookies()` 执行失败返回固定 `400 Cookie export failed`，不写 audit。
+- 本小闭环不实现 Netscape 格式、不新增前端入口、不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_cookie_json_requires_explicit_confirmation_without_reading_context backend/tests/test_api.py::test_export_cookie_json_returns_document_and_writes_redacted_audit backend/tests/test_api.py::test_export_cookie_json_requires_running_profile backend/tests/test_api.py::test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_leak -q
 # 4 passed
 ```
 

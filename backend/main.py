@@ -32,7 +32,12 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import database as db
 from .browser_manager import BrowserManager
-from .cookie_formats import CookieJsonDocument, cookie_json_audit_summary, cookies_for_playwright
+from .cookie_formats import (
+    CookieJsonDocument,
+    build_cookie_json_export,
+    cookie_json_audit_summary,
+    cookies_for_playwright,
+)
 from .geoip import resolve_network_geo
 from .health import (
     ProfileHealthResponse,
@@ -58,6 +63,8 @@ from .models import (
     AutomationTasksResponse,
     AutomationWaitForSelectorRequest,
     ClipboardRequest,
+    CookieExportRequest,
+    CookieExportResponse,
     CookieImportResponse,
     LaunchResponse,
     LoginRequest,
@@ -700,6 +707,21 @@ def _audit_runtime_viewer_failure(
         )
     except Exception as exc:
         logger.warning("Runtime viewer failure audit skipped: %s", type(exc).__name__)
+
+
+def _cookie_export_audit_metadata(summary: dict) -> dict:
+    return {
+        "format": summary.get("format"),
+        "schema_version": summary.get("schema_version"),
+        "total_count": summary.get("cookie_count"),
+        "domain_scoped_count": summary.get("domain_scoped_count"),
+        "url_scoped_count": summary.get("url_scoped_count"),
+        "secure_count": summary.get("secure_count"),
+        "http_only_count": summary.get("http_only_count"),
+        "session_count": summary.get("session_cookie_count"),
+        "persistent_count": summary.get("persistent_cookie_count"),
+        "same_site_counts": summary.get("same_site_counts"),
+    }
 
 
 def _runtime_service_token_from_request(request: Request) -> str | None:
@@ -1373,6 +1395,40 @@ async def import_profile_cookies(profile_id: str, req: dict):
         profile_id=profile_id,
         imported=len(cookies),
         summary=cookie_json_audit_summary(document),
+    )
+
+
+@app.post("/api/profiles/{profile_id}/cookies/export", response_model=CookieExportResponse)
+async def export_profile_cookies(profile_id: str, req: CookieExportRequest):
+    if req.confirm_export is not True:
+        raise HTTPException(status_code=422, detail="Cookie export requires explicit confirmation")
+
+    running = _automation_running(profile_id)
+    try:
+        cookies = await running.context.cookies()
+    except Exception as exc:
+        logger.warning("Cookie export failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+
+    exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    try:
+        document = build_cookie_json_export(cookies, profile_id=profile_id, exported_at=exported_at)
+    except Exception as exc:
+        logger.warning("Cookie export normalization failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+
+    summary = cookie_json_audit_summary(document)
+    db.create_audit_event(
+        event_type="cookie.exported",
+        actor_type="local_admin",
+        profile_id=profile_id,
+        metadata=_cookie_export_audit_metadata(summary),
+    )
+    return CookieExportResponse(
+        profile_id=profile_id,
+        exported=len(document.cookies),
+        summary=summary,
+        document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
     )
 
 

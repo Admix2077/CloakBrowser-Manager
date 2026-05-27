@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import threading
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -517,6 +518,7 @@ def _automation_running_profile(pid: str, pages: list[MagicMock] | None = None) 
     context.pages = pages if pages is not None else []
     context.new_page = AsyncMock()
     context.add_cookies = AsyncMock()
+    context.cookies = AsyncMock()
 
     running = MagicMock(spec=RunningProfile)
     running.profile_id = pid
@@ -698,6 +700,152 @@ def test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking
 
     assert resp.status_code == 400
     assert resp.json() == {"detail": "Cookie import failed"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert "super-secret-cookie-value" not in caplog.text
+    assert "sensitive.example.com" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_json_requires_explicit_confirmation_without_reading_context(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "CookieExportConfirmProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export",
+        json={"confirm_export": False},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Cookie export requires explicit confirmation"}
+    running.context.cookies.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_json_rejects_coerced_confirmation_without_reading_context(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "CookieExportCoercedConfirmProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    for confirm_export in ("true", "yes", 1):
+        resp = app_client.post(
+            f"/api/profiles/{pid}/cookies/export",
+            json={"confirm_export": confirm_export},
+        )
+
+        assert resp.status_code == 422
+
+    running.context.cookies.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_json_returns_document_and_writes_redacted_audit(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "CookieExportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    cookie_value = "super-secret-cookie-value"
+    cookie_domain = "sensitive.example.com"
+    cookie_url = "https://example.org/account?token=hidden"
+    running.context.cookies.return_value = [
+        {
+            "name": "sid",
+            "value": cookie_value,
+            "domain": cookie_domain,
+            "path": "/",
+            "secure": True,
+            "httpOnly": True,
+            "sameSite": "Lax",
+        },
+        {
+            "name": "analytics_id",
+            "value": "another-secret-cookie-value",
+            "url": cookie_url,
+            "expires": 1_893_456_000,
+        },
+    ]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export",
+        json={"confirm_export": True},
+    )
+
+    assert resp.status_code == 200
+    running.context.cookies.assert_awaited_once()
+    data = resp.json()
+    assert data["profile_id"] == pid
+    assert data["exported"] == 2
+    assert data["summary"]["cookie_count"] == 2
+    assert data["summary"]["domain_scoped_count"] == 1
+    assert data["summary"]["url_scoped_count"] == 1
+    assert data["document"]["format"] == "cloakbrowser.cookie-json.v1"
+    assert data["document"]["schema_version"] == 1
+    assert data["document"]["profile_id"] == pid
+    assert data["document"]["cookies"][0]["value"] == cookie_value
+    assert data["document"]["cookies"][1]["url"] == cookie_url
+
+    events = main.db.list_audit_events()
+    assert [event["event_type"] for event in events] == ["cookie.exported"]
+    assert events[0]["actor_type"] == "local_admin"
+    assert events[0]["profile_id"] == pid
+    assert events[0]["runtime_session_id"] is None
+    assert events[0]["external_session_id"] is None
+    assert events[0]["metadata"] == {
+        "format": "cloakbrowser.cookie-json.v1",
+        "schema_version": 1,
+        "total_count": 2,
+        "domain_scoped_count": 1,
+        "url_scoped_count": 1,
+        "secure_count": 1,
+        "http_only_count": 1,
+        "session_count": 1,
+        "persistent_count": 1,
+        "same_site_counts": {"Strict": 0, "Lax": 1, "None": 0, "unset": 1},
+    }
+    audit_text = json.dumps(events, sort_keys=True)
+    assert cookie_value not in audit_text
+    assert "another-secret-cookie-value" not in audit_text
+    assert "sid" not in audit_text
+    assert "analytics_id" not in audit_text
+    assert cookie_domain not in audit_text
+    assert "token=hidden" not in audit_text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_json_requires_running_profile(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "StoppedCookieExportProfile"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export",
+        json={"confirm_export": True},
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not running"}
+    assert main.db.list_audit_events() == []
+
+
+def test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_leak(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "FailingCookieExportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.cookies.side_effect = RuntimeError("super-secret-cookie-value sensitive.example.com")
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export",
+        json={"confirm_export": True},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Cookie export failed"}
+    assert main.db.list_audit_events() == []
     assert "super-secret-cookie-value" not in resp.text
     assert "sensitive.example.com" not in resp.text
     assert "super-secret-cookie-value" not in caplog.text
