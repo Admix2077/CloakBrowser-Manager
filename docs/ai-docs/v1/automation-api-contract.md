@@ -540,7 +540,7 @@ POST /api/tasks/{id}/run
 - `cancel_requested` 只在 step 边界生效，不承诺中断正在执行或正在 await 的 Playwright 操作；收束为 `cancelled` 后 `result.steps[]` 只包含已执行 step 的 `succeeded/failed` 低敏摘要和一个未执行 step 的 `cancelled` 低敏摘要。
 - 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
-- 当前已提供内部 worker 单次运行入口，但不启动后台循环或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
+- 当前已提供内部 worker 单次运行入口和内部 loop 骨架，但不启动后台常驻任务或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
 
 ### 内部 Task Claim / Lease
 
@@ -561,7 +561,12 @@ POST /api/tasks/{id}/run
   - profile 不存在或未运行时把已领取 task 用匹配 `lease_owner` 收束为 `failed`，`result.steps` 为空，错误固定为 `Profile not found` 或 `Profile not running`。
   - 运行中遇到 page not found 等内部 HTTP step 错误时，收束为 `failed`，`error` 固定为 `Automation step failed`，`result.steps[]` 只记录当前 step 的 `index/type/status=failed`。
   - 成功、失败或取消收束均通过 `finish_claimed_automation_task()` 校验当前 worker owner，并清空 `lease_owner` / `lease_expires_at`。
-- 当前仍未启动后台常驻 worker loop、调度器或全局 worker 池；该能力不新增 Project Mileage 对接面，不写钱包、订单、权限、扣费、续期、viewer token 或屏幕流逻辑。
+- `run_automation_worker_loop(lease_owner, lease_seconds=60, max_runs=None, max_idle_cycles=1, idle_sleep_seconds=1.0, stop_event=None)` 是内部 loop 骨架：
+  - 持续调用 `run_automation_worker_once()`，直到达到 `max_runs`、达到 `max_idle_cycles` 或 `stop_event` 已设置。
+  - 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。
+  - 空闲时仅按 `idle_sleep_seconds` sleep；达到最后一次允许空闲周期后直接退出，避免额外等待。
+  - `stop_event` 在每轮 claim 前检查；如果已设置，不领取 queued task，不修改 task 状态。
+- 当前仍未在应用 lifespan 中启动后台常驻 worker 任务、调度器或全局 worker 池；该能力不新增 Project Mileage 对接面，不写钱包、订单、权限、扣费、续期、viewer token 或屏幕流逻辑。
 - 内部 `lease_owner` / `lease_expires_at` 不属于前端或 Project Mileage DTO，不应出现在 task API、前端 task log、审计 metadata 或跨仓契约响应中。
 
 ## Script Runner 接入建议

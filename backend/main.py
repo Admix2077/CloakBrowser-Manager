@@ -2259,6 +2259,43 @@ async def run_automation_worker_once(
     return finished
 
 
+async def run_automation_worker_loop(
+    *,
+    lease_owner: str,
+    lease_seconds: int = 60,
+    max_runs: int | None = None,
+    max_idle_cycles: int | None = 1,
+    idle_sleep_seconds: float = 1.0,
+    stop_event: asyncio.Event | None = None,
+) -> dict[str, int]:
+    summary = {
+        "claimed": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "cancelled": 0,
+        "idle_cycles": 0,
+    }
+    while True:
+        if stop_event is not None and stop_event.is_set():
+            break
+        if max_runs is not None and summary["claimed"] >= max_runs:
+            break
+
+        task = await run_automation_worker_once(lease_owner=lease_owner, lease_seconds=lease_seconds)
+        if task is None:
+            summary["idle_cycles"] += 1
+            if max_idle_cycles is not None and summary["idle_cycles"] >= max_idle_cycles:
+                break
+            if idle_sleep_seconds > 0:
+                await asyncio.sleep(idle_sleep_seconds)
+            continue
+
+        summary["claimed"] += 1
+        if task["status"] in {"succeeded", "failed", "cancelled"}:
+            summary[task["status"]] += 1
+    return summary
+
+
 @app.post("/api/tasks/{task_id}/run", response_model=AutomationTaskResponse)
 async def run_automation_task(task_id: str):
     task = db.get_automation_task(task_id)

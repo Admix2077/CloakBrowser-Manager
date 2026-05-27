@@ -35,6 +35,15 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker loop 内部骨架小闭环：
+  - 新增内部 `run_automation_worker_loop(lease_owner, lease_seconds=60, max_runs=None, max_idle_cycles=1, idle_sleep_seconds=1.0, stop_event=None)`，为后续后台常驻 worker 提供可测试 loop 骨架。
+  - loop 持续调用 `run_automation_worker_once()`，直到达到 `max_runs`、达到 `max_idle_cycles` 或 `stop_event` 已设置。
+  - loop 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。
+  - 空队列时会增加 `idle_cycles`；如果还未达到上限且 `idle_sleep_seconds > 0`，才进行 sleep；达到最后一次允许空闲周期后直接退出，避免额外等待。
+  - `stop_event` 在每轮 claim 前检查；如果已设置，不领取 queued task，不修改 task 状态。
+  - 当前仍未在 FastAPI lifespan 启动后台常驻任务，不新增公开 REST API，不自动启动 profile，不接 Project Mileage DTO。
+  - 本小闭环不实现 worker 池、自动续租循环、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker run-once 内部骨架小闭环：
   - 新增内部 `run_automation_worker_once(lease_owner, lease_seconds=60)`，作为后续后台 worker loop 的单次执行骨架。
   - worker 通过 `claim_next_automation_task()` 原子领取可执行 task；无可领取 task 时返回 `None`，不修改数据库。

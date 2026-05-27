@@ -2051,6 +2051,70 @@ async def test_automation_worker_run_once_fails_http_step_errors_without_leaking
     main.browser_mgr.running.pop(pid, None)
 
 
+@pytest.mark.asyncio
+async def test_automation_worker_loop_runs_multiple_claimed_tasks(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerLoopProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    first = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    second = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+
+    summary = await main.run_automation_worker_loop(
+        lease_owner="worker-a",
+        max_runs=2,
+        idle_sleep_seconds=0,
+    )
+
+    assert summary == {"claimed": 2, "succeeded": 2, "failed": 0, "cancelled": 0, "idle_cycles": 0}
+    assert main.db.get_automation_task(first["id"])["status"] == "succeeded"
+    assert main.db.get_automation_task(second["id"])["status"] == "succeeded"
+    main.browser_mgr.running.pop(pid, None)
+
+
+@pytest.mark.asyncio
+async def test_automation_worker_loop_stops_after_idle_cycles(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sleeps: list[float] = []
+
+    async def record_sleep(seconds: float):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(main.asyncio, "sleep", record_sleep)
+
+    summary = await main.run_automation_worker_loop(
+        lease_owner="worker-a",
+        max_runs=5,
+        max_idle_cycles=2,
+        idle_sleep_seconds=0.25,
+    )
+
+    assert summary == {"claimed": 0, "succeeded": 0, "failed": 0, "cancelled": 0, "idle_cycles": 2}
+    assert sleeps == [0.25]
+
+
+@pytest.mark.asyncio
+async def test_automation_worker_loop_honors_stop_event_before_claiming(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerLoopStopProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    stop_event = main.asyncio.Event()
+    stop_event.set()
+
+    summary = await main.run_automation_worker_loop(
+        lease_owner="worker-a",
+        max_runs=1,
+        idle_sleep_seconds=0,
+        stop_event=stop_event,
+    )
+
+    assert summary == {"claimed": 0, "succeeded": 0, "failed": 0, "cancelled": 0, "idle_cycles": 0}
+    assert main.db.get_automation_task(task["id"])["status"] == "queued"
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_run_open_url_step_navigates_existing_page_without_leaking_query(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunOpenUrlProfile"})
     pid = create.json()["id"]
