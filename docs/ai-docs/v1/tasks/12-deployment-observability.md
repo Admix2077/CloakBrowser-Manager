@@ -11,7 +11,7 @@
 - [ ] 保持 Dockerfile 可构建。
 - [x] healthcheck 覆盖 `/api/status`。
 - [x] 数据目录 `/data` 可持久化。
-- [ ] 文档说明 backup/restore。
+- [x] 文档说明 backup/restore。
 - [x] 支持 `AUTH_TOKEN`。
 - [x] 支持 service token。
 
@@ -58,6 +58,44 @@ docker run --rm -p 8080:8080 -v invisible-browser-profiles-test:/data invisible-
 - [ ] 重启后 profiles 仍存在。
 - [ ] 强杀后再次启动 profile 不因 lock/session restore 卡死。
 - [ ] status 能反映运行中数量。
+
+## 2026-05-28 Backup/Restore runbook 与安全边界小闭环
+
+背景：
+
+- 12 模块需要部署备份/恢复说明，但当前不适合直接实现真实 backup/restore API：`/data/profiles.db` 和 `/data/profiles/` 可能包含 cookie、local storage、proxy password、runtime/session/audit 等敏感事实。
+- 本轮先用 runbook 明确人工备份恢复边界和验收步骤，避免部署者误以为可以热备、只备份 DB、只备份 profile dir，或把备份包提交到仓库。
+- 本轮只修改 CloakBrowser 自仓文档和 guardrail 测试，不读取真实 `/data`、不读取 `.env`，不进入 Project Mileage app/payload。
+
+已完成：
+
+- 新增 `docs/ai-docs/v1/deployment-backup-restore-runbook.md`
+  - 明确 `/data/profiles.db` 与 `/data/profiles/` 必须作为同一快照整体备份。
+  - 明确当前不支持热备，备份/恢复前推荐 `docker compose down`。
+  - 明确恢复前先备份当前 `/data`，避免覆盖现场后无法回滚。
+  - 明确恢复后先用 `/api/status` 做低敏健康检查，再手动启动低风险 profile 做浏览器/VNC 验收。
+  - 明确不要提交备份包、`.env`、SQLite dump、profile dir archive、cookie、local storage、proxy password、`AUTH_TOKEN`、`RUNTIME_SERVICE_TOKEN`、viewer token 或任何 secret。
+- `backend/tests/test_deployment_config.py`
+  - 新增 runbook guardrail 测试，锁住数据范围、停服务备份、不支持热备、恢复前回滚备份、`/api/status` 验收和 Project Mileage 边界。
+
+边界：
+
+- 本轮没有实现自动 backup/restore API，没有打包真实 `/data`，没有读取 profile dir 内容，没有导出 SQLite dump。
+- 本轮不标记 `备份 SQLite`、`备份 profile dirs`、`恢复后可启动 profile` 为完成，因为还没有真实命令和浏览器恢复验收证据。
+- Project Mileage app/payload 当前不参与备份恢复；App 不能直连 CloakBrowser runtime、diagnostics、backup 或 restore 能力。未来如需远程账号工作台展示备份/恢复状态，必须先由 Payload 通过安全 DTO 定义，并由 Payload 持有服务端凭证。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_deployment_config.py -q
+# RED: 3 failed；runbook 文件不存在，12 文档尚未标记 backup/restore 文档说明完成
+
+. .venv/bin/activate && python -m pytest backend/tests/test_deployment_config.py -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_deployment_config.py backend/tests/test_auth.py backend/tests/test_session_broker.py -q
+# 51 passed
+```
 
 ## 2026-05-28 Docker runtime service token 配置与文档小闭环
 

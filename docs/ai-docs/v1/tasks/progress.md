@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 Backup/Restore runbook 与安全边界小闭环：
+  - 新增 `docs/ai-docs/v1/deployment-backup-restore-runbook.md`，说明单机 Docker 部署下 `/data/profiles.db` 与 `/data/profiles/` 必须作为同一快照整体备份。
+  - runbook 明确当前不支持热备，备份/恢复前推荐 `docker compose down`，恢复前先备份当前 `/data`，恢复后先用 `/api/status` 做低敏健康检查，再手动启动低风险 profile 验证浏览器/VNC。
+  - runbook 明确不要提交备份包、`.env`、SQLite dump、profile dir archive、cookie、local storage、proxy password、`AUTH_TOKEN`、`RUNTIME_SERVICE_TOKEN`、viewer token 或任何 secret。
+  - 新增 `backend/tests/test_deployment_config.py` guardrail，锁住数据范围、停服务备份、不支持热备、敏感边界和 Project Mileage 边界。
+  - 本小闭环只完成 runbook 和测试，不读取真实 `/data`，不实现自动 backup/restore API，不标记 `备份 SQLite`、`备份 profile dirs` 或 `恢复后可启动 profile` 为完成；当前没有 Project Mileage app/payload 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 Docker runtime service token 配置与文档小闭环：
   - `docker-compose.yml` 在继续本机绑定 `127.0.0.1:8080:8080` 和持久化 `~/.invisible-browser-manager:/data` 的基础上，透传 `AUTH_TOKEN=${AUTH_TOKEN:-}` 与 `RUNTIME_SERVICE_TOKEN=${RUNTIME_SERVICE_TOKEN:-}`。
   - README 明确 `AUTH_TOKEN` 是本地管理台/API 的 local admin 凭证，`RUNTIME_SERVICE_TOKEN` 只用于服务端到服务端 `/api/runtime/*`，请求头为 `X-Runtime-Service-Token`。

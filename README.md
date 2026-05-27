@@ -154,6 +154,16 @@ RUNTIME_SERVICE_TOKEN=runtime-service-token \
 docker compose up --build
 ```
 
+## 备份与恢复
+
+单机 Docker 部署需要把 `/data/profiles.db` 和 `/data/profiles/` 作为同一个快照整体备份。当前不支持热备，备份或恢复前应先停止服务：
+
+```bash
+docker compose down
+```
+
+详细步骤和安全边界见 `docs/ai-docs/v1/deployment-backup-restore-runbook.md`。不要提交备份包、`.env`、SQLite dump、profile dir archive、cookie、local storage、proxy password、`AUTH_TOKEN`、`RUNTIME_SERVICE_TOKEN`、viewer token 或任何 secret。
+
 ## 本地开发
 
 后端：
