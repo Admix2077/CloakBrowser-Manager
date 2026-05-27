@@ -9,11 +9,11 @@
 ### Docker
 
 - [ ] 保持 Dockerfile 可构建。
-- [ ] healthcheck 覆盖 `/api/status`。
-- [ ] 数据目录 `/data` 可持久化。
+- [x] healthcheck 覆盖 `/api/status`。
+- [x] 数据目录 `/data` 可持久化。
 - [ ] 文档说明 backup/restore。
-- [ ] 支持 `AUTH_TOKEN`。
-- [ ] 支持 service token。
+- [x] 支持 `AUTH_TOKEN`。
+- [x] 支持 service token。
 
 ### Resource Limits
 
@@ -36,7 +36,7 @@
 - [x] 新增 `/api/diagnostics`。
 - [x] 日志中包含 profile id 和 action。
 - [x] 错误响应稳定。
-- [ ] 前端 settings/diagnostics 页面显示系统状态。
+- [x] 前端 settings/diagnostics 页面显示系统状态。
 
 ### Backup
 
@@ -58,6 +58,57 @@ docker run --rm -p 8080:8080 -v invisible-browser-profiles-test:/data invisible-
 - [ ] 重启后 profiles 仍存在。
 - [ ] 强杀后再次启动 profile 不因 lock/session restore 卡死。
 - [ ] status 能反映运行中数量。
+
+## 2026-05-28 Docker runtime service token 配置与文档小闭环
+
+背景：
+
+- CloakBrowser 已有 `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token`，用于未来由 Project Mileage Payload 服务端调用 `/api/runtime/*`。
+- `docker-compose.yml` 之前只透传 `AUTH_TOKEN`，容易让部署者误以为 local admin token 可复用为 runtime service token。
+- 本轮只修改 CloakBrowser 自仓配置、README 和测试，不进入 Project Mileage app/payload。
+
+已完成：
+
+- `docker-compose.yml`
+  - 继续只绑定 `127.0.0.1:8080:8080`。
+  - 继续把 `~/.invisible-browser-manager` 挂载到 `/data`。
+  - 透传 `AUTH_TOKEN=${AUTH_TOKEN:-}`。
+  - 新增透传 `RUNTIME_SERVICE_TOKEN=${RUNTIME_SERVICE_TOKEN:-}`。
+- `README.md`
+  - 说明 `AUTH_TOKEN` 是本地管理台/API 的 local admin 凭证。
+  - 说明 `RUNTIME_SERVICE_TOKEN` 只用于服务端到服务端的 `/api/runtime/*`，请求头为 `X-Runtime-Service-Token`。
+  - 明确 Project Mileage App 不能直连 CloakBrowser runtime API，不能持有 runtime service token；未来必须由 Payload 校验订单、钱包、权限和审计后再调用 CloakBrowser。
+  - 明确不要把 `RUNTIME_SERVICE_TOKEN` 放进前端环境变量、URL、日志、截图、issue 或提交记录。
+- `backend/tests/test_deployment_config.py`
+  - 新增配置/文档 guardrail 测试，锁住 Compose token 透传、local-only 端口绑定、`/data` 挂载和 README token 边界。
+
+边界：
+
+- 本轮不读取 `.env`，不写入任何真实 token。
+- 本轮不修改 Project Mileage app/payload，不新增 Payload DTO，不实现钱包、订单、权限、扣费、续期、viewer token 或远程屏幕流逻辑。
+- App 仍禁止直连 CloakBrowser runtime API；`RUNTIME_SERVICE_TOKEN` 只能由服务端持有。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_deployment_config.py -q
+# RED: 2 failed；Compose 未透传 RUNTIME_SERVICE_TOKEN，README 未记录 runtime service token 边界
+
+. .venv/bin/activate && python -m pytest backend/tests/test_deployment_config.py -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_deployment_config.py backend/tests/test_auth.py backend/tests/test_session_broker.py -q
+# 48 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 496 passed in 29.73s
+
+AUTH_TOKEN=local-admin-token RUNTIME_SERVICE_TOKEN=runtime-service-token docker compose config >/tmp/cloakbrowser-compose-config.txt && rg -n "AUTH_TOKEN|RUNTIME_SERVICE_TOKEN|/data" /tmp/cloakbrowser-compose-config.txt
+# 输出包含 AUTH_TOKEN、RUNTIME_SERVICE_TOKEN 和 /data 挂载；未读取或输出真实 secret。
+
+git diff --check
+# passed
+```
 
 ## 2026-05-28 前端 System diagnostics 页面小闭环
 

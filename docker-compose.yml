@@ -7,3 +7,4 @@ services:
       - ~/.invisible-browser-manager:/data
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN:-}
+      - RUNTIME_SERVICE_TOKEN=${RUNTIME_SERVICE_TOKEN:-}

@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 Docker runtime service token 配置与文档小闭环：
+  - `docker-compose.yml` 在继续本机绑定 `127.0.0.1:8080:8080` 和持久化 `~/.invisible-browser-manager:/data` 的基础上，透传 `AUTH_TOKEN=${AUTH_TOKEN:-}` 与 `RUNTIME_SERVICE_TOKEN=${RUNTIME_SERVICE_TOKEN:-}`。
+  - README 明确 `AUTH_TOKEN` 是本地管理台/API 的 local admin 凭证，`RUNTIME_SERVICE_TOKEN` 只用于服务端到服务端 `/api/runtime/*`，请求头为 `X-Runtime-Service-Token`。
+  - README 明确 Project Mileage App 不能直连 CloakBrowser runtime API，不能持有 runtime service token；未来必须由 Payload 校验订单、钱包、权限和审计后再调用 CloakBrowser。
+  - 新增 `backend/tests/test_deployment_config.py` 锁住 Compose token 透传、local-only 端口绑定、`/data` 挂载和 README token 边界。
+  - 本小闭环不读取 `.env`，不写入真实 token，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成前端 System diagnostics 页面小闭环：
   - 前端新增 `System` 分段入口和 `SystemDiagnosticsPage`，调用受保护的 `/api/diagnostics`。
   - 页面只展示低敏 status、storage bool、运行/启动/profile/proxy/task 计数、active display/VNC port 数字、`MAX_RUNNING_PROFILES` 解析结果和 automation worker 解析后配置。

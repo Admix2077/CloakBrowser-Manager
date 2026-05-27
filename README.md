@@ -32,6 +32,25 @@ docker run --rm \
   invisible-browser-manager
 ```
 
+如需给后端服务端调用 runtime session API，再额外设置 runtime service token：
+
+```bash
+docker run --rm \
+  -p 127.0.0.1:8080:8080 \
+  -v invisible-browser-profiles:/data \
+  -e AUTH_TOKEN=your-local-admin-token \
+  -e RUNTIME_SERVICE_TOKEN=your-runtime-service-token \
+  invisible-browser-manager
+```
+
+`AUTH_TOKEN` 是本地管理台/API 的 local admin 凭证。`RUNTIME_SERVICE_TOKEN` 只用于服务端到服务端的 `/api/runtime/*` 调用，请求头为：
+
+```bash
+X-Runtime-Service-Token: <runtime-service-token>
+```
+
+Project Mileage App 不能直连 CloakBrowser runtime API，也不能持有 runtime service token；未来远程账号工作台必须由 Payload 服务端校验订单、钱包、权限和审计后，再由 Payload 使用 `X-Runtime-Service-Token` 调用 CloakBrowser。不要把 RUNTIME_SERVICE_TOKEN 放进前端环境变量、URL、日志、截图、issue 或提交记录。
+
 默认命令只绑定 `127.0.0.1`，避免无认证时暴露到局域网。远程测试建议用 SSH tunnel：
 
 ```bash
@@ -125,6 +144,14 @@ Compose 默认绑定：
 
 ```text
 ~/.invisible-browser-manager
+```
+
+Compose 会透传本机环境变量 `AUTH_TOKEN` 和 `RUNTIME_SERVICE_TOKEN`。示例：
+
+```bash
+AUTH_TOKEN=local-admin-token \
+RUNTIME_SERVICE_TOKEN=runtime-service-token \
+docker compose up --build
 ```
 
 ## 本地开发
