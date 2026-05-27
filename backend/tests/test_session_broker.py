@@ -237,6 +237,50 @@ def test_runtime_session_uses_runtime_token_when_ui_auth_is_enabled(
     assert resp.json()["external_session_id"] == "pm-session-auth-enabled"
 
 
+def test_ui_auth_token_cannot_create_runtime_session(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    profile_id = _create_profile(app_client)
+    monkeypatch.setattr(main, "AUTH_TOKEN", "ui-secret", raising=False)
+
+    resp = app_client.post(
+        "/api/runtime/sessions",
+        headers={"Authorization": "Bearer ui-secret"},
+        json={
+            "external_session_id": "pm-session-ui-token-rejected",
+            "profile_id": profile_id,
+            "lease_seconds": 300,
+        },
+    )
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runtime service token required"
+
+
+def test_ui_auth_cookie_cannot_create_runtime_session(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    profile_id = _create_profile(app_client)
+    monkeypatch.setattr(main, "AUTH_TOKEN", "ui-secret", raising=False)
+    app_client.cookies.set("auth_token", "ui-secret")
+
+    resp = app_client.post(
+        "/api/runtime/sessions",
+        json={
+            "external_session_id": "pm-session-ui-cookie-rejected",
+            "profile_id": profile_id,
+            "lease_seconds": 300,
+        },
+    )
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Runtime service token required"
+
+
 def test_runtime_viewer_token_requires_runtime_service_token(
     app_client: TestClient,
     runtime_headers: dict[str, str],

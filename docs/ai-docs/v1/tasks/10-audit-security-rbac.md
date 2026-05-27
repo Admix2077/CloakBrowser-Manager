@@ -13,8 +13,15 @@
   - `/api/auth/login` 仍使用用户输入 token 与 `AUTH_TOKEN` 做常量时间比对。
   - 登录成功后写入的 `auth_token` cookie 改为由 `AUTH_TOKEN` 派生的 `v1.<hmac-sha256>` 值，避免 `Set-Cookie` 响应头回显环境变量明文。
   - 为避免本地已登录页面立刻失效，认证中间件暂时兼容读取旧明文 cookie；新登录不会再签发旧明文 cookie。
-- [ ] 新增 service token，用于 Payload 调用 runtime API。
-- [ ] 区分 user API、admin API、service API。
+- [x] 新增 service token，用于 Payload 调用 runtime API：
+  - `RUNTIME_SERVICE_TOKEN` 作为 runtime service API 专用凭证。
+  - runtime service API 只接受 `X-Runtime-Service-Token`，不接受 `AUTH_TOKEN` bearer 或 `auth_token` cookie。
+  - 普通受保护 `/api/*` local admin API 只接受 `AUTH_TOKEN` bearer 或 `auth_token` cookie，不接受 `X-Runtime-Service-Token`。
+  - `/api/auth/status` 会忽略 runtime service token，不把它当作登录态。
+  - 当前测试覆盖 service token 与 local admin token/cookie 的双向隔离。
+- [ ] 区分 user API、admin API、service API：
+  - 当前已完成 local admin API 与 runtime service API 的 token 隔离。
+  - 当前尚未实现 viewer/operator/admin 多角色 RBAC；Project Mileage 业务权限仍必须以后续 Payload DTO 为准。
 - [x] WebSocket viewer token 校验：
   - runtime VNC `WebSocket /api/runtime/sessions/{id}/vnc` 要求有效、未过期 viewer token。
   - missing/wrong/expired viewer token 会拒绝连接并写低敏 `runtime.viewer.failed` reason code，不记录 token 明文、URL query、viewer URL 或 token hash。
@@ -89,7 +96,9 @@
 
 ### RBAC 远期设计
 
-- [ ] 单机版先支持 admin。
+- [x] 单机版先支持 admin：
+  - 单机本地管理侧继续使用 `AUTH_TOKEN` 作为 local admin 凭证。
+  - audit actor 仍固定为 `local_admin`。
 - [ ] 后续支持 viewer/operator/admin。
 - [ ] Project Mileage 权限以 Payload roles 为准。
 - [ ] CloakBrowser 内部 RBAC 不替代 Payload 业务权限。
@@ -104,6 +113,7 @@ cd frontend && npm test -- --run
 ## 验收标准
 
 - [x] 未授权不能访问 protected API。
+- [x] runtime service API 与 local admin API token 隔离。
 - [x] WebSocket origin 检查不退化。
 - [x] audit 中没有 proxy password、cookie value、token。
 - [ ] 删除、导出、终止等高风险操作有确认或权限限制。

@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 runtime service token 隔离测试与文档收口小闭环：
+  - `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token` 明确作为 runtime service API 专用凭证，用于未来由 Payload 调用 CloakBrowser runtime API。
+  - runtime service API 只接受 `X-Runtime-Service-Token`，不接受普通 `AUTH_TOKEN` bearer 或 `auth_token` cookie。
+  - 普通受保护 `/api/*` local admin API 只接受 `AUTH_TOKEN` bearer 或 `auth_token` cookie，不接受 `X-Runtime-Service-Token`。
+  - `/api/auth/status` 会忽略 runtime service token，不把它当作登录态。
+  - 新增测试覆盖 service token 不能访问普通 protected API、auth status 不接受 service token、普通 auth token/cookie 不能创建 runtime session。
+  - 当前只完成 local admin API 与 runtime service API 的 token 隔离；viewer/operator/admin 多角色 RBAC 仍是远期，Project Mileage 业务权限仍必须以 Payload roles/DTO 为准。
+  - 本小闭环只修改 CloakBrowser 本仓测试和文档，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 bulk action audit 小闭环：
   - `POST /api/profiles/import` 至少成功创建 1 个 profile 后写 `profile.imported` 汇总 audit。
   - `POST /api/profiles/export` 至少成功导出 1 个 profile config 后写 `profile.config_exported` 汇总 audit。

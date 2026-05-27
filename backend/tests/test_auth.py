@@ -31,6 +31,7 @@ def client_auth(tmp_db, monkeypatch):
     from backend import main
 
     monkeypatch.setattr(main, "AUTH_TOKEN", "test-secret")
+    monkeypatch.setattr(main, "RUNTIME_SERVICE_TOKEN", "runtime-secret")
     monkeypatch.setattr(main.browser_mgr, "cleanup_stale", AsyncMock())
     monkeypatch.setattr(main.browser_mgr, "cleanup_all", AsyncMock())
     monkeypatch.setattr(main.browser_mgr.vnc, "cleanup_stale", AsyncMock())
@@ -89,12 +90,34 @@ def test_auth_correct_cookie_200(client_auth: TestClient):
     assert resp.status_code == 200
 
 
+def test_runtime_service_token_cannot_authenticate_protected_api(
+    client_auth: TestClient,
+):
+    resp = client_auth.get(
+        "/api/profiles",
+        headers={"X-Runtime-Service-Token": "runtime-secret"},
+    )
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Unauthorized"
+
+
 def test_auth_status_unauthenticated(client_auth: TestClient):
     resp = client_auth.get("/api/auth/status")
     assert resp.status_code == 200
     data = resp.json()
     assert data["auth_required"] is True
     assert data["authenticated"] is False
+
+
+def test_auth_status_ignores_runtime_service_token(client_auth: TestClient):
+    resp = client_auth.get(
+        "/api/auth/status",
+        headers={"X-Runtime-Service-Token": "runtime-secret"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"auth_required": True, "authenticated": False}
 
 
 def test_auth_status_authenticated(client_auth: TestClient):
