@@ -107,6 +107,58 @@ describe("api.exportProfiles", () => {
   });
 });
 
+describe("api.importProfileCookies", () => {
+  it("sends cookie JSON v1 to the profile cookie import endpoint", async () => {
+    const document = {
+      format: "cloakbrowser.cookie-json.v1",
+      schema_version: 1,
+      cookies: [{
+        name: "session",
+        value: "secret-cookie-value",
+        domain: "example.com",
+        path: "/",
+        secure: true,
+        httpOnly: true,
+        sameSite: "Lax",
+      }],
+    };
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      profile_id: "profile-1",
+      imported: 1,
+      summary: { cookie_count: 1 },
+    }));
+
+    await api.importProfileCookies("profile-1", document);
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/profile-1/cookies/import");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual(document);
+  });
+});
+
+describe("api.exportProfileCookies", () => {
+  it("requires explicit confirmation when requesting cookie export", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      profile_id: "profile-1",
+      exported: 1,
+      summary: { cookie_count: 1 },
+      document: {
+        format: "cloakbrowser.cookie-json.v1",
+        schema_version: 1,
+        cookies: [],
+      },
+    }));
+
+    await api.exportProfileCookies("profile-1");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/profile-1/cookies/export");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ confirm_export: true });
+  });
+});
+
 // ── updateProfile ───────────────────────────────────────────────────────────
 
 describe("api.updateProfile", () => {

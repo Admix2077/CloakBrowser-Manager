@@ -192,6 +192,48 @@ export interface ProfileExportResponse {
   results: ProfileExportResult[];
 }
 
+export interface CookieJsonCookie {
+  name: string;
+  value: string;
+  domain?: string | null;
+  url?: string | null;
+  path?: string;
+  expires?: number | null;
+  secure?: boolean;
+  httpOnly?: boolean;
+  sameSite?: "Strict" | "Lax" | "None" | null;
+}
+
+export interface CookieJsonDocument {
+  format?: "cloakbrowser.cookie-json.v1";
+  schema_version: number;
+  profile_id?: string | null;
+  exported_at?: string | null;
+  cookies: CookieJsonCookie[];
+}
+
+export interface CookieSummary {
+  cookie_count?: number;
+  secure_count?: number;
+  http_only_count?: number;
+  session_cookie_count?: number;
+  persistent_cookie_count?: number;
+  [key: string]: unknown;
+}
+
+export interface CookieImportResponse {
+  profile_id: string;
+  imported: number;
+  summary: CookieSummary;
+}
+
+export interface CookieExportResponse {
+  profile_id: string;
+  exported: number;
+  summary: CookieSummary;
+  document: CookieJsonDocument;
+}
+
 export interface ProxyAsset {
   id: string;
   name: string;
@@ -492,6 +534,18 @@ export const api = {
     request<ProfileExportResponse>("/api/profiles/export", {
       method: "POST",
       body: JSON.stringify({ profile_ids: profileIds }),
+    }),
+
+  importProfileCookies: (profileId: string, document: CookieJsonDocument) =>
+    request<CookieImportResponse>(`/api/profiles/${profileId}/cookies/import`, {
+      method: "POST",
+      body: JSON.stringify(document),
+    }),
+
+  exportProfileCookies: (profileId: string) =>
+    request<CookieExportResponse>(`/api/profiles/${profileId}/cookies/export`, {
+      method: "POST",
+      body: JSON.stringify({ confirm_export: true }),
     }),
 
   updateProfile: (id: string, data: Partial<ProfileCreateData>) =>

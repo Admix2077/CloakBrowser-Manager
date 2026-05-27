@@ -1,10 +1,11 @@
-import { ArrowRight, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
+import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
 import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
 import { HealthBadge } from "./HealthBadge";
+import { ProfileCookieManager } from "./ProfileCookieManager";
 import { StatusIndicator } from "./StatusIndicator";
 
 interface ProfileSummaryPanelProps {
@@ -134,6 +135,10 @@ export function ProfileSummaryPanel({
 
           <SummarySection icon={<Network className="h-3.5 w-3.5" />} title="Proxy" priority="secondary">
             <SummaryRow label="Endpoint" value={proxyLabel} mono title={proxyLabel} />
+          </SummarySection>
+
+          <SummarySection icon={<Cookie className="h-3.5 w-3.5" />} title="Cookies" priority="secondary">
+            <ProfileCookieManager profile={profile} />
           </SummarySection>
 
           <SummarySection icon={<Cpu className="h-3.5 w-3.5" />} title="Device" priority="secondary">

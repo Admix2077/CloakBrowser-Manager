@@ -14,7 +14,7 @@
 - [ ] 停止状态 profile 可通过 profile dir 方式导入 cookie 时必须先评估 Firefox 存储格式，不强行实现。
 - [x] 导出 cookie 必须写 audit。
 - [x] 导出 cookie 必须有显式确认。
-- [ ] 前端新增 Cookie 管理入口。
+- [x] 前端新增 Cookie 管理入口。
 - [x] 支持 profile config export：
   - 不包含 cookie。
   - 不包含 proxy password，除非用户选择包含敏感字段。
@@ -207,6 +207,65 @@
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py -q
 # 7 passed
+```
+
+## 2026-05-27 前端 Cookie 管理入口小闭环
+
+当前状态：
+
+- 已新增 `frontend/src/components/ProfileCookieManager.tsx`，并接入 `ProfileSummaryPanel` 的单 profile `Cookies` 区域。
+- 前端 API adapter 已新增：
+  - `api.importProfileCookies(profileId, document)` -> `POST /api/profiles/{profile_id}/cookies/import`。
+  - `api.exportProfileCookies(profileId)` -> `POST /api/profiles/{profile_id}/cookies/export`，请求体固定 `{ "confirm_export": true }`。
+- Cookie 管理入口只面向 CloakBrowser 可信本地管理台：
+  - 只对 `status=running` profile 启用 import/export。
+  - stopped profile 显示固定提示并禁用按钮，不调用 cookie API。
+  - Import 只接受粘贴 Cookie JSON v1；JSON parse 失败时显示固定 `Invalid Cookie JSON document`。
+  - Import 成功或失败后清空 textarea，避免 cookie 明文长时间留在页面。
+  - Import 成功只显示 `imported` 数量和低敏 summary 数量。
+  - Export 必须先勾选显式确认；响应里的 Cookie JSON document 只用于下载文件，不渲染到页面文本。
+- 页面和组件测试覆盖不渲染：
+  - cookie value。
+  - cookie name。
+  - domain。
+  - URL query / fragment。
+  - token。
+- 本小闭环不新增后端 API、不新增 audit 类型、不接 Project Mileage DTO、不修改 Project Mileage app/payload。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+浏览器验收记录：
+
+- Browser plugin 不在当前工具列表中；本轮使用 Playwright MCP 做渲染验收。
+- 使用临时后端 `127.0.0.1:18081` 和临时 SQLite 数据目录 `/tmp/cloakbrowser-ui-check`，不污染真实 `/data`。
+- 页面 `http://127.0.0.1:18081/` 标题为 `Invisible Browser Manager`。
+- Profile summary 中可见 `Cookies` / `Cookie management` 区域，running profile 显示可用状态。
+- 粘贴包含 `cookie name/value/domain/token/fragment` 的非法 JSON 后点击 `Import cookies`：
+  - 页面显示固定 `Invalid Cookie JSON document`。
+  - textarea 被清空。
+  - 页面文本不包含 `browser-secret-value`、`secret-cookie-name`、`private.example`、`browser-token` 或 `#frag`。
+- `browser_console_messages(level=warning, all=true)` 返回 `Errors: 0, Warnings: 0`。
+- 截图证据：`cloakbrowser-cookie-manager-ui-check.png`。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- src/lib/api.test.ts
+# 33 passed
+
+cd frontend && npm test -- src/components/ProfileCookieManager.test.tsx
+# 4 passed
+
+cd frontend && npm test -- src/components/ProfileSummaryPanel.test.tsx
+# 2 passed
+
+cd frontend && npm test -- --run
+# 15 files / 208 tests passed
+
+cd frontend && npm run build
+# built successfully
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_api.py -q
+# 165 passed
 ```
 
 ## 验证

@@ -35,6 +35,17 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成前端 Cookie 管理入口小闭环：
+  - `frontend/src/lib/api.ts` 新增 Cookie JSON v1 类型、`api.importProfileCookies(profileId, document)` 和 `api.exportProfileCookies(profileId)`。
+  - `api.importProfileCookies()` 调用既有 `POST /api/profiles/{profile_id}/cookies/import`。
+  - `api.exportProfileCookies()` 调用既有 `POST /api/profiles/{profile_id}/cookies/export`，请求体固定 `{ confirm_export: true }`。
+  - 新增 `frontend/src/components/ProfileCookieManager.tsx`，并接入 `ProfileSummaryPanel` 的单 profile `Cookies` 区域。
+  - Cookie 管理入口只对 running profile 启用 import/export；stopped profile 显示固定提示并禁用按钮，不调用 cookie API。
+  - Import 粘贴 Cookie JSON v1 后调用后端，成功或失败后清空 textarea；成功只显示导入数量和低敏 summary 计数。
+  - Export 必须勾选显式确认；后端响应里的 Cookie JSON document 只用于下载文件，不渲染到页面文本。
+  - 页面与组件测试覆盖不渲染 cookie value、cookie name、domain、URL query、fragment 或 token。
+  - 浏览器验收使用临时后端和临时 SQLite 数据目录，确认 Cookie 管理区可见、非法 JSON 固定错误、textarea 清空、页面文本无敏感 cookie 字段，console warning/error 为 0。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Netscape cookie 格式层小闭环：
   - `backend/cookie_formats.py` 新增 `parse_netscape_cookies()`、`build_netscape_cookie_export()` 和 `netscape_cookie_audit_summary()`。
   - parser 支持标准 7 列 Netscape cookie 行、普通注释/空行跳过和 `#HttpOnly_` 前缀，并转换为 `CookieJsonDocument`。
