@@ -119,6 +119,7 @@ from .models import (
     RuntimeSessionCreate,
     RuntimeSessionRenew,
     RuntimeSessionResponse,
+    RuntimeSessionTerminate,
     RuntimeViewerTokenCreate,
     RuntimeViewerTokenResponse,
     StatusResponse,
@@ -1574,6 +1575,20 @@ async def create_runtime_viewer_token(
 @app.post("/api/runtime/sessions/{session_id}/terminate", response_model=RuntimeSessionResponse)
 async def terminate_runtime_session(session_id: str, request: Request):
     _require_runtime_service_token(request)
+    try:
+        req = RuntimeSessionTerminate.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Runtime session terminate requires explicit confirmation",
+        ) from None
+
+    if req.confirm_terminate is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Runtime session terminate requires explicit confirmation",
+        )
+
     session = db.terminate_runtime_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Runtime session not found")

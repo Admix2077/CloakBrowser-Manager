@@ -380,12 +380,14 @@ git diff --check
 
 - 已完成 CloakBrowser 侧 runtime session terminate 小闭环。
 - 当前 terminate 策略是：将 session 标记为 `terminated`，清空 viewer token hash 和过期时间，使 runtime VNC 访问失效；不自动 stop profile。profile 停止/lease 释放策略留给后续更完整的 session lease 管理，避免误杀未来可能共享同一 profile 的其他业务会话。
+- 当前 terminate 已按高风险远程会话操作收口：`POST /api/runtime/sessions/{session_id}/terminate` 必须显式传入 JSON boolean `confirm_terminate: true`；缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Runtime session terminate requires explicit confirmation`，且不终止 session、不撤销 viewer token、不写 terminate audit。
 
 已完成：
 
 - `backend/tests/test_session_broker.py`
   - 新增 terminate TDD 覆盖。
   - 覆盖无 runtime service token 不能 terminate。
+  - 覆盖有 runtime service token 但缺失显式确认时不能 terminate，且无副作用。
   - 覆盖不存在 session 返回 404。
   - 覆盖 terminate 后 response 不暴露 `viewer_token_hash`。
   - 覆盖 terminate 后 DB status 为 `terminated`，viewer token hash 和过期时间被清空。
@@ -394,6 +396,7 @@ git diff --check
   - 新增 `terminate_runtime_session()`。
 - `backend/main.py`
   - 新增 `POST /api/runtime/sessions/{session_id}/terminate`。
+  - terminate 请求体必须显式传入 `confirm_terminate: true`。
 
 验证记录：
 

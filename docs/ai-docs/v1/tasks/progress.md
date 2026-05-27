@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 runtime session terminate 后端强制确认小闭环：
+  - `POST /api/runtime/sessions/{session_id}/terminate` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_terminate: true`。
+  - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Runtime session terminate requires explicit confirmation`。
+  - 未确认 terminate 不会把 session 标记为 `terminated`，不会撤销 viewer token hash / 过期时间，也不会写 `runtime.session.terminated` audit。
+  - 确认 terminate 后继续保留既有语义：session 标记为 `terminated`，清空 viewer token hash 和过期时间，使原 viewer token 无法继续连接 runtime VNC；仍不自动 stop profile。
+  - 本小闭环只修改 CloakBrowser 本仓 runtime terminate 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 proxy assign / random assign 后端强制确认小闭环：
   - `POST /api/proxies/{proxy_id}/assign` 与 `POST /api/proxies/assign/random` 均新增请求体确认字段，必须显式传入 JSON boolean `confirm_assign: true`。
   - 缺失确认、`false` 或字符串 `"true"` 均返回固定 422；普通指定分配返回 `Proxy assignment requires explicit confirmation`，随机分配返回 `Random proxy assignment requires explicit confirmation`。

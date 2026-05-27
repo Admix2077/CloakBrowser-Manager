@@ -717,6 +717,42 @@ def test_runtime_session_terminate_requires_runtime_service_token(
     assert resp.json()["detail"] == "Runtime service token required"
 
 
+def test_runtime_session_terminate_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    token_resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+    assert token_resp.status_code == 201
+    stored_before = db.get_runtime_session(session["id"])
+    assert stored_before is not None
+    assert stored_before["status"] == "active"
+    assert stored_before["viewer_token_hash"]
+
+    for payload in ({}, {"confirm_terminate": False}, {"confirm_terminate": "true"}):
+        resp = app_client.post(
+            f"/api/runtime/sessions/{session['id']}/terminate",
+            headers=runtime_headers,
+            json=payload,
+        )
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "detail": "Runtime session terminate requires explicit confirmation"
+        }
+
+    stored_after = db.get_runtime_session(session["id"])
+    assert stored_after is not None
+    assert stored_after["status"] == "active"
+    assert stored_after["viewer_token_hash"] == stored_before["viewer_token_hash"]
+    assert stored_after["viewer_token_expires_at"] == stored_before["viewer_token_expires_at"]
+    assert "runtime.session.terminated" not in _audit_event_types()
+
+
 def test_runtime_session_terminate_marks_session_inactive_and_revokes_viewer_token(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -734,6 +770,7 @@ def test_runtime_session_terminate_marks_session_inactive_and_revokes_viewer_tok
     terminate = app_client.post(
         f"/api/runtime/sessions/{session['id']}/terminate",
         headers=runtime_headers,
+        json={"confirm_terminate": True},
     )
 
     assert terminate.status_code == 200
@@ -764,6 +801,7 @@ def test_runtime_session_terminate_rejects_missing_session(
     resp = app_client.post(
         "/api/runtime/sessions/missing/terminate",
         headers=runtime_headers,
+        json={"confirm_terminate": True},
     )
 
     assert resp.status_code == 404
@@ -836,6 +874,7 @@ def test_runtime_session_renew_rejects_missing_or_terminated_session(
     terminate = app_client.post(
         f"/api/runtime/sessions/{session['id']}/terminate",
         headers=runtime_headers,
+        json={"confirm_terminate": True},
     )
     assert terminate.status_code == 200
 
@@ -886,6 +925,7 @@ def test_runtime_service_actions_write_redacted_audit_events(
     terminate = app_client.post(
         f"/api/runtime/sessions/{session['id']}/terminate",
         headers=runtime_headers,
+        json={"confirm_terminate": True},
     )
     assert terminate.status_code == 200
 

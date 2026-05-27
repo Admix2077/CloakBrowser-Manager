@@ -140,4 +140,6 @@ cd frontend && npm test -- --run
   - [x] 缺失 proxy assignment 确认时返回固定 `422 Proxy assignment requires explicit confirmation`，不改写 profile proxy，不写 `proxy.assigned` audit；前端 `api.assignProxyToProfiles()` 固定发送确认 body。
   - [x] `POST /api/proxies/assign/random` 后端强制要求 JSON boolean `confirm_assign: true`。
   - [x] 缺失 random proxy assignment 确认时返回固定 `422 Random proxy assignment requires explicit confirmation`，不改写 profile proxy，不写 `proxy.random_assigned` audit；前端 `api.assignRandomProxyToProfiles()` 固定发送确认 body。
+  - [x] `POST /api/runtime/sessions/{session_id}/terminate` 后端强制要求 JSON boolean `confirm_terminate: true`。
+  - [x] 缺失 runtime terminate 确认时返回固定 `422 Runtime session terminate requires explicit confirmation`，不终止 session、不撤销 viewer token、不写 `runtime.session.terminated` audit。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

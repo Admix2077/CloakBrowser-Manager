@@ -506,6 +506,10 @@ class RuntimeViewerTokenResponse(BaseModel):
     expires_at: str
 
 
+class RuntimeSessionTerminate(BaseModel):
+    confirm_terminate: StrictBool = False
+
+
 class RuntimeSessionRenew(BaseModel):
     lease_seconds: int = Field(ge=1, le=86_400)
 
