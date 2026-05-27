@@ -1455,6 +1455,97 @@ def test_export_profile_bundle_requires_existing_profile(app_client: TestClient)
     assert resp.json() == {"detail": "Profile not found"}
 
 
+def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app_client: TestClient):
+    source = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bundle Import Source",
+            "proxy": "http://user:super-secret-proxy-password@bundle.example:8080",
+            "platform": "macos",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "tags": [{"tag": "bundle", "color": "#2563eb"}],
+        },
+    ).json()
+    exported = app_client.post(
+        f"/api/profiles/{source['id']}/bundle/export",
+        json={"include_sensitive_proxy": True},
+    ).json()
+
+    bundle = exported["bundle"]
+    bundle["profile"]["config"]["user_data_dir"] = "/data/profiles/should-not-import"
+    bundle["profile"]["config"]["status"] = "running"
+    bundle["profile"]["config"]["automation_url"] = "http://127.0.0.1:9222"
+    bundle["cookies"] = {
+        "included": True,
+        "cookies": [{"name": "sid", "value": "super-secret-cookie-value"}],
+    }
+    bundle["local_storage"] = {
+        "included": True,
+        "entries": [{"key": "token", "value": "local-storage-secret"}],
+    }
+    bundle["profile_dir"] = {
+        "included": True,
+        "archive": "profile-dir-secret",
+    }
+    bundle["metadata"]["wallet"] = {"balance": 100}
+    bundle["metadata"]["order_id"] = "order-secret"
+    bundle["metadata"]["viewer_token"] = "viewer-token-secret"
+
+    resp = app_client.post("/api/profiles/bundle/import", json={"bundle": bundle})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["schema_version"] == 1
+    assert data["imported"] == 1
+    assert data["failed"] == 0
+    result = data["results"][0]
+    assert result["ok"] is True
+    assert result["errors"] == []
+    imported = result["profile"]
+    assert imported["id"] != source["id"]
+    assert imported["name"] == "Bundle Import Source"
+    assert imported["proxy"] == "http://user:super-secret-proxy-password@bundle.example:8080"
+    assert imported["platform"] == "macos"
+    assert imported["screen_width"] == 1440
+    assert imported["screen_height"] == 900
+    assert imported["tags"] == [{"tag": "bundle", "color": "#2563eb"}]
+    assert imported["status"] == "stopped"
+    assert imported["automation_url"] is None
+    assert imported["user_data_dir"] != "/data/profiles/should-not-import"
+
+    response_text = resp.text
+    assert "super-secret-cookie-value" not in response_text
+    assert "local-storage-secret" not in response_text
+    assert "profile-dir-secret" not in response_text
+    assert "order-secret" not in response_text
+    assert "viewer-token-secret" not in response_text
+
+
+def test_import_profile_bundle_rejects_invalid_bundle_without_echoing_payload(app_client: TestClient):
+    resp = app_client.post(
+        "/api/profiles/bundle/import",
+        json={
+            "bundle": {
+                "format": "wrong-format",
+                "schema_version": 1,
+                "profile": {
+                    "config": {
+                        "name": "",
+                        "cookies": [{"value": "super-secret-cookie-value"}],
+                    }
+                },
+                "profile_dir": {"archive": "profile-dir-secret"},
+            }
+        },
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Invalid profile bundle document"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "profile-dir-secret" not in resp.text
+
+
 def test_automation_info_running(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationInfo"})
     pid = create.json()["id"]

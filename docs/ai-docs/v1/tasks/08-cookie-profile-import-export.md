@@ -28,6 +28,7 @@
   - 停止态 profile dir 风险。
 - [x] 支持 profile bundle manifest/config-only 格式层。
 - [x] 支持 profile bundle config export API。
+- [x] 支持 profile bundle config import API。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -507,6 +508,46 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_bulk_export_profile_configs_returns_partial_results backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
 # 9 passed
+```
+
+## 2026-05-27 Profile Bundle config import API 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/profiles/bundle/import`。
+- 请求体为 `{ "bundle": ... }`，只接受 `cloakbrowser.profile-bundle.v1` / `schema_version=1`。
+- import 只读取 `bundle.profile.config`：
+  - 复用既有 `ProfileConfigExport` 和 `ProfileCreate` 校验。
+  - 只按 profile config 白名单字段创建新 profile。
+  - 创建新 profile、新 UUID、新 `user_data_dir`。
+- import 明确忽略、不导入、不回显：
+  - 调用方附带的 `user_data_dir`、`status`、`automation_url`、VNC 字段。
+  - `cookies` 明文。
+  - `local_storage` 明文。
+  - `profile_dir.archive` 或完整 profile dir。
+  - Project Mileage 钱包、订单、支付、权限、viewer token 或审计事实。
+- 非法 bundle 返回固定 `422 Invalid profile bundle document`，不使用 FastAPI 默认 validation response 回显调用方 payload。
+- config 校验失败时返回 `ProfileConfigImportResponse` 行级失败结果，不创建 profile。
+- 本小闭环不导入 cookie/local storage/profile dir，不读取磁盘 profile 目录，不覆盖既有 profile，不写 audit，不新增前端入口，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser bundle/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_profile_bundle_creates_new_profile_from_config_only_manifest backend/tests/test_api.py::test_import_profile_bundle_rejects_invalid_bundle_without_echoing_payload -q
+# failed before implementation: 2 failed with 405 Method Not Allowed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_profile_bundle_creates_new_profile_from_config_only_manifest backend/tests/test_api.py::test_import_profile_bundle_rejects_invalid_bundle_without_echoing_payload -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py backend/tests/test_api.py -q
+# 179 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
+# 8 passed
+
+git diff --check
+# passed
 ```
 
 ## 验证

@@ -126,7 +126,7 @@ from .profile_import import (
     profile_create_data_for_import,
     preview_profile_csv_import,
 )
-from .profile_bundle import build_profile_config_bundle
+from .profile_bundle import ProfileBundleImportRequest, build_profile_config_bundle
 from .proxies import redact_proxy_asset_url
 
 logger = logging.getLogger("invisible_browser.manager")
@@ -1651,6 +1651,79 @@ async def export_profile_bundle(profile_id: str, request: Request):
     return ProfileBundleExportResponse(
         profile_id=profile_id,
         bundle=bundle.model_dump(mode="json", by_alias=True),
+    )
+
+
+@app.post("/api/profiles/bundle/import", response_model=ProfileConfigImportResponse)
+async def import_profile_bundle(request: Request):
+    try:
+        req = ProfileBundleImportRequest.model_validate(await request.json())
+    except Exception as exc:
+        logger.warning("Profile bundle import validation failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=422, detail="Invalid profile bundle document") from exc
+
+    config = req.bundle.profile.config.model_dump(mode="json", by_alias=True, exclude_none=True)
+    data = _profile_config_import_data(config)
+    errors = _profile_config_import_errors(data)
+    try:
+        profile_create = ProfileCreate(**data)
+    except ValidationError as exc:
+        errors.extend(_validation_error_messages(exc))
+
+    if errors:
+        return ProfileConfigImportResponse(
+            total=1,
+            imported=0,
+            failed=1,
+            results=[
+                ProfileConfigImportResult(
+                    index=0,
+                    ok=False,
+                    errors=errors,
+                    profile=None,
+                )
+            ],
+        )
+
+    create_data = profile_create.model_dump()
+    tags = create_data.pop("tags", None)
+    create_data["tags"] = _tag_payloads(tags)
+
+    try:
+        profile = db.create_profile(**create_data)
+    except Exception as exc:
+        logger.warning("Profile bundle import create failed: %s", type(exc).__name__)
+        return ProfileConfigImportResponse(
+            total=1,
+            imported=0,
+            failed=1,
+            results=[
+                ProfileConfigImportResult(
+                    index=0,
+                    ok=False,
+                    errors=["Failed to create profile"],
+                    profile=None,
+                )
+            ],
+        )
+
+    status = browser_mgr.get_status(profile["id"])
+    profile["status"] = status["status"]
+    profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["automation_url"] = status["automation_url"]
+    profile["tags"] = [TagResponse(**tag) for tag in profile.get("tags", [])]
+    return ProfileConfigImportResponse(
+        total=1,
+        imported=1,
+        failed=0,
+        results=[
+            ProfileConfigImportResult(
+                index=0,
+                ok=True,
+                errors=[],
+                profile=ProfileResponse(**profile),
+            )
+        ],
     )
 
 

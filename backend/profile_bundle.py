@@ -73,6 +73,27 @@ class ProfileBundleDocument(BaseModel):
     metadata: ProfileBundleMetadata
 
 
+class ProfileBundleConfigImportProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    config: ProfileConfigExport
+
+
+class ProfileBundleConfigImportDocument(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    format: Literal["cloakbrowser.profile-bundle.v1"] = PROFILE_BUNDLE_FORMAT
+    schema_version: Literal[1] = 1
+    profile: ProfileBundleConfigImportProfile
+
+
+class ProfileBundleImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bundle: ProfileBundleConfigImportDocument
+
+
+
 def _profile_config_for_bundle(
     profile: dict[str, Any],
     *,
