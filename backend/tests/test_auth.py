@@ -113,6 +113,25 @@ def test_login_correct_sets_cookie(client_auth: TestClient):
     assert "auth_token" in resp.cookies
 
 
+def test_login_correct_does_not_return_auth_token_in_response(client_auth: TestClient):
+    resp = client_auth.post("/api/auth/login", json={"token": "test-secret"})
+
+    assert resp.status_code == 200
+    assert "test-secret" not in resp.text
+    assert "test-secret" not in resp.headers.get("set-cookie", "")
+
+    cookie_value = resp.cookies.get("auth_token")
+    assert cookie_value
+    assert cookie_value != "test-secret"
+
+    authenticated = client_auth.get("/api/auth/status")
+    assert authenticated.status_code == 200
+    assert authenticated.json() == {"auth_required": True, "authenticated": True}
+
+    protected = client_auth.get("/api/profiles")
+    assert protected.status_code == 200
+
+
 def test_login_wrong_token_401(client_auth: TestClient):
     resp = client_auth.post("/api/auth/login", json={"token": "wrong"})
     assert resp.status_code == 401

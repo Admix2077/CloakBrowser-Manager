@@ -8,7 +8,11 @@
 
 ### Auth
 
-- [ ] 保留当前 `AUTH_TOKEN` 本地部署模式。
+- [x] 保留当前 `AUTH_TOKEN` 本地部署模式：
+  - `Authorization: Bearer <AUTH_TOKEN>` 继续可访问受保护 API。
+  - `/api/auth/login` 仍使用用户输入 token 与 `AUTH_TOKEN` 做常量时间比对。
+  - 登录成功后写入的 `auth_token` cookie 改为由 `AUTH_TOKEN` 派生的 `v1.<hmac-sha256>` 值，避免 `Set-Cookie` 响应头回显环境变量明文。
+  - 为避免本地已登录页面立刻失效，认证中间件暂时兼容读取旧明文 cookie；新登录不会再签发旧明文 cookie。
 - [ ] 新增 service token，用于 Payload 调用 runtime API。
 - [ ] 区分 user API、admin API、service API。
 - [ ] WebSocket viewer token 校验。
@@ -19,7 +23,10 @@
 - [x] audit metadata 不记录敏感字段：
   - 当前已覆盖 runtime service audit metadata。
   - 已禁止 viewer token、viewer URL、viewer token hash、runtime service token、proxy URL/password、cookie 等进入 audit metadata。
-- [ ] API response 不返回 AUTH_TOKEN。
+- [x] API response 不返回 AUTH_TOKEN：
+  - `/api/auth/status` 只返回 `auth_required` / `authenticated`。
+  - `/api/auth/login` 成功 JSON 只返回 `{ ok: true }`。
+  - 登录成功 `Set-Cookie` 不再包含 `AUTH_TOKEN` 明文。
 - [ ] cookie 导出不写日志。
 - [ ] VNC token hash 存储，不存明文。
 
@@ -47,13 +54,13 @@
 ## 验证
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_auth.py backend/tests/test_audit.py -q
+. .venv/bin/activate && python -m pytest backend/tests/test_auth.py backend/tests/test_session_broker.py -q
 cd frontend && npm test -- --run
 ```
 
 ## 验收标准
 
-- [ ] 未授权不能访问 protected API。
+- [x] 未授权不能访问 protected API。
 - [ ] WebSocket origin 检查不退化。
 - [ ] audit 中没有 proxy password、cookie value、token。
 - [ ] 删除、导出、终止等高风险操作有确认或权限限制。

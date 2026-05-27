@@ -156,6 +156,17 @@ _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
 _AUTOMATION_WORKER_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
 
+def _auth_cookie_value() -> str | None:
+    if not AUTH_TOKEN:
+        return None
+    digest = hmac.new(
+        AUTH_TOKEN.encode("utf-8"),
+        b"cloakbrowser-auth-cookie-v1",
+        hashlib.sha256,
+    ).hexdigest()
+    return f"v1.{digest}"
+
+
 def _env_bool(name: str, *, default: bool = False) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -212,6 +223,13 @@ def _check_auth(scope: Scope) -> bool:
             cookies.load(val.decode())
             if "auth_token" in cookies:
                 cookie_val = cookies["auth_token"].value
+                auth_cookie_value = _auth_cookie_value()
+                if (
+                    cookie_val
+                    and auth_cookie_value
+                    and hmac.compare_digest(cookie_val, auth_cookie_value)
+                ):
+                    return True
                 if cookie_val and hmac.compare_digest(cookie_val, AUTH_TOKEN):
                     return True
             break
@@ -583,9 +601,12 @@ async def auth_login(body: LoginRequest, request: Request, response: Response):
     if not body.token or not hmac.compare_digest(body.token, AUTH_TOKEN):
         raise HTTPException(status_code=401, detail="Invalid token")
     is_https = _is_https(request)
+    auth_cookie_value = _auth_cookie_value()
+    if not auth_cookie_value:
+        raise HTTPException(status_code=500, detail="Authentication unavailable")
     response.set_cookie(
         key="auth_token",
-        value=AUTH_TOKEN,
+        value=auth_cookie_value,
         httponly=True,
         samesite="strict",
         secure=is_https,

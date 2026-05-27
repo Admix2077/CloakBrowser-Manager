@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 `AUTH_TOKEN` 登录响应脱敏小闭环：
+  - 保留当前单机本地部署 `AUTH_TOKEN` 模式，`Authorization: Bearer <AUTH_TOKEN>` 仍可访问受保护 API。
+  - `/api/auth/login` 仍要求用户提交 token，并与 `AUTH_TOKEN` 做常量时间比对。
+  - 登录成功 JSON 响应继续只返回 `{ ok: true }`，不返回 token、hash 或 session 细节。
+  - 登录成功写入的 `auth_token` cookie 改为由 `AUTH_TOKEN` 派生的 `v1.<hmac-sha256>` 值，避免 `Set-Cookie` 响应头回显环境变量明文。
+  - 认证中间件暂时兼容读取旧明文 cookie，避免本地已登录页面立即失效；新登录不再签发旧明文 cookie。
+  - 新增 `test_login_correct_does_not_return_auth_token_in_response` 覆盖响应体、响应头和 cookie 值均不包含 `AUTH_TOKEN` 明文，并确认登录后 `/api/auth/status` 仍为 authenticated。
+  - 本小闭环只修改 CloakBrowser 本仓认证实现和文档，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Cookie JSON Playwright payload 修正与验收小闭环：
   - 修正 `backend/cookie_formats.py:CookieJsonCookie.to_playwright_cookie()`，`url` scoped cookie 转换为 Playwright payload 时只输出 `url`，不再同时输出默认 `path`；`domain` scoped cookie 继续输出 `domain + path`。
   - 根因是 Playwright `context.add_cookies()` 要求 cookie shape 在 `url` 和 `domain + path` 之间二选一；旧转换会让真实 browser context 报 `Cookie should have either url or path`。
