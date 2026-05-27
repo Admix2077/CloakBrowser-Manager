@@ -674,7 +674,7 @@ export const api = {
   bulkCheckProxies: (proxyIds: string[]) =>
     request<ProxyBulkCheckResponse>("/api/proxies/bulk/check", {
       method: "POST",
-      body: JSON.stringify({ proxy_ids: proxyIds }),
+      body: JSON.stringify({ proxy_ids: proxyIds, confirm_bulk_check: true }),
     }),
 
   assignProxyToProfiles: (id: string, profileIds: string[]) =>

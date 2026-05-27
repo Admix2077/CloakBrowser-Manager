@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 proxy bulk check 后端强制确认小闭环：
+  - `POST /api/proxies/bulk/check` 新增请求体确认字段，必须显式传入 JSON boolean `confirm_bulk_check: true`。
+  - 缺失请求体、空 JSON、非 object、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy bulk check requires explicit confirmation`。
+  - 确认检查发生在 `proxy_ids` 列表校验之前；未确认时即使 `proxy_ids=[]` 也只返回固定确认错误。
+  - 未确认批量检测不会调用 `resolve_network_geo()`，不会更新 proxy `last_check_*`，也不会写 `proxy.bulk_checked` audit。
+  - 确认批量检测后继续保留既有语义：同批成功、检测失败和 missing proxy 可共存；响应和 audit 继续保持 proxy URL/密码脱敏边界。
+  - 前端 `api.bulkCheckProxies()` 固定发送 `{ confirm_bulk_check: true }`，既有 Proxy Manager 批量检测流程复用该确认。
+  - 本小闭环只修改 CloakBrowser 本仓 proxy bulk check 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 automation page close 后端强制确认小闭环：
   - `DELETE /api/profiles/{profile_id}/automation/pages/{page_ref}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_close_page: true`。
   - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Automation page close requires explicit confirmation`。

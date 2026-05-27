@@ -249,6 +249,7 @@ class ProxyResponse(BaseModel):
 
 class ProxyBulkCheckRequest(BaseModel):
     proxy_ids: list[str] = Field(min_length=1)
+    confirm_bulk_check: StrictBool = False
 
 
 class ProxyBulkCheckResult(BaseModel):

@@ -528,7 +528,7 @@ describe("api.checkProxy", () => {
 });
 
 describe("api.bulkCheckProxies", () => {
-  it("sends POST with proxy ids to the bulk check endpoint", async () => {
+  it("sends POST with proxy ids and explicit confirmation to the bulk check endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({
       total: 2,
       succeeded: 1,
@@ -541,7 +541,10 @@ describe("api.bulkCheckProxies", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/proxies/bulk/check");
     expect(options.method).toBe("POST");
-    expect(JSON.parse(options.body)).toEqual({ proxy_ids: ["proxy-1", "proxy-2"] });
+    expect(JSON.parse(options.body)).toEqual({
+      proxy_ids: ["proxy-1", "proxy-2"],
+      confirm_bulk_check: true,
+    });
   });
 });
 

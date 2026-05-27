@@ -961,3 +961,49 @@ cd frontend && npm test -- src/lib/api.test.ts --run
 cd frontend && npm test -- src/components/ProxyManagerPage.test.tsx --run
 # 22 passed
 ```
+
+## 2026-05-27 Proxy 批量检测强制确认小闭环
+
+背景：
+
+- `POST /api/proxies/bulk/check` 会对一组 proxy 发起网络检测，并批量更新 `last_check_*` 状态，还会在有真实检查动作时写 `proxy.bulk_checked` 汇总审计。
+- 本小闭环只收口后端安全确认和前端 API body，不改变 Proxy Manager 现有批量检测交互，不改变单个 `POST /api/proxies/{proxy_id}/check`。
+
+已完成：
+
+- [x] `backend/models.py`
+  - `ProxyBulkCheckRequest` 新增 `confirm_bulk_check: StrictBool = False`。
+- [x] `backend/main.py`
+  - `POST /api/proxies/bulk/check` 必须显式传入 JSON boolean `confirm_bulk_check: true`。
+  - 缺失请求体、空 JSON、非 object、缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy bulk check requires explicit confirmation`。
+  - 确认检查发生在 `proxy_ids` 列表校验之前；未确认时即使 `proxy_ids=[]` 也只返回固定确认错误，避免回显无关输入细节。
+  - 未确认时不调用 `resolve_network_geo()`，不更新 proxy `last_check_*`，不写 `proxy.bulk_checked` audit。
+  - 确认后继续保留既有语义：成功、检测失败和 missing proxy 可在同批响应中共存，响应和 audit 继续保持 proxy URL/密码脱敏边界。
+- [x] `frontend/src/lib/api.ts`
+  - `api.bulkCheckProxies()` 固定发送 `{ proxy_ids, confirm_bulk_check: true }`。
+
+范围说明：
+
+- 本轮不改 Project Mileage app/payload。
+- 本轮不新增 Project Mileage DTO，不实现订单、钱包、权限、扣费、续期、viewer token 或远程屏幕流逻辑。
+- 本轮不改变 Proxy Manager 页面 UI 文案和选择流程。
+- 本轮不改变单个 proxy check API；单个检测后续如被判定为高风险 mutation，再单独小闭环处理。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_bulk_check_requires_explicit_confirmation_without_side_effects backend/tests/test_proxies.py::test_proxy_bulk_check_requires_at_least_one_proxy_id -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 25 passed
+
+cd frontend && npm test -- src/lib/api.test.ts src/components/ProxyManagerPage.test.tsx --run
+# 59 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_api.py backend/tests/test_database.py -q
+# 262 passed
+
+git diff --check
+# passed
+```

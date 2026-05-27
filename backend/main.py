@@ -1364,7 +1364,26 @@ async def assign_random_proxy_to_profiles(request: Request):
 
 
 @app.post("/api/proxies/bulk/check", response_model=ProxyBulkCheckResponse)
-async def bulk_check_proxies(req: ProxyBulkCheckRequest):
+async def bulk_check_proxies(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy bulk check requires explicit confirmation",
+        ) from None
+
+    if not isinstance(payload, dict) or payload.get("confirm_bulk_check") is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy bulk check requires explicit confirmation",
+        )
+
+    try:
+        req = ProxyBulkCheckRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=_validation_error_messages(exc)) from exc
+
     results: list[ProxyBulkCheckResult] = []
 
     for proxy_id in req.proxy_ids:

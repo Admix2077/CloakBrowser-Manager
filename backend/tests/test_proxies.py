@@ -372,7 +372,10 @@ def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
 
     resp = app_client.post(
         "/api/proxies/bulk/check",
-        json={"proxy_ids": [good["id"], broken["id"], "missing"]},
+        json={
+            "proxy_ids": [good["id"], broken["id"], "missing"],
+            "confirm_bulk_check": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -420,6 +423,50 @@ def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
     assert "hiddenpass" not in stored_broken["last_check_error"]
 
 
+def test_proxy_bulk_check_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured_proxy_urls: list[str | None] = []
+
+    async def fake_resolve(proxy_url: str | None):
+        captured_proxy_urls.append(proxy_url)
+        return GeoIPResult(
+            timezone="Europe/Berlin",
+            locale="de-DE",
+            ip="198.51.100.25",
+            country_code="DE",
+            source="qa",
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    proxy = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Bulk confirm",
+            "url": "http://user:hiddenpass@bulk-confirm.example:8080",
+        },
+    ).json()
+
+    for payload in (
+        {"proxy_ids": [proxy["id"]]},
+        {"proxy_ids": []},
+        {"proxy_ids": [proxy["id"]], "confirm_bulk_check": False},
+        {"proxy_ids": [proxy["id"]], "confirm_bulk_check": "true"},
+    ):
+        resp = app_client.post("/api/proxies/bulk/check", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Proxy bulk check requires explicit confirmation"}
+
+    assert captured_proxy_urls == []
+    stored = db.get_proxy(proxy["id"])
+    assert stored is not None
+    assert stored["last_check_status"] is None
+    assert stored["last_check_ip"] is None
+    assert stored["last_check_error"] is None
+    assert _proxy_bulk_audit_events() == []
+
+
 def test_proxy_bulk_check_writes_redacted_audit_event(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -445,7 +492,13 @@ def test_proxy_bulk_check_writes_redacted_audit_event(
         json={"name": "Broken audit bulk", "url": "http://user:hiddenpass@broken-audit.example:8080"},
     ).json()
 
-    resp = app_client.post("/api/proxies/bulk/check", json={"proxy_ids": [good["id"], broken["id"], "missing"]})
+    resp = app_client.post(
+        "/api/proxies/bulk/check",
+        json={
+            "proxy_ids": [good["id"], broken["id"], "missing"],
+            "confirm_bulk_check": True,
+        },
+    )
 
     assert resp.status_code == 200
     events = _proxy_bulk_audit_events()
@@ -466,7 +519,10 @@ def test_proxy_bulk_check_writes_redacted_audit_event(
 
 
 def test_proxy_bulk_check_requires_at_least_one_proxy_id(app_client: TestClient):
-    resp = app_client.post("/api/proxies/bulk/check", json={"proxy_ids": []})
+    resp = app_client.post(
+        "/api/proxies/bulk/check",
+        json={"proxy_ids": [], "confirm_bulk_check": True},
+    )
 
     assert resp.status_code == 422
 
