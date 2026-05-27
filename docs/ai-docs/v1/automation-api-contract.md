@@ -566,6 +566,7 @@ POST /api/tasks/{id}/run
 - `run_automation_worker_loop(lease_owner, lease_seconds=60, max_runs=None, max_idle_cycles=1, idle_sleep_seconds=1.0, stop_event=None)` 是内部 loop 骨架：
   - 持续调用 `run_automation_worker_once()`，直到达到 `max_runs`、达到 `max_idle_cycles` 或 `stop_event` 已设置。
   - 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。
+  - 如果单次 worker 因租约已不再归当前 owner 而抛出固定 `409 Automation task lease no longer owned by worker`，loop 不向外抛异常，只在 summary 中计为一次 `claimed` 和一次 `failed`；task 仍保持 DB 当前状态，避免覆盖其他 worker 已接管的状态。
   - 空闲时仅按 `idle_sleep_seconds` sleep；达到最后一次允许空闲周期后直接退出，避免额外等待。
   - `stop_event` 在每轮 claim 前检查；如果已设置，不领取 queued task，不修改 task 状态。
 - 应用 lifespan 已支持可选启动一个内部 worker loop：

@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lost lease summary 小闭环：
+  - `run_automation_worker_loop()` 会识别内部固定 `409 Automation task lease no longer owned by worker`。
+  - 如果单次 worker 因租约不再归当前 owner 而抛出该固定异常，loop 不再崩退出。
+  - loop 会把该情况低敏计入 summary：`claimed += 1`、`failed += 1`。
+  - task 本身保持 DB 当前状态，不尝试覆盖为 `failed`，避免覆盖其他 worker 已接管或已收束的状态。
+  - summary 仍只包含 `claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、URL、selector、表单值、异常原文或 lease owner。
+  - 其他未知 `HTTPException` 仍继续抛出，不被吞掉。
+  - 该能力只属于内部 worker loop，不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+  - 本小闭环不实现 worker 池、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lease heartbeat 小闭环：
   - `run_automation_worker_once()` 执行已领取 task 时，会启动内部 lease heartbeat。
   - heartbeat 按 `lease_seconds` 的半周期续租，间隔下限 `0.1s`、上限 `30s`，通过 `renew_automation_task_lease()` 校验当前 `lease_owner`。

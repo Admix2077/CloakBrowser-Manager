@@ -282,6 +282,30 @@ cd frontend && npm run build
 # 15 passed
 ```
 
+## 2026-05-27 Automation worker lost lease summary 小闭环
+
+当前状态：
+
+- `run_automation_worker_loop()` 会识别内部固定 `409 Automation task lease no longer owned by worker`。
+- 如果单次 worker 因租约不再归当前 owner 而抛出该固定异常，loop 不再崩退出。
+- loop 会把该情况低敏计入 summary：`claimed += 1`、`failed += 1`。
+- task 本身保持 DB 当前状态，不尝试覆盖为 `failed`，避免覆盖其他 worker 已接管或已收束的状态。
+- summary 仍只包含 `claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、URL、selector、表单值、异常原文或 lease owner。
+- 其他未知 `HTTPException` 仍继续抛出，不被吞掉。
+- 该能力只属于内部 worker loop，不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+- 本小闭环不实现 worker 池、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+- 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_loop_counts_lost_lease_as_failed_without_leaking_payload -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_returns_none_without_queued_task backend/tests/test_api.py::test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload backend/tests/test_api.py::test_automation_worker_run_once_executes_claimed_task_and_clears_lease backend/tests/test_api.py::test_automation_worker_run_once_renews_lease_during_wait_without_exposing_metadata backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_automation_worker_loop_runs_multiple_claimed_tasks backend/tests/test_api.py::test_automation_worker_loop_stops_after_idle_cycles backend/tests/test_api.py::test_automation_worker_loop_honors_stop_event_before_claiming backend/tests/test_api.py::test_automation_worker_loop_counts_lost_lease_as_failed_without_leaking_payload backend/tests/test_api.py::test_automation_worker_lifespan_keeps_worker_disabled_by_default backend/tests/test_api.py::test_automation_worker_lifespan_starts_enabled_worker_and_stops_it -q
+# 11 passed
+```
+
 ## 2026-05-27 Automation worker lifespan 可选启动小闭环
 
 当前状态：

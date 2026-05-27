@@ -2183,6 +2183,49 @@ async def test_automation_worker_loop_honors_stop_event_before_claiming(app_clie
     main.browser_mgr.running.pop(pid, None)
 
 
+@pytest.mark.asyncio
+async def test_automation_worker_loop_counts_lost_lease_as_failed_without_leaking_payload(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerLoopLostLeaseProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    secret_url = "https://example.com/app?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "open_url", "url": secret_url}]},
+    ).json()
+    original_run_once = main.run_automation_worker_once
+
+    async def run_once_then_lose_lease(**kwargs):
+        claimed = main.db.claim_next_automation_task(
+            lease_owner=kwargs["lease_owner"],
+            lease_seconds=kwargs["lease_seconds"],
+        )
+        assert claimed is not None
+        raise main.HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+
+    monkeypatch.setattr(main, "run_automation_worker_once", run_once_then_lose_lease)
+
+    summary = await main.run_automation_worker_loop(
+        lease_owner="worker-a",
+        lease_seconds=1,
+        max_runs=1,
+        idle_sleep_seconds=0,
+    )
+
+    assert summary == {"claimed": 1, "succeeded": 0, "failed": 1, "cancelled": 0, "idle_cycles": 0}
+    data = main._automation_task_response(main.db.get_automation_task(task["id"])).model_dump()
+    assert data["status"] == "running"
+    assert "lease_owner" not in data
+    assert "lease_expires_at" not in data
+    assert secret_url not in str(data)
+    assert "super-secret" not in str(data)
+    monkeypatch.setattr(main, "run_automation_worker_once", original_run_once)
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_worker_lifespan_keeps_worker_disabled_by_default(
     tmp_db,
     monkeypatch: pytest.MonkeyPatch,

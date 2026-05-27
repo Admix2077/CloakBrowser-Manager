@@ -121,6 +121,7 @@ AUTH_TOKEN: str | None = os.environ.get("AUTH_TOKEN") or None
 RUNTIME_SERVICE_TOKEN: str | None = os.environ.get("RUNTIME_SERVICE_TOKEN") or None
 _AUTOMATION_CONSOLE_LOG_LIMIT = 200
 _AUTOMATION_NETWORK_EVENT_LIMIT = 200
+_AUTOMATION_WORKER_LOST_LEASE_DETAIL = "Automation task lease no longer owned by worker"
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
@@ -1734,7 +1735,7 @@ def _finish_cancel_requested_automation_task(
             allowed_statuses={"running", "cancel_requested"},
         )
         if cancelled is None:
-            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+            raise HTTPException(status_code=409, detail=_AUTOMATION_WORKER_LOST_LEASE_DETAIL)
         return cancelled
     return _cancel_automation_task(task_id, final_step_results)
 
@@ -1755,7 +1756,7 @@ def _fail_automation_task(
             error=error,
         )
         if failed is None:
-            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+            raise HTTPException(status_code=409, detail=_AUTOMATION_WORKER_LOST_LEASE_DETAIL)
         return failed
     failed = db.update_automation_task(
         task_id,
@@ -1784,7 +1785,7 @@ def _succeed_automation_task(
             error=None,
         )
         if finished is None:
-            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+            raise HTTPException(status_code=409, detail=_AUTOMATION_WORKER_LOST_LEASE_DETAIL)
         return finished
     finished = db.update_automation_task(
         task_id,
@@ -1812,7 +1813,7 @@ def _renew_automation_worker_lease(
         allowed_statuses={"running", "cancel_requested"},
     )
     if renewed is None:
-        raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+        raise HTTPException(status_code=409, detail=_AUTOMATION_WORKER_LOST_LEASE_DETAIL)
 
 
 def _automation_worker_lease_heartbeat_interval(lease_seconds: int) -> float:
@@ -2372,7 +2373,7 @@ async def run_automation_worker_once(
             error="Automation step failed",
         )
         if finished is None:
-            raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+            raise HTTPException(status_code=409, detail=_AUTOMATION_WORKER_LOST_LEASE_DETAIL)
     return finished
 
 
@@ -2398,7 +2399,12 @@ async def run_automation_worker_loop(
         if max_runs is not None and summary["claimed"] >= max_runs:
             break
 
-        task = await run_automation_worker_once(lease_owner=lease_owner, lease_seconds=lease_seconds)
+        try:
+            task = await run_automation_worker_once(lease_owner=lease_owner, lease_seconds=lease_seconds)
+        except HTTPException as exc:
+            if exc.status_code != 409 or exc.detail != _AUTOMATION_WORKER_LOST_LEASE_DETAIL:
+                raise
+            task = {"status": "failed"}
         if task is None:
             summary["idle_cycles"] += 1
             if max_idle_cycles is not None and summary["idle_cycles"] >= max_idle_cycles:
