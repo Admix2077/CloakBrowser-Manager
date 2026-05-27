@@ -30,6 +30,7 @@
 - [x] 支持 profile bundle config export API。
 - [x] 支持 profile bundle config import API。
 - [x] 支持 running profile cookie bundle export。
+- [x] 完成 local storage 只读评估。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -593,6 +594,37 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
 # 8 passed
+```
+
+## 2026-05-27 local storage 只读评估小闭环
+
+当前状态：
+
+- 已新增 `docs/ai-docs/v1/local-storage-bundle-readonly-evaluation.md`。
+- 本小闭环只做评估文档，不新增 API，不读取 profile dir，不读取 local storage 明文，不修改前端。
+- 评估结论：
+  - 不采用 `context.storage_state()` 作为默认实现，因为它可能跨 origin 导出大量站点状态。
+  - 不实现停止态 profile dir 读取，因为 Firefox local storage / IndexedDB / SQLite / cache 数据结构复杂且泄露面大。
+  - 推荐后续最小实现只读取 running profile 指定 `page_ref` 当前 origin 的 `window.localStorage`。
+- 推荐后续扩展 `POST /api/profiles/{profile_id}/bundle/export`：
+  - `include_local_storage`：默认 `false`，必须 JSON boolean。
+  - `confirm_local_storage_export`：默认 `false`，必须 JSON boolean。
+  - `local_storage_page_ref`：默认 `"0"`，必须是当前 running profile 的 page index 或 page id。
+- 推荐安全边界：
+  - 只允许 running profile。
+  - 只读取当前 page origin。
+  - 使用固定内部脚本读取，不接受调用方提供 JavaScript expression。
+  - 不扫描所有 tabs。
+  - 不读取 sessionStorage、IndexedDB、Cache Storage、Service Worker cache、history、downloads、form history、cert/key DB。
+  - 不写 local storage key/value 到 logger、audit metadata 或 task result。
+- 推荐 audit 只写低敏计数和可选 `origin_hash`，不写 origin 原文、key、value、URL query 或 fragment。
+- 本小闭环不接 Project Mileage DTO，不修改 Project Mileage app/payload；未来 App 仍不能直连 CloakBrowser bundle/local storage/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+git diff --check
+# passed
 ```
 
 ## 验证

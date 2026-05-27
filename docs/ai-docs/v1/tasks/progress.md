@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 local storage 只读评估小闭环：
+  - 新增 `docs/ai-docs/v1/local-storage-bundle-readonly-evaluation.md`。
+  - 评估结论是不采用 `context.storage_state()` 作为默认实现，不实现停止态 profile dir 读取。
+  - 推荐后续最小实现只读取 running profile 指定 `page_ref` 当前 origin 的 `window.localStorage`。
+  - 推荐 `include_local_storage`、`confirm_local_storage_export` 和 `local_storage_page_ref` 字段，boolean 必须严格 JSON boolean。
+  - 推荐 audit 只写低敏计数和可选 `origin_hash`，不写 origin 原文、key、value、URL query 或 fragment。
+  - 本小闭环只更新 CloakBrowser 文档，不新增 API、不读取 local storage 明文、不读取 profile dir、不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 running profile cookie bundle export 小闭环：
   - `POST /api/profiles/{profile_id}/bundle/export` 新增 `include_cookies` 和 `confirm_cookie_export`。
   - 两个 flag 都必须是 JSON boolean，不接受字符串或数字宽松转换。
