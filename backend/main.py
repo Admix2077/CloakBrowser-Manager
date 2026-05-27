@@ -1817,16 +1817,14 @@ async def export_profile_cookies(profile_id: str, req: CookieExportRequest):
     running = _automation_running(profile_id)
     try:
         cookies = await running.context.cookies()
-    except Exception as exc:
-        logger.warning("Cookie export failed for %s: %s", profile_id, type(exc).__name__)
-        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cookie export failed") from None
 
     exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
         document = build_cookie_json_export(cookies, profile_id=profile_id, exported_at=exported_at)
-    except Exception as exc:
-        logger.warning("Cookie export normalization failed for %s: %s", profile_id, type(exc).__name__)
-        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cookie export failed") from None
 
     summary = cookie_json_audit_summary(document)
     db.create_audit_event(
@@ -1851,16 +1849,14 @@ async def export_profile_cookies_netscape(profile_id: str, req: CookieExportRequ
     running = _automation_running(profile_id)
     try:
         cookies = await running.context.cookies()
-    except Exception as exc:
-        logger.warning("Cookie export failed for %s: %s", profile_id, type(exc).__name__)
-        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cookie export failed") from None
 
     try:
         document = build_cookie_json_export(cookies, profile_id=profile_id)
         text = build_netscape_cookie_export(document)
-    except Exception as exc:
-        logger.warning("Netscape cookie export normalization failed for %s: %s", profile_id, type(exc).__name__)
-        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cookie export failed") from None
 
     summary = netscape_cookie_audit_summary(document)
     db.create_audit_event(
@@ -1904,9 +1900,11 @@ async def export_profile_bundle(profile_id: str, request: Request):
                 profile_id=profile_id,
                 exported_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             )
-        except Exception as exc:
-            logger.warning("Profile bundle cookie export failed for %s: %s", profile_id, type(exc).__name__)
-            raise HTTPException(status_code=400, detail="Profile bundle cookie export failed") from exc
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="Profile bundle cookie export failed",
+            ) from None
 
     local_storage_origin = None
     local_storage_entries = None

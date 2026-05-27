@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 cookie export 不写日志小闭环：
+  - `POST /api/profiles/{profile_id}/cookies/export`、`POST /api/profiles/{profile_id}/cookies/export/netscape` 和 `POST /api/profiles/{profile_id}/bundle/export` 的 cookie export 分支成功路径不写 logger。
+  - 以上 cookie export 失败路径只返回固定错误，不写 manager logger，不写失败 audit，不记录异常类型、profile id、cookie value、cookie name、domain、URL、query 或 fragment。
+  - 成功路径继续按既有 `cookie.exported` / `profile_bundle.cookie_exported` 写低敏 audit metadata，只包含格式、schema、计数等摘要。
+  - 新增失败路径测试覆盖 JSON cookie export、Netscape cookie export 和 profile bundle cookie export，不泄露响应、不写失败 audit、`caplog.text == ""`。
+  - 本小闭环只修改 CloakBrowser 本仓 cookie export 日志边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 runtime service token 隔离测试与文档收口小闭环：
   - `RUNTIME_SERVICE_TOKEN` / `X-Runtime-Service-Token` 明确作为 runtime service API 专用凭证，用于未来由 Payload 调用 CloakBrowser runtime API。
   - runtime service API 只接受 `X-Runtime-Service-Token`，不接受普通 `AUTH_TOKEN` bearer 或 `auth_token` cookie。

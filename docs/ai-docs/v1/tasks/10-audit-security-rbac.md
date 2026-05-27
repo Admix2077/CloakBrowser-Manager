@@ -40,7 +40,10 @@
   - `/api/auth/status` 只返回 `auth_required` / `authenticated`。
   - `/api/auth/login` 成功 JSON 只返回 `{ ok: true }`。
   - 登录成功 `Set-Cookie` 不再包含 `AUTH_TOKEN` 明文。
-- [ ] cookie 导出不写日志。
+- [x] cookie 导出不写日志：
+  - JSON cookie export、Netscape cookie export 和 profile bundle cookie export 的成功路径不写 logger。
+  - 以上 cookie export 失败路径只返回固定错误，不写 manager logger，不写失败 audit，不记录异常类型、profile id、cookie value、cookie name、domain、URL、query 或 fragment。
+  - 成功路径 audit 仅写低敏计数 metadata。
 - [x] VNC token hash 存储，不存明文：
   - viewer token 明文只在 `POST /api/runtime/sessions/{id}/viewer-token` 响应中返回一次。
   - `runtime_sessions.viewer_token_hash` 只保存 hash，且对外 `RuntimeSessionResponse` 不暴露 hash。

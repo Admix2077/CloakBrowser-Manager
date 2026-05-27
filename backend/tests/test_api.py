@@ -1293,6 +1293,7 @@ def test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_le
     assert _audit_events_except("profile.created") == []
     assert "super-secret-cookie-value" not in resp.text
     assert "sensitive.example.com" not in resp.text
+    assert caplog.text == ""
     assert "super-secret-cookie-value" not in caplog.text
     assert "sensitive.example.com" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
@@ -1437,6 +1438,7 @@ def test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_o
     assert _audit_events_except("profile.created") == []
     assert "super-secret-cookie-value" not in resp.text
     assert "sensitive.example.com" not in resp.text
+    assert caplog.text == ""
     assert "super-secret-cookie-value" not in caplog.text
     assert "sensitive.example.com" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
@@ -1638,6 +1640,32 @@ def test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redac
     assert "super-secret-cookie-value" not in audit_text
     assert "sid" not in audit_text
     assert "sensitive.example.com" not in audit_text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_profile_bundle_cookie_bundle_failure_uses_fixed_error_without_audit_or_log(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle Cookie Export Failure"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.cookies.side_effect = RuntimeError(
+        "super-secret-cookie-value sensitive.example.com"
+    )
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_cookies": True, "confirm_cookie_export": True},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Profile bundle cookie export failed"}
+    assert _audit_events_except("profile.created") == []
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert caplog.text == ""
     main.browser_mgr.running.pop(pid, None)
 
 
