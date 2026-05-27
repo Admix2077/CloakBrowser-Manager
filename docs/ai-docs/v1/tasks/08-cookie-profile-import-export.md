@@ -32,6 +32,7 @@
 - [x] 支持 running profile cookie bundle export。
 - [x] 完成 local storage 只读评估。
 - [x] 支持 running profile 当前 origin local storage bundle export。
+- [x] 完成 profile dir archive 只读评估。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -595,6 +596,31 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
 # 8 passed
+```
+
+## 2026-05-27 profile dir archive 只读评估小闭环
+
+当前状态：
+
+- 已新增 `docs/ai-docs/v1/profile-dir-archive-evaluation.md`。
+- 评估结论是当前阶段不实现 profile dir archive export/import API。
+- 原因是 Firefox profile dir 可能包含 cookie、local storage、IndexedDB、Cache Storage、history、session restore、download metadata、cert/key DB、站点权限、设备绑定标识和业务 token，不能整目录 zip 后默认导出或导入。
+- 未来如实现 export，必须只允许 stopped profile，要求独立 JSON boolean：
+  - `include_profile_dir_archive: true`。
+  - `confirm_profile_dir_archive_export: true`。
+- 未确认时不得读取 profile dir、不得统计文件、不得写 audit；running profile 必须固定失败，不复制正在使用的目录。
+- 未来如实现 import，必须创建新 profile、新 UUID 和新 `user_data_dir`，不能覆盖既有 profile 或解压到调用方指定目录。
+- 文档明确导入前必须拒绝路径穿越、绝对路径、重复路径、symlink、hardlink、设备文件、socket、FIFO、特殊权限位、超大文件和超过目录深度/总字节数上限的 archive。
+- 当前不列出可直接放行的具体 allowlist 文件名；后续必须先用只读样本清单审计验证每个候选文件不包含 URL、token、账号状态、证书、cookie、local storage、history 或下载信息。
+- 必须拒绝清单至少覆盖 cookie/local storage SQLite、IndexedDB、cache、service worker、history、form history、session restore、downloads、cert/key DB、lock、`.env`、dump、日志、secret/token、隐藏高风险目录和非普通文件。
+- 未来成功 export 的 audit 只允许记录格式、schema、文件数、总字节数、排除文件数和 `archive_manifest_hash`，不记录文件名明细、原始路径、URL、cookie/local storage/IndexedDB 内容、token、secret、proxy password 或 Project Mileage 业务事实。
+- 本小闭环只更新 CloakBrowser 文档，不新增 API，不读取 profile dir，不生成 archive，不接 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+git diff --check
+# passed
 ```
 
 ## 2026-05-27 local storage 只读评估小闭环

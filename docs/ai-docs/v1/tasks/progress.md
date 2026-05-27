@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 profile dir archive 只读评估小闭环：
+  - 新增 `docs/ai-docs/v1/profile-dir-archive-evaluation.md`。
+  - 评估结论是当前阶段不实现 profile dir archive export/import API。
+  - 未来如实现 export，必须只允许 stopped profile，要求独立 JSON boolean `include_profile_dir_archive` 和 `confirm_profile_dir_archive_export`；未确认时不读取 profile dir、不统计文件、不写 audit。
+  - 未来如实现 import，必须创建新 profile、新 UUID 和新 `user_data_dir`，不能覆盖既有 profile 或解压到调用方指定目录。
+  - 文档明确 allowlist 优先、denylist 必备，并要求拒绝路径穿越、绝对路径、重复路径、symlink、hardlink、设备文件、socket、FIFO、特殊权限位和超限 archive。
+  - 未来 audit 只允许记录低敏统计和 `archive_manifest_hash`，不记录文件名明细、原始路径、URL、cookie/local storage/IndexedDB 内容、token、secret、proxy password 或 Project Mileage 业务事实。
+  - 本小闭环只更新 CloakBrowser 文档，不新增 API，不读取 profile dir，不生成 archive，不接 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 running profile 当前 origin local storage bundle export 小闭环：
   - `POST /api/profiles/{profile_id}/bundle/export` 新增 `include_local_storage`、`confirm_local_storage_export` 和 `local_storage_page_ref`。
   - `include_local_storage` / `confirm_local_storage_export` 必须是 JSON boolean，不接受字符串或数字宽松转换。

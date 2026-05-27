@@ -194,6 +194,8 @@ bundle 默认不能包含以下内容：
 - 必须先定义 allowlist/denylist。
 - 必须排除 lock、session restore、history、downloads、cache、service worker、cert/key DB、SQLite WAL/SHM 等高风险文件。
 - 未完成评估前，不实现 archive API。
+- 评估文档：`docs/ai-docs/v1/profile-dir-archive-evaluation.md`。
+- 评估完成后仍不直接代表 archive API 可以实现；实现前必须再按测试先行补导出/导入失败测试。
 
 ## Project Mileage 边界
 
