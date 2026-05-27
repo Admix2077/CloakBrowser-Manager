@@ -36,8 +36,11 @@ from .browser_manager import BrowserManager
 from .cookie_formats import (
     CookieJsonDocument,
     build_cookie_json_export,
+    build_netscape_cookie_export,
     cookie_json_audit_summary,
     cookies_for_playwright,
+    netscape_cookie_audit_summary,
+    parse_netscape_cookies,
 )
 from .geoip import resolve_network_geo
 from .health import (
@@ -67,6 +70,8 @@ from .models import (
     CookieExportRequest,
     CookieExportResponse,
     CookieImportResponse,
+    NetscapeCookieExportResponse,
+    NetscapeCookieImportRequest,
     LaunchResponse,
     LoginRequest,
     ProxyAssignRequest,
@@ -725,6 +730,17 @@ def _cookie_export_audit_metadata(summary: dict) -> dict:
         "session_count": summary.get("session_cookie_count"),
         "persistent_count": summary.get("persistent_cookie_count"),
         "same_site_counts": summary.get("same_site_counts"),
+    }
+
+
+def _netscape_cookie_export_audit_metadata(summary: dict) -> dict:
+    return {
+        "format": summary.get("format"),
+        "total_count": summary.get("cookie_count"),
+        "secure_count": summary.get("secure_count"),
+        "session_count": summary.get("session_cookie_count"),
+        "persistent_count": summary.get("persistent_cookie_count"),
+        "http_only_count": summary.get("http_only_count"),
     }
 
 
@@ -1496,9 +1512,10 @@ async def import_profile_configs(req: ProfileConfigImportRequest):
 
 
 @app.post("/api/profiles/{profile_id}/cookies/import", response_model=CookieImportResponse)
-async def import_profile_cookies(profile_id: str, req: dict):
+async def import_profile_cookies(profile_id: str, request: Request):
     running = _automation_running(profile_id)
     try:
+        req = await request.json()
         document = CookieJsonDocument.model_validate(req)
     except Exception as exc:
         logger.warning("Cookie JSON import validation failed for %s: %s", profile_id, type(exc).__name__)
@@ -1515,6 +1532,30 @@ async def import_profile_cookies(profile_id: str, req: dict):
         profile_id=profile_id,
         imported=len(cookies),
         summary=cookie_json_audit_summary(document),
+    )
+
+
+@app.post("/api/profiles/{profile_id}/cookies/import/netscape", response_model=CookieImportResponse)
+async def import_profile_cookies_netscape(profile_id: str, request: Request):
+    running = _automation_running(profile_id)
+    try:
+        req = NetscapeCookieImportRequest.model_validate(await request.json())
+        document = parse_netscape_cookies(req.text)
+    except Exception as exc:
+        logger.warning("Netscape cookie import validation failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=422, detail="Invalid Netscape cookie document") from exc
+
+    cookies = cookies_for_playwright(document)
+    try:
+        await running.context.add_cookies(cookies)
+    except Exception as exc:
+        logger.warning("Cookie import failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=400, detail="Cookie import failed") from exc
+
+    return CookieImportResponse(
+        profile_id=profile_id,
+        imported=len(cookies),
+        summary=netscape_cookie_audit_summary(document),
     )
 
 
@@ -1549,6 +1590,40 @@ async def export_profile_cookies(profile_id: str, req: CookieExportRequest):
         exported=len(document.cookies),
         summary=summary,
         document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
+    )
+
+
+@app.post("/api/profiles/{profile_id}/cookies/export/netscape", response_model=NetscapeCookieExportResponse)
+async def export_profile_cookies_netscape(profile_id: str, req: CookieExportRequest):
+    if req.confirm_export is not True:
+        raise HTTPException(status_code=422, detail="Cookie export requires explicit confirmation")
+
+    running = _automation_running(profile_id)
+    try:
+        cookies = await running.context.cookies()
+    except Exception as exc:
+        logger.warning("Cookie export failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+
+    try:
+        document = build_cookie_json_export(cookies, profile_id=profile_id)
+        text = build_netscape_cookie_export(document)
+    except Exception as exc:
+        logger.warning("Netscape cookie export normalization failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=400, detail="Cookie export failed") from exc
+
+    summary = netscape_cookie_audit_summary(document)
+    db.create_audit_event(
+        event_type="cookie.exported",
+        actor_type="local_admin",
+        profile_id=profile_id,
+        metadata=_netscape_cookie_export_audit_metadata(summary),
+    )
+    return NetscapeCookieExportResponse(
+        profile_id=profile_id,
+        exported=len(document.cookies),
+        summary=summary,
+        text=text,
     )
 
 

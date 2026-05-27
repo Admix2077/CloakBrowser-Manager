@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 Netscape cookie REST API 小闭环：
+  - 新增 `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体为 Netscape cookie 文件文本，解析后复用运行中 Playwright browser context `add_cookies()`。
+  - 新增 `POST /api/profiles/{profile_id}/cookies/export/netscape`，必须显式传入 JSON boolean `confirm_export: true`，执行时从运行中 context `cookies()` 导出 Netscape cookie 文件文本。
+  - import/export 都只允许运行中 profile；停止状态 profile 不读写 Firefox profile dir，不尝试直接修改磁盘 cookie 存储。
+  - export 未显式确认时不读取 browser context、不写 audit；字符串或数字确认值不会被宽松转换。
+  - export 成功沿用 `cookie.exported` audit 事件，metadata 只包含 `format/total_count/secure_count/session_count/persistent_count/http_only_count` 等低敏统计。
+  - import/export 固定错误、logger warning 和 audit metadata 均不回显 cookie value、cookie name、domain、URL、query、fragment、原始 Netscape 行或 Playwright 原始异常 message。
+  - Cookie JSON import 和 Netscape import 对无效请求形状都返回固定错误，不使用 FastAPI 默认 validation response 回显原始 input。
+  - Netscape export 响应里的 `text` 包含 cookie 明文，因此该 API 仅限 CloakBrowser 可信本地管理侧并要求显式确认。
+  - 本小闭环不新增前端入口、不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成前端 Cookie 管理入口小闭环：
   - `frontend/src/lib/api.ts` 新增 Cookie JSON v1 类型、`api.importProfileCookies(profileId, document)` 和 `api.exportProfileCookies(profileId)`。
   - `api.importProfileCookies()` 调用既有 `POST /api/profiles/{profile_id}/cookies/import`。

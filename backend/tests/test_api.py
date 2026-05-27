@@ -856,6 +856,31 @@ def test_import_cookie_json_rejects_invalid_document_without_leaking_payload(app
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_import_cookie_json_rejects_invalid_request_shape_without_echoing_input(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "InvalidCookieImportRequestShapeProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    for payload in (
+        [],
+        ["sensitive.example.com", "sid", "super-secret-cookie-value"],
+        "sensitive.example.com sid super-secret-cookie-value",
+    ):
+        resp = app_client.post(
+            f"/api/profiles/{pid}/cookies/import",
+            json=payload,
+        )
+
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Invalid cookie JSON document"}
+
+    running.context.add_cookies.assert_not_called()
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert "sid" not in resp.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking_payload(
     app_client: TestClient,
     caplog: pytest.LogCaptureFixture,
@@ -879,6 +904,153 @@ def test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking
                     "domain": "sensitive.example.com",
                 }
             ],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Cookie import failed"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert "super-secret-cookie-value" not in caplog.text
+    assert "sensitive.example.com" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_import_cookie_netscape_adds_cookies_to_running_profile_without_leaking_values(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "NetscapeCookieImportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    text = "\n".join(
+        [
+            "# Netscape HTTP Cookie File",
+            ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value",
+            "#HttpOnly_example.org\tFALSE\t/account\tFALSE\t0\tanalytics_id\tanother-secret-cookie-value",
+        ]
+    )
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import/netscape",
+        json={"text": text},
+    )
+
+    assert resp.status_code == 200
+    running.context.add_cookies.assert_awaited_once_with([
+        {
+            "name": "sid",
+            "value": "super-secret-cookie-value",
+            "domain": ".sensitive.example.com",
+            "path": "/",
+            "expires": 1_893_456_000,
+            "secure": True,
+            "httpOnly": False,
+        },
+        {
+            "name": "analytics_id",
+            "value": "another-secret-cookie-value",
+            "domain": "example.org",
+            "path": "/account",
+            "expires": 0,
+            "secure": False,
+            "httpOnly": True,
+        },
+    ])
+    data = resp.json()
+    assert data["profile_id"] == pid
+    assert data["imported"] == 2
+    assert data["summary"] == {
+        "format": "netscape-cookie-file",
+        "cookie_count": 2,
+        "secure_count": 1,
+        "session_cookie_count": 1,
+        "persistent_cookie_count": 1,
+        "http_only_count": 1,
+    }
+    response_text = str(data)
+    assert "super-secret-cookie-value" not in response_text
+    assert "another-secret-cookie-value" not in response_text
+    assert "sid" not in response_text
+    assert "analytics_id" not in response_text
+    assert "sensitive.example.com" not in response_text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_import_cookie_netscape_rejects_malformed_text_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "InvalidNetscapeCookieImportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import/netscape",
+        json={"text": "sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid"},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Invalid Netscape cookie document"}
+    running.context.add_cookies.assert_not_called()
+    assert "sensitive.example.com" not in resp.text
+    assert "sid" not in resp.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_import_cookie_netscape_rejects_invalid_request_shape_without_echoing_input(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "InvalidNetscapeCookieRequestShapeProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    for payload in (
+        {},
+        {"text": ""},
+        {"text": ["sensitive.example.com", "sid", "super-secret-cookie-value"]},
+        {"text": {"raw": "sensitive.example.com sid super-secret-cookie-value"}},
+    ):
+        resp = app_client.post(
+            f"/api/profiles/{pid}/cookies/import/netscape",
+            json=payload,
+        )
+
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Invalid Netscape cookie document"}
+
+    running.context.add_cookies.assert_not_called()
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert "sid" not in resp.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_import_cookie_netscape_requires_running_profile_without_leaking_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "StoppedNetscapeCookieImportProfile"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import/netscape",
+        json={
+            "text": ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value"
+        },
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not running"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+
+
+def test_import_cookie_netscape_add_cookies_failure_uses_fixed_error_without_leaking_payload(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "FailingNetscapeCookieImportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.add_cookies.side_effect = RuntimeError(
+        "super-secret-cookie-value sensitive.example.com"
+    )
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/import/netscape",
+        json={
+            "text": ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value"
         },
     )
 
@@ -1024,6 +1196,150 @@ def test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_le
 
     resp = app_client.post(
         f"/api/profiles/{pid}/cookies/export",
+        json={"confirm_export": True},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Cookie export failed"}
+    assert main.db.list_audit_events() == []
+    assert "super-secret-cookie-value" not in resp.text
+    assert "sensitive.example.com" not in resp.text
+    assert "super-secret-cookie-value" not in caplog.text
+    assert "sensitive.example.com" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_netscape_requires_explicit_confirmation_without_reading_context(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "NetscapeCookieExportConfirmProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export/netscape",
+        json={"confirm_export": False},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Cookie export requires explicit confirmation"}
+    running.context.cookies.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_netscape_rejects_coerced_confirmation_without_reading_context(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "NetscapeCookieExportCoercedConfirmProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+
+    for confirm_export in ("true", "yes", 1):
+        resp = app_client.post(
+            f"/api/profiles/{pid}/cookies/export/netscape",
+            json={"confirm_export": confirm_export},
+        )
+
+        assert resp.status_code == 422
+
+    running.context.cookies.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_netscape_returns_text_and_writes_redacted_audit(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "NetscapeCookieExportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.cookies.return_value = [
+        {
+            "name": "sid",
+            "value": "super-secret-cookie-value",
+            "domain": ".sensitive.example.com",
+            "path": "/",
+            "expires": 1_893_456_000,
+            "secure": True,
+        },
+        {
+            "name": "acctid",
+            "value": "session-secret",
+            "url": "https://app.example.org/dashboard?token=hidden#frag",
+            "path": "/dashboard",
+            "httpOnly": True,
+        },
+    ]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export/netscape",
+        json={"confirm_export": True},
+    )
+
+    assert resp.status_code == 200
+    running.context.cookies.assert_awaited_once()
+    data = resp.json()
+    assert data["profile_id"] == pid
+    assert data["exported"] == 2
+    assert data["summary"] == {
+        "format": "netscape-cookie-file",
+        "cookie_count": 2,
+        "secure_count": 1,
+        "session_cookie_count": 1,
+        "persistent_cookie_count": 1,
+        "http_only_count": 1,
+    }
+    assert data["text"].splitlines() == [
+        "# Netscape HTTP Cookie File",
+        ".sensitive.example.com\tTRUE\t/\tTRUE\t1893456000\tsid\tsuper-secret-cookie-value",
+        "#HttpOnly_app.example.org\tFALSE\t/dashboard\tFALSE\t0\tacctid\tsession-secret",
+    ]
+    assert "token=hidden" not in data["text"]
+    assert "#frag" not in data["text"]
+
+    events = main.db.list_audit_events()
+    assert [event["event_type"] for event in events] == ["cookie.exported"]
+    assert events[0]["actor_type"] == "local_admin"
+    assert events[0]["profile_id"] == pid
+    assert events[0]["metadata"] == {
+        "format": "netscape-cookie-file",
+        "total_count": 2,
+        "secure_count": 1,
+        "session_count": 1,
+        "persistent_count": 1,
+        "http_only_count": 1,
+    }
+    audit_text = json.dumps(events, sort_keys=True)
+    assert "super-secret-cookie-value" not in audit_text
+    assert "session-secret" not in audit_text
+    assert "sid" not in audit_text
+    assert "acctid" not in audit_text
+    assert "sensitive.example.com" not in audit_text
+    assert "token=hidden" not in audit_text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_cookie_netscape_requires_running_profile(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "StoppedNetscapeCookieExportProfile"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export/netscape",
+        json={"confirm_export": True},
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not running"}
+    assert main.db.list_audit_events() == []
+
+
+def test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_or_leak(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "FailingNetscapeCookieExportProfile"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.context.cookies.side_effect = RuntimeError("super-secret-cookie-value sensitive.example.com")
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/cookies/export/netscape",
         json={"confirm_export": True},
     )
 

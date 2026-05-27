@@ -598,6 +598,10 @@ class CookieImportResponse(BaseModel):
     summary: dict[str, Any]
 
 
+class NetscapeCookieImportRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=10_000_000)
+
+
 class CookieExportRequest(BaseModel):
     confirm_export: StrictBool = False
 
@@ -607,6 +611,13 @@ class CookieExportResponse(BaseModel):
     exported: int
     summary: dict[str, Any]
     document: dict[str, Any]
+
+
+class NetscapeCookieExportResponse(BaseModel):
+    profile_id: str
+    exported: int
+    summary: dict[str, Any]
+    text: str
 
 
 class ClipboardRequest(BaseModel):

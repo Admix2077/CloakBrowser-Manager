@@ -8,8 +8,10 @@
 
 - [x] 定义 cookie JSON import 格式。
 - [x] 定义 cookie JSON export 格式。
-- [x] 支持 Netscape cookie import。
-- [x] 支持 Netscape cookie export。
+- [x] 支持 Netscape cookie import 格式层。
+- [x] 支持 Netscape cookie export 格式层。
+- [x] 支持 running profile Netscape cookie import API。
+- [x] 支持 running profile Netscape cookie export API。
 - [x] 仅运行中 profile 允许通过 browser context 导入 cookie。
 - [ ] 停止状态 profile 可通过 profile dir 方式导入 cookie 时必须先评估 Firefox 存储格式，不强行实现。
 - [x] 导出 cookie 必须写 audit。
@@ -82,6 +84,7 @@
   - 低敏 `summary` 计数。
 - 响应、固定错误和 logger warning 均不回显 cookie value、cookie name、domain、URL、query 或 Playwright 原始异常 message。
 - 非法 Cookie JSON 文档返回固定 `422 Invalid cookie JSON document`。
+- 非 dict 请求体也返回固定 `422 Invalid cookie JSON document`，不使用 FastAPI 默认 validation response 回显原始 input。
 - `add_cookies()` 执行失败返回固定 `400 Cookie import failed`。
 - 本小闭环不实现 cookie export、不写 `audit_events`、不新增前端入口、不接 Project Mileage DTO。
 - Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
@@ -268,10 +271,69 @@ cd frontend && npm run build
 # 165 passed
 ```
 
+## 2026-05-27 Netscape cookie REST API 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/profiles/{profile_id}/cookies/import/netscape`。
+- 请求体为 `{ "text": "<Netscape cookie file text>" }`：
+  - `text` 必须非空。
+  - parser 复用 `parse_netscape_cookies()`，并转换为 Cookie JSON v1 document 后调用运行中 Playwright browser context `add_cookies()`。
+- import 只允许运行中 profile：
+  - profile 未运行返回 `404 Profile not running`。
+  - 停止状态 profile 不写 Firefox profile dir，不尝试直接修改磁盘 cookie 存储。
+- import 成功响应只返回：
+  - `profile_id`。
+  - `imported`。
+  - Netscape 低敏 `summary` 计数。
+- import 非法 Netscape 文档或无效请求形状返回固定 `422 Invalid Netscape cookie document`，不使用 FastAPI 默认 validation response 回显原始 input；`add_cookies()` 执行失败返回固定 `400 Cookie import failed`。
+- 已新增 `POST /api/profiles/{profile_id}/cookies/export/netscape`。
+- export 请求体必须显式传入 JSON boolean `confirm_export: true`：
+  - 缺失或 `false` 返回固定 `422 Cookie export requires explicit confirmation`。
+  - 字符串 `"true"`、`"yes"` 或数字 `1` 不会被宽松转换。
+  - 未确认时不读取 browser context、不写 audit。
+- export 只允许运行中 profile；profile 未运行返回 `404 Profile not running`，停止状态 profile 不读 Firefox profile dir。
+- export 成功时调用运行中 Playwright browser context `cookies()`，先规范化为 Cookie JSON v1，再生成 Netscape cookie 文本。
+- export 响应返回：
+  - `profile_id`。
+  - `exported`。
+  - Netscape 低敏 `summary`。
+  - `text`：Netscape cookie 文件文本，包含 cookie 明文；该 API 仅限可信本地管理侧并要求显式确认。
+- export 成功写 `audit_events`：
+  - `event_type`：`cookie.exported`。
+  - `actor_type`：`local_admin`。
+  - `profile_id`：目标 profile。
+  - `metadata`：只包含 `format/total_count/secure_count/session_count/persistent_count/http_only_count` 等低敏统计。
+- audit metadata、固定错误和 logger warning 均不回显 cookie value、cookie name、domain、URL、query、fragment、原始 Netscape 行或 Playwright 原始异常 message。
+- 本小闭环不新增前端入口、不接 Project Mileage DTO、不修改 Project Mileage app/payload。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_netscape_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_api.py::test_import_cookie_netscape_rejects_malformed_text_without_leaking_payload backend/tests/test_api.py::test_import_cookie_netscape_requires_running_profile_without_leaking_payload backend/tests/test_api.py::test_import_cookie_netscape_add_cookies_failure_uses_fixed_error_without_leaking_payload backend/tests/test_api.py::test_export_cookie_netscape_requires_explicit_confirmation_without_reading_context backend/tests/test_api.py::test_export_cookie_netscape_rejects_coerced_confirmation_without_reading_context backend/tests/test_api.py::test_export_cookie_netscape_returns_text_and_writes_redacted_audit backend/tests/test_api.py::test_export_cookie_netscape_requires_running_profile backend/tests/test_api.py::test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_or_leak -q
+# failed before implementation: 9 failed with 405 Method Not Allowed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_netscape_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_api.py::test_import_cookie_netscape_rejects_malformed_text_without_leaking_payload backend/tests/test_api.py::test_import_cookie_netscape_requires_running_profile_without_leaking_payload backend/tests/test_api.py::test_import_cookie_netscape_add_cookies_failure_uses_fixed_error_without_leaking_payload backend/tests/test_api.py::test_export_cookie_netscape_requires_explicit_confirmation_without_reading_context backend/tests/test_api.py::test_export_cookie_netscape_rejects_coerced_confirmation_without_reading_context backend/tests/test_api.py::test_export_cookie_netscape_returns_text_and_writes_redacted_audit backend/tests/test_api.py::test_export_cookie_netscape_requires_running_profile backend/tests/test_api.py::test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_or_leak -q
+# 9 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_rejects_invalid_request_shape_without_echoing_input backend/tests/test_api.py::test_import_cookie_netscape_rejects_invalid_request_shape_without_echoing_input -q
+# failed before implementation: 2 failed with default validation response echoing input
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_rejects_invalid_request_shape_without_echoing_input backend/tests/test_api.py::test_import_cookie_netscape_rejects_invalid_request_shape_without_echoing_input -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py -q
+# 7 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q
+# 167 passed
+```
+
 ## 验证
 
 ```bash
-. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py -q
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_api.py -q
 cd frontend && npm test -- --run
 cd frontend && npm run build
 ```
@@ -280,5 +342,6 @@ cd frontend && npm run build
 
 - [ ] JSON cookie 导入后页面可读到 cookie。
 - [ ] JSON cookie 导出不破坏字段。
-- [ ] Netscape 格式基础兼容。
-- [ ] 导出动作写 audit 且不记录 cookie 明文。
+- [x] Netscape 格式基础兼容。
+- [x] Netscape import/export API 只作用于 running profile。
+- [x] 导出动作写 audit 且不记录 cookie 明文。
