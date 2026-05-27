@@ -227,11 +227,17 @@ async def resolve_network_geo(proxy_url: str | None = None) -> GeoIPResult:
         return cached
 
     timeout = _geoip_timeout_seconds()
-    async with httpx.AsyncClient(
-        proxy=proxy_url,
-        timeout=timeout,
-        transport=_transport_for_tests,
-    ) as client:
+    try:
+        client_context = httpx.AsyncClient(
+            proxy=proxy_url,
+            timeout=timeout,
+            transport=_transport_for_tests,
+        )
+    except Exception as exc:
+        logger.warning("GeoIP client initialization failed: %s", type(exc).__name__)
+        return GeoIPResult(None, None, None, None, "failed")
+
+    async with client_context as client:
         for provider_name, url, params, parser in _GEOIP_PROVIDERS:
             try:
                 response = await client.get(url, params=params)
@@ -277,11 +283,6 @@ async def resolve_profile_network_fingerprint(profile: dict[str, Any]) -> dict[s
     locale = _nonempty(profile.get("locale"))
 
     if not _geoip_enabled(profile.get("geoip", True)):
-        resolved["timezone"] = timezone
-        resolved["locale"] = locale
-        return resolved
-
-    if timezone and locale:
         resolved["timezone"] = timezone
         resolved["locale"] = locale
         return resolved

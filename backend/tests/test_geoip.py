@@ -74,6 +74,22 @@ async def test_resolve_network_geo_uses_proxy_for_lookup(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_resolve_network_geo_falls_back_when_proxy_client_cannot_start(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class BrokenAsyncClient:
+        def __init__(self, *, proxy=None, timeout=None, transport=None):
+            raise ImportError("socksio missing for proxy.example:1080")
+
+    monkeypatch.setattr(geoip.httpx, "AsyncClient", BrokenAsyncClient)
+    geoip.clear_geoip_cache()
+
+    result = await geoip.resolve_network_geo("socks5://user:pass@proxy.example:1080")
+
+    assert result == geoip.GeoIPResult(None, None, None, None, "failed")
+
+
+@pytest.mark.asyncio
 async def test_resolve_network_geo_falls_back_to_second_provider(monkeypatch: pytest.MonkeyPatch):
     hosts: list[str] = []
 
@@ -203,12 +219,20 @@ async def test_resolve_profile_network_fingerprint_uses_direct_geoip_without_pro
 async def test_resolve_profile_network_fingerprint_keeps_explicit_fields(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    async def fail_if_called(proxy_url: str | None):
-        raise AssertionError("GeoIP lookup should not run when timezone and locale are explicit")
+    async def fake_resolve(proxy_url: str | None):
+        assert proxy_url is None
+        return geoip.GeoIPResult(
+            timezone="America/Los_Angeles",
+            locale="en-US",
+            ip="23.144.4.92",
+            country_code="US",
+            source="test-direct",
+        )
 
-    monkeypatch.setattr(geoip, "resolve_network_geo", fail_if_called)
+    monkeypatch.setattr(geoip, "resolve_network_geo", fake_resolve)
 
     profile = {
+        "geoip": True,
         "proxy": None,
         "timezone": "Asia/Shanghai",
         "locale": "zh-CN",
@@ -218,6 +242,40 @@ async def test_resolve_profile_network_fingerprint_keeps_explicit_fields(
 
     assert resolved["timezone"] == "Asia/Shanghai"
     assert resolved["locale"] == "zh-CN"
+
+
+@pytest.mark.asyncio
+async def test_resolve_profile_network_fingerprint_keeps_explicit_fields_but_records_exit_ip(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_resolve(proxy_url: str | None):
+        assert proxy_url is None
+        return geoip.GeoIPResult(
+            timezone="America/Los_Angeles",
+            locale="en-US",
+            ip="23.144.4.92",
+            country_code="US",
+            source="test-direct",
+        )
+
+    monkeypatch.setattr(geoip, "resolve_network_geo", fake_resolve)
+
+    resolved = await geoip.resolve_profile_network_fingerprint({
+        "geoip": True,
+        "proxy": None,
+        "timezone": "Asia/Shanghai",
+        "locale": "zh-CN",
+    })
+
+    assert resolved["timezone"] == "Asia/Shanghai"
+    assert resolved["locale"] == "zh-CN"
+    assert resolved["_geoip_result"] == {
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US",
+        "ip": "23.144.4.92",
+        "country_code": "US",
+        "source": "test-direct",
+    }
 
 
 @pytest.mark.asyncio

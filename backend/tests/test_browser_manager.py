@@ -307,6 +307,64 @@ async def test_launch_resolves_missing_timezone_and_locale_before_invisible_laun
     await mgr.stop("profile-geoip")
 
 
+@pytest.mark.asyncio
+async def test_launch_passes_geoip_exit_ip_to_invisible_webrtc_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+):
+    async def fake_resolve(profile: dict):
+        resolved = dict(profile)
+        resolved["timezone"] = "America/Los_Angeles"
+        resolved["locale"] = "en-US"
+        resolved["_geoip_result"] = {
+            "timezone": "America/Los_Angeles",
+            "locale": "en-US",
+            "ip": "23.144.4.92",
+            "country_code": "US",
+            "source": "test-direct",
+        }
+        return resolved
+
+    seen_env: list[str | None] = []
+
+    async def fake_enter(self):
+        seen_env.append(os.environ.get("STEALTHFOX_WEBRTC_PUBLIC_IP"))
+        return self.context
+
+    monkeypatch.setattr(bm, "resolve_profile_network_fingerprint", fake_resolve)
+    monkeypatch.setattr(mock_invisible_playwright, "__aenter__", fake_enter)
+    monkeypatch.setenv("STEALTHFOX_WEBRTC_PUBLIC_IP", "198.51.100.10")
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    await mgr.launch({
+        "id": "profile-geoip-webrtc",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": 1366,
+        "screen_height": 768,
+        "proxy": None,
+        "timezone": None,
+        "locale": None,
+        "geoip": True,
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+
+    assert seen_env == ["23.144.4.92"]
+    assert os.environ["STEALTHFOX_WEBRTC_PUBLIC_IP"] == "198.51.100.10"
+
+    await mgr.stop("profile-geoip-webrtc")
+
+
 def test_build_invisible_kwargs_filters_chromium_only_launch_args(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,

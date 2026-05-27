@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 06 远程工作台与 VNC 会话，补齐旧仓 GeoIP 出口 IP 注入 WebRTC 环境的小闭环：
+  - 参考旧仓 `/home/jeff/local/repos/CloakBrowser`，`geoip=true` 时即使未配置 proxy 也走当前进程/容器出口解析 GeoIP。
+  - `timezone` / `locale` 已手动填写时不覆盖手动值，但仍解析并记录 `_geoip_result.ip`。
+  - `BrowserManager.launch()` 在启动 `InvisiblePlaywright` 的临界区临时设置 `STEALTHFOX_WEBRTC_PUBLIC_IP=<geoip exit ip>`，启动后恢复原环境变量。
+  - GeoIP client 初始化失败时降级为空结果，避免本机缺 SOCKS 依赖等 lookup 环境问题直接阻断 profile launch。
+  - 该变量不作为公开 API 字段，不记录 proxy、token、cookie、viewer URL 或 Project Mileage 业务事实。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 direct Automation API 错误响应稳定小闭环：
   - `new_page/goto/evaluate/wait_for_selector/click/fill/keyboard_type/scroll/screenshot/close_page` 页面动作失败响应统一为固定 `400 Automation page action failed`。
   - warning 日志统一为低敏 key-value：`action=automation.<action>_failed profile_id=... page_index=... error_type=...`，不再记录异常原文。

@@ -26,6 +26,7 @@ INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
 DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
 MAX_RUNNING_PROFILES_ENV = "MAX_RUNNING_PROFILES"
+WEBRTC_PUBLIC_IP_ENV = "STEALTHFOX_WEBRTC_PUBLIC_IP"
 
 
 class BrowserResourceLimitError(RuntimeError):
@@ -250,6 +251,16 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _geoip_exit_ip(profile: dict[str, Any]) -> str | None:
+    geoip_result = profile.get("_geoip_result")
+    if not isinstance(geoip_result, dict):
+        return None
+    ip = geoip_result.get("ip")
+    if isinstance(ip, str) and ip.strip():
+        return ip.strip()
+    return None
+
+
 def _accept_language_header(locale: str | None) -> str:
     lang = (locale or "en-US").replace("_", "-")
     base = lang.split("-")[0]
@@ -434,7 +445,11 @@ class BrowserManager:
             # Firefox has inherited the display.
             async with self._launch_env_lock:
                 old_display = os.environ.get("DISPLAY")
+                old_webrtc_public_ip = os.environ.get(WEBRTC_PUBLIC_IP_ENV)
                 os.environ["DISPLAY"] = f":{display}"
+                geoip_exit_ip = _geoip_exit_ip(resolved_profile)
+                if geoip_exit_ip:
+                    os.environ[WEBRTC_PUBLIC_IP_ENV] = geoip_exit_ip
                 try:
                     context = await runner.__aenter__()
                 finally:
@@ -442,6 +457,10 @@ class BrowserManager:
                         os.environ.pop("DISPLAY", None)
                     else:
                         os.environ["DISPLAY"] = old_display
+                    if old_webrtc_public_ip is None:
+                        os.environ.pop(WEBRTC_PUBLIC_IP_ENV, None)
+                    else:
+                        os.environ[WEBRTC_PUBLIC_IP_ENV] = old_webrtc_public_ip
 
             accept_language = _accept_language_header(kwargs.get("locale"))
             await context.set_extra_http_headers({"Accept-Language": accept_language})

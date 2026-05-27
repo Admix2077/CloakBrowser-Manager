@@ -420,3 +420,69 @@ cd frontend && npm run build
 git diff --check
 # passed
 ```
+
+## 2026-05-28 GeoIP 出口 IP 注入 WebRTC 环境小闭环
+
+背景：
+
+- 旧仓 `/home/jeff/local/repos/CloakBrowser` 的 `maybe_resolve_geoip()` 会返回 `(timezone, locale, exit_ip)`。
+- 旧仓即使没有 proxy，也会通过当前进程/容器出口做 GeoIP；即使调用方显式设置了 timezone/locale，也会继续解析 exit IP，用于 WebRTC IP 对齐。
+- 本仓此前已经能在无 proxy 时自动填充缺失 timezone/locale，但当 timezone/locale 都显式填写时会跳过 GeoIP，因此不会记录 exit IP；启动 `invisible_playwright` 时也没有把解析到的 exit IP 注入 `STEALTHFOX_WEBRTC_PUBLIC_IP`。
+- 本轮只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/geoip.py`
+  - `resolve_profile_network_fingerprint()` 在 `geoip=true` 时不再因为 timezone/locale 都已显式填写而跳过 GeoIP。
+  - 手动 `timezone` / `locale` 仍然优先，不会被 GeoIP 覆盖。
+  - GeoIP 成功时继续写入低敏 `_geoip_result`，包含 `ip/country_code/timezone/locale/source`，供启动成功后写 `last_geoip_*`。
+  - `httpx.AsyncClient(...)` 初始化失败时降级返回固定 `source=failed` 的空 GeoIP 结果，避免 SOCKS 依赖缺失等本机环境问题阻断 profile launch。
+- `backend/browser_manager.py`
+  - 新增 `_geoip_exit_ip()`，只从 `_geoip_result.ip` 提取出口 IP。
+  - `BrowserManager.launch()` 在调用 `InvisiblePlaywright.__aenter__()` 前临时设置 `STEALTHFOX_WEBRTC_PUBLIC_IP=<geoip exit ip>`。
+  - 启动结束后恢复原 `STEALTHFOX_WEBRTC_PUBLIC_IP`，避免污染后续 profile。
+- `backend/tests/test_geoip.py`
+  - 更新显式 timezone/locale 测试：确认手动值不被覆盖，但仍记录直连 GeoIP exit IP。
+- `backend/tests/test_browser_manager.py`
+  - 覆盖启动期间 `STEALTHFOX_WEBRTC_PUBLIC_IP` 使用 `_geoip_result.ip`，启动后恢复原环境变量。
+
+边界：
+
+- 不记录、不回显 proxy URL、proxy password、headers、token、cookie/local storage、viewer token 或 Project Mileage 钱包/订单/权限/审计事实。
+- `STEALTHFOX_WEBRTC_PUBLIC_IP` 只在同一个 `_launch_env_lock` 保护的启动临界区内临时设置；不作为公开 API 字段。
+- 本轮不改变 VNC token、runtime session、权限、扣费、续期、审计契约或 Project Mileage 远程工作台接入方式。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_resolve_profile_network_fingerprint_keeps_explicit_fields backend/tests/test_geoip.py::test_resolve_profile_network_fingerprint_keeps_explicit_fields_but_records_exit_ip backend/tests/test_browser_manager.py::test_launch_passes_geoip_exit_ip_to_invisible_webrtc_env -q
+# RED: 2 failed；旧实现显式字段时无 `_geoip_result`，启动期间沿用旧 `STEALTHFOX_WEBRTC_PUBLIC_IP`
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_resolve_profile_network_fingerprint_keeps_explicit_fields backend/tests/test_geoip.py::test_resolve_profile_network_fingerprint_keeps_explicit_fields_but_records_exit_ip backend/tests/test_browser_manager.py::test_launch_passes_geoip_exit_ip_to_invisible_webrtc_env -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_resolve_network_geo_falls_back_when_proxy_client_cannot_start -q
+# RED: 1 failed；旧实现中 `httpx.AsyncClient(...)` 初始化异常会直接抛出
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_resolve_network_geo_falls_back_when_proxy_client_cannot_start -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_resolve_network_geo_falls_back_when_proxy_client_cannot_start backend/tests/test_geoip.py::test_resolve_network_geo_uses_direct_exit_ip backend/tests/test_geoip.py::test_resolve_network_geo_uses_proxy_for_lookup -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_browser_manager.py -q
+# 51 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 494 passed in 29.62s
+
+cd frontend && npm test -- --run
+# Test Files 15 passed (15)
+# Tests 216 passed (216)
+
+cd frontend && npm run build
+# tsc -b && vite build succeeded
+
+git diff --check
+# passed
+```
