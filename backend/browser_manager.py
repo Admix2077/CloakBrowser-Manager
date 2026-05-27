@@ -20,6 +20,7 @@ from .vnc_manager import VNCManager
 logger = logging.getLogger("invisible_browser.manager.browser")
 
 INVISIBLE_FIREFOX_PROCESS_PATTERN = r"\.cache/invisible-playwright/.*/firefox"
+EXISTING_PAGE_INIT_TIMEOUT_SECONDS = 2.0
 
 
 def _normalize_proxy(raw: str) -> str:
@@ -358,7 +359,10 @@ class BrowserManager:
             # Also inject into already-open pages (about:blank created before init_script)
             for p in context.pages:
                 try:
-                    await p.evaluate(init_js)
+                    await asyncio.wait_for(
+                        p.evaluate(init_js),
+                        timeout=EXISTING_PAGE_INIT_TIMEOUT_SECONDS,
+                    )
                 except Exception as exc:
                     logger.debug("Browser init failed on existing page: %s", exc)
 

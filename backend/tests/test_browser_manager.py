@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -380,6 +381,54 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     await mgr.stop("profile-1")
     assert launch.closed is True
     mgr.vnc.stop_vnc.assert_awaited_once_with(100)
+
+
+@pytest.mark.asyncio
+async def test_launch_does_not_block_on_existing_page_init_script_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+):
+    class HangingPage:
+        async def evaluate(self, script: str):
+            await asyncio.Event().wait()
+
+    async def fake_enter(self):
+        self.context.pages = [HangingPage()]
+        return self.context
+
+    monkeypatch.setattr(mock_invisible_playwright, "__aenter__", fake_enter)
+    monkeypatch.setattr(bm, "EXISTING_PAGE_INIT_TIMEOUT_SECONDS", 0.01, raising=False)
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    running = await asyncio.wait_for(
+        mgr.launch({
+            "id": "profile-slow-existing-page",
+            "fingerprint_seed": 123,
+            "user_data_dir": str(user_data_dir),
+            "screen_width": 1366,
+            "screen_height": 768,
+            "proxy": None,
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "humanize": False,
+            "headless": False,
+            "launch_args": [],
+        }),
+        timeout=0.5,
+    )
+
+    assert running.profile_id == "profile-slow-existing-page"
+    assert mgr.get_status("profile-slow-existing-page")["status"] == "running"
+
+    await mgr.stop("profile-slow-existing-page")
 
 
 @pytest.mark.asyncio
