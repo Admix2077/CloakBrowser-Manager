@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 Cookie JSON Playwright payload 修正与验收小闭环：
+  - 修正 `backend/cookie_formats.py:CookieJsonCookie.to_playwright_cookie()`，`url` scoped cookie 转换为 Playwright payload 时只输出 `url`，不再同时输出默认 `path`；`domain` scoped cookie 继续输出 `domain + path`。
+  - 根因是 Playwright `context.add_cookies()` 要求 cookie shape 在 `url` 和 `domain + path` 之间二选一；旧转换会让真实 browser context 报 `Cookie should have either url or path`。
+  - 新增 `test_cookies_for_playwright_uses_url_or_domain_path_shape`，并同步 API import 测试期望。
+  - Cookie JSON export 字段保留继续由格式层和 API export 测试覆盖；audit 仍只写低敏计数。
+  - 使用本机一次性 HTTP server 和系统 Chrome 的 Playwright smoke 验证修复后的 URL scoped payload 可被 browser 接受，页面 `document.cookie` 可读到非 httpOnly cookie，`context.cookies()` 可导出 visible/httpOnly 两条 cookie。
+  - 标准 Playwright Firefox 未安装，`invisible_playwright` 一次性 Firefox 验收在当前环境挂起并已清理临时进程；本轮不标 Firefox/invisible_playwright 浏览器 PASS。
+  - 本小闭环不新增 API，不修改前端，不读取真实 profile dir，不接 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 stopped profile cookie storage 只读评估小闭环：
   - 新增 `docs/ai-docs/v1/stopped-profile-cookie-storage-evaluation.md`。
   - 评估结论是当前阶段不实现停止态 Firefox profile dir 的 `cookies.sqlite` 直接写入。

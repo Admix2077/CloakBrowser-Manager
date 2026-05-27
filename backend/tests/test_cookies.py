@@ -147,6 +147,52 @@ def test_build_cookie_json_export_and_playwright_payload_preserve_cookie_shape()
     ]
 
 
+def test_cookies_for_playwright_uses_url_or_domain_path_shape():
+    doc = CookieJsonDocument.model_validate(
+        {
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "url_cookie",
+                    "value": "url-cookie-value",
+                    "url": "https://app.example.test/account?token=hidden",
+                    "path": "/ignored-for-playwright-url-scope",
+                    "secure": True,
+                    "sameSite": "Lax",
+                },
+                {
+                    "name": "domain_cookie",
+                    "value": "domain-cookie-value",
+                    "domain": ".example.test",
+                    "path": "/account",
+                    "httpOnly": True,
+                },
+            ],
+        }
+    )
+
+    playwright_cookies = cookies_for_playwright(doc)
+
+    assert playwright_cookies == [
+        {
+            "name": "url_cookie",
+            "value": "url-cookie-value",
+            "url": "https://app.example.test/account?token=hidden",
+            "secure": True,
+            "httpOnly": False,
+            "sameSite": "Lax",
+        },
+        {
+            "name": "domain_cookie",
+            "value": "domain-cookie-value",
+            "domain": ".example.test",
+            "path": "/account",
+            "secure": False,
+            "httpOnly": True,
+        },
+    ]
+
+
 def test_parse_netscape_cookies_to_cookie_json_without_leaking_values_in_summary():
     text = "\n".join(
         [

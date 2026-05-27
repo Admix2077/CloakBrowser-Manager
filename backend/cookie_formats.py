@@ -31,7 +31,11 @@ class CookieJsonCookie(BaseModel):
         return self
 
     def to_playwright_cookie(self) -> dict:
-        return self.model_dump(mode="json", by_alias=True, exclude_none=True)
+        cookie = self.model_dump(mode="json", by_alias=True, exclude_none=True)
+        if self.url:
+            cookie.pop("domain", None)
+            cookie.pop("path", None)
+        return cookie
 
 
 class CookieJsonDocument(BaseModel):

@@ -619,6 +619,44 @@ git diff --check
 # passed
 ```
 
+## 2026-05-27 Cookie JSON Playwright payload 修正与验收小闭环
+
+当前状态：
+
+- 修正 `backend/cookie_formats.py:CookieJsonCookie.to_playwright_cookie()`：
+  - `url` scoped cookie 转换为 Playwright `context.add_cookies()` payload 时只输出 `url`，不再同时输出默认 `path`。
+  - `domain` scoped cookie 继续输出 `domain + path`。
+- 根因：
+  - Playwright 要求 cookie shape 在 `url` 和 `domain + path` 之间二选一。
+  - 之前 `CookieJsonCookie.path` 默认是 `/`，导致 `url` scoped cookie 也带 `path`，真实 browser context 会报 `Cookie should have either url or path`。
+- 已补测试：
+  - `test_cookies_for_playwright_uses_url_or_domain_path_shape` 覆盖 URL scoped cookie 不带 `path`，domain scoped cookie 保留 `path`。
+  - `test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values` 已同步 API 层期望，确认 import 调用 `add_cookies()` 时使用 Playwright 可接受 payload。
+- Cookie JSON 导出不破坏字段：
+  - `test_build_cookie_json_export_and_playwright_payload_preserve_cookie_shape` 继续覆盖 Cookie JSON export 文档保留 cookie 明文字段、`profile_id`、`exported_at` 和 domain/path/httpOnly/sameSite 等字段。
+  - `test_export_cookie_json_returns_document_and_writes_redacted_audit` 继续覆盖 API export 响应保留 Cookie JSON document，同时 audit 只写低敏计数。
+- 页面可读验收：
+  - 使用本机一次性 HTTP server 和系统 Chrome 的 Playwright `context.add_cookies()` 做浏览器层 smoke，确认修复后的 URL scoped payload 可被 browser 接受，页面 `document.cookie` 可读到非 httpOnly cookie，`context.cookies()` 可导出 visible/httpOnly 两条 cookie。
+  - 标准 Playwright Firefox 未安装，`p.firefox.launch()` 失败并提示需要 `playwright install`。
+  - `invisible_playwright` 一次性 Firefox 验收在本环境启动后挂起，已清理本次临时 `/tmp/cloak-cookie-qa-*` 进程；因此本轮不标 Firefox/invisible_playwright 浏览器 PASS。
+- 本小闭环不新增 API，不修改前端，不读取真实 profile dir，不接 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py::test_cookies_for_playwright_uses_url_or_domain_path_shape -q
+# failed before implementation: 1 failed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_values backend/tests/test_cookies.py::test_cookies_for_playwright_uses_url_or_domain_path_shape -q
+# 2 passed
+
+. .venv/bin/activate && timeout 60s python - <<'PY'
+# 一次性 HTTP server + system Chrome + Playwright cookie smoke
+PY
+# document_cookie= cloak_visible=visible-cookie-value
+# exported_names= ['cloak_http_only', 'cloak_visible']
+```
+
 ## 2026-05-27 profile dir archive 只读评估小闭环
 
 当前状态：
@@ -736,8 +774,8 @@ cd frontend && npm run build
 
 ## 验收标准
 
-- [ ] JSON cookie 导入后页面可读到 cookie。
-- [ ] JSON cookie 导出不破坏字段。
+- [x] JSON cookie 导入后页面可读到 cookie。
+- [x] JSON cookie 导出不破坏字段。
 - [x] Netscape 格式基础兼容。
 - [x] Netscape import/export API 只作用于 running profile。
 - [x] 导出动作写 audit 且不记录 cookie 明文。

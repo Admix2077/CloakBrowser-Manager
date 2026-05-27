@@ -784,7 +784,6 @@ def test_import_cookie_json_adds_cookies_to_running_profile_without_leaking_valu
             "name": "analytics_id",
             "value": "another-secret-cookie-value",
             "url": cookie_url,
-            "path": "/",
             "expires": 1_893_456_000,
             "secure": False,
             "httpOnly": False,
