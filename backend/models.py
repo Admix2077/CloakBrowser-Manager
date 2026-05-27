@@ -527,8 +527,13 @@ class RuntimeSessionRenew(BaseModel):
 
 class StatusResponse(BaseModel):
     running_count: int
+    launching_count: int = 0
+    failed_count: int = 0
     binary_version: str
     profiles_total: int
+    proxy_count: int = 0
+    task_queue_count: int = 0
+    automation_task_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class ProfileStatusResponse(BaseModel):

@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 `/api/status` 低敏运行计数小闭环：
+  - `StatusResponse` 增加 `launching_count`、`failed_count`、`proxy_count`、`task_queue_count` 和 `automation_task_counts`。
+  - `/api/status` 仍作为 Docker healthcheck 免登录接口，只返回低敏计数，不返回明细。
+  - 新增 `count_profiles()`、`count_proxies()` 和 `count_automation_tasks_by_status()`，status 计算只使用 `COUNT(*)` / `GROUP BY status`，不读取完整 profile、proxy 或 automation task rows。
+  - `running_count` 来自 browser manager running map；`launching_count` 来自 browser manager 内部启动中集合计数；`failed_count`、`task_queue_count` 和 `automation_task_counts` 来自 automation task status 聚合。
+  - 前端 `SystemStatus` 类型已同步新增字段。
+  - 测试覆盖 status 响应包含新增计数，且响应和实现都不泄露 proxy password/host、automation URL token、selector、fill value、evaluate expression 或 steps 明细。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 profile 创建类导入后端强制确认小闭环：
   - `POST /api/profiles/import`、`POST /api/profiles/config/import` 和 `POST /api/profiles/bundle/import` 都会创建新 profile，必须显式传入 JSON boolean `confirm_import: true`。
   - 缺失请求体、空 JSON、非 object、缺失确认、`false` 或字符串 `"true"` 均返回固定 422；CSV import 返回 `Profile import requires explicit confirmation`，config import 返回 `Profile config import requires explicit confirmation`，bundle import 返回 `Profile bundle import requires explicit confirmation`。

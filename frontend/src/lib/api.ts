@@ -407,8 +407,13 @@ export interface ProfileHealthResponse {
 
 export interface SystemStatus {
   running_count: number;
+  launching_count: number;
+  failed_count: number;
   binary_version: string;
   profiles_total: number;
+  proxy_count: number;
+  task_queue_count: number;
+  automation_task_counts: Record<string, number>;
 }
 
 export interface AutomationTaskStep {

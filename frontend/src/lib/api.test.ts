@@ -714,6 +714,44 @@ describe("api.getClipboard", () => {
   });
 });
 
+// ── getStatus ───────────────────────────────────────────────────────────────
+
+describe("api.getStatus", () => {
+  it("returns low-sensitive system counters", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      running_count: 2,
+      launching_count: 1,
+      failed_count: 3,
+      binary_version: "invisible-playwright",
+      profiles_total: 10,
+      proxy_count: 4,
+      task_queue_count: 5,
+      automation_task_counts: {
+        queued: 5,
+        running: 1,
+        failed: 3,
+      },
+    }));
+
+    const result = await api.getStatus();
+
+    expect(result).toEqual({
+      running_count: 2,
+      launching_count: 1,
+      failed_count: 3,
+      binary_version: "invisible-playwright",
+      profiles_total: 10,
+      proxy_count: 4,
+      task_queue_count: 5,
+      automation_task_counts: {
+        queued: 5,
+        running: 1,
+        failed: 3,
+      },
+    });
+  });
+});
+
 // ── Error handling ──────────────────────────────────────────────────────────
 
 describe("error handling", () => {

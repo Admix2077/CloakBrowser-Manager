@@ -540,6 +540,11 @@ class BrowserManager:
             "automation_url": None,
         }
 
+    @property
+    def launching_count(self) -> int:
+        """Number of profiles currently in the launch critical section."""
+        return len(self._launching)
+
     async def cleanup_all(self):
         """Stop all running profiles. Called on shutdown."""
         async with self._lock:

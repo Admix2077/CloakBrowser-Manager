@@ -756,13 +756,71 @@ def test_system_status(app_client: TestClient):
     main.browser_mgr.running.clear()
 
     # Create a profile so profiles_total > 0
-    app_client.post("/api/profiles", json={"name": "Status Test"})
+    profile = app_client.post("/api/profiles", json={"name": "Status Test"}).json()
+    main.db.create_proxy(
+        "Status Proxy",
+        "http://user:secret-password@status.proxy.example:8080",
+    )
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        steps=[{"type": "open_url", "url": "https://example.com/?token=secret-token"}],
+    )
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        status="running",
+        steps=[{"type": "fill", "selector": "#password", "value": "secret-value"}],
+    )
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        status="failed",
+        steps=[{"type": "evaluate", "expression": "window.localStorage.secret"}],
+    )
+
     resp = app_client.get("/api/status")
     assert resp.status_code == 200
     data = resp.json()
     assert data["running_count"] == 0
+    assert data["launching_count"] == 0
+    assert data["failed_count"] >= 1
     assert data["binary_version"] == "invisible-playwright"
     assert data["profiles_total"] >= 1
+    assert data["proxy_count"] >= 1
+    assert data["task_queue_count"] >= 1
+    assert data["automation_task_counts"]["queued"] >= 1
+    assert data["automation_task_counts"]["running"] >= 1
+    assert data["automation_task_counts"]["failed"] >= 1
+
+    serialized = json.dumps(data)
+    assert "secret-password" not in serialized
+    assert "status.proxy.example" not in serialized
+    assert "secret-token" not in serialized
+    assert "secret-value" not in serialized
+    assert "window.localStorage.secret" not in serialized
+    assert "steps" not in serialized
+
+
+def test_system_status_uses_count_queries_without_loading_sensitive_rows(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    app_client.post("/api/profiles", json={"name": "Status Count Only"})
+
+    def fail_list_proxies():
+        raise AssertionError("status must not load full proxy rows")
+
+    def fail_list_automation_tasks(*args, **kwargs):
+        raise AssertionError("status must not load full automation task rows")
+
+    monkeypatch.setattr(main.db, "list_profiles", lambda: (_ for _ in ()).throw(
+        AssertionError("status must not load full profile rows")
+    ))
+    monkeypatch.setattr(main.db, "list_proxies", fail_list_proxies)
+    monkeypatch.setattr(main.db, "list_automation_tasks", fail_list_automation_tasks)
+
+    resp = app_client.get("/api/status")
+
+    assert resp.status_code == 200
+    assert resp.json()["profiles_total"] >= 1
 
 
 # ── Launch Args ─────────────────────────────────────────────────────────────

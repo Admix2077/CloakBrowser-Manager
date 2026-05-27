@@ -2495,11 +2495,17 @@ async def check_profile_health(profile_id: str):
 
 @app.get("/api/status", response_model=StatusResponse)
 async def get_system_status():
-    profiles = db.list_profiles()
+    task_counts = db.count_automation_tasks_by_status()
+
     return StatusResponse(
         running_count=len(browser_mgr.running),
+        launching_count=browser_mgr.launching_count,
+        failed_count=task_counts.get("failed", 0),
         binary_version="invisible-playwright",
-        profiles_total=len(profiles),
+        profiles_total=db.count_profiles(),
+        proxy_count=db.count_proxies(),
+        task_queue_count=task_counts.get("queued", 0),
+        automation_task_counts=task_counts,
     )
 
 

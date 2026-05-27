@@ -317,6 +317,12 @@ def list_profiles() -> list[dict[str, Any]]:
         return profiles
 
 
+def count_profiles() -> int:
+    with get_db() as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM profiles").fetchone()
+    return int(row["count"] if row else 0)
+
+
 def update_profile(profile_id: str, **fields: Any) -> dict[str, Any] | None:
     existing = get_profile(profile_id)
     if not existing:
@@ -673,6 +679,14 @@ def list_automation_tasks(
                 pagination_args,
             ).fetchall()
     return [_automation_task_from_row(row) for row in rows]
+
+
+def count_automation_tasks_by_status() -> dict[str, int]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS count FROM automation_tasks GROUP BY status",
+        ).fetchall()
+    return {str(row["status"] or "unknown"): int(row["count"]) for row in rows}
 
 
 def update_automation_task(
@@ -1039,6 +1053,12 @@ def list_proxies() -> list[dict[str, Any]]:
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM proxies ORDER BY created_at DESC").fetchall()
     return [_proxy_from_row(row) for row in rows]
+
+
+def count_proxies() -> int:
+    with get_db() as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM proxies").fetchone()
+    return int(row["count"] if row else 0)
 
 
 def get_proxy(proxy_id: str) -> dict[str, Any] | None:
