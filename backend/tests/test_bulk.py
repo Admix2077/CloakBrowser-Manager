@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+import json
+
 from starlette.testclient import TestClient
 
 from backend import database as db
+
+
+def _bulk_audit_events() -> list[dict]:
+    return [
+        event
+        for event in db.list_audit_events()
+        if event["event_type"].startswith("profile.") and event["event_type"].endswith(("imported", "exported"))
+    ]
 
 
 def test_profile_csv_import_preview_applies_template_and_explicit_overrides(app_client: TestClient):
@@ -141,6 +151,7 @@ def test_profile_csv_import_preview_has_no_database_side_effects(app_client: Tes
     )
 
     assert db.list_profiles() == []
+    assert _bulk_audit_events() == []
 
 
 def test_profile_csv_import_creates_valid_rows_and_keeps_invalid_row_errors(app_client: TestClient):
@@ -208,6 +219,38 @@ def test_profile_csv_import_creates_valid_rows_and_keeps_invalid_row_errors(app_
 
     profiles = app_client.get("/api/profiles").json()
     assert [profile["name"] for profile in profiles] == ["Imported Good"]
+
+
+def test_profile_csv_import_writes_redacted_bulk_audit_event(app_client: TestClient):
+    resp = app_client.post(
+        "/api/profiles/import",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,proxy,tags,notes,platform,locale,timezone",
+                    "Imported Audit,http://user:hiddenpass@audit-import.example:8080,asia,secret-note,linux,ja-JP,Asia/Tokyo",
+                    ",http://user:hiddenpass@bad-import.example:8080,bad,Broken row,ios,en-US,America/Chicago",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    events = _bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["profile.imported"]
+    assert events[0]["actor_type"] == "local_admin"
+    assert events[0]["metadata"] == {
+        "source_format": "csv",
+        "total": 2,
+        "created_count": 1,
+        "failed_count": 1,
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "hiddenpass" not in serialized_event
+    assert "audit-import.example" not in serialized_event
+    assert "bad-import.example" not in serialized_event
+    assert "secret-note" not in serialized_event
+    assert "Asia/Tokyo" not in serialized_event
 
 
 def test_profile_csv_import_rejects_headerless_csv_without_creating_profiles(app_client: TestClient):
@@ -293,6 +336,38 @@ def test_bulk_export_profile_configs_requires_at_least_one_profile_id(app_client
     assert resp.status_code == 422
 
 
+def test_bulk_export_profile_configs_writes_redacted_audit_event(app_client: TestClient):
+    profile = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Export Audit",
+            "proxy": "http://user:hiddenpass@export-audit.example:8080",
+            "notes": "export-secret-note",
+        },
+    ).json()
+
+    resp = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [profile["id"], "missing"], "include_sensitive": True},
+    )
+
+    assert resp.status_code == 200
+    events = _bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["profile.config_exported"]
+    assert events[0]["metadata"] == {
+        "source_format": "profile_config_json",
+        "schema_version": 1,
+        "include_sensitive": True,
+        "total": 2,
+        "exported_count": 1,
+        "failed_count": 1,
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "hiddenpass" not in serialized_event
+    assert "export-audit.example" not in serialized_event
+    assert "export-secret-note" not in serialized_event
+
+
 def test_profile_config_export_can_round_trip_through_config_import(app_client: TestClient):
     created = app_client.post(
         "/api/profiles",
@@ -330,3 +405,41 @@ def test_profile_config_export_can_round_trip_through_config_import(app_client: 
     assert imported["screen_height"] == 900
     assert imported["tags"] == [{"tag": "roundtrip", "color": "#0f766e"}]
     assert imported["status"] == "stopped"
+
+
+def test_profile_config_import_writes_redacted_bulk_audit_event(app_client: TestClient):
+    resp = app_client.post(
+        "/api/profiles/config/import",
+        json={
+            "schema_version": 1,
+            "configs": [
+                {
+                    "name": "Config Import Audit",
+                    "proxy": "http://user:hiddenpass@config-import.example:8080",
+                    "notes": "config-secret-note",
+                },
+                {
+                    "name": "",
+                    "proxy": "http://user:hiddenpass@bad-config-import.example:8080",
+                    "notes": "bad-config-secret-note",
+                },
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    events = _bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["profile.config_imported"]
+    assert events[0]["metadata"] == {
+        "source_format": "profile_config_json",
+        "schema_version": 1,
+        "total": 2,
+        "created_count": 1,
+        "failed_count": 1,
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "hiddenpass" not in serialized_event
+    assert "config-import.example" not in serialized_event
+    assert "bad-config-import.example" not in serialized_event
+    assert "config-secret-note" not in serialized_event
+    assert "bad-config-secret-note" not in serialized_event

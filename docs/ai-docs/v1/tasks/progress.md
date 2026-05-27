@@ -35,6 +35,18 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 bulk action audit 小闭环：
+  - `POST /api/profiles/import` 至少成功创建 1 个 profile 后写 `profile.imported` 汇总 audit。
+  - `POST /api/profiles/export` 至少成功导出 1 个 profile config 后写 `profile.config_exported` 汇总 audit。
+  - `POST /api/profiles/config/import` 至少成功创建 1 个 profile 后写 `profile.config_imported` 汇总 audit。
+  - `POST /api/proxies/bulk/check` 至少检查到 1 个真实 proxy 后写 `proxy.bulk_checked` 汇总 audit。
+  - `POST /api/proxies/{proxy_id}/assign` 至少成功分配 1 个 profile 后写 `proxy.assigned` 汇总 audit。
+  - `POST /api/proxies/assign/random` 至少成功分配 1 个 profile 后写 `proxy.random_assigned` 汇总 audit。
+  - preview、列表读取、逐项 missing 失败、没有真实成功/检查动作的请求不写 bulk audit，避免扫描噪声。
+  - metadata 只记录 source format、schema version、include_sensitive boolean、total/requested/counts、proxy/profile/candidate/tag 计数、provider/country_code 和 proxy/preset id 等低敏汇总字段。
+  - metadata 不记录 CSV 原文、导出 config 内容、proxy URL/host/username/password、notes、last_check_error、IP、timezone/locale 原文、cookie/local storage、token、headers、路径或 Project Mileage 钱包/订单/权限/审计事实。
+  - 新增 profile/proxy bulk audit 测试覆盖 CSV import、config export/import、import preview 不写、proxy bulk check、proxy assign、random assign，并断言 proxy password/host、notes、IP、CSV/config 原文等敏感内容不泄露。
+  - 本小闭环只修改 CloakBrowser 本仓 bulk action 审计，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 automation task audit 小闭环：
   - `POST /api/tasks` 成功创建 queued task 后写 `automation.task.created`。
   - `POST /api/tasks/{id}/cancel` 对 queued task 写 `automation.task.cancelled`，对 running task 写 `automation.task.cancel_requested`。

@@ -62,7 +62,16 @@
   - actor 固定为 `local_admin`；顶层 `profile_id` 指向目标 profile。
   - metadata 只含 `status/warning_codes/warning_count/lookup_attempted/lookup_result/geoip_source/geoip_country_code/manual_*_override/runtime_status` 等低敏字段。
   - metadata 不记录 proxy URL、proxy host、proxy username/password、IP、timezone/locale 原文、warning message/action、异常 message、请求体、headers、token、cookie、`user_data_dir`、viewer URL、VNC 地址、automation URL 或 Project Mileage 业务字段。
-- [ ] bulk action 写 audit。
+- [x] bulk action 写 audit：
+  - `POST /api/profiles/import` 至少成功创建 1 个 profile 后写 `profile.imported` 汇总 audit。
+  - `POST /api/profiles/export` 至少成功导出 1 个 profile config 后写 `profile.config_exported` 汇总 audit。
+  - `POST /api/profiles/config/import` 至少成功创建 1 个 profile 后写 `profile.config_imported` 汇总 audit。
+  - `POST /api/proxies/bulk/check` 至少检查到 1 个真实 proxy 后写 `proxy.bulk_checked` 汇总 audit。
+  - `POST /api/proxies/{proxy_id}/assign` 至少成功分配 1 个 profile 后写 `proxy.assigned` 汇总 audit。
+  - `POST /api/proxies/assign/random` 至少成功分配 1 个 profile 后写 `proxy.random_assigned` 汇总 audit。
+  - `POST /api/profiles/import/preview`、列表读取、逐项 missing 失败、没有真实成功/检查动作的请求不写 bulk audit。
+  - metadata 只含 source format、schema version、include_sensitive boolean、total/requested/counts、proxy/profile/candidate/tag 计数、provider/country_code 和 proxy/preset id 等低敏汇总字段。
+  - metadata 不记录 CSV 原文、导出 config 内容、proxy URL/host/username/password、notes、last_check_error、IP、timezone/locale 原文、cookie/local storage、token、headers、路径或 Project Mileage 业务字段。
 - [x] automation task 写 audit：
   - `POST /api/tasks` 成功创建 queued task 后写 `automation.task.created`。
   - `POST /api/tasks/{id}/cancel` 对 queued task 成功终止写 `automation.task.cancelled`；对 running task 成功接受协作取消写 `automation.task.cancel_requested`。

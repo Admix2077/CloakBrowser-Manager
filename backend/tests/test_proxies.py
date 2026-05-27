@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,14 @@ from starlette.testclient import TestClient
 
 from backend import database as db, main
 from backend.geoip import GeoIPResult
+
+
+def _proxy_bulk_audit_events() -> list[dict]:
+    return [
+        event
+        for event in db.list_audit_events()
+        if event["event_type"] in {"proxy.bulk_checked", "proxy.assigned", "proxy.random_assigned"}
+    ]
 
 
 def test_init_db_creates_proxies_table(tmp_db: Path):
@@ -377,6 +386,51 @@ def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
     assert "hiddenpass" not in stored_broken["last_check_error"]
 
 
+def test_proxy_bulk_check_writes_redacted_audit_event(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_resolve(proxy_url: str | None):
+        if proxy_url and "broken" in proxy_url:
+            raise RuntimeError(f"cannot connect via {proxy_url}")
+        return GeoIPResult(
+            timezone="Europe/Berlin",
+            locale="de-DE",
+            ip="198.51.100.25",
+            country_code="DE",
+            source="qa",
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    good = app_client.post(
+        "/api/proxies",
+        json={"name": "Good audit bulk", "url": "http://user:hiddenpass@good-audit.example:8080"},
+    ).json()
+    broken = app_client.post(
+        "/api/proxies",
+        json={"name": "Broken audit bulk", "url": "http://user:hiddenpass@broken-audit.example:8080"},
+    ).json()
+
+    resp = app_client.post("/api/proxies/bulk/check", json={"proxy_ids": [good["id"], broken["id"], "missing"]})
+
+    assert resp.status_code == 200
+    events = _proxy_bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["proxy.bulk_checked"]
+    assert events[0]["actor_type"] == "local_admin"
+    assert events[0]["metadata"] == {
+        "proxy_count": 3,
+        "checked_count": 2,
+        "good_count": 1,
+        "error_count": 1,
+        "missing_count": 1,
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "hiddenpass" not in serialized_event
+    assert "good-audit.example" not in serialized_event
+    assert "broken-audit.example" not in serialized_event
+    assert "198.51.100.25" not in serialized_event
+
+
 def test_proxy_bulk_check_requires_at_least_one_proxy_id(app_client: TestClient):
     resp = app_client.post("/api/proxies/bulk/check", json={"proxy_ids": []})
 
@@ -422,6 +476,33 @@ def test_proxy_assigns_raw_url_to_profiles_without_leaking_credentials(app_clien
     assert stored_second is not None
     assert stored_first["proxy"] == "http://user:hiddenpass@assign.example:8080"
     assert stored_second["proxy"] == "http://user:hiddenpass@assign.example:8080"
+
+
+def test_proxy_assign_writes_redacted_audit_event(app_client: TestClient):
+    proxy = app_client.post(
+        "/api/proxies",
+        json={"name": "Assignable audit", "url": "http://user:hiddenpass@assign-audit.example:8080"},
+    ).json()
+    first = app_client.post("/api/profiles", json={"name": "Assign Audit A"}).json()
+    second = app_client.post("/api/profiles", json={"name": "Assign Audit B"}).json()
+
+    resp = app_client.post(
+        f"/api/proxies/{proxy['id']}/assign",
+        json={"profile_ids": [first["id"], second["id"], "missing"]},
+    )
+
+    assert resp.status_code == 200
+    events = _proxy_bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["proxy.assigned"]
+    assert events[0]["metadata"] == {
+        "proxy_id": proxy["id"],
+        "profile_count": 3,
+        "assigned_count": 2,
+        "missing_profile_count": 1,
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "hiddenpass" not in serialized_event
+    assert "assign-audit.example" not in serialized_event
 
 
 def test_proxy_assign_not_found_and_empty_profiles(app_client: TestClient):
@@ -523,6 +604,53 @@ def test_random_proxy_assignment_filters_by_country_tag_and_preset_without_leaki
     assert stored_second is not None
     assert stored_first["proxy"] == "http://user:hiddenpass@jp-mobile.example:8080"
     assert stored_second["proxy"] == "http://user:hiddenpass@jp-mobile.example:8080"
+
+
+def test_random_proxy_assignment_writes_redacted_audit_event(app_client: TestClient):
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Audit preset",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    ).json()
+    app_client.post(
+        "/api/proxies",
+        json={
+            "name": "JP audit mobile",
+            "url": "http://user:hiddenpass@jp-audit-mobile.example:8080",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    ).json()
+    first = app_client.post("/api/profiles", json={"name": "Random Audit A"}).json()
+    second = app_client.post("/api/profiles", json={"name": "Random Audit B"}).json()
+
+    resp = app_client.post(
+        "/api/proxies/assign/random",
+        json={"profile_ids": [first["id"], second["id"], "missing"], "provider_preset_id": preset["id"]},
+    )
+
+    assert resp.status_code == 200
+    events = _proxy_bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["proxy.random_assigned"]
+    assert events[0]["metadata"] == {
+        "provider_preset_id": preset["id"],
+        "provider": "ProxyJP",
+        "country_code": "JP",
+        "tag_count": 1,
+        "candidate_count": 1,
+        "profile_count": 3,
+        "assigned_count": 2,
+        "missing_profile_count": 1,
+    }
+    serialized_event = json.dumps(events[0], sort_keys=True)
+    assert "hiddenpass" not in serialized_event
+    assert "jp-audit-mobile.example" not in serialized_event
+    assert "mobile" not in serialized_event
 
 
 def test_random_proxy_assignment_rejects_missing_selection(app_client: TestClient):

@@ -687,6 +687,20 @@ def _audit_profile_event(
     )
 
 
+def _audit_bulk_event(
+    event_type: str,
+    metadata: dict,
+    *,
+    profile_id: str | None = None,
+) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="local_admin",
+        profile_id=profile_id,
+        metadata=metadata,
+    )
+
+
 def _health_check_audit_metadata(
     health: ProfileHealthResponse,
     *,
@@ -1159,7 +1173,7 @@ async def assign_proxy_to_profiles(proxy_id: str, req: ProxyAssignRequest):
         results.append(ProxyAssignResult(profile_id=profile_id, ok=True, error=None))
 
     succeeded = sum(1 for result in results if result.ok)
-    return ProxyAssignResponse(
+    response = ProxyAssignResponse(
         proxy_id=proxy_id,
         proxy=_proxy_response(proxy),
         total=len(req.profile_ids),
@@ -1167,6 +1181,17 @@ async def assign_proxy_to_profiles(proxy_id: str, req: ProxyAssignRequest):
         failed=len(req.profile_ids) - succeeded,
         results=results,
     )
+    if succeeded:
+        _audit_bulk_event(
+            "proxy.assigned",
+            {
+                "proxy_id": proxy_id,
+                "profile_count": len(req.profile_ids),
+                "assigned_count": succeeded,
+                "missing_profile_count": len(req.profile_ids) - succeeded,
+            },
+        )
+    return response
 
 
 @app.post("/api/proxies/assign/random", response_model=ProxyRandomAssignResponse)
@@ -1227,7 +1252,7 @@ async def assign_random_proxy_to_profiles(req: ProxyRandomAssignRequest):
         )
 
     succeeded = sum(1 for result in results if result.ok)
-    return ProxyRandomAssignResponse(
+    response = ProxyRandomAssignResponse(
         strategy="random",
         provider_preset_id=req.provider_preset_id,
         provider=provider,
@@ -1239,6 +1264,21 @@ async def assign_random_proxy_to_profiles(req: ProxyRandomAssignRequest):
         failed=len(req.profile_ids) - succeeded,
         results=results,
     )
+    if succeeded:
+        _audit_bulk_event(
+            "proxy.random_assigned",
+            {
+                "provider_preset_id": req.provider_preset_id,
+                "provider": provider,
+                "country_code": country_code,
+                "tag_count": len(tags),
+                "candidate_count": len(candidates),
+                "profile_count": len(req.profile_ids),
+                "assigned_count": succeeded,
+                "missing_profile_count": len(req.profile_ids) - succeeded,
+            },
+        )
+    return response
 
 
 @app.post("/api/proxies/bulk/check", response_model=ProxyBulkCheckResponse)
@@ -1270,12 +1310,27 @@ async def bulk_check_proxies(req: ProxyBulkCheckRequest):
         )
 
     succeeded = sum(1 for result in results if result.ok)
-    return ProxyBulkCheckResponse(
+    response = ProxyBulkCheckResponse(
         total=len(req.proxy_ids),
         succeeded=succeeded,
         failed=len(req.proxy_ids) - succeeded,
         results=results,
     )
+    checked_count = sum(1 for result in results if result.proxy is not None)
+    missing_count = len(req.proxy_ids) - checked_count
+    error_count = checked_count - succeeded
+    if checked_count:
+        _audit_bulk_event(
+            "proxy.bulk_checked",
+            {
+                "proxy_count": len(req.proxy_ids),
+                "checked_count": checked_count,
+                "good_count": succeeded,
+                "error_count": error_count,
+                "missing_count": missing_count,
+            },
+        )
+    return response
 
 
 @app.get("/api/profile-templates", response_model=list[ProfileTemplateResponse])
@@ -1560,12 +1615,23 @@ async def import_profiles(req: ProfileImportPreviewRequest):
         )
 
     succeeded = sum(1 for result in results if result.ok)
-    return ProfileImportResponse(
+    response = ProfileImportResponse(
         total=len(results),
         succeeded=succeeded,
         failed=len(results) - succeeded,
         results=results,
     )
+    if succeeded:
+        _audit_bulk_event(
+            "profile.imported",
+            {
+                "source_format": "csv",
+                "total": len(results),
+                "created_count": succeeded,
+                "failed_count": len(results) - succeeded,
+            },
+        )
+    return response
 
 
 @app.post("/api/profiles/export", response_model=ProfileExportResponse)
@@ -1597,12 +1663,25 @@ async def export_profiles(req: ProfileExportRequest):
         )
 
     exported = sum(1 for result in results if result.ok)
-    return ProfileExportResponse(
+    response = ProfileExportResponse(
         total=len(results),
         exported=exported,
         failed=len(results) - exported,
         results=results,
     )
+    if exported:
+        _audit_bulk_event(
+            "profile.config_exported",
+            {
+                "source_format": "profile_config_json",
+                "schema_version": 1,
+                "include_sensitive": req.include_sensitive,
+                "total": len(results),
+                "exported_count": exported,
+                "failed_count": len(results) - exported,
+            },
+        )
+    return response
 
 
 @app.post("/api/profiles/config/import", response_model=ProfileConfigImportResponse)
@@ -1662,12 +1741,24 @@ async def import_profile_configs(req: ProfileConfigImportRequest):
         )
 
     imported = sum(1 for result in results if result.ok)
-    return ProfileConfigImportResponse(
+    response = ProfileConfigImportResponse(
         total=len(results),
         imported=imported,
         failed=len(results) - imported,
         results=results,
     )
+    if imported:
+        _audit_bulk_event(
+            "profile.config_imported",
+            {
+                "source_format": "profile_config_json",
+                "schema_version": req.schema_version,
+                "total": len(results),
+                "created_count": imported,
+                "failed_count": len(results) - imported,
+            },
+        )
+    return response
 
 
 @app.post("/api/profiles/{profile_id}/cookies/import", response_model=CookieImportResponse)
