@@ -27,6 +27,12 @@ DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
 MAX_RUNNING_PROFILES_ENV = "MAX_RUNNING_PROFILES"
 WEBRTC_PUBLIC_IP_ENV = "STEALTHFOX_WEBRTC_PUBLIC_IP"
+WEBRTC_LOCAL_IP_SUPPRESSION_PREFS = {
+    "media.peerconnection.ice.no_host": True,
+    "media.peerconnection.ice.default_address_only": True,
+    "media.peerconnection.ice.obfuscate_host_addresses": False,
+    "media.peerconnection.ice.disableIPv6": True,
+}
 
 
 class BrowserResourceLimitError(RuntimeError):
@@ -247,6 +253,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         "humanize": bool(profile.get("humanize", False)),
         "locale": profile.get("locale") or "en-US",
         "timezone": profile.get("timezone") or "",
+        "extra_prefs": dict(WEBRTC_LOCAL_IP_SUPPRESSION_PREFS),
         "profile_dir": str(profile["user_data_dir"]),
     }
 

@@ -32,6 +32,15 @@
 - [ ] language 与 Accept-Language 一致。
 - [ ] BrowserScan 无 `Language mismatch`。
 - [ ] BrowserScan 无 `Different time zones`。
+- [ ] BrowserScan browser-checker 内核版本与 UA 一致。
+- [x] BrowserScan WebRTC 不泄漏 local IP。
+- [ ] BrowserLeaks WebRTC / Canvas / WebGL / Fonts 无明显平台不一致。
+- [ ] CreepJS 无 webdriver/headless/lie detection 严重红灯。
+- [ ] Pixelscan/IPhey 无 IP、timezone、language、WebRTC、hardware/software 高风险不一致。
+- [ ] 同一 seed 停止/重启后核心指纹稳定。
+- [ ] 不同 seed 的 profile 核心指纹有合理差异。
+
+详细矩阵见 `../fingerprint-consistency-qa-plan.md`。
 
 ## Project Mileage 联动回归
 

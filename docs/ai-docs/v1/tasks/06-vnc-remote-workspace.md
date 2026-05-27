@@ -486,3 +486,49 @@ cd frontend && npm run build
 git diff --check
 # passed
 ```
+
+## 2026-05-28 WebRTC local IP 泄漏收口小闭环
+
+背景：
+
+- 真实 Docker profile 启动后，在 BrowserScan `https://www.browserscan.net/webrtc` 上复测发现：public IP 已经通过 `STEALTHFOX_WEBRTC_PUBLIC_IP` 对齐到 GeoIP 出口 `23.144.4.92`，但页面仍显示 Docker local IP `172.17.0.x`。
+- 这属于 P0 指纹泄漏：远程账号工作台的浏览器环境不应该向检测站暴露容器内网地址。
+- 本轮只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/browser_manager.py`
+  - 新增 `WEBRTC_LOCAL_IP_SUPPRESSION_PREFS`。
+  - `_build_invisible_kwargs()` 通过 `extra_prefs` 固定传入 WebRTC host candidate suppression prefs：
+    - `media.peerconnection.ice.no_host=true`
+    - `media.peerconnection.ice.default_address_only=true`
+    - `media.peerconnection.ice.obfuscate_host_addresses=false`
+    - `media.peerconnection.ice.disableIPv6=true`
+- `backend/tests/test_browser_manager.py`
+  - 新增测试锁住 `_build_invisible_kwargs()` 必须传入以上 `extra_prefs`。
+- `docs/ai-docs/v1/fingerprint-consistency-qa-plan.md`
+  - 新增指纹一致性 QA 计划，定义 BrowserScan、BrowserLeaks、CreepJS、Pixelscan、IPhey、EFF、AmIUnique、Fingerprint demo 等测试矩阵和 PASS/P0/P1/P2 口径。
+
+实测结果：
+
+- 构建镜像：`docker build --network=host --platform linux/amd64 -t invisible-browser-manager:fingerprint-webrtc-fix .`
+- 临时容器：`127.0.0.1:18086`，临时数据目录 `/tmp/cloakbrowser-fingerprint-webrtc-fix-data`。
+- 创建并启动 profile 成功，启动返回 `display=:100`、`vnc_ws_port=6100`、`automation_url=/api/profiles/{id}/automation`。
+- BrowserScan WebRTC 修复后显示：
+  - `WebRTC Leak Test: No Public IP Leak 23.144.4.92`
+  - 多个 STUN 项 `Local IP: -`
+  - 多个 STUN 项 `Public IP: 23.144.4.92 (USA)`
+- `prefs.js` 已确认包含：
+  - `media.peerconnection.ice.default_address_only=true`
+  - `media.peerconnection.ice.no_host=true`
+  - `media.peerconnection.ice.obfuscate_host_addresses=false`
+
+剩余 P0 blocker：
+
+- BrowserScan browser-checker 仍显示 browser kernel `Firefox 149`，但 UA 声称 `Firefox 150`。这属于内核/UA 一致性问题，下一步需要单独排查底层 patched Firefox 特征、BuildID、UA override 和 BrowserScan 检测依据，不能盲目宣称已完全通过。
+
+边界：
+
+- 本轮不新增公开 fingerprint QA API，不新增 Project Mileage DTO。
+- WebRTC prefs 不记录、不回显 IP、proxy、token、cookie/local storage、viewer URL 或 Project Mileage 钱包/订单/权限/审计事实。
+- 未来 Project Mileage 如需展示远程账号环境健康，只能通过 Payload 低敏 DTO，不允许 App 直连 CloakBrowser 检测或 automation API。

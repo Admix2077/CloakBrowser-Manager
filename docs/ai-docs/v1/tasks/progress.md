@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 06/13 指纹一致性验收，完成 WebRTC local IP 泄漏收口小闭环：
+  - 真实 Docker profile + BrowserScan WebRTC 复现到修复前 `Local IP: 172.17.0.x` 泄漏。
+  - `backend/browser_manager.py` 通过 `extra_prefs` 给 `InvisiblePlaywright` 固定传入 WebRTC host candidate suppression prefs，压住 local IP candidate。
+  - `backend/tests/test_browser_manager.py` 新增 guardrail，确认 `_build_invisible_kwargs()` 必须传入 `media.peerconnection.ice.no_host=true` 等 WebRTC prefs。
+  - 修复后镜像 `invisible-browser-manager:fingerprint-webrtc-fix` 实测 BrowserScan WebRTC 显示 `Local IP: -`，public IP 全部为 GeoIP 出口 `23.144.4.92 (USA)`。
+  - 新增 `docs/ai-docs/v1/fingerprint-consistency-qa-plan.md`，定义 BrowserScan、BrowserLeaks、CreepJS、Pixelscan、IPhey、EFF、AmIUnique、Fingerprint demo 等测试矩阵和 PASS/P0/P1/P2 口径。
+  - 当前仍有 P0 blocker：BrowserScan browser-checker 显示实际 kernel `Firefox 149`，UA 声称 `Firefox 150`；下一步需要排查底层 patched Firefox 特征与 UA 常量一致性。当前没有 Project Mileage app/payload 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 Backup/Restore runbook 与安全边界小闭环：
   - 新增 `docs/ai-docs/v1/deployment-backup-restore-runbook.md`，说明单机 Docker 部署下 `/data/profiles.db` 与 `/data/profiles/` 必须作为同一快照整体备份。
   - runbook 明确当前不支持热备，备份/恢复前推荐 `docker compose down`，恢复前先备份当前 `/data`，恢复后先用 `/api/status` 做低敏健康检查，再手动启动低风险 profile 验证浏览器/VNC。

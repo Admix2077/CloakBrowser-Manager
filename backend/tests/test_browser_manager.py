@@ -219,6 +219,22 @@ def test_build_invisible_kwargs_omits_empty_optional_values(tmp_path: Path):
     assert kwargs["extra_args"] == []
 
 
+def test_build_invisible_kwargs_suppresses_webrtc_host_candidates(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "proxy": None,
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US",
+        "launch_args": None,
+    })
+
+    assert kwargs["extra_prefs"]["media.peerconnection.ice.no_host"] is True
+    assert kwargs["extra_prefs"]["media.peerconnection.ice.default_address_only"] is True
+    assert kwargs["extra_prefs"]["media.peerconnection.ice.obfuscate_host_addresses"] is False
+    assert kwargs["extra_prefs"]["media.peerconnection.ice.disableIPv6"] is True
+
+
 def test_build_invisible_kwargs_drops_user_window_size_overrides(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,
