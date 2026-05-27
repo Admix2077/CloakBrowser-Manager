@@ -8,6 +8,7 @@ interface ProfileViewerProps {
   vncUrl?: string | null;
   automationUrl: string | null;
   clipboardSync: boolean;
+  onBackToProfiles?: () => void;
   onDisconnect: () => void;
 }
 
@@ -30,6 +31,7 @@ export function ProfileViewer({
   vncUrl = null,
   automationUrl,
   clipboardSync: initialClipboardSync,
+  onBackToProfiles,
   onDisconnect,
 }: ProfileViewerProps) {
   const viewerFrameRef = useRef<HTMLDivElement>(null);
@@ -301,6 +303,15 @@ export function ProfileViewer({
             >
               Session {shortExternalSessionId}
             </span>
+          ) : null}
+          {onBackToProfiles ? (
+            <button
+              type="button"
+              onClick={onBackToProfiles}
+              className="shrink-0 rounded-[999px] border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20"
+            >
+              All profiles
+            </button>
           ) : null}
           <span className={`shrink-0 rounded-[999px] border px-2 py-1 text-[11px] font-semibold transition-colors ${
             automationUrl

@@ -327,3 +327,96 @@ git diff --check
 - Project Mileage Payload 侧确认 viewer token 刷新策略、权限、扣费/续期和业务审计。
 - Project Mileage App 侧通过 Payload DTO 接入刷新/重开会话能力。
 - 不允许 App 直接调用 CloakBrowser runtime API。
+
+## 2026-05-28 VNC 大画面与直连 GeoIP 复刻小闭环
+
+背景：
+
+- 用户反馈旧仓 `/home/jeff/local/repos/CloakBrowser` 在无 proxy 时也能自动 GeoIP 校准，并且 8080 运行界面的 VNC 画面更大、浏览器窗口更完整。
+- 本轮只参考旧仓实现，不修改 Project Mileage app/payload。
+
+旧仓参考：
+
+- `/home/jeff/local/repos/CloakBrowser/cloakbrowser/geoip.py`
+  - `resolve_network_geo_with_ip(None)` 会走当前进程/容器直连出口查询 GeoIP。
+- `/home/jeff/local/repos/CloakBrowser/cloakbrowser/browser.py`
+  - `maybe_resolve_geoip(True, None, None, None)` 会在无 proxy 时调用直连 GeoIP。
+- `/home/jeff/local/repos/CloakBrowser/bin/docker-entrypoint.sh`
+  - headed 模式使用 `Xvfb :99 -screen 0 1920x1080x24`。
+- `/home/jeff/local/repos/CloakBrowser/cloakbrowser/config.py`
+  - 默认 viewport 为 `1920x947`，对应 1080p Windows 最大化浏览器窗口。
+
+已完成：
+
+- `backend/tests/test_geoip.py`
+  - 新增测试明确：profile 未配置 proxy、timezone、locale 且 `geoip=true` 时，启动链路会调用 `resolve_network_geo(None)`，使用当前容器/主机出口自动填充 timezone/locale，并保留低敏 `_geoip_result`。
+- `backend/browser_manager.py`
+  - 保留既有无 proxy 直连 GeoIP 能力。
+  - 将 1080p 可用高度从 `height - 40` 调整为旧仓 Windows 口径 `height - 48`，即 `1920x1080 -> availHeight 1032`。
+  - Firefox 启动完成后通过 X11 `xdotool` 做 best-effort 窗口移动和尺寸整理，让 VNC 内浏览器窗口尽量贴合 Xvnc geometry；整理失败只写 debug，不阻断 launch。
+  - 用户自定义 `launch_args` 中的 `--width`、`--height`、`--window-size` 会被过滤，避免 profile 配置把 VNC 画面改小或破坏管理器统一尺寸。
+- `Dockerfile`
+  - runtime 依赖新增 `xdotool`，供容器内 X11 窗口整理使用。
+- `frontend/src/App.tsx`
+  - 进入 running profile 的 VNC viewer 时隐藏左侧 Profiles sidebar，让 VNC 画面横向占满主工作区。
+- `frontend/src/components/ProfileViewer.tsx`
+  - viewer 顶部环境条新增受控 `All profiles` 返回入口；返回时不伪造会话状态，不触发 stop/terminate。
+
+边界：
+
+- 本轮不改变 VNC token、viewer token、runtime session、权限、扣费、续期或审计契约。
+- 本轮不把任意 VNC/runtime API 暴露给 Project Mileage App。
+- 本轮不读取 cookie、profile dir、secret 或 `.env`。
+- 本轮不修改 `/home/jeff/code/project-mileage-v3-app` 或 `/home/jeff/code/project-mileage-v3-payload`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_resolve_profile_network_fingerprint_uses_direct_geoip_without_proxy backend/tests/test_browser_manager.py::test_build_invisible_pin_uses_realistic_1080p_available_height backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_user_window_size_overrides backend/tests/test_browser_manager.py::test_launch_fits_firefox_window_to_vnc_after_start backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_launch_uses_invisible_playwright_on_vnc_display -q
+# 7 passed
+
+cd frontend && npm test -- --run src/App.test.tsx -t "keeps the VNC viewer reachable|returns to the all profiles table when selecting All profiles from the VNC viewer"
+# 2 passed, 26 skipped
+
+docker build --platform linux/amd64 -t invisible-browser-manager:vnc-geoip-window-fix .
+# Successfully tagged invisible-browser-manager:vnc-geoip-window-fix
+
+docker run --rm --name cloakbrowser-vnc-geoip-window-fix -p 127.0.0.1:18082:8080 -v cloakbrowser-vnc-geoip-window-fix-data-2:/data invisible-browser-manager:vnc-geoip-window-fix
+# http://127.0.0.1:18082/api/status -> 200, {"running_count":0,"binary_version":"invisible-playwright","profiles_total":0}
+
+python3 - <<'PY'
+# 创建无 proxy profile，先验证未确认 launch 返回 422，再用 {"confirm_launch": true} 启动。
+PY
+# 未确认 launch: 422 Profile launch requires explicit confirmation
+# 已确认 launch: 200, 4.55s, display=:100, vnc_ws_port=6100
+# profile last_geoip_*: US / America/Los_Angeles / en-US / ip-api / 2026-05-27T17:07:25.825130+00:00
+
+docker exec cloakbrowser-vnc-geoip-window-fix sh -lc 'command -v xdotool'
+# /usr/bin/xdotool
+
+docker exec cloakbrowser-vnc-geoip-window-fix sh -lc 'ps -ef | grep -E "Xvnc|firefox|uvicorn" | grep -v grep || true'
+# Xvnc :100 -websocketPort 6100 -rfbport -1 -geometry 1920x1080 ...
+# Firefox 主进程不含用户传入的 --width=800 / --height 600，只保留允许的 --private-window。
+
+docker exec cloakbrowser-vnc-geoip-window-fix sh -lc 'DISPLAY=:100 xdotool search --onlyvisible --class firefox getwindowgeometry %@ 2>/dev/null || true'
+# Window ... Position: 0,0; Geometry: 1920x1080
+
+Playwright MCP:
+# 打开 http://127.0.0.1:18082，进入 running profile viewer。
+# 页面标题 Invisible Browser Manager；非空白；无 framework error overlay。
+# viewer 模式左侧 Profiles list/table 不存在；显示 Connected / Automation ready / Clipboard sync on。
+# DOM 验收：canvasCount=1，canvas attrWidth/attrHeight=1920x1080，当前 1440x1000 viewport 下显示尺寸约 1440x810。
+# 点击 All profiles 后返回 profile list/table。
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 479 passed in 28.65s
+
+cd frontend && npm test -- --run
+# 15 files passed, 214 tests passed
+
+cd frontend && npm run build
+# tsc -b && vite build succeeded
+
+git diff --check
+# passed
+```

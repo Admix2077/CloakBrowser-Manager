@@ -166,6 +166,40 @@ async def test_resolve_profile_network_fingerprint_fills_only_missing_fields(
 
 
 @pytest.mark.asyncio
+async def test_resolve_profile_network_fingerprint_uses_direct_geoip_without_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_resolve(proxy_url: str | None):
+        assert proxy_url is None
+        return geoip.GeoIPResult(
+            timezone="America/Los_Angeles",
+            locale="en-US",
+            ip="23.144.4.92",
+            country_code="US",
+            source="test-direct",
+        )
+
+    monkeypatch.setattr(geoip, "resolve_network_geo", fake_resolve)
+
+    resolved = await geoip.resolve_profile_network_fingerprint({
+        "geoip": True,
+        "proxy": None,
+        "timezone": None,
+        "locale": None,
+    })
+
+    assert resolved["timezone"] == "America/Los_Angeles"
+    assert resolved["locale"] == "en-US"
+    assert resolved["_geoip_result"] == {
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US",
+        "ip": "23.144.4.92",
+        "country_code": "US",
+        "source": "test-direct",
+    }
+
+
+@pytest.mark.asyncio
 async def test_resolve_profile_network_fingerprint_keeps_explicit_fields(
     monkeypatch: pytest.MonkeyPatch,
 ):

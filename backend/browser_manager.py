@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,8 @@ logger = logging.getLogger("invisible_browser.manager.browser")
 INVISIBLE_FIREFOX_PROCESS_PATTERN = r"\.cache/invisible-playwright/.*/firefox"
 EXISTING_PAGE_INIT_TIMEOUT_SECONDS = 2.0
 INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
+DEFAULT_TASKBAR_HEIGHT_PX = 40
+WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
 
 
 def _normalize_proxy(raw: str) -> str:
@@ -108,7 +111,12 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     if height:
         height_int = int(height)
         pin["screen.height"] = height_int
-        pin["screen.avail_height"] = max(1, height_int - 40)
+        taskbar_height = (
+            WINDOWS_1080P_TASKBAR_HEIGHT_PX
+            if height_int == 1080
+            else DEFAULT_TASKBAR_HEIGHT_PX
+        )
+        pin["screen.avail_height"] = max(1, height_int - taskbar_height)
 
     gpu_vendor = profile.get("gpu_vendor")
     if gpu_vendor:
@@ -146,6 +154,9 @@ _BLOCKED_FIREFOX_ARG_PREFIXES = (
     "--profile",
     "-profile",
     "-P",
+    "--width",
+    "--height",
+    "--window-size",
 )
 
 _BLOCKED_FIREFOX_ARG_EXACT = (
@@ -164,6 +175,9 @@ _BLOCKED_FIREFOX_ARGS_WITH_VALUE = (
     "--profile",
     "-profile",
     "-P",
+    "--width",
+    "--height",
+    "--window-size",
 )
 
 
@@ -285,6 +299,52 @@ def _clean_firefox_startup_state(user_data_dir: Path) -> None:
         (user_data_dir / restore_file).unlink(missing_ok=True)
 
 
+async def _fit_firefox_window_to_vnc(display: int, width: int, height: int) -> None:
+    """Best-effort X11 window sizing for the visible VNC workspace."""
+    xdotool_bin = shutil.which("xdotool")
+    if not xdotool_bin:
+        logger.debug("xdotool not found; skipping Firefox window fit")
+        return
+
+    env = {**os.environ, "DISPLAY": f":{display}"}
+    try:
+        search = await asyncio.create_subprocess_exec(
+            xdotool_bin,
+            "search",
+            "--onlyvisible",
+            "--class",
+            "firefox",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=env,
+        )
+        stdout, _ = await asyncio.wait_for(search.communicate(), timeout=1.0)
+        if search.returncode != 0:
+            return
+        window_ids = [line.strip() for line in stdout.decode().splitlines() if line.strip()]
+        if not window_ids:
+            return
+
+        window_id = window_ids[-1]
+        proc = await asyncio.create_subprocess_exec(
+            xdotool_bin,
+            "windowsize",
+            window_id,
+            str(width),
+            str(height),
+            "windowmove",
+            window_id,
+            "0",
+            "0",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            env=env,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=1.0)
+    except Exception as exc:
+        logger.debug("Firefox window fit skipped: %s", exc)
+
+
 def _page_url(page: Any) -> str:
     return str(getattr(page, "url", "") or "")
 
@@ -380,6 +440,12 @@ class BrowserManager:
                     await context.new_page()
                 except Exception as exc:
                     logger.debug("Automation bootstrap page creation failed: %s", exc)
+
+            await _fit_firefox_window_to_vnc(
+                display,
+                int(profile.get("screen_width") or 1920),
+                int(profile.get("screen_height") or 1080),
+            )
 
             running = RunningProfile(
                 profile_id=profile_id,

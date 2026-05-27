@@ -143,6 +143,18 @@ def test_build_invisible_pin_screen_gpu_hardware_dark_theme():
     }
 
 
+def test_build_invisible_pin_uses_realistic_1080p_available_height():
+    pin = bm._build_invisible_pin({
+        "screen_width": 1920,
+        "screen_height": 1080,
+    })
+
+    assert pin["screen.width"] == 1920
+    assert pin["screen.height"] == 1080
+    assert pin["screen.avail_width"] == 1920
+    assert pin["screen.avail_height"] == 1032
+
+
 def test_build_invisible_pin_light_theme():
     assert bm._build_invisible_pin({"color_scheme": "light"})["dark_theme"] is False
 
@@ -205,6 +217,18 @@ def test_build_invisible_kwargs_omits_empty_optional_values(tmp_path: Path):
     assert kwargs["timezone"] == ""
     assert kwargs["locale"] == "en-US"
     assert kwargs["extra_args"] == []
+
+
+def test_build_invisible_kwargs_drops_user_window_size_overrides(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "screen_width": 1920,
+        "screen_height": 1080,
+        "launch_args": ["--width=800", "--height", "600", "--private-window"],
+    })
+
+    assert kwargs["extra_args"] == ["--private-window"]
 
 
 def test_accept_language_header_includes_base_language():
@@ -381,6 +405,46 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
     await mgr.stop("profile-1")
     assert launch.closed is True
     mgr.vnc.stop_vnc.assert_awaited_once_with(100)
+
+
+@pytest.mark.asyncio
+async def test_launch_fits_firefox_window_to_vnc_after_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+):
+    calls: list[tuple[int, int, int]] = []
+
+    async def fake_fit(display: int, width: int, height: int) -> None:
+        calls.append((display, width, height))
+
+    monkeypatch.setattr(bm, "_fit_firefox_window_to_vnc", fake_fit)
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    await mgr.launch({
+        "id": "profile-window-fit",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": 1920,
+        "screen_height": 1080,
+        "proxy": None,
+        "timezone": "Asia/Shanghai",
+        "locale": "zh-CN",
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+
+    assert calls == [(100, 1920, 1080)]
+
+    await mgr.stop("profile-window-fit")
 
 
 @pytest.mark.asyncio

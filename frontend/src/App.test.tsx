@@ -47,17 +47,20 @@ vi.mock("./components/ProfileViewer", () => ({
     profileId,
     automationUrl,
     clipboardSync,
+    onBackToProfiles,
     onDisconnect,
   }: {
     profileId: string;
     automationUrl: string | null;
     clipboardSync: boolean;
+    onBackToProfiles?: () => void;
     onDisconnect: () => void;
   }) => (
     <section aria-label="VNC viewer">
       <div>VNC viewer for {profileId}</div>
       <div>Automation URL: {automationUrl ?? "none"}</div>
       <div>Clipboard sync: {clipboardSync ? "enabled" : "disabled"}</div>
+      <button type="button" onClick={onBackToProfiles}>All profiles</button>
       <button type="button" onClick={onDisconnect}>Simulate VNC disconnect</button>
     </section>
   ),
@@ -435,6 +438,7 @@ describe("App operations console", () => {
     expect(within(viewer).getByText("Automation URL: /api/profiles/running/automation")).toBeTruthy();
     expect(within(viewer).getByText("Clipboard sync: enabled")).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Profiles list" })).toBeNull();
   });
 
   it("returns from the VNC viewer to profile editing when the viewer disconnects", async () => {

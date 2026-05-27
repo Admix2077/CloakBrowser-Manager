@@ -237,6 +237,8 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
       unavailable: unavailableCount,
     };
   }, [filteredProfiles.length, healthByProfileId, profiles]);
+  const isProfileViewerOpen =
+    section === "profiles" && view === "view" && selected?.status === "running";
 
   useEffect(() => {
     const visibleIds = new Set(filteredProfiles.map((profile) => profile.id));
@@ -459,7 +461,7 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
   return (
     <div className="flex h-screen bg-[#f6f7f9] text-slate-900">
       {/* Sidebar */}
-      {section === "profiles" && sidebarOpen && (
+      {section === "profiles" && sidebarOpen && !isProfileViewerOpen && (
         <>
           <button
             type="button"
@@ -720,6 +722,10 @@ function AppContent({ authRequired, onLogout }: AppContentProps) {
               profileId={selected.id}
               automationUrl={selected.automation_url}
               clipboardSync={selected.clipboard_sync}
+              onBackToProfiles={() => {
+                setSelectedId(null);
+                setView("empty");
+              }}
               onDisconnect={handleVncDisconnect}
             />
           )}

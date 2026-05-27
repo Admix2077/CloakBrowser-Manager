@@ -796,3 +796,28 @@ cd /home/jeff/code/project-mileage-v3-payload && pnpm build
 - 不在 Project Mileage 前端伪造远程会话、VNC token、倒计时或成功态。
 - 不把 proxy 密码、cookie、VNC token、AUTH_TOKEN 写入日志或审计 metadata。
 - 不用第三方检测站抓取结果作为 V1 必需依赖。
+
+## 2026-05-28 当前小闭环记录
+
+- 本轮参考旧仓 `/home/jeff/local/repos/CloakBrowser`，完成 CloakBrowser 自仓 VNC 大画面与无 proxy GeoIP 复刻收口。
+- GeoIP：
+  - 当前本仓已有无 proxy 直连 GeoIP 路径；新增测试明确启动链路在 `geoip=true` 且无 proxy/timezone/locale 时调用 `resolve_network_geo(None)`。
+  - 启动成功后仍只把 `last_geoip_*` 低敏结果写入 profile，不把 IP、proxy、URL、headers 或异常原文写入 audit metadata。
+- VNC/浏览器尺寸：
+  - `backend/browser_manager.py` 将 1080p 可用高度对齐旧仓 Windows 口径为 `1032`。
+  - Firefox 启动完成后通过 X11 `xdotool` 做 best-effort 窗口移动和尺寸整理；用户传入的 `--width`、`--height`、`--window-size` 会被过滤，避免覆盖管理器尺寸。
+  - `Dockerfile` 新增 `xdotool` runtime 依赖。
+  - `frontend/src/App.tsx` 在 running profile viewer 模式隐藏左侧 profile 列表，让 VNC 主画面占满主工作区。
+  - `frontend/src/components/ProfileViewer.tsx` 新增受控 `All profiles` 返回入口。
+- 真实容器 smoke：
+  - 新镜像 `invisible-browser-manager:vnc-geoip-window-fix` 已构建成功，服务运行在 `http://127.0.0.1:18082`。
+  - 创建无 proxy profile 后，未确认 launch 返回 `422 Profile launch requires explicit confirmation`；带 `{"confirm_launch": true}` 后 4.55 秒启动成功。
+  - profile 写入 `last_geoip_*`：`US / America/Los_Angeles / en-US / ip-api`。
+  - 容器内 `Xvnc` 为 `-geometry 1920x1080`；`xdotool` 可用；Firefox 可见窗口为 `Position: 0,0`、`Geometry: 1920x1080`；Firefox 主进程没有保留用户传入的 `--width=800` / `--height 600`。
+  - 浏览器 UI 验收：viewer 页面非空白，连接态为 `Connected`，canvas 后端帧为 `1920x1080`，当前 1440x1000 viewport 下显示约 `1440x810`，左侧 profile list/table 在 viewer 模式隐藏，`All profiles` 可返回列表。
+- 验证：
+  - `. .venv/bin/activate && python -m pytest backend/tests -q` -> `479 passed in 28.65s`。
+  - `cd frontend && npm test -- --run` -> `15 files passed, 214 tests passed`。
+  - `cd frontend && npm run build` -> `tsc -b && vite build` 成功。
+  - `git diff --check` -> passed。
+- 本轮不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。

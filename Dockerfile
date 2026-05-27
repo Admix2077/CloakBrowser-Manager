@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libgtk-3-0 libpangocairo-1.0-0 libcairo-gobject2 \
     libgdk-pixbuf-2.0-0 libxss1 libxtst6 fonts-liberation \
     libgl1-mesa-dri libegl-mesa0 \
-    procps wget ca-certificates xclip git \
+    procps wget ca-certificates xclip xdotool git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install KasmVNC. invisible_playwright currently ships Linux x86_64 Firefox.
