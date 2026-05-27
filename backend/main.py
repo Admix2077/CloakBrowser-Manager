@@ -1797,6 +1797,44 @@ def _succeed_automation_task(
     return finished
 
 
+def _renew_automation_worker_lease(
+    task_id: str,
+    *,
+    lease_owner: str | None,
+    lease_seconds: int | None,
+) -> None:
+    if lease_owner is None or lease_seconds is None:
+        return
+    renewed = db.renew_automation_task_lease(
+        task_id,
+        lease_owner=lease_owner,
+        lease_seconds=lease_seconds,
+        allowed_statuses={"running", "cancel_requested"},
+    )
+    if renewed is None:
+        raise HTTPException(status_code=409, detail="Automation task lease no longer owned by worker")
+
+
+def _automation_worker_lease_heartbeat_interval(lease_seconds: int) -> float:
+    return max(0.1, min(float(lease_seconds) / 2, 30.0))
+
+
+async def _run_automation_worker_lease_heartbeat(
+    task_id: str,
+    *,
+    lease_owner: str,
+    lease_seconds: int,
+    stop_event: asyncio.Event,
+) -> None:
+    interval = _automation_worker_lease_heartbeat_interval(lease_seconds)
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval)
+            break
+        except asyncio.TimeoutError:
+            _renew_automation_worker_lease(task_id, lease_owner=lease_owner, lease_seconds=lease_seconds)
+
+
 def _automation_step_str(step: dict, key: str, default: str | None = None) -> str | None:
     value = step.get(key, default)
     return value if isinstance(value, str) else default
@@ -2309,7 +2347,20 @@ async def run_automation_worker_once(
             error=detail,
         )
     try:
-        finished, _ = await _execute_running_automation_task(claimed, lease_owner=lease_owner)
+        stop_heartbeat = asyncio.Event()
+        heartbeat_task = asyncio.create_task(
+            _run_automation_worker_lease_heartbeat(
+                claimed["id"],
+                lease_owner=lease_owner,
+                lease_seconds=lease_seconds,
+                stop_event=stop_heartbeat,
+            )
+        )
+        try:
+            finished, _ = await _execute_running_automation_task(claimed, lease_owner=lease_owner)
+        finally:
+            stop_heartbeat.set()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
     except HTTPException:
         latest = db.get_automation_task(claimed["id"]) or claimed
         step_results = latest.get("result", {}).get("steps") if isinstance(latest.get("result"), dict) else None

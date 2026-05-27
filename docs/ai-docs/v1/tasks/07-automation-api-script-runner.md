@@ -216,7 +216,7 @@ cd frontend && npm run build
 - worker 执行中遇到 page not found 等内部 HTTP step 错误时，收束为 `failed`，错误固定为 `Automation step failed`，不透传 selector、URL、异常原文或内部路径。
 - worker 成功、失败或取消收束均走 `finish_claimed_automation_task()` owner 校验；owner 不匹配时不会覆盖 task 状态。
 - 公开 task API 响应仍不暴露 `lease_owner`、`lease_expires_at`；`steps` 和 `result` 继续统一白名单脱敏。
-- 当前仍未实现后台常驻 loop、调度器、worker 池、自动续租循环、自动启动 profile、跨系统补偿或 Project Mileage DTO。
+- 当前仍未实现后台常驻 loop、调度器、worker 池、自动启动 profile、跨系统补偿或 Project Mileage DTO。
 - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 
 验证记录：
@@ -233,6 +233,30 @@ cd frontend && npm run build
 
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_returns_none_without_queued_task backend/tests/test_api.py::test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload backend/tests/test_api.py::test_automation_worker_run_once_executes_claimed_task_and_clears_lease backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_cancel_running_automation_task_requests_cooperative_cancel_without_leaking_payload backend/tests/test_api.py::test_run_automation_task_honors_cancel_request_at_step_boundary_without_running_next_step backend/tests/test_api.py::test_run_open_url_step_navigates_existing_page_without_leaking_query backend/tests/test_api.py::test_run_click_step_clicks_existing_page_without_leaking_selector backend/tests/test_api.py::test_run_fill_step_fills_existing_page_without_leaking_selector_or_value backend/tests/test_api.py::test_run_keyboard_type_step_types_existing_page_without_leaking_text backend/tests/test_api.py::test_run_evaluate_step_evaluates_existing_page_without_leaking_expression_or_result backend/tests/test_api.py::test_run_screenshot_step_captures_existing_page_without_returning_png -q
 # 12 passed
+```
+
+## 2026-05-27 Automation worker lease heartbeat 小闭环
+
+当前状态：
+
+- `run_automation_worker_once()` 执行已领取 task 时，会启动内部 lease heartbeat。
+- heartbeat 按 `lease_seconds` 的半周期续租，间隔下限 `0.1s`、上限 `30s`，通过 `renew_automation_task_lease()` 校验当前 `lease_owner`。
+- heartbeat 覆盖长 `wait` 或长 Playwright await 期间的租约续期，降低 lease 过期后被其他 worker 重领的风险。
+- task 成功、失败、取消或异常收束后，heartbeat 会停止；最终 task 仍通过 `finish_claimed_automation_task()` 清空 `lease_owner` / `lease_expires_at`。
+- heartbeat 失败说明 worker 不再拥有 lease，会以 `409 Automation task lease no longer owned by worker` 收束调用路径，不覆盖其他 worker 已接管的状态。
+- 该能力只属于内部 worker，不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+- heartbeat 不写公开响应、不写 task result、不记录 step payload、URL、selector、表单值或异常原文，不承诺强制打断正在 await 的 Playwright 操作。
+- 本小闭环不实现 worker 池、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+- 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_renews_lease_during_wait_without_exposing_metadata -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_worker_run_once_returns_none_without_queued_task backend/tests/test_api.py::test_automation_worker_run_once_fails_claimed_task_when_profile_not_running_without_leaking_payload backend/tests/test_api.py::test_automation_worker_run_once_executes_claimed_task_and_clears_lease backend/tests/test_api.py::test_automation_worker_run_once_renews_lease_during_wait_without_exposing_metadata backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_automation_worker_loop_runs_multiple_claimed_tasks backend/tests/test_api.py::test_automation_worker_loop_stops_after_idle_cycles backend/tests/test_api.py::test_automation_worker_loop_honors_stop_event_before_claiming backend/tests/test_api.py::test_automation_worker_lifespan_keeps_worker_disabled_by_default backend/tests/test_api.py::test_automation_worker_lifespan_starts_enabled_worker_and_stops_it -q
+# 10 passed
 ```
 
 ## 2026-05-27 Automation worker loop 内部骨架小闭环

@@ -2017,6 +2017,73 @@ async def test_automation_worker_run_once_executes_claimed_task_and_clears_lease
 
 
 @pytest.mark.asyncio
+async def test_automation_worker_run_once_renews_lease_during_wait_without_exposing_metadata(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerRenewProfile"})
+    pid = create.json()["id"]
+    page = _automation_page()
+    _automation_running_profile(pid, [page])
+    task = app_client.post(
+        "/api/tasks",
+        json={
+            "profile_id": pid,
+            "steps": [
+                {"type": "wait", "ms": 1},
+                {"type": "click", "selector": "#safe-button"},
+            ],
+        },
+    ).json()
+    renew_calls: list[tuple[str, str, int]] = []
+    renew_seen = main.asyncio.Event()
+    renew_seen_during_wait = False
+    original_renew = main.db.renew_automation_task_lease
+
+    def record_renew(task_id: str, *, lease_owner: str, lease_seconds: int, **kwargs):
+        renew_calls.append((task_id, lease_owner, lease_seconds))
+        renew_seen.set()
+        return original_renew(task_id, lease_owner=lease_owner, lease_seconds=lease_seconds, **kwargs)
+
+    async def controlled_sleep(seconds: float):
+        nonlocal renew_seen_during_wait
+        try:
+            await main.asyncio.wait_for(renew_seen.wait(), timeout=0.2)
+            renew_seen_during_wait = True
+        except main.asyncio.TimeoutError:
+            pass
+
+    monkeypatch.setattr(main.db, "renew_automation_task_lease", record_renew)
+    monkeypatch.setattr(main, "_automation_worker_lease_heartbeat_interval", lambda lease_seconds: 0.01)
+    monkeypatch.setattr(main.asyncio, "sleep", controlled_sleep)
+
+    result = await main.run_automation_worker_once(lease_owner="worker-a", lease_seconds=1)
+
+    assert result is not None
+    data = main._automation_task_response(result).model_dump()
+    assert data["id"] == task["id"]
+    assert data["status"] == "succeeded"
+    assert data["result"] == {
+        "steps": [
+            {"index": 0, "type": "wait", "status": "succeeded"},
+            {"index": 1, "type": "click", "status": "succeeded"},
+        ],
+    }
+    assert renew_seen_during_wait is True
+    assert renew_calls
+    assert all(call == (task["id"], "worker-a", 1) for call in renew_calls)
+    assert "lease_owner" not in data
+    assert "lease_expires_at" not in data
+    assert "#safe-button" not in str(data)
+
+    persisted = main.db.get_automation_task(task["id"])
+    assert persisted is not None
+    assert persisted["lease_owner"] is None
+    assert persisted["lease_expires_at"] is None
+    main.browser_mgr.running.pop(pid, None)
+
+
+@pytest.mark.asyncio
 async def test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload(
     app_client: TestClient,
 ):

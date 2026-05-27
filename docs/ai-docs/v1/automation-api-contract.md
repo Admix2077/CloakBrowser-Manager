@@ -558,9 +558,11 @@ POST /api/tasks/{id}/run
 - `run_automation_worker_once(lease_owner, lease_seconds=60)` 是内部单次 worker 入口：
   - 无可领取 task 时返回 `None`，不修改 DB。
   - 通过 `claim_next_automation_task()` 领取 task 后只复用已运行 profile 执行脚本，不自动启动 profile。
+  - 执行期间启动内部 lease heartbeat，按 `lease_seconds` 的半周期（最低 0.1 秒，最高 30 秒）调用 `renew_automation_task_lease()` 续租，降低长 step 或长 wait 期间 lease 过期后被其他 worker 重领的风险。
   - profile 不存在或未运行时把已领取 task 用匹配 `lease_owner` 收束为 `failed`，`result.steps` 为空，错误固定为 `Profile not found` 或 `Profile not running`。
   - 运行中遇到 page not found 等内部 HTTP step 错误时，收束为 `failed`，`error` 固定为 `Automation step failed`，`result.steps[]` 只记录当前 step 的 `index/type/status=failed`。
   - 成功、失败或取消收束均通过 `finish_claimed_automation_task()` 校验当前 worker owner，并清空 `lease_owner` / `lease_expires_at`。
+  - heartbeat 是内部 DB 续租能力，不写公开响应、不写 task result、不记录 step payload，不承诺强制打断正在 await 的 Playwright 操作。
 - `run_automation_worker_loop(lease_owner, lease_seconds=60, max_runs=None, max_idle_cycles=1, idle_sleep_seconds=1.0, stop_event=None)` 是内部 loop 骨架：
   - 持续调用 `run_automation_worker_once()`，直到达到 `max_runs`、达到 `max_idle_cycles` 或 `stop_event` 已设置。
   - 返回低敏 summary：`claimed/succeeded/failed/cancelled/idle_cycles`，不包含 task id、profile id、step payload、URL、selector、表单值、异常原文或 lease owner。

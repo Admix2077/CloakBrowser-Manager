@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lease heartbeat 小闭环：
+  - `run_automation_worker_once()` 执行已领取 task 时，会启动内部 lease heartbeat。
+  - heartbeat 按 `lease_seconds` 的半周期续租，间隔下限 `0.1s`、上限 `30s`，通过 `renew_automation_task_lease()` 校验当前 `lease_owner`。
+  - heartbeat 覆盖长 `wait` 或长 Playwright await 期间的租约续期，降低 lease 过期后被其他 worker 重领的风险。
+  - task 成功、失败、取消或异常收束后，heartbeat 会停止；最终 task 仍通过 `finish_claimed_automation_task()` 清空 `lease_owner` / `lease_expires_at`。
+  - heartbeat 失败说明 worker 不再拥有 lease，会以 `409 Automation task lease no longer owned by worker` 收束调用路径，不覆盖其他 worker 已接管的状态。
+  - 该能力只属于内部 worker，不新增公开 REST API、不新增前端入口、不自动启动 profile、不接 Project Mileage DTO。
+  - heartbeat 不写公开响应、不写 task result、不记录 step payload、URL、selector、表单值或异常原文，不承诺强制打断正在 await 的 Playwright 操作。
+  - 本小闭环不实现 worker 池、跨进程 supervisor、跨系统补偿、钱包/订单/权限/扣费/续期/viewer token/屏幕流逻辑。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lifespan 可选启动小闭环：
   - FastAPI lifespan 已支持可选启动一个内部 automation worker loop。
   - 默认关闭：未设置 `AUTOMATION_WORKER_ENABLED=true` 时，不启动 worker，不自动领取或执行 queued task。
