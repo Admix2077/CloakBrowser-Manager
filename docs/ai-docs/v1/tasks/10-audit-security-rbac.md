@@ -42,7 +42,13 @@
 ### Audit
 
 - [x] 新增 audit_events 表。
-- [ ] profile mutation 写 audit。
+- [x] profile mutation 写 audit：
+  - `POST /api/profiles` 成功写 `profile.created`。
+  - `PUT /api/profiles/{id}` 成功写 `profile.updated`。
+  - `DELETE /api/profiles/{id}` 成功写 `profile.deleted`。
+  - actor 固定为 `local_admin`；顶层 `profile_id` 指向目标 profile。
+  - metadata 只含 `name/platform/tag_count/updated_fields` 等低敏字段。
+  - metadata 不记录 proxy URL、proxy username/password、notes、`user_data_dir`、runtime/viewer、cookie/local storage、请求体、错误详情或 Project Mileage 业务字段。
 - [x] proxy mutation 写 audit：
   - `POST /api/proxies` 成功写 `proxy.created`。
   - `PUT /api/proxies/{id}` 成功写 `proxy.updated`。

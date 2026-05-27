@@ -64,6 +64,14 @@ def _audit_event_types() -> list[str]:
     return [event["event_type"] for event in db.list_audit_events()]
 
 
+def _runtime_audit_events() -> list[dict]:
+    return [
+        event
+        for event in db.list_audit_events()
+        if event["event_type"].startswith("runtime.")
+    ]
+
+
 def _viewer_failure_events(session_id: str | None = None) -> list[dict]:
     return [
         event
@@ -837,7 +845,7 @@ def test_runtime_service_actions_write_redacted_audit_events(
     )
     assert terminate.status_code == 200
 
-    events = db.list_audit_events()
+    events = _runtime_audit_events()
     assert [event["event_type"] for event in events] == [
         "runtime.session.created",
         "runtime.session.read",
@@ -890,7 +898,7 @@ def test_runtime_audit_ignores_unauthenticated_runtime_requests(
     )
 
     assert resp.status_code == 401
-    assert _audit_event_types() == []
+    assert _runtime_audit_events() == []
 
 
 def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):

@@ -659,6 +659,34 @@ def _audit_proxy_event(event_type: str, proxy: dict, *, updated_fields: list[str
     )
 
 
+def _profile_audit_metadata(profile: dict, *, updated_fields: list[str] | None = None) -> dict:
+    if updated_fields is not None:
+        return {
+            "updated_fields": sorted(updated_fields),
+            "tag_count": len(profile.get("tags") or []),
+        }
+    metadata = {
+        "name": profile.get("name"),
+        "platform": profile.get("platform"),
+        "tag_count": len(profile.get("tags") or []),
+    }
+    return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _audit_profile_event(
+    event_type: str,
+    profile: dict,
+    *,
+    updated_fields: list[str] | None = None,
+) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="local_admin",
+        profile_id=str(profile["id"]),
+        metadata=_profile_audit_metadata(profile, updated_fields=updated_fields),
+    )
+
+
 def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
     safe = dict(preset)
     safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
@@ -1426,6 +1454,7 @@ async def create_profile(req: ProfileCreate):
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
+    _audit_profile_event("profile.created", profile)
     return ProfileResponse(**profile)
 
 
@@ -1925,6 +1954,7 @@ async def get_profile(profile_id: str):
 async def update_profile(profile_id: str, req: ProfileUpdate):
     # Only pass fields that were explicitly set
     data = req.model_dump(exclude_unset=True)
+    audit_fields = sorted(data.keys())
     tags = data.pop("tags", None)
     if tags is not None:
         data["tags"] = [t.model_dump() if hasattr(t, "model_dump") else t for t in tags]
@@ -1936,6 +1966,7 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["automation_url"] = status["automation_url"]
     profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
+    _audit_profile_event("profile.updated", profile, updated_fields=audit_fields)
     return ProfileResponse(**profile)
 
 
@@ -1958,6 +1989,7 @@ async def delete_profile(profile_id: str):
     if user_data_dir.exists():
         shutil.rmtree(user_data_dir, ignore_errors=True)
 
+    _audit_profile_event("profile.deleted", profile)
     return {"ok": True}
 
 

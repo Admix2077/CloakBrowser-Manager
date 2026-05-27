@@ -14,6 +14,23 @@ from backend import main
 from backend.browser_manager import RunningProfile
 
 
+def _audit_events_except(*event_types: str) -> list[dict]:
+    excluded = set(event_types)
+    return [
+        event
+        for event in main.db.list_audit_events()
+        if event["event_type"] not in excluded
+    ]
+
+
+def _audit_events_of_type(event_type: str) -> list[dict]:
+    return [
+        event
+        for event in main.db.list_audit_events()
+        if event["event_type"] == event_type
+    ]
+
+
 # ── Profile CRUD ─────────────────────────────────────────────────────────────
 
 
@@ -114,6 +131,71 @@ def test_delete_profile(app_client: TestClient):
 def test_delete_profile_not_found(app_client: TestClient):
     resp = app_client.delete("/api/profiles/nonexistent")
     assert resp.status_code == 404
+
+
+def test_profile_crud_api_writes_redacted_audit_events(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Audited Profile",
+            "proxy": "http://user:super-secret-proxy-password@profile-audit.example:8080",
+            "platform": "linux",
+            "notes": "note-token-super-secret",
+            "tags": [{"tag": "ops", "color": None}],
+        },
+    )
+    assert create.status_code == 201
+    profile_id = create.json()["id"]
+
+    update = app_client.put(
+        f"/api/profiles/{profile_id}",
+        json={
+            "name": "Audited Profile Updated",
+            "proxy": "http://user:new-secret-proxy-password@profile-audit.example:8080",
+            "notes": "updated-note-token-super-secret",
+            "tags": [{"tag": "priority", "color": "#2563eb"}],
+        },
+    )
+    assert update.status_code == 200
+
+    delete = app_client.delete(f"/api/profiles/{profile_id}")
+    assert delete.status_code == 200
+
+    events = main.db.list_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "profile.created",
+        "profile.updated",
+        "profile.deleted",
+    ]
+    assert all(event["actor_type"] == "local_admin" for event in events)
+    assert [event["profile_id"] for event in events] == [profile_id, profile_id, profile_id]
+    assert all(event["runtime_session_id"] is None for event in events)
+    assert events[0]["metadata"] == {
+        "name": "Audited Profile",
+        "platform": "linux",
+        "tag_count": 1,
+    }
+    assert events[1]["metadata"] == {
+        "updated_fields": ["name", "notes", "proxy", "tags"],
+        "tag_count": 1,
+    }
+    assert events[2]["metadata"] == {
+        "name": "Audited Profile Updated",
+        "platform": "linux",
+        "tag_count": 1,
+    }
+
+    serialized_events = json.dumps(events, sort_keys=True)
+    assert "super-secret-proxy-password" not in serialized_events
+    assert "new-secret-proxy-password" not in serialized_events
+    assert "user:" not in serialized_events
+    assert "profile-audit.example" not in serialized_events
+    assert "note-token-super-secret" not in serialized_events
+    assert "updated-note-token-super-secret" not in serialized_events
+    assert "user_data_dir" not in serialized_events
+    serialized_metadata = json.dumps([event["metadata"] for event in events], sort_keys=True)
+    assert "runtime" not in serialized_metadata
+    assert "viewer" not in serialized_metadata
 
 
 def test_delete_profile_stops_running(app_client: TestClient):
@@ -1075,7 +1157,7 @@ def test_export_cookie_json_requires_explicit_confirmation_without_reading_conte
     assert resp.status_code == 422
     assert resp.json() == {"detail": "Cookie export requires explicit confirmation"}
     running.context.cookies.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1093,7 +1175,7 @@ def test_export_cookie_json_rejects_coerced_confirmation_without_reading_context
         assert resp.status_code == 422
 
     running.context.cookies.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1141,7 +1223,7 @@ def test_export_cookie_json_returns_document_and_writes_redacted_audit(app_clien
     assert data["document"]["cookies"][0]["value"] == cookie_value
     assert data["document"]["cookies"][1]["url"] == cookie_url
 
-    events = main.db.list_audit_events()
+    events = _audit_events_of_type("cookie.exported")
     assert [event["event_type"] for event in events] == ["cookie.exported"]
     assert events[0]["actor_type"] == "local_admin"
     assert events[0]["profile_id"] == pid
@@ -1180,7 +1262,7 @@ def test_export_cookie_json_requires_running_profile(app_client: TestClient):
 
     assert resp.status_code == 404
     assert resp.json() == {"detail": "Profile not running"}
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
 
 
 def test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_leak(
@@ -1200,7 +1282,7 @@ def test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_le
 
     assert resp.status_code == 400
     assert resp.json() == {"detail": "Cookie export failed"}
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     assert "super-secret-cookie-value" not in resp.text
     assert "sensitive.example.com" not in resp.text
     assert "super-secret-cookie-value" not in caplog.text
@@ -1221,7 +1303,7 @@ def test_export_cookie_netscape_requires_explicit_confirmation_without_reading_c
     assert resp.status_code == 422
     assert resp.json() == {"detail": "Cookie export requires explicit confirmation"}
     running.context.cookies.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1239,7 +1321,7 @@ def test_export_cookie_netscape_rejects_coerced_confirmation_without_reading_con
         assert resp.status_code == 422
 
     running.context.cookies.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1291,7 +1373,7 @@ def test_export_cookie_netscape_returns_text_and_writes_redacted_audit(app_clien
     assert "token=hidden" not in data["text"]
     assert "#frag" not in data["text"]
 
-    events = main.db.list_audit_events()
+    events = _audit_events_of_type("cookie.exported")
     assert [event["event_type"] for event in events] == ["cookie.exported"]
     assert events[0]["actor_type"] == "local_admin"
     assert events[0]["profile_id"] == pid
@@ -1324,7 +1406,7 @@ def test_export_cookie_netscape_requires_running_profile(app_client: TestClient)
 
     assert resp.status_code == 404
     assert resp.json() == {"detail": "Profile not running"}
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
 
 
 def test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_or_leak(
@@ -1344,7 +1426,7 @@ def test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_o
 
     assert resp.status_code == 400
     assert resp.json() == {"detail": "Cookie export failed"}
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     assert "super-secret-cookie-value" not in resp.text
     assert "sensitive.example.com" not in resp.text
     assert "super-secret-cookie-value" not in caplog.text
@@ -1402,7 +1484,7 @@ def test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fi
     assert "wallet" not in response_text
     assert "order" not in response_text
     assert "payment" not in response_text
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
 
 
 def test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit(app_client: TestClient):
@@ -1469,7 +1551,7 @@ def test_export_profile_bundle_cookie_bundle_requires_explicit_confirmation_with
     assert resp.status_code == 422
     assert resp.json() == {"detail": "Profile bundle cookie export requires explicit confirmation"}
     running.context.cookies.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1489,7 +1571,7 @@ def test_export_profile_bundle_cookie_bundle_rejects_coerced_flags_without_readi
         assert resp.json() == {"detail": "Invalid profile bundle export request"}
 
     running.context.cookies.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1504,7 +1586,7 @@ def test_export_profile_bundle_cookie_bundle_requires_running_profile(app_client
 
     assert resp.status_code == 404
     assert resp.json() == {"detail": "Profile not running"}
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
 
 
 def test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redacted_audit(
@@ -1540,7 +1622,7 @@ def test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redac
     assert bundle["cookies"]["document"]["cookies"][0]["value"] == "super-secret-cookie-value"
     assert bundle["metadata"]["cookies_included"] is True
 
-    events = main.db.list_audit_events()
+    events = _audit_events_of_type("profile_bundle.cookie_exported")
     assert [event["event_type"] for event in events] == ["profile_bundle.cookie_exported"]
     assert events[0]["actor_type"] == "local_admin"
     assert events[0]["profile_id"] == pid
@@ -1567,7 +1649,7 @@ def test_export_profile_bundle_local_storage_requires_explicit_confirmation_with
     assert resp.status_code == 422
     assert resp.json() == {"detail": "Profile bundle local storage export requires explicit confirmation"}
     page.evaluate.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1588,7 +1670,7 @@ def test_export_profile_bundle_local_storage_rejects_coerced_flags_without_readi
         assert resp.json() == {"detail": "Invalid profile bundle export request"}
 
     page.evaluate.assert_not_called()
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1603,7 +1685,7 @@ def test_export_profile_bundle_local_storage_requires_running_profile(app_client
 
     assert resp.status_code == 404
     assert resp.json() == {"detail": "Profile not running"}
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
 
 
 def test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin(
@@ -1623,7 +1705,7 @@ def test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin(
     assert resp.json() == {"detail": "Local storage origin unavailable"}
     page.evaluate.assert_not_called()
     assert "about:blank" not in resp.text
-    assert main.db.list_audit_events() == []
+    assert _audit_events_except("profile.created") == []
     main.browser_mgr.running.pop(pid, None)
 
 
@@ -1665,7 +1747,7 @@ def test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_r
     }
     assert bundle["metadata"]["local_storage_included"] is True
 
-    events = main.db.list_audit_events()
+    events = _audit_events_of_type("profile_bundle.local_storage_exported")
     assert [event["event_type"] for event in events] == ["profile_bundle.local_storage_exported"]
     assert events[0]["actor_type"] == "local_admin"
     assert events[0]["profile_id"] == pid

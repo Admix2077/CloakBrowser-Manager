@@ -35,6 +35,15 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 profile mutation audit 小闭环：
+  - `POST /api/profiles` 成功后写 `profile.created` audit event。
+  - `PUT /api/profiles/{id}` 成功后写 `profile.updated` audit event。
+  - `DELETE /api/profiles/{id}` 成功后写 `profile.deleted` audit event。
+  - audit actor 固定为 `local_admin`；顶层 `profile_id` 指向目标 profile；metadata 只记录 `name/platform/tag_count/updated_fields` 等低敏字段。
+  - metadata 不记录 proxy URL、proxy username/password、notes、`user_data_dir`、runtime/viewer、cookie/local storage、请求体、错误详情或 Project Mileage 钱包/订单/权限/审计事实。
+  - 新增 `test_profile_crud_api_writes_redacted_audit_events` 覆盖 create/update/delete audit 顺序、metadata 内容和 proxy/notes/runtime/viewer/profile dir 不泄露。
+  - 既有 cookie/profile bundle audit 测试已调整为过滤 setup 阶段的 `profile.created`，继续验证 cookie/bundle 失败路径不写对应 export audit。
+  - 本小闭环只修改 CloakBrowser 本仓 profile CRUD 审计，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 proxy mutation audit 小闭环：
   - `POST /api/proxies` 成功后写 `proxy.created` audit event。
   - `PUT /api/proxies/{id}` 成功后写 `proxy.updated` audit event。
