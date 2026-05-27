@@ -27,6 +27,7 @@
   - 显式敏感导出边界。
   - 停止态 profile dir 风险。
 - [x] 支持 profile bundle manifest/config-only 格式层。
+- [x] 支持 profile bundle config export API。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -467,6 +468,45 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_api.py -q
 # 176 passed
+```
+
+## 2026-05-27 Profile Bundle config export API 小闭环
+
+当前状态：
+
+- 已新增 `POST /api/profiles/{profile_id}/bundle/export`。
+- 请求体：
+  - `include_sensitive_proxy`：默认 `false`。
+  - 必须是 JSON boolean，不接受字符串或数字宽松转换。
+- 成功响应返回：
+  - `profile_id`。
+  - `bundle`：`cloakbrowser.profile-bundle.v1` config-only manifest。
+- 默认响应行为：
+  - `profile.config` 只包含既有 `ProfileConfigExport` 白名单字段。
+  - proxy 默认脱敏，移除 `username:password@`。
+  - `cookies.included=false`，只返回低敏空统计。
+  - `local_storage.included=false`，只返回低敏空统计。
+  - `profile_dir.included=false`，`archive=null`，不读取磁盘 profile 目录。
+- 显式 `include_sensitive_proxy: true` 时，才在可信本地管理 API 响应中保留完整 proxy。
+- 请求体 shape 或 `include_sensitive_proxy` 类型非法时，返回固定 `422 Invalid profile bundle export request`，不使用 FastAPI 默认 validation response 回显调用方 payload。
+- profile 不存在返回固定 `404 Profile not found`。
+- 本小闭环不导出 cookie/local storage 明文，不读取 profile dir，不写 audit，不新增前端入口，不实现 bundle import，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser bundle/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit backend/tests/test_api.py::test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload backend/tests/test_api.py::test_export_profile_bundle_requires_existing_profile -q
+# failed before implementation: 4 failed with 405 Method Not Allowed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit backend/tests/test_api.py::test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload backend/tests/test_api.py::test_export_profile_bundle_requires_existing_profile -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py backend/tests/test_api.py -q
+# 177 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_bulk_export_profile_configs_returns_partial_results backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
+# 9 passed
 ```
 
 ## 验证

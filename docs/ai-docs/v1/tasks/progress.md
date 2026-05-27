@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle config export API 小闭环：
+  - 新增 `POST /api/profiles/{profile_id}/bundle/export`。
+  - 请求体支持 `include_sensitive_proxy`，默认 `false`，必须是 JSON boolean，不接受字符串或数字宽松转换。
+  - 成功响应返回 `profile_id` 和 `cloakbrowser.profile-bundle.v1` config-only `bundle`。
+  - 默认 `profile.config` 只包含 `ProfileConfigExport` 白名单字段，proxy 默认脱敏；`cookies/local_storage/profile_dir` 均为 `included=false` 和低敏空统计。
+  - endpoint 不读取磁盘 profile dir，不导出 cookie/local storage 明文，不写 audit，不新增前端入口，不实现 bundle import。
+  - 无效请求体固定返回 `422 Invalid profile bundle export request`，不回显调用方 payload；profile 不存在返回 `404 Profile not found`。
+  - 本小闭环不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle manifest/config-only 格式层小闭环：
   - 新增 `backend/profile_bundle.py` 和 `backend/tests/test_profile_bundle.py`。
   - 定义 `cloakbrowser.profile-bundle.v1` / `schema_version=1` 格式模型。

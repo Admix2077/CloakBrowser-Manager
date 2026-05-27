@@ -407,6 +407,15 @@ class ProfileExportResponse(BaseModel):
     results: list[ProfileExportResult] = Field(default_factory=list)
 
 
+class ProfileBundleExportRequest(BaseModel):
+    include_sensitive_proxy: StrictBool = False
+
+
+class ProfileBundleExportResponse(BaseModel):
+    profile_id: str
+    bundle: dict[str, Any]
+
+
 class ProfileConfigImportRequest(BaseModel):
     schema_version: Literal[1] = 1
     configs: list[dict[str, Any]] = Field(min_length=1, max_length=1000)

@@ -95,6 +95,8 @@ from .models import (
     ProfileConfigImportResponse,
     ProfileConfigImportResult,
     ProfileConfigExport,
+    ProfileBundleExportRequest,
+    ProfileBundleExportResponse,
     ProfileExportRequest,
     ProfileExportResponse,
     ProfileExportResult,
@@ -124,6 +126,7 @@ from .profile_import import (
     profile_create_data_for_import,
     preview_profile_csv_import,
 )
+from .profile_bundle import build_profile_config_bundle
 from .proxies import redact_proxy_asset_url
 
 logger = logging.getLogger("invisible_browser.manager")
@@ -1624,6 +1627,30 @@ async def export_profile_cookies_netscape(profile_id: str, req: CookieExportRequ
         exported=len(document.cookies),
         summary=summary,
         text=text,
+    )
+
+
+@app.post("/api/profiles/{profile_id}/bundle/export", response_model=ProfileBundleExportResponse)
+async def export_profile_bundle(profile_id: str, request: Request):
+    try:
+        req = ProfileBundleExportRequest.model_validate(await request.json())
+    except Exception as exc:
+        logger.warning("Profile bundle export validation failed for %s: %s", profile_id, type(exc).__name__)
+        raise HTTPException(status_code=422, detail="Invalid profile bundle export request") from exc
+
+    profile = db.get_profile(profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    bundle = build_profile_config_bundle(
+        profile,
+        exported_at=exported_at,
+        include_sensitive_proxy=req.include_sensitive_proxy,
+    )
+    return ProfileBundleExportResponse(
+        profile_id=profile_id,
+        bundle=bundle.model_dump(mode="json", by_alias=True),
     )
 
 

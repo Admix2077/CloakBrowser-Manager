@@ -1353,6 +1353,108 @@ def test_export_cookie_netscape_context_failure_uses_fixed_error_without_audit_o
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bundle API Profile",
+            "proxy": "http://user:super-secret-proxy-password@bundle.example:8080",
+            "platform": "macos",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "tags": [{"tag": "bundle", "color": "#2563eb"}],
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(f"/api/profiles/{pid}/bundle/export", json={})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["profile_id"] == pid
+    bundle = data["bundle"]
+    assert bundle["format"] == "cloakbrowser.profile-bundle.v1"
+    assert bundle["schema_version"] == 1
+    assert bundle["profile"]["config"]["name"] == "Bundle API Profile"
+    assert bundle["profile"]["config"]["proxy"] == "http://bundle.example:8080"
+    assert bundle["profile"]["config"]["tags"] == [{"tag": "bundle", "color": "#2563eb"}]
+    assert bundle["cookies"] == {
+        "included": False,
+        "format": "cloakbrowser.cookie-json.v1",
+        "schema_version": 1,
+        "summary": {"cookie_count": 0},
+    }
+    assert bundle["local_storage"] == {"included": False, "origin_count": 0}
+    assert bundle["profile_dir"]["included"] is False
+    assert bundle["profile_dir"]["archive"] is None
+    assert bundle["metadata"]["source_profile_id"] == pid
+    assert bundle["metadata"]["sensitive_proxy_included"] is False
+    assert bundle["metadata"]["cookies_included"] is False
+    assert bundle["metadata"]["local_storage_included"] is False
+    assert bundle["metadata"]["profile_dir_archive_included"] is False
+
+    response_text = resp.text
+    assert "super-secret-proxy-password" not in response_text
+    assert "user_data_dir" not in response_text
+    assert "automation_url" not in response_text
+    assert "vnc_ws_port" not in response_text
+    assert "viewer_token" not in response_text
+    assert "runtime_session" not in response_text
+    assert "wallet" not in response_text
+    assert "order" not in response_text
+    assert "payment" not in response_text
+    assert main.db.list_audit_events() == []
+
+
+def test_export_profile_bundle_can_include_sensitive_proxy_only_when_explicit(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bundle Sensitive Proxy",
+            "proxy": "http://user:super-secret-proxy-password@bundle.example:8080",
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_sensitive_proxy": True},
+    )
+
+    assert resp.status_code == 200
+    bundle = resp.json()["bundle"]
+    assert bundle["profile"]["config"]["proxy"] == (
+        "http://user:super-secret-proxy-password@bundle.example:8080"
+    )
+    assert bundle["metadata"]["sensitive_proxy_included"] is True
+
+
+def test_export_profile_bundle_rejects_coerced_sensitive_flag_without_echoing_payload(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Bundle Coerced Flag"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={
+            "include_sensitive_proxy": "true",
+            "cookies": [{"value": "super-secret-cookie-value"}],
+            "user_data_dir": "/data/profiles/secret-path",
+        },
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Invalid profile bundle export request"}
+    assert "super-secret-cookie-value" not in resp.text
+    assert "/data/profiles/secret-path" not in resp.text
+
+
+def test_export_profile_bundle_requires_existing_profile(app_client: TestClient):
+    resp = app_client.post("/api/profiles/missing/bundle/export", json={})
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not found"}
+
+
 def test_automation_info_running(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationInfo"})
     pid = create.json()["id"]
