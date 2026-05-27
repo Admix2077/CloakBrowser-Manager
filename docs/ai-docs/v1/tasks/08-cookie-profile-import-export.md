@@ -15,7 +15,7 @@
 - [x] 导出 cookie 必须写 audit。
 - [x] 导出 cookie 必须有显式确认。
 - [ ] 前端新增 Cookie 管理入口。
-- [ ] 支持 profile config export：
+- [x] 支持 profile config export：
   - 不包含 cookie。
   - 不包含 proxy password，除非用户选择包含敏感字段。
 - [ ] 支持 profile config import。
@@ -123,6 +123,27 @@
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_cookie_json_requires_explicit_confirmation_without_reading_context backend/tests/test_api.py::test_export_cookie_json_returns_document_and_writes_redacted_audit backend/tests/test_api.py::test_export_cookie_json_requires_running_profile backend/tests/test_api.py::test_export_cookie_json_context_failure_uses_fixed_error_without_audit_or_leak -q
 # 4 passed
+```
+
+## 2026-05-27 profile config export 敏感字段默认脱敏小闭环
+
+当前状态：
+
+- 既有 `POST /api/profiles/export` 已补齐敏感字段默认边界。
+- 请求体支持 `include_sensitive`：
+  - 默认 `false`。
+  - 必须是 JSON boolean，不接受字符串或数字宽松转换。
+  - `false` 时，导出的 `config.proxy` 会移除 `username:password@`，只保留 scheme、host、port。
+  - `true` 时，才返回完整 proxy URL，用于可信本地管理侧明确选择导出敏感配置。
+- profile config export 仍只导出 profile 配置字段，不包含 cookie、local storage、profile dir、viewer token、runtime session、automation task、钱包、订单、权限或 Project Mileage 业务事实源。
+- 本小闭环不新增前端入口、不新增 audit 事件、不实现 profile config import、不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser profile/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_proxy_credentials_by_default backend/tests/test_api.py::test_export_profiles_can_include_sensitive_proxy_when_explicitly_requested backend/tests/test_api.py::test_export_profiles_rejects_coerced_sensitive_flag -q
+# 3 passed
 ```
 
 ## 验证

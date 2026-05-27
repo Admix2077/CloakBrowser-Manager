@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 profile config export 敏感字段默认脱敏小闭环：
+  - 既有 `POST /api/profiles/export` 支持 `include_sensitive`，默认 `false`。
+  - `include_sensitive` 必须是 JSON boolean，不接受字符串或数字宽松转换。
+  - 默认导出的 `config.proxy` 会移除 `username:password@`，只保留 scheme、host、port。
+  - 显式 `include_sensitive: true` 时，才返回完整 proxy URL，用于可信本地管理侧明确选择导出敏感配置。
+  - profile config export 仍只导出 profile 配置字段，不包含 cookie、local storage、profile dir、viewer token、runtime session、automation task、钱包、订单、权限或 Project Mileage 业务事实源。
+  - 本小闭环不新增前端入口、不新增 audit 事件、不实现 profile config import、不接 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 JSON cookie export 显式确认与审计小闭环：
   - 新增 `POST /api/profiles/{profile_id}/cookies/export`。
   - 请求体必须显式传入 JSON boolean `confirm_export: true`，不接受字符串或数字宽松转换；缺失或 `false` 返回固定 `422 Cookie export requires explicit confirmation`，且不读取 browser context、不写 audit。

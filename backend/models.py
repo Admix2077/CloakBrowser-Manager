@@ -364,6 +364,7 @@ class ProfileImportResponse(BaseModel):
 
 class ProfileExportRequest(BaseModel):
     profile_ids: list[str] = Field(min_length=1)
+    include_sensitive: StrictBool = False
 
 
 class ProfileConfigExport(BaseModel):

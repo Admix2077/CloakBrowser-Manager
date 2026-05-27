@@ -257,7 +257,7 @@ def test_bulk_export_profile_configs_returns_partial_results(app_client: TestCli
     assert first_result["ok"] is True
     assert first_result["error"] is None
     assert first_result["config"]["name"] == "Export A"
-    assert first_result["config"]["proxy"] == "http://user:hiddenpass@export-a.example:8080"
+    assert first_result["config"]["proxy"] == "http://export-a.example:8080"
     assert first_result["config"]["platform"] == "macos"
     assert first_result["config"]["screen_width"] == 1440
     assert first_result["config"]["screen_height"] == 900
@@ -274,6 +274,7 @@ def test_bulk_export_profile_configs_returns_partial_results(app_client: TestCli
     assert "automation_url" not in first_result["config"]
     assert "vnc_ws_port" not in first_result["config"]
     assert "user_data_dir" not in first_result["config"]
+    assert "hiddenpass" not in resp.text
 
     assert missing_result == {
         "profile_id": "missing",

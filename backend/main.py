@@ -1356,6 +1356,8 @@ async def export_profiles(req: ProfileExportRequest):
             )
             continue
 
+        if not req.include_sensitive and profile.get("proxy"):
+            profile["proxy"] = redact_proxy_asset_url(str(profile["proxy"]))
         profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
         results.append(
             ProfileExportResult(

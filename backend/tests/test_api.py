@@ -157,6 +157,67 @@ def test_tags_api_update_replace_and_clear(app_client: TestClient):
     assert cleared.json()["tags"] == []
 
 
+def test_export_profiles_redacts_proxy_credentials_by_default(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "ExportProxyDefault",
+            "proxy": "http://user:super-secret-proxy-password@proxy.example.com:8080",
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post("/api/profiles/export", json={"profile_ids": [pid]})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    config = data["results"][0]["config"]
+    assert config["proxy"] == "http://proxy.example.com:8080"
+    response_text = resp.text
+    assert "super-secret-proxy-password" not in response_text
+    assert "user:super-secret-proxy-password" not in response_text
+
+
+def test_export_profiles_can_include_sensitive_proxy_when_explicitly_requested(app_client: TestClient):
+    proxy = "http://user:super-secret-proxy-password@proxy.example.com:8080"
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "ExportProxySensitive",
+            "proxy": proxy,
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [pid], "include_sensitive": True},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    config = data["results"][0]["config"]
+    assert config["proxy"] == proxy
+
+
+def test_export_profiles_rejects_coerced_sensitive_flag(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "ExportProxyCoercedSensitive",
+            "proxy": "http://user:super-secret-proxy-password@proxy.example.com:8080",
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [pid], "include_sensitive": "true"},
+    )
+
+    assert resp.status_code == 422
+
+
 # ── Profile Status ───────────────────────────────────────────────────────────
 
 
