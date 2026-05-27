@@ -432,6 +432,53 @@ async def test_launch_does_not_block_on_existing_page_init_script_timeout(
 
 
 @pytest.mark.asyncio
+async def test_launch_creates_automation_blank_page_when_only_internal_pages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+):
+    class InternalPage:
+        url = "about:home"
+
+        async def evaluate(self, script: str):
+            return None
+
+    async def fake_enter(self):
+        self.context.pages = [InternalPage()]
+        self.context.new_page = AsyncMock()
+        return self.context
+
+    monkeypatch.setattr(mock_invisible_playwright, "__aenter__", fake_enter)
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    await mgr.launch({
+        "id": "profile-internal-only",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": 1366,
+        "screen_height": 768,
+        "proxy": None,
+        "timezone": "Asia/Shanghai",
+        "locale": "zh-CN",
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+
+    launch = mock_invisible_playwright.instances[0]
+    launch.context.new_page.assert_awaited_once()
+
+    await mgr.stop("profile-internal-only")
+
+
+@pytest.mark.asyncio
 async def test_cleanup_stale_kills_scoped_invisible_playwright_firefox(
     monkeypatch: pytest.MonkeyPatch,
 ):

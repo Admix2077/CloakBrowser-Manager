@@ -3920,6 +3920,19 @@ def _automation_page_id(running, page) -> str:
     return page_id
 
 
+def _automation_page_url(page) -> str:
+    return str(getattr(page, "url", "") or "")
+
+
+def _automation_is_internal_page(page) -> bool:
+    return _automation_page_url(page) in {"about:home", "about:newtab", "about:welcome"}
+
+
+def _automation_pages(running) -> list:
+    pages = list(getattr(running.context, "pages", []) or [])
+    return [page for page in pages if not _automation_is_internal_page(page)]
+
+
 def _automation_console_log_entry(message) -> dict:
     try:
         location = message.location
@@ -4033,7 +4046,7 @@ async def _automation_page_summary(running, index: int, page) -> AutomationPageR
     return AutomationPageResponse(
         page_id=_automation_page_id(running, page),
         index=index,
-        url=page.url,
+        url=_automation_page_url(page),
         title=title,
     )
 
@@ -4052,7 +4065,7 @@ def _automation_get_page(profile_id: str, page_ref: str):
     running = _automation_running(profile_id)
     if not hasattr(running, "automation_page_ids"):
         running.automation_page_ids = {}
-    pages = list(getattr(running.context, "pages", []) or [])
+    pages = _automation_pages(running)
 
     if page_ref.isdecimal():
         page_index = int(page_ref)
@@ -4086,7 +4099,7 @@ async def automation_info(profile_id: str):
 @app.get("/api/profiles/{profile_id}/automation/pages", response_model=AutomationPagesResponse)
 async def automation_pages(profile_id: str):
     running = _automation_running(profile_id)
-    pages = list(getattr(running.context, "pages", []) or [])
+    pages = _automation_pages(running)
     return AutomationPagesResponse(
         pages=[
             await _automation_page_summary(running, index, page)
@@ -4129,7 +4142,7 @@ async def automation_create_page(profile_id: str):
         logger.warning("Automation new_page failed for %s: %s", profile_id, exc)
         raise HTTPException(status_code=400, detail=str(exc))
 
-    pages = list(getattr(running.context, "pages", []) or [])
+    pages = _automation_pages(running)
     try:
         index = pages.index(page)
     except ValueError:

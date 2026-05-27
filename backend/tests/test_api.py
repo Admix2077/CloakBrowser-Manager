@@ -2240,6 +2240,37 @@ def test_automation_pages_lists_existing_pages(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_pages_hide_internal_about_home_from_numeric_refs(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationInternalHome"})
+    pid = create.json()["id"]
+    about_home = _automation_page("about:home", "")
+    managed_page = _automation_page("about:blank", "Blank")
+    _automation_running_profile(pid, [about_home, managed_page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["pages"]) == 1
+    assert data["pages"][0]["index"] == 0
+    assert data["pages"][0]["url"] == "about:blank"
+    assert isinstance(data["pages"][0]["page_id"], str)
+
+    goto = app_client.post(
+        f"/api/profiles/{pid}/automation/pages/0/goto",
+        json={"url": "https://example.com/", "wait_until": "domcontentloaded", "timeout_ms": 5000},
+    )
+
+    assert goto.status_code == 200
+    managed_page.goto.assert_awaited_once_with(
+        "https://example.com/",
+        wait_until="domcontentloaded",
+        timeout=5000,
+    )
+    about_home.goto.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_pages_create_new_page(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationNewPage"})
     pid = create.json()["id"]

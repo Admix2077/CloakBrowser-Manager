@@ -21,6 +21,7 @@ logger = logging.getLogger("invisible_browser.manager.browser")
 
 INVISIBLE_FIREFOX_PROCESS_PATTERN = r"\.cache/invisible-playwright/.*/firefox"
 EXISTING_PAGE_INIT_TIMEOUT_SECONDS = 2.0
+INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
 
 
 def _normalize_proxy(raw: str) -> str:
@@ -284,6 +285,14 @@ def _clean_firefox_startup_state(user_data_dir: Path) -> None:
         (user_data_dir / restore_file).unlink(missing_ok=True)
 
 
+def _page_url(page: Any) -> str:
+    return str(getattr(page, "url", "") or "")
+
+
+def _is_internal_firefox_page(page: Any) -> bool:
+    return _page_url(page) in INTERNAL_FIREFOX_PAGE_URLS
+
+
 @dataclass
 class RunningProfile:
     profile_id: str
@@ -365,6 +374,12 @@ class BrowserManager:
                     )
                 except Exception as exc:
                     logger.debug("Browser init failed on existing page: %s", exc)
+
+            if not any(not _is_internal_firefox_page(p) for p in context.pages):
+                try:
+                    await context.new_page()
+                except Exception as exc:
+                    logger.debug("Automation bootstrap page creation failed: %s", exc)
 
             running = RunningProfile(
                 profile_id=profile_id,
