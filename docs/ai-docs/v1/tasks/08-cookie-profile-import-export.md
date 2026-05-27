@@ -26,6 +26,7 @@
   - 默认包含/排除项。
   - 显式敏感导出边界。
   - 停止态 profile dir 风险。
+- [x] 支持 profile bundle manifest/config-only 格式层。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -420,6 +421,52 @@ cd frontend && npm run build
 ```bash
 git diff --check
 # passed
+```
+
+## 2026-05-27 Profile Bundle manifest/config-only 格式层小闭环
+
+当前状态：
+
+- 已新增 `backend/profile_bundle.py` 和 `backend/tests/test_profile_bundle.py`。
+- Profile Bundle 格式名固定为 `cloakbrowser.profile-bundle.v1`，`schema_version` 固定为 `1`。
+- 新增 `build_profile_config_bundle(profile, exported_at, app_version=None, include_sensitive_proxy=False)`：
+  - 只构造 manifest/config-only bundle 文档。
+  - 复用既有 `ProfileConfigExport` 白名单字段。
+  - 默认对 `config.proxy` 调用 `redact_proxy_asset_url()` 脱敏，移除 `username:password@`。
+  - 只有显式 `include_sensitive_proxy=True` 时，才在 `profile.config.proxy` 中保留完整 proxy。
+- 默认 bundle 结构包含：
+  - `profile.config`：profile config 白名单字段。
+  - `cookies`：`included=false` 和低敏 `cookie_count=0`。
+  - `local_storage`：`included=false` 和 `origin_count=0`。
+  - `profile_dir`：`included=false`、文件统计为 0、`archive=null`。
+  - `metadata`：app/source profile/include flag 等低敏元数据。
+- 默认不包含、不读取、不回显：
+  - `user_data_dir`。
+  - Firefox profile dir 原始目录。
+  - cookie/local storage 明文。
+  - runtime session、viewer token、viewer token hash、VNC 字段、automation URL、lease owner。
+  - Project Mileage 钱包、订单、支付、权限、续期、远程工作台 session 或审计事实。
+- `ProfileBundleDocument.profile` 设置为 `repr=False`，避免显式敏感 proxy 在测试失败、调试输出或日志拼接中通过模型 repr 泄露。
+- 本小闭环不新增公开 API，不读取 profile dir，不导出 cookie/local storage 明文，不写 audit，不新增前端入口，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser bundle/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py -q
+# failed before implementation: ModuleNotFoundError: No module named 'backend.profile_bundle'
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py -q
+# failed before repr hardening: 1 failed, explicit sensitive proxy appeared in repr(bundle)
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py backend/tests/test_bulk.py::test_bulk_export_profile_configs_returns_partial_results backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_api.py -q
+# 176 passed
 ```
 
 ## 验证

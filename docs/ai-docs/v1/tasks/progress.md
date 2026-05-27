@@ -35,6 +35,15 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle manifest/config-only 格式层小闭环：
+  - 新增 `backend/profile_bundle.py` 和 `backend/tests/test_profile_bundle.py`。
+  - 定义 `cloakbrowser.profile-bundle.v1` / `schema_version=1` 格式模型。
+  - 新增 `build_profile_config_bundle()`，只构造 manifest/config-only bundle，不新增公开 API，不读取 profile dir。
+  - `profile.config` 复用既有 `ProfileConfigExport` 白名单字段；默认 proxy 脱敏，只有显式 `include_sensitive_proxy=True` 才保留完整 proxy。
+  - 默认 bundle 只包含低敏 metadata、`cookies.included=false`、`local_storage.included=false`、`profile_dir.included=false` 和空统计。
+  - 默认不包含 `user_data_dir`、Firefox profile dir 原始目录、cookie/local storage 明文、runtime/viewer/VNC/automation/lease 字段、Project Mileage 钱包/订单/支付/权限/审计事实或 secret/token。
+  - `ProfileBundleDocument.profile` 设置为 `repr=False`，避免显式敏感 proxy 通过模型 repr 出现在测试失败或调试输出中。
+  - 本小闭环不新增 REST API、不写 audit、不新增前端入口、不接 Project Mileage DTO、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Profile Bundle 边界与分阶段方案小闭环：
   - 新增 `docs/ai-docs/v1/profile-bundle-boundary-plan.md`。
   - 明确后续 bundle 采用 `cloakbrowser.profile-bundle.v1` manifest 思路，先从 config/metadata 低风险能力开始，不直接整目录打包。
