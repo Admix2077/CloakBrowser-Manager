@@ -92,6 +92,7 @@ cd frontend && npm run build
   - `launch_args` 采用与 profile 一致的 JSON roundtrip。
 - [x] `backend/models.py`
   - 新增 `ProfileTemplateCreate` / `ProfileTemplateUpdate` / `ProfileTemplateResponse`。
+  - 10 审计安全阶段已补 `ProfileTemplateDeleteRequest`；删除 template 必须传 JSON boolean `confirm_delete: true`。
   - 字段覆盖 platform、screen、GPU、hardware concurrency、color scheme、humanize、human preset、launch args、geoip。
 - [x] `backend/main.py`
   - 新增 `/api/profile-templates` CRUD：
@@ -100,8 +101,10 @@ cd frontend && npm run build
     - `GET /api/profile-templates/{template_id}`
     - `PUT /api/profile-templates/{template_id}`
     - `DELETE /api/profile-templates/{template_id}`
+  - 10 审计安全阶段已补删除确认：缺失、`false` 或字符串 `"true"` 返回固定 422，未确认不删除 template。
 - [x] `backend/tests/test_templates.py`
   - 覆盖表创建、DB CRUD、API CRUD、not found、模板更新不静默改写已有 profile。
+  - 10 审计安全阶段已补 API 删除确认测试。
 
 验证：
 

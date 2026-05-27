@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 profile template delete 后端强制确认小闭环：
+  - `DELETE /api/profile-templates/{template_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Profile template delete requires explicit confirmation`。
+  - 未确认删除不会删除 profile template；确认删除继续保持“模板更新/删除不改写已有 profile”的既有事实源边界。
+  - 前端 `api.deleteProfileTemplate()` 固定发送 `{ confirm_delete: true }`。
+  - 本小闭环只修改 CloakBrowser 本仓 template delete 安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 proxy provider preset delete 后端强制确认小闭环：
   - `DELETE /api/proxy-provider-presets/{preset_id}` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_delete: true`。
   - 缺失确认、`false` 或字符串 `"true"` 均返回固定 `422 Proxy provider preset delete requires explicit confirmation`。

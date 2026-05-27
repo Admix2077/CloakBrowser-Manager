@@ -241,6 +241,20 @@ describe("api.deleteProfile", () => {
   });
 });
 
+describe("api.deleteProfileTemplate", () => {
+  it("sends DELETE request with explicit confirmation", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    const result = await api.deleteProfileTemplate("template-1");
+
+    expect(result).toEqual({ ok: true });
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profile-templates/template-1");
+    expect(options.method).toBe("DELETE");
+    expect(JSON.parse(options.body)).toEqual({ confirm_delete: true });
+  });
+});
+
 // ── launchProfile ───────────────────────────────────────────────────────────
 
 describe("api.launchProfile", () => {

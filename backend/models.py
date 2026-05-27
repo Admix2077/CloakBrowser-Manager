@@ -102,6 +102,10 @@ class ProfileTemplateUpdate(BaseModel):
     geoip: bool | None = None
 
 
+class ProfileTemplateDeleteRequest(BaseModel):
+    confirm_delete: StrictBool = False
+
+
 class ProfileTemplateResponse(BaseModel):
     id: str
     name: str

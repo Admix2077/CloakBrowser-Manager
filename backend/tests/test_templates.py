@@ -144,10 +144,45 @@ def test_profile_template_crud_api(app_client: TestClient):
     assert get.status_code == 200
     assert get.json()["name"] == "Retail US steady"
 
-    delete = app_client.delete(f"/api/profile-templates/{data['id']}")
+    delete = app_client.request(
+        "DELETE",
+        f"/api/profile-templates/{data['id']}",
+        json={"confirm_delete": True},
+    )
     assert delete.status_code == 200
     assert delete.json() == {"ok": True}
     assert app_client.get(f"/api/profile-templates/{data['id']}").status_code == 404
+
+
+def test_delete_profile_template_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    create = app_client.post(
+        "/api/profile-templates",
+        json={
+            "name": "Retail US",
+            "platform": "linux",
+            "screen_width": 1366,
+            "screen_height": 768,
+        },
+    )
+    assert create.status_code == 201
+    template_id = create.json()["id"]
+
+    for payload in ({}, {"confirm_delete": False}, {"confirm_delete": "true"}):
+        resp = app_client.request(
+            "DELETE",
+            f"/api/profile-templates/{template_id}",
+            json=payload,
+        )
+        assert resp.status_code == 422
+        assert resp.json() == {
+            "detail": "Profile template delete requires explicit confirmation"
+        }
+
+    get = app_client.get(f"/api/profile-templates/{template_id}")
+    assert get.status_code == 200
+    assert get.json()["id"] == template_id
 
 
 def test_create_profile_from_template_copies_template_fields(app_client: TestClient):
@@ -235,4 +270,8 @@ def test_create_profile_from_missing_template_returns_404(app_client: TestClient
 def test_profile_template_api_not_found(app_client: TestClient):
     assert app_client.get("/api/profile-templates/missing").status_code == 404
     assert app_client.put("/api/profile-templates/missing", json={"name": "x"}).status_code == 404
-    assert app_client.delete("/api/profile-templates/missing").status_code == 404
+    assert app_client.request(
+        "DELETE",
+        "/api/profile-templates/missing",
+        json={"confirm_delete": True},
+    ).status_code == 404

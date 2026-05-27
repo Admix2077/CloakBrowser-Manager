@@ -130,4 +130,6 @@ cd frontend && npm test -- --run
   - [x] 缺失 proxy 删除确认时返回固定 422，不删除 proxy asset，不写 `proxy.deleted` audit。
   - [x] `DELETE /api/proxy-provider-presets/{preset_id}` 后端强制要求 JSON boolean `confirm_delete: true`。
   - [x] 缺失 provider preset 删除确认时返回固定 `422 Proxy provider preset delete requires explicit confirmation`，不删除 preset；前端 `api.deleteProxyProviderPreset()` 固定发送确认 body。
+  - [x] `DELETE /api/profile-templates/{template_id}` 后端强制要求 JSON boolean `confirm_delete: true`。
+  - [x] 缺失 profile template 删除确认时返回固定 `422 Profile template delete requires explicit confirmation`，不删除 template；前端 `api.deleteProfileTemplate()` 固定发送确认 body。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

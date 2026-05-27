@@ -603,7 +603,10 @@ export const api = {
     }),
 
   deleteProfileTemplate: (id: string) =>
-    request<{ ok: boolean }>(`/api/profile-templates/${id}`, { method: "DELETE" }),
+    request<{ ok: boolean }>(`/api/profile-templates/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ confirm_delete: true }),
+    }),
 
   launchProfile: (id: string) =>
     request<LaunchResult>(`/api/profiles/${id}/launch`, { method: "POST" }),

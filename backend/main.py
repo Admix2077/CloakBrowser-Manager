@@ -110,6 +110,7 @@ from .models import (
     ProfileResponse,
     ProfileStatusResponse,
     ProfileTemplateCreate,
+    ProfileTemplateDeleteRequest,
     ProfileTemplateResponse,
     ProfileTemplateUpdate,
     ProfileUpdate,
@@ -1392,7 +1393,21 @@ async def update_profile_template(template_id: str, req: ProfileTemplateUpdate):
 
 
 @app.delete("/api/profile-templates/{template_id}")
-async def delete_profile_template(template_id: str):
+async def delete_profile_template(template_id: str, request: Request):
+    try:
+        req = ProfileTemplateDeleteRequest.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile template delete requires explicit confirmation",
+        ) from None
+
+    if req.confirm_delete is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Profile template delete requires explicit confirmation",
+        )
+
     deleted = db.delete_profile_template(template_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Profile template not found")
