@@ -331,6 +331,27 @@ def test_build_invisible_kwargs_filters_chromium_only_launch_args(tmp_path: Path
     assert kwargs["extra_args"] == ["--private-window"]
 
 
+@pytest.mark.asyncio
+async def test_stop_without_runner_closes_context_and_releases_vnc():
+    mgr = BrowserManager()
+    context = SimpleNamespace(close=AsyncMock())
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.running["profile-context"] = bm.RunningProfile(
+        profile_id="profile-context",
+        context=context,
+        display=111,
+        ws_port=6111,
+        engine="invisible_playwright",
+        runner=None,
+    )
+
+    await mgr.stop("profile-context")
+
+    context.close.assert_awaited_once()
+    mgr.vnc.stop_vnc.assert_awaited_once_with(111)
+    assert "profile-context" not in mgr.running
+
+
 # ── launch lifecycle ─────────────────────────────────────────────────────────
 
 

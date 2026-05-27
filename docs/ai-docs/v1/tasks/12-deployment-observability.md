@@ -20,7 +20,7 @@
 - [x] 配置最大同时运行 profile 数。
 - [x] 配置批量启动并发。
 - [x] 启动前检查可用 display / ws port。
-- [ ] 停止时释放 VNC 和 browser context。
+- [x] 停止时释放 VNC 和 browser context。
 - [ ] 清理 stale process。
 
 ### Observability
@@ -258,4 +258,36 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 
 . .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_allocate_skips_unavailable_display_or_ws_port backend/tests/test_vnc_manager.py::test_allocate_first backend/tests/test_vnc_manager.py::test_allocate_sequential backend/tests/test_vnc_manager.py::test_allocate_fills_gap -q
 # 4 passed
+```
+
+## 2026-05-28 stop 释放 browser context / VNC 验收收口小闭环
+
+背景：
+
+- 12 Resource Limits 要求停止 profile 时释放浏览器 context 和 VNC 资源。
+- 现有 launch/stop 测试已覆盖 runner 分支：`BrowserManager.stop()` 会调用 invisible_playwright runner 的 `__aexit__()`，随后释放 VNC。
+- 本轮补齐无 runner 分支的测试证据，确保直接持有 Playwright browser context 时也会关闭 context 并释放 VNC。
+- 本轮只修改 CloakBrowser 本仓测试和文档，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/tests/test_browser_manager.py`
+  - 新增 `test_stop_without_runner_closes_context_and_releases_vnc`。
+  - 手动构造 `RunningProfile(runner=None)`，调用 `BrowserManager.stop()`。
+  - 断言 `context.close()` 被 await 一次。
+  - 断言 `vnc.stop_vnc(display)` 被 await 一次。
+  - 断言 `running` map 已移除目标 profile。
+- `backend/browser_manager.py`
+  - 生产代码无需修改；现有实现已满足该验收口径。
+
+边界：
+
+- stop 只释放 CloakBrowser 本地运行态资源；不删除 profile、不删除订单、不修改钱包/支付/权限/续期事实。
+- 日志只包含 profile id 和固定 action，不记录 proxy、cookie/local storage、viewer token、runtime service token、headers 或 Project Mileage 订单/钱包/权限/审计事实。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stop_without_runner_closes_context_and_releases_vnc -q
+# 1 passed
 ```
