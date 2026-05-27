@@ -234,6 +234,13 @@ export interface CookieExportResponse {
   document: CookieJsonDocument;
 }
 
+export interface NetscapeCookieExportResponse {
+  profile_id: string;
+  exported: number;
+  summary: CookieSummary;
+  text: string;
+}
+
 export interface ProxyAsset {
   id: string;
   name: string;
@@ -544,6 +551,18 @@ export const api = {
 
   exportProfileCookies: (profileId: string) =>
     request<CookieExportResponse>(`/api/profiles/${profileId}/cookies/export`, {
+      method: "POST",
+      body: JSON.stringify({ confirm_export: true }),
+    }),
+
+  importProfileCookiesNetscape: (profileId: string, text: string) =>
+    request<CookieImportResponse>(`/api/profiles/${profileId}/cookies/import/netscape`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  exportProfileCookiesNetscape: (profileId: string) =>
+    request<NetscapeCookieExportResponse>(`/api/profiles/${profileId}/cookies/export/netscape`, {
       method: "POST",
       body: JSON.stringify({ confirm_export: true }),
     }),

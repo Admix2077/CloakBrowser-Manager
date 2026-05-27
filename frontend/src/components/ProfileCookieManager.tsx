@@ -3,9 +3,13 @@ import { useState } from "react";
 import { api, type CookieJsonDocument, type CookieSummary, type Profile } from "../lib/api";
 
 const COOKIE_JSON_FORMAT = "cloakbrowser.cookie-json.v1";
+const NETSCAPE_FORMAT = "netscape-cookie-file";
 const INVALID_JSON_MESSAGE = "Invalid Cookie JSON document";
+const INVALID_NETSCAPE_MESSAGE = "Invalid Netscape cookie document";
 const IMPORT_FAILED_MESSAGE = "Cookie import failed";
 const EXPORT_FAILED_MESSAGE = "Cookie export failed";
+
+type CookieFormatMode = "json" | "netscape";
 
 interface ProfileCookieManagerProps {
   profile: Profile;
@@ -13,6 +17,7 @@ interface ProfileCookieManagerProps {
 
 export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
   const [cookieText, setCookieText] = useState("");
+  const [formatMode, setFormatMode] = useState<CookieFormatMode>("json");
   const [confirmExport, setConfirmExport] = useState(false);
   const [summary, setSummary] = useState<CookieSummary | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -21,31 +26,29 @@ export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
   const isRunning = profile.status === "running";
   const canImport = isRunning && cookieText.trim().length > 0 && busyAction === null;
   const canExport = isRunning && confirmExport && busyAction === null;
+  const formatLabel = formatMode === "json" ? COOKIE_JSON_FORMAT : NETSCAPE_FORMAT;
+  const importLabel = formatMode === "json" ? "Cookie JSON" : "Netscape cookie file";
+  const textareaLabel = formatMode === "json" ? "Cookie JSON v1 document" : "Netscape cookie file text";
+  const textareaPlaceholder = formatMode === "json"
+    ? '{"format":"cloakbrowser.cookie-json.v1","schema_version":1,"cookies":[]}'
+    : "# Netscape HTTP Cookie File";
 
   const importCookies = async () => {
     if (!canImport) return;
-    let document: CookieJsonDocument;
-    try {
-      document = JSON.parse(cookieText) as CookieJsonDocument;
-    } catch {
-      setError(INVALID_JSON_MESSAGE);
-      setNotice(null);
-      setSummary(null);
-      setCookieText("");
-      return;
-    }
 
     setBusyAction("import");
     setError(null);
     setNotice(null);
     try {
-      const response = await api.importProfileCookies(profile.id, document);
+      const response = formatMode === "json"
+        ? await api.importProfileCookies(profile.id, parseCookieJson(cookieText))
+        : await api.importProfileCookiesNetscape(profile.id, cookieText);
       setSummary(response.summary);
       setNotice(`Imported ${response.imported} cookie(s)`);
       setCookieText("");
     } catch (err) {
       setSummary(null);
-      setError(safeCookieError(err, IMPORT_FAILED_MESSAGE));
+      setError(formatMode === "json" ? safeCookieError(err, IMPORT_FAILED_MESSAGE) : safeCookieError(err, INVALID_NETSCAPE_MESSAGE));
       setCookieText("");
     } finally {
       setBusyAction(null);
@@ -59,9 +62,19 @@ export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
     setError(null);
     setNotice(null);
     try {
-      const response = await api.exportProfileCookies(profile.id);
+      if (formatMode === "json") {
+        const response = await api.exportProfileCookies(profile.id);
+        setSummary(response.summary);
+        const downloaded = downloadCookieDocument(profile.id, response.document);
+        setNotice(downloaded
+          ? `Exported ${response.exported} cookie(s)`
+          : `Exported ${response.exported} cookie(s); download unavailable`);
+        return;
+      }
+
+      const response = await api.exportProfileCookiesNetscape(profile.id);
       setSummary(response.summary);
-      const downloaded = downloadCookieDocument(profile.id, response.document);
+      const downloaded = downloadCookieText(profile.id, response.text, "txt");
       setNotice(downloaded
         ? `Exported ${response.exported} cookie(s)`
         : `Exported ${response.exported} cookie(s); download unavailable`);
@@ -86,7 +99,7 @@ export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
           </span>
           <div className="min-w-0">
             <h3 className="text-xs font-semibold text-slate-950">Cookies</h3>
-            <p className="mt-0.5 text-[11px] text-slate-500">{COOKIE_JSON_FORMAT}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">{formatLabel}</p>
           </div>
         </div>
         <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${
@@ -116,12 +129,31 @@ export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
         </div>
       )}
 
+      <div className="grid grid-cols-2 gap-1 rounded-md border border-slate-200 bg-white p-1" role="group" aria-label="Cookie format">
+        <button
+          type="button"
+          className={`h-7 rounded-[5px] text-xs font-semibold ${formatMode === "json" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+          onClick={() => switchFormatMode("json", { setFormatMode, setCookieText, setError, setNotice, setSummary })}
+          disabled={busyAction !== null}
+        >
+          JSON
+        </button>
+        <button
+          type="button"
+          className={`h-7 rounded-[5px] text-xs font-semibold ${formatMode === "netscape" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50"}`}
+          onClick={() => switchFormatMode("netscape", { setFormatMode, setCookieText, setError, setNotice, setSummary })}
+          disabled={busyAction !== null}
+        >
+          Netscape
+        </button>
+      </div>
+
       <label className="grid gap-1">
         <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-          Cookie JSON
+          {importLabel}
         </span>
         <textarea
-          aria-label="Cookie JSON v1 document"
+          aria-label={textareaLabel}
           className="input min-h-[108px] resize-y font-mono text-[11px] leading-5"
           value={cookieText}
           onChange={(event) => {
@@ -129,7 +161,7 @@ export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
             setError(null);
             setNotice(null);
           }}
-          placeholder='{"format":"cloakbrowser.cookie-json.v1","schema_version":1,"cookies":[]}'
+          placeholder={textareaPlaceholder}
           spellCheck={false}
           disabled={!isRunning || busyAction !== null}
         />
@@ -173,6 +205,31 @@ export function ProfileCookieManager({ profile }: ProfileCookieManagerProps) {
   );
 }
 
+function parseCookieJson(text: string): CookieJsonDocument {
+  try {
+    return JSON.parse(text) as CookieJsonDocument;
+  } catch (err) {
+    throw new Error(INVALID_JSON_MESSAGE, { cause: err });
+  }
+}
+
+function switchFormatMode(
+  mode: CookieFormatMode,
+  setters: {
+    setFormatMode: (mode: CookieFormatMode) => void;
+    setCookieText: (text: string) => void;
+    setError: (message: string | null) => void;
+    setNotice: (message: string | null) => void;
+    setSummary: (summary: CookieSummary | null) => void;
+  },
+) {
+  setters.setFormatMode(mode);
+  setters.setCookieText("");
+  setters.setError(null);
+  setters.setNotice(null);
+  setters.setSummary(null);
+}
+
 function CookieSummaryPills({ summary }: { summary: CookieSummary }) {
   const total = numericSummary(summary.cookie_count);
   const secure = numericSummary(summary.secure_count);
@@ -207,6 +264,8 @@ function safeCookieError(err: unknown, fallback: string): string {
   const message = err instanceof Error ? err.message : "";
   if (
     message === "Invalid cookie JSON document" ||
+    message === INVALID_JSON_MESSAGE ||
+    message === "Invalid Netscape cookie document" ||
     message === "Profile not running" ||
     message === "Cookie import failed" ||
     message === "Cookie export failed" ||
@@ -218,6 +277,20 @@ function safeCookieError(err: unknown, fallback: string): string {
 }
 
 function downloadCookieDocument(profileId: string, cookieDocument: CookieJsonDocument): boolean {
+  return downloadCookieText(
+    profileId,
+    JSON.stringify(cookieDocument, null, 2),
+    "json",
+    "application/json",
+  );
+}
+
+function downloadCookieText(
+  profileId: string,
+  text: string,
+  extension: "json" | "txt",
+  type = "text/plain",
+): boolean {
   if (
     typeof window === "undefined" ||
     typeof window.URL?.createObjectURL !== "function" ||
@@ -226,13 +299,11 @@ function downloadCookieDocument(profileId: string, cookieDocument: CookieJsonDoc
     return false;
   }
 
-  const blob = new Blob([JSON.stringify(cookieDocument, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([text], { type });
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `cloakbrowser-cookies-${profileId}.json`;
+  anchor.download = `cloakbrowser-cookies-${profileId}.${extension}`;
   anchor.rel = "noopener";
   document.body.appendChild(anchor);
   anchor.click();

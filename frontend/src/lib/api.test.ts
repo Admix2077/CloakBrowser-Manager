@@ -159,6 +159,43 @@ describe("api.exportProfileCookies", () => {
   });
 });
 
+describe("api.importProfileCookiesNetscape", () => {
+  it("sends Netscape cookie text to the profile cookie import endpoint", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      profile_id: "profile-1",
+      imported: 1,
+      summary: { format: "netscape-cookie-file", cookie_count: 1 },
+    }));
+
+    await api.importProfileCookiesNetscape("profile-1", "example.com\tFALSE\t/\tFALSE\t0\tsid\tsecret");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/profile-1/cookies/import/netscape");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({
+      text: "example.com\tFALSE\t/\tFALSE\t0\tsid\tsecret",
+    });
+  });
+});
+
+describe("api.exportProfileCookiesNetscape", () => {
+  it("requires explicit confirmation when requesting Netscape cookie export", async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      profile_id: "profile-1",
+      exported: 1,
+      summary: { format: "netscape-cookie-file", cookie_count: 1 },
+      text: "# Netscape HTTP Cookie File\nexample.com\tFALSE\t/\tFALSE\t0\tsid\tsecret",
+    }));
+
+    await api.exportProfileCookiesNetscape("profile-1");
+
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/profiles/profile-1/cookies/export/netscape");
+    expect(options.method).toBe("POST");
+    expect(JSON.parse(options.body)).toEqual({ confirm_export: true });
+  });
+});
+
 // ── updateProfile ───────────────────────────────────────────────────────────
 
 describe("api.updateProfile", () => {

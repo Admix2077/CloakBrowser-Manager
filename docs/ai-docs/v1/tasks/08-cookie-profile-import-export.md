@@ -330,6 +330,53 @@ cd frontend && npm run build
 # 167 passed
 ```
 
+## 2026-05-27 前端 Netscape Cookie 管理入口小闭环
+
+当前状态：
+
+- 前端 Cookie 管理入口已从单一 Cookie JSON v1 粘贴框扩展为双模式：
+  - `JSON`：沿用 `POST /api/profiles/{profile_id}/cookies/import` 和 `POST /api/profiles/{profile_id}/cookies/export`。
+  - `Netscape`：新增调用 `POST /api/profiles/{profile_id}/cookies/import/netscape` 和 `POST /api/profiles/{profile_id}/cookies/export/netscape`。
+- 前端 API adapter 已新增：
+  - `api.importProfileCookiesNetscape(profileId, text)` -> `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体 `{ "text": ... }`。
+  - `api.exportProfileCookiesNetscape(profileId)` -> `POST /api/profiles/{profile_id}/cookies/export/netscape`，请求体固定 `{ "confirm_export": true }`。
+- `ProfileCookieManager` 新增 `JSON / Netscape` 分段模式：
+  - 切换模式会清空 textarea、notice、error 和 summary，避免 cookie 明文跨模式残留。
+  - 只对 running profile 启用 import/export；stopped profile 继续禁用按钮且不调用任何 cookie API。
+  - Netscape import 成功或失败后清空 textarea。
+  - Netscape export 仍必须勾选显式确认。
+  - Netscape export 响应里的 `text` 只用于下载 `.txt` 文件，不渲染到页面文本。
+- 页面和组件测试覆盖不渲染：
+  - cookie value。
+  - cookie name。
+  - domain。
+  - URL query / fragment。
+  - token。
+- 本小闭环不新增后端 API、不新增 audit 类型、不接 Project Mileage DTO、不修改 Project Mileage app/payload。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+cd frontend && npm test -- src/lib/api.test.ts
+# failed before implementation: 2 failed, api.importProfileCookiesNetscape/api.exportProfileCookiesNetscape missing
+
+cd frontend && npm test -- src/components/ProfileCookieManager.test.tsx
+# failed before implementation: 2 failed, Netscape mode button missing
+
+cd frontend && npm test -- src/lib/api.test.ts
+# 35 passed
+
+cd frontend && npm test -- src/components/ProfileCookieManager.test.tsx
+# 6 passed
+
+cd frontend && npm test -- --run
+# 15 files / 212 tests passed
+
+cd frontend && npm run build
+# built successfully
+```
+
 ## 验证
 
 ```bash

@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成前端 Netscape Cookie 管理入口小闭环：
+  - `frontend/src/lib/api.ts` 新增 `api.importProfileCookiesNetscape(profileId, text)` 和 `api.exportProfileCookiesNetscape(profileId)`。
+  - `api.importProfileCookiesNetscape()` 调用 `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体 `{ text }`。
+  - `api.exportProfileCookiesNetscape()` 调用 `POST /api/profiles/{profile_id}/cookies/export/netscape`，请求体固定 `{ confirm_export: true }`。
+  - `ProfileCookieManager` 新增 `JSON / Netscape` 双模式；切换模式会清空 textarea、notice、error 和 summary，避免 cookie 明文跨模式残留。
+  - Cookie 管理入口仍只对 running profile 启用 import/export；stopped profile 不调用 JSON 或 Netscape cookie API。
+  - Netscape import 成功或失败后清空 textarea；Netscape export 仍必须勾选显式确认。
+  - Netscape export 响应里的 `text` 只用于下载 `.txt` 文件，不渲染到页面文本。
+  - 页面与组件测试覆盖不渲染 cookie value、cookie name、domain、URL query、fragment 或 token。
+  - 本小闭环只修改 CloakBrowser 本仓，不新增后端 API、不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 Netscape cookie REST API 小闭环：
   - 新增 `POST /api/profiles/{profile_id}/cookies/import/netscape`，请求体为 Netscape cookie 文件文本，解析后复用运行中 Playwright browser context `add_cookies()`。
   - 新增 `POST /api/profiles/{profile_id}/cookies/export/netscape`，必须显式传入 JSON boolean `confirm_export: true`，执行时从运行中 context `cookies()` 导出 Netscape cookie 文件文本。

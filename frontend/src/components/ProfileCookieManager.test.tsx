@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfileCookieManager } from "./ProfileCookieManager";
-import { api, type CookieExportResponse, type CookieImportResponse, type Profile } from "../lib/api";
+import { api, type CookieExportResponse, type CookieImportResponse, type NetscapeCookieExportResponse, type Profile } from "../lib/api";
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -10,12 +10,16 @@ vi.mock("../lib/api", async (importOriginal) => {
     api: {
       importProfileCookies: vi.fn(),
       exportProfileCookies: vi.fn(),
+      importProfileCookiesNetscape: vi.fn(),
+      exportProfileCookiesNetscape: vi.fn(),
     },
   };
 });
 
 const mockImportProfileCookies = api.importProfileCookies as ReturnType<typeof vi.fn>;
 const mockExportProfileCookies = api.exportProfileCookies as ReturnType<typeof vi.fn>;
+const mockImportProfileCookiesNetscape = api.importProfileCookiesNetscape as ReturnType<typeof vi.fn>;
+const mockExportProfileCookiesNetscape = api.exportProfileCookiesNetscape as ReturnType<typeof vi.fn>;
 
 function profile(overrides: Partial<Profile> = {}): Profile {
   return {
@@ -101,9 +105,32 @@ function exportResponse(overrides: Partial<CookieExportResponse> = {}): CookieEx
   };
 }
 
+function netscapeExportResponse(overrides: Partial<NetscapeCookieExportResponse> = {}): NetscapeCookieExportResponse {
+  return {
+    profile_id: "profile-1",
+    exported: 2,
+    summary: {
+      format: "netscape-cookie-file",
+      cookie_count: 2,
+      secure_count: 1,
+      http_only_count: 1,
+      session_cookie_count: 1,
+      persistent_cookie_count: 1,
+    },
+    text: [
+      "# Netscape HTTP Cookie File",
+      ".sensitive.example\tTRUE\t/\tTRUE\t1893456000\tsid\texport-secret-value",
+      "#HttpOnly_app.example\tFALSE\t/dashboard\tFALSE\t0\tacctid\tsession-secret",
+    ].join("\n"),
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockImportProfileCookies.mockReset();
   mockExportProfileCookies.mockReset();
+  mockImportProfileCookiesNetscape.mockReset();
+  mockExportProfileCookiesNetscape.mockReset();
   Object.defineProperty(window.URL, "createObjectURL", {
     configurable: true,
     value: undefined,
@@ -168,6 +195,8 @@ describe("ProfileCookieManager", () => {
 
     expect(mockImportProfileCookies).not.toHaveBeenCalled();
     expect(mockExportProfileCookies).not.toHaveBeenCalled();
+    expect(mockImportProfileCookiesNetscape).not.toHaveBeenCalled();
+    expect(mockExportProfileCookiesNetscape).not.toHaveBeenCalled();
   });
 
   it("requires explicit export confirmation and does not render exported cookie document fields", async () => {
@@ -190,6 +219,64 @@ describe("ProfileCookieManager", () => {
     expect(manager.textContent).not.toContain("sensitive.example");
     expect(manager.textContent).not.toContain("export-token");
     expect(manager.textContent).not.toContain("#frag");
+  });
+
+  it("imports Netscape cookie text and only renders low-risk summary counts", async () => {
+    mockImportProfileCookiesNetscape.mockResolvedValueOnce(importResponse({
+      summary: {
+        format: "netscape-cookie-file",
+        cookie_count: 2,
+        secure_count: 1,
+        http_only_count: 1,
+        session_cookie_count: 1,
+        persistent_cookie_count: 1,
+      },
+    }));
+    const netscapeText = ".private.example\tTRUE\t/\tTRUE\t1893456000\timport-cookie-name-secret\timport-secret-value";
+
+    render(<ProfileCookieManager profile={profile()} />);
+
+    const manager = screen.getByRole("region", { name: "Cookie management" });
+    fireEvent.click(within(manager).getByRole("button", { name: "Netscape" }));
+    fireEvent.change(within(manager).getByLabelText("Netscape cookie file text"), {
+      target: { value: netscapeText },
+    });
+    fireEvent.click(within(manager).getByRole("button", { name: "Import cookies" }));
+
+    await waitFor(() => expect(mockImportProfileCookiesNetscape).toHaveBeenCalledWith(
+      "profile-1",
+      netscapeText,
+    ));
+    expect(mockImportProfileCookies).not.toHaveBeenCalled();
+    expect((await within(manager).findByRole("status")).textContent).toContain("Imported 2 cookie(s)");
+    expect(within(manager).getByText("2 total")).toBeTruthy();
+    expect(within(manager).getByText("1 secure")).toBeTruthy();
+
+    expect(manager.textContent).not.toContain("import-secret-value");
+    expect(manager.textContent).not.toContain("import-cookie-name-secret");
+    expect(manager.textContent).not.toContain("private.example");
+  });
+
+  it("exports Netscape cookie text for download without rendering the exported text", async () => {
+    mockExportProfileCookiesNetscape.mockResolvedValueOnce(netscapeExportResponse());
+
+    render(<ProfileCookieManager profile={profile()} />);
+
+    const manager = screen.getByRole("region", { name: "Cookie management" });
+    fireEvent.click(within(manager).getByRole("button", { name: "Netscape" }));
+    fireEvent.click(within(manager).getByLabelText("Confirm cookie export"));
+    fireEvent.click(within(manager).getByRole("button", { name: "Export cookies" }));
+
+    await waitFor(() => expect(mockExportProfileCookiesNetscape).toHaveBeenCalledWith("profile-1"));
+    expect(mockExportProfileCookies).not.toHaveBeenCalled();
+    expect((await within(manager).findByRole("status")).textContent).toContain("Exported 2 cookie(s)");
+    expect(within(manager).getByText("2 total")).toBeTruthy();
+
+    expect(manager.textContent).not.toContain("export-secret-value");
+    expect(manager.textContent).not.toContain("session-secret");
+    expect(manager.textContent).not.toContain("sid");
+    expect(manager.textContent).not.toContain("acctid");
+    expect(manager.textContent).not.toContain("sensitive.example");
   });
 
   it("shows a fixed invalid JSON error without echoing the pasted cookie document", async () => {
