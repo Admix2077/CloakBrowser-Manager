@@ -31,6 +31,7 @@
 - [x] 支持 profile bundle config import API。
 - [x] 支持 running profile cookie bundle export。
 - [x] 完成 local storage 只读评估。
+- [x] 支持 running profile 当前 origin local storage bundle export。
 - [ ] 后续按分阶段方案实现完整 profile bundle：
   - profile dir。
   - cookies。
@@ -625,6 +626,57 @@ git diff --check
 ```bash
 git diff --check
 # passed
+```
+
+## 2026-05-27 running profile local storage bundle export 小闭环
+
+当前状态：
+
+- `POST /api/profiles/{profile_id}/bundle/export` 已支持 running profile 当前 origin local storage bundle。
+- 请求体新增：
+  - `include_local_storage`：默认 `false`，必须是 JSON boolean。
+  - `confirm_local_storage_export`：默认 `false`，必须是 JSON boolean。
+  - `local_storage_page_ref`：默认 `"0"`，必须是当前 running profile 的 page index 或 page id。
+- 只有 `include_local_storage=true` 且 `confirm_local_storage_export=true` 时，才读取指定 page 的 `window.localStorage`。
+- 未显式确认时返回固定 `422 Profile bundle local storage export requires explicit confirmation`，不读取 page、不写 audit。
+- 字符串或数字 boolean 不会被宽松转换；非法请求体返回固定 `422 Invalid profile bundle export request`，不回显调用方 payload。
+- profile 未运行返回固定 `404 Profile not running`。
+- page 不存在沿用固定 `404 Automation page not found`。
+- 当前 page URL 没有 `http/https` origin 时返回固定 `400 Local storage origin unavailable`，不回显完整 URL。
+- 成功响应中：
+  - `bundle.local_storage.included=true`。
+  - `bundle.local_storage.format=cloakbrowser.local-storage.v1`。
+  - `bundle.local_storage.schema_version=1`。
+  - `bundle.local_storage.origin` 只包含 scheme/host/port，不包含 path/query/fragment。
+  - `bundle.local_storage.entries` 包含 local storage 明文；该能力仅限可信本地管理 API 和显式确认。
+  - `bundle.metadata.local_storage_included=true`。
+- config-only 默认响应仍只保留 `local_storage.included=false` 和 `origin_count=0`，不输出 `entries=null`、`origin=null` 或误导性格式字段。
+- 成功 local storage bundle export 写低敏 audit：
+  - `event_type=profile_bundle.local_storage_exported`。
+  - `actor_type=local_admin`。
+  - `profile_id` 为目标 profile。
+  - metadata 只包含格式、schema、entry_count、total_value_bytes 和 `origin_hash`。
+  - audit 不包含 local storage key、value、origin 原文、URL query 或 fragment。
+- 本小闭环不导入 local storage，不读取停止态 profile dir，不使用 `context.storage_state()`，不扫描所有 tabs，不读取 sessionStorage/IndexedDB/cache/history，不新增前端入口，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；未来 App 仍不能直连 CloakBrowser bundle/local storage/cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_requires_explicit_confirmation_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_coerced_flags_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_requires_running_profile backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin backend/tests/test_api.py::test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit -q
+# failed before implementation: 5 failed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_requires_explicit_confirmation_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_coerced_flags_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_requires_running_profile backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin backend/tests/test_api.py::test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py::test_build_profile_config_bundle_defaults_to_safe_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py backend/tests/test_api.py -q
+# 188 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
+# 8 passed
 ```
 
 ## 验证

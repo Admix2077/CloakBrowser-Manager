@@ -129,7 +129,9 @@ from .profile_import import (
 from .profile_bundle import (
     ProfileBundleImportRequest,
     add_cookie_document_to_bundle,
+    add_local_storage_entries_to_bundle,
     build_profile_config_bundle,
+    local_storage_audit_metadata,
 )
 from .proxies import redact_proxy_asset_url
 
@@ -749,6 +751,31 @@ def _netscape_cookie_export_audit_metadata(summary: dict) -> dict:
         "persistent_count": summary.get("persistent_cookie_count"),
         "http_only_count": summary.get("http_only_count"),
     }
+
+
+def _origin_from_page_url(raw_url: str) -> str | None:
+    parsed = urlparse(str(raw_url))
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return None
+    host = parsed.hostname
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    return f"{parsed.scheme}://{host}"
+
+
+def _normalize_local_storage_entries(raw_entries: object) -> list[dict[str, str]]:
+    if not isinstance(raw_entries, list):
+        raise ValueError("Invalid local storage entries")
+    entries: list[dict[str, str]] = []
+    for raw_entry in raw_entries:
+        if not isinstance(raw_entry, dict):
+            raise ValueError("Invalid local storage entries")
+        key = raw_entry.get("key")
+        value = raw_entry.get("value")
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ValueError("Invalid local storage entries")
+        entries.append({"key": key, "value": value})
+    return entries
 
 
 _PROFILE_CONFIG_IMPORT_FIELDS = {
@@ -1665,6 +1692,33 @@ async def export_profile_bundle(profile_id: str, request: Request):
             logger.warning("Profile bundle cookie export failed for %s: %s", profile_id, type(exc).__name__)
             raise HTTPException(status_code=400, detail="Profile bundle cookie export failed") from exc
 
+    local_storage_origin = None
+    local_storage_entries = None
+    if req.include_local_storage:
+        if req.confirm_local_storage_export is not True:
+            raise HTTPException(
+                status_code=422,
+                detail="Profile bundle local storage export requires explicit confirmation",
+            )
+        _, page, _ = _automation_get_page(profile_id, req.local_storage_page_ref)
+        local_storage_origin = _origin_from_page_url(getattr(page, "url", ""))
+        if local_storage_origin is None:
+            raise HTTPException(status_code=400, detail="Local storage origin unavailable")
+        try:
+            local_storage_entries = _normalize_local_storage_entries(
+                await page.evaluate(
+                    """() => Array.from({ length: window.localStorage.length }, (_, index) => {
+                        const key = window.localStorage.key(index);
+                        return { key, value: key === null ? "" : window.localStorage.getItem(key) ?? "" };
+                    })"""
+                )
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.warning("Profile bundle local storage export failed for %s: %s", profile_id, type(exc).__name__)
+            raise HTTPException(status_code=400, detail="Profile bundle local storage export failed") from exc
+
     exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     bundle = build_profile_config_bundle(
         profile,
@@ -1679,9 +1733,31 @@ async def export_profile_bundle(profile_id: str, request: Request):
             profile_id=profile_id,
             metadata=_cookie_export_audit_metadata(cookie_json_audit_summary(cookie_document)),
         )
+    if local_storage_origin is not None and local_storage_entries is not None:
+        bundle = add_local_storage_entries_to_bundle(
+            bundle,
+            origin=local_storage_origin,
+            entries=local_storage_entries,
+        )
+        db.create_audit_event(
+            event_type="profile_bundle.local_storage_exported",
+            actor_type="local_admin",
+            profile_id=profile_id,
+            metadata=local_storage_audit_metadata(local_storage_origin, local_storage_entries),
+        )
     bundle_payload = bundle.model_dump(mode="json", by_alias=True)
     if bundle_payload.get("cookies", {}).get("document") is None:
         bundle_payload["cookies"].pop("document", None)
+    if bundle_payload.get("local_storage", {}).get("entries") is None:
+        bundle_payload["local_storage"].pop("entries", None)
+    if bundle_payload.get("local_storage", {}).get("origin") is None:
+        bundle_payload["local_storage"].pop("origin", None)
+    if bundle_payload.get("local_storage", {}).get("format") is None:
+        bundle_payload["local_storage"].pop("format", None)
+    if bundle_payload.get("local_storage", {}).get("schema_version") is None:
+        bundle_payload["local_storage"].pop("schema_version", None)
+    if bundle_payload.get("local_storage", {}).get("entry_count") is None:
+        bundle_payload["local_storage"].pop("entry_count", None)
     return ProfileBundleExportResponse(
         profile_id=profile_id,
         bundle=bundle_payload,

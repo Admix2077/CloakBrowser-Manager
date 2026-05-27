@@ -1552,6 +1552,138 @@ def test_export_profile_bundle_cookie_bundle_embeds_cookie_json_and_writes_redac
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_export_profile_bundle_local_storage_requires_explicit_confirmation_without_reading_page(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle LocalStorage Confirm"})
+    pid = create.json()["id"]
+    page = _automation_page(url="https://app.example.com/dashboard?token=hidden#frag")
+    _automation_running_profile(pid, pages=[page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_local_storage": True, "confirm_local_storage_export": False},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Profile bundle local storage export requires explicit confirmation"}
+    page.evaluate.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_profile_bundle_local_storage_rejects_coerced_flags_without_reading_page(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle LocalStorage Coerced"})
+    pid = create.json()["id"]
+    page = _automation_page(url="https://app.example.com/dashboard")
+    _automation_running_profile(pid, pages=[page])
+
+    for payload in (
+        {"include_local_storage": "true", "confirm_local_storage_export": True},
+        {"include_local_storage": True, "confirm_local_storage_export": "true"},
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/bundle/export", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Invalid profile bundle export request"}
+
+    page.evaluate.assert_not_called()
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_profile_bundle_local_storage_requires_running_profile(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Stopped Bundle LocalStorage"})
+    pid = create.json()["id"]
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_local_storage": True, "confirm_local_storage_export": True},
+    )
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Profile not running"}
+    assert main.db.list_audit_events() == []
+
+
+def test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Blank Bundle LocalStorage"})
+    pid = create.json()["id"]
+    page = _automation_page(url="about:blank")
+    _automation_running_profile(pid, pages=[page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_local_storage": True, "confirm_local_storage_export": True},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Local storage origin unavailable"}
+    page.evaluate.assert_not_called()
+    assert "about:blank" not in resp.text
+    assert main.db.list_audit_events() == []
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Bundle LocalStorage Export"})
+    pid = create.json()["id"]
+    page = _automation_page(url="https://app.example.com/dashboard?token=hidden#frag")
+    page.evaluate.return_value = [
+        {"key": "authToken", "value": "super-secret-local-storage-value"},
+        {"key": "theme", "value": "dark"},
+    ]
+    _automation_running_profile(pid, pages=[page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_local_storage": True, "confirm_local_storage_export": True},
+    )
+
+    assert resp.status_code == 200
+    page.evaluate.assert_awaited_once()
+    expression = page.evaluate.await_args.args[0]
+    assert "localStorage" in expression
+    assert "token=hidden" not in expression
+    data = resp.json()
+    bundle = data["bundle"]
+    assert bundle["local_storage"] == {
+        "included": True,
+        "format": "cloakbrowser.local-storage.v1",
+        "schema_version": 1,
+        "origin": "https://app.example.com",
+        "origin_count": 1,
+        "entry_count": 2,
+        "entries": [
+            {"key": "authToken", "value": "super-secret-local-storage-value"},
+            {"key": "theme", "value": "dark"},
+        ],
+    }
+    assert bundle["metadata"]["local_storage_included"] is True
+
+    events = main.db.list_audit_events()
+    assert [event["event_type"] for event in events] == ["profile_bundle.local_storage_exported"]
+    assert events[0]["actor_type"] == "local_admin"
+    assert events[0]["profile_id"] == pid
+    metadata = events[0]["metadata"]
+    assert metadata["format"] == "cloakbrowser.local-storage.v1"
+    assert metadata["schema_version"] == 1
+    assert metadata["entry_count"] == 2
+    assert metadata["total_value_bytes"] == len("super-secret-local-storage-value") + len("dark")
+    assert "origin_hash" in metadata
+    audit_text = json.dumps(events, sort_keys=True)
+    assert "super-secret-local-storage-value" not in audit_text
+    assert "authToken" not in audit_text
+    assert "app.example.com" not in audit_text
+    assert "token=hidden" not in audit_text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app_client: TestClient):
     source = app_client.post(
         "/api/profiles",

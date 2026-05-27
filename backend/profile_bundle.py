@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,7 +35,12 @@ class ProfileBundleLocalStorage(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     included: bool = False
+    format: Literal["cloakbrowser.local-storage.v1"] | None = None
+    schema_version: Literal[1] | None = None
+    origin: str | None = None
     origin_count: int = 0
+    entry_count: int | None = None
+    entries: list[dict[str, str]] | None = Field(default=None, repr=False)
 
 
 class ProfileBundleProfileDir(BaseModel):
@@ -144,4 +150,33 @@ def add_cookie_document_to_bundle(
         document=document.model_dump(mode="json", by_alias=True, exclude_none=True),
     )
     bundle.metadata.cookies_included = True
+    return bundle
+
+
+def local_storage_audit_metadata(origin: str, entries: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "format": "cloakbrowser.local-storage.v1",
+        "schema_version": 1,
+        "entry_count": len(entries),
+        "total_value_bytes": sum(len(entry.get("value", "")) for entry in entries),
+        "origin_hash": hashlib.sha256(origin.encode("utf-8")).hexdigest(),
+    }
+
+
+def add_local_storage_entries_to_bundle(
+    bundle: ProfileBundleDocument,
+    *,
+    origin: str,
+    entries: list[dict[str, str]],
+) -> ProfileBundleDocument:
+    bundle.local_storage = ProfileBundleLocalStorage(
+        included=True,
+        format="cloakbrowser.local-storage.v1",
+        schema_version=1,
+        origin=origin,
+        origin_count=1,
+        entry_count=len(entries),
+        entries=entries,
+    )
+    bundle.metadata.local_storage_included = True
     return bundle

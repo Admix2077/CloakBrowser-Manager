@@ -411,6 +411,9 @@ class ProfileBundleExportRequest(BaseModel):
     include_sensitive_proxy: StrictBool = False
     include_cookies: StrictBool = False
     confirm_cookie_export: StrictBool = False
+    include_local_storage: StrictBool = False
+    confirm_local_storage_export: StrictBool = False
+    local_storage_page_ref: str = Field(default="0", min_length=1, max_length=4096)
 
 
 class ProfileBundleExportResponse(BaseModel):
