@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 profile 生命周期日志 action / profile_id 小闭环：
+  - `BrowserManager.launch()` 成功日志改为稳定 key-value：`action=profile.launch_succeeded profile_id=... display=:... ws_port=... engine=...`。
+  - `BrowserManager.stop()` 新增/调整 `action=profile.stop_requested profile_id=...` 与 `action=profile.stop_finished profile_id=...`。
+  - 浏览器关闭回调日志改为 `action=profile.browser_closed profile_id=...`。
+  - 新增测试断言 launch/stop 日志包含 action/profile_id，且不包含 `user_data_dir` 路径。
+  - 生命周期日志只记录低敏 runtime 观测字段，不记录 proxy、cookie/local storage、viewer token、runtime service token、headers、automation payload 或 Project Mileage 钱包/订单/权限/审计事实。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 stale process 清理验收收口小闭环：
   - 补充 `VNCManager.cleanup_stale()` 测试，确认只调用 scoped `pkill -f "Xvnc :[0-9]"`，不使用通用 `firefox` 或 `.*` 模式。
   - 既有 `BrowserManager.cleanup_stale()` 测试继续覆盖先调用 VNC stale 清理，再清理 `INVISIBLE_FIREFOX_PROCESS_PATTERN` 匹配的 invisible_playwright Firefox。

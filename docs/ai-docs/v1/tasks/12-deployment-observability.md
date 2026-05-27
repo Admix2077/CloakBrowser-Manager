@@ -34,7 +34,7 @@
   - task_queue_count。
   - automation_task_counts。
 - [x] 新增 `/api/diagnostics`。
-- [ ] 日志中包含 profile id 和 action。
+- [x] 日志中包含 profile id 和 action。
 - [ ] 错误响应稳定。
 - [ ] 前端 settings/diagnostics 页面显示系统状态。
 
@@ -324,4 +324,39 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 ```bash
 . .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_cleanup_stale_kills_scoped_xvnc_processes backend/tests/test_browser_manager.py::test_cleanup_stale_kills_scoped_invisible_playwright_firefox -q
 # 2 passed
+```
+
+## 2026-05-28 profile 生命周期日志 action / profile_id 小闭环
+
+背景：
+
+- 运维排障需要能按 action 和 profile id 检索关键生命周期日志。
+- 旧日志是自然语言，例如 `Launched profile ...` / `Stopping profile ...`，不利于机器筛选，也没有 stop 完成日志。
+- 本轮只修改 CloakBrowser 本仓，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/browser_manager.py`
+  - launch 成功日志改为 `action=profile.launch_succeeded profile_id=... display=:... ws_port=... engine=...`。
+  - stop 请求日志改为 `action=profile.stop_requested profile_id=...`。
+  - stop 完成新增 `action=profile.stop_finished profile_id=...`。
+  - browser close 回调日志改为 `action=profile.browser_closed profile_id=...`。
+- `backend/tests/test_browser_manager.py`
+  - 新增 `test_launch_and_stop_logs_include_action_and_profile_id`。
+  - 覆盖 launch/stop 日志包含稳定 `action` 和 `profile_id`。
+  - 断言日志不包含 `user_data_dir` 路径。
+
+边界：
+
+- 生命周期日志只记录低敏 runtime 观测字段：action、profile_id、display、ws_port、engine。
+- 不记录 profile dir、proxy URL/host/username/password、cookie/local storage、viewer token、runtime service token、headers、请求体、automation payload 或 Project Mileage 订单/钱包/权限/审计事实。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_and_stop_logs_include_action_and_profile_id -q
+# RED: 缺少 action=profile.launch_succeeded profile_id=...
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_and_stop_logs_include_action_and_profile_id -q
+# 1 passed
 ```

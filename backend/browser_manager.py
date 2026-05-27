@@ -491,7 +491,7 @@ class BrowserManager:
                 self._launching.discard(profile_id)
 
             logger.info(
-                "Launched profile %s on display :%d (ws_port=%d, engine=%s)",
+                "action=profile.launch_succeeded profile_id=%s display=:%d ws_port=%d engine=%s",
                 profile_id, display, ws_port, running.engine,
             )
 
@@ -514,7 +514,7 @@ class BrowserManager:
             running = self.running.pop(profile_id, None)
 
         if running:
-            logger.info("Browser closed for profile %s, cleaning up", profile_id)
+            logger.info("action=profile.browser_closed profile_id=%s", profile_id)
             if running.runner is not None:
                 try:
                     await running.runner.__aexit__(None, None, None)
@@ -531,7 +531,7 @@ class BrowserManager:
         if not running:
             return
 
-        logger.info("Stopping profile %s", profile_id)
+        logger.info("action=profile.stop_requested profile_id=%s", profile_id)
 
         if running.runner is not None:
             try:
@@ -545,6 +545,7 @@ class BrowserManager:
                 logger.warning("Error closing context for %s: %s", profile_id, exc)
 
         await self.vnc.stop_vnc(running.display)
+        logger.info("action=profile.stop_finished profile_id=%s", profile_id)
 
     def get_status(self, profile_id: str) -> dict[str, Any]:
         """Get running status for a profile."""

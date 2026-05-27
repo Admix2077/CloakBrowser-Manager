@@ -429,6 +429,42 @@ async def test_launch_uses_invisible_playwright_on_vnc_display(
 
 
 @pytest.mark.asyncio
+async def test_launch_and_stop_logs_include_action_and_profile_id(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("INFO", logger="invisible_browser.manager.browser")
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+    await mgr.launch({
+        "id": "profile-log",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": 1366,
+        "screen_height": 768,
+        "proxy": None,
+        "timezone": None,
+        "locale": None,
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+    await mgr.stop("profile-log")
+
+    assert "action=profile.launch_succeeded profile_id=profile-log" in caplog.text
+    assert "action=profile.stop_requested profile_id=profile-log" in caplog.text
+    assert "action=profile.stop_finished profile_id=profile-log" in caplog.text
+    assert str(user_data_dir) not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_launch_fits_firefox_window_to_vnc_after_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
