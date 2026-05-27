@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 08 Cookie、Profile 导入导出，完成 stopped profile cookie storage 只读评估小闭环：
+  - 新增 `docs/ai-docs/v1/stopped-profile-cookie-storage-evaluation.md`。
+  - 评估结论是当前阶段不实现停止态 Firefox profile dir 的 `cookies.sqlite` 直接写入。
+  - 现有 Cookie JSON / Netscape import 继续只支持 running profile，并通过 Playwright browser context `add_cookies()` 完成。
+  - 文档明确直接写 stopped profile cookie 存储风险高于 browser context import，必须先验证 SQLite/WAL/SHM 一致性、Firefox schema、字段语义、去重覆盖、partition/origin attributes、备份/事务/rollback 和日志脱敏。
+  - 当前禁止新增 stopped cookie import REST API，禁止在 stopped profile 上打开或写入 `cookies.sqlite`，禁止通过 bundle/archive import 写入 cookie 明文，禁止自动启动 profile 作为隐式副作用。
+  - 本小闭环只更新 CloakBrowser 文档，不新增 API，不读取 profile dir，不读取 cookie DB，不接 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 08 Cookie、Profile 导入导出，完成 profile dir archive 只读评估小闭环：
   - 新增 `docs/ai-docs/v1/profile-dir-archive-evaluation.md`。
   - 评估结论是当前阶段不实现 profile dir archive export/import API。

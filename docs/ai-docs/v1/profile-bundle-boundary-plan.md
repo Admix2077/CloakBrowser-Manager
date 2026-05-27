@@ -141,6 +141,7 @@ bundle 默认不能包含以下内容：
 - 不同 Firefox/invisible_playwright 版本的数据格式可能变化。
 
 因此停止态 profile dir 能力必须先做只读评估和允许/拒绝清单，不能直接实现“整目录 zip 导出/导入”。
+停止态 cookie 存储的单独评估见 `docs/ai-docs/v1/stopped-profile-cookie-storage-evaluation.md`；当前仍不实现 `cookies.sqlite` 直接写入。
 
 如果未来实现完整 profile dir bundle：
 

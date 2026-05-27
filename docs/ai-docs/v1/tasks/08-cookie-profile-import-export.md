@@ -13,7 +13,7 @@
 - [x] 支持 running profile Netscape cookie import API。
 - [x] 支持 running profile Netscape cookie export API。
 - [x] 仅运行中 profile 允许通过 browser context 导入 cookie。
-- [ ] 停止状态 profile 可通过 profile dir 方式导入 cookie 时必须先评估 Firefox 存储格式，不强行实现。
+- [x] 完成停止态 profile dir cookie 存储只读评估；当前不实现 `cookies.sqlite` 直接写入。
 - [x] 导出 cookie 必须写 audit。
 - [x] 导出 cookie 必须有显式确认。
 - [x] 前端新增 Cookie 管理入口。
@@ -596,6 +596,27 @@ git diff --check
 
 . .venv/bin/activate && python -m pytest backend/tests/test_cookies.py backend/tests/test_bulk.py::test_profile_config_export_can_round_trip_through_config_import -q
 # 8 passed
+```
+
+## 2026-05-27 stopped profile cookie storage 只读评估小闭环
+
+当前状态：
+
+- 已新增 `docs/ai-docs/v1/stopped-profile-cookie-storage-evaluation.md`。
+- 评估结论是当前阶段不实现停止态 Firefox profile dir 的 `cookies.sqlite` 直接写入。
+- 现有 Cookie JSON / Netscape import 继续只支持 running profile，并通过 Playwright browser context `add_cookies()` 完成。
+- 文档明确直接写 stopped profile cookie 存储风险高于 browser context import：SQLite/WAL/SHM 一致性、Firefox schema 变化、字段语义、去重覆盖、partition/origin attributes、数据库损坏和日志泄露都需要独立验证。
+- 当前禁止新增 stopped cookie import REST API，禁止在 stopped profile 上打开或写入 `cookies.sqlite`，禁止通过 bundle/archive import 写入 cookie 明文，禁止自动启动 profile 作为隐式副作用。
+- 未来如果确需支持 stopped profile cookie import，优先建议设计“受控临时启动 -> browser context import -> 受控停止”的显式操作；只有浏览器 API 方案不能满足时，才评估 SQLite 离线写入。
+- 未来 SQLite 评估必须使用 disposable Firefox/invisible_playwright profile 样本做 schema introspection，不读取真实用户 profile dir；必须覆盖 profile stopped/lock 检查、备份、事务、rollback、WAL/SHM、时间字段单位、SameSite 映射、partition/origin attributes 和去重策略。
+- 未来 audit 只允许记录格式、schema 和低敏计数，不记录 cookie value/name/domain/path/profile dir/SQL/异常或 Project Mileage 业务事实。
+- 本小闭环只更新 CloakBrowser 文档，不新增 API，不读取 profile dir，不读取 cookie DB，不接 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
+
+验证记录：
+
+```bash
+git diff --check
+# passed
 ```
 
 ## 2026-05-27 profile dir archive 只读评估小闭环
