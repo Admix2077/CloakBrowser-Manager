@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 proxy assign / random assign 后端强制确认小闭环：
+  - `POST /api/proxies/{proxy_id}/assign` 与 `POST /api/proxies/assign/random` 均新增请求体确认字段，必须显式传入 JSON boolean `confirm_assign: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 422；普通指定分配返回 `Proxy assignment requires explicit confirmation`，随机分配返回 `Random proxy assignment requires explicit confirmation`。
+  - 未确认分配不会改写 profile 的 `proxy` 字段，不会写 `proxy.assigned` / `proxy.random_assigned` audit。
+  - 确认分配后继续保留既有语义：指定 proxy 分配写入该 proxy raw URL；随机分配按 provider/country/tag/preset 筛选候选 proxy 后为每个 profile 随机选择；响应和 audit 继续保持 proxy URL/密码脱敏边界。
+  - 前端 `api.assignProxyToProfiles()` 与 `api.assignRandomProxyToProfiles()` 固定发送 `{ confirm_assign: true }`，既有 Proxy Manager 分配弹窗和随机分配弹窗复用该确认。
+  - 本小闭环只修改 CloakBrowser 本仓 proxy 分配安全边界，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 profile stop 后端强制确认小闭环：
   - `POST /api/profiles/{profile_id}/stop` 新增请求体确认模型，必须显式传入 JSON boolean `confirm_stop: true`。
   - 缺失请求体、空 JSON、`false` 或字符串 `"true"` 均返回固定 `422 Profile stop requires explicit confirmation`。

@@ -136,4 +136,8 @@ cd frontend && npm test -- --run
   - [x] 缺失 automation task cancel 确认时返回固定 `422 Automation task cancel requires explicit confirmation`，不改变 task 状态，不写 cancel audit。
   - [x] `POST /api/profiles/{profile_id}/stop` 后端强制要求 JSON boolean `confirm_stop: true`。
   - [x] 缺失 profile stop 确认时返回固定 `422 Profile stop requires explicit confirmation`，不调用 `browser_mgr.stop()`，不停止运行环境；前端 `api.stopProfile()` 固定发送确认 body。
+  - [x] `POST /api/proxies/{proxy_id}/assign` 后端强制要求 JSON boolean `confirm_assign: true`。
+  - [x] 缺失 proxy assignment 确认时返回固定 `422 Proxy assignment requires explicit confirmation`，不改写 profile proxy，不写 `proxy.assigned` audit；前端 `api.assignProxyToProfiles()` 固定发送确认 body。
+  - [x] `POST /api/proxies/assign/random` 后端强制要求 JSON boolean `confirm_assign: true`。
+  - [x] 缺失 random proxy assignment 确认时返回固定 `422 Random proxy assignment requires explicit confirmation`，不改写 profile proxy，不写 `proxy.random_assigned` audit；前端 `api.assignRandomProxyToProfiles()` 固定发送确认 body。
   - [ ] 其余 delete/export/terminate 类高风险操作仍需按风险逐项补齐后端确认或权限限制。

@@ -950,6 +950,10 @@ def _validation_error_messages(exc: ValidationError) -> list[str]:
     return errors
 
 
+def _validation_error_includes_field(exc: ValidationError, field_name: str) -> bool:
+    return any(field_name in error.get("loc", ()) for error in exc.errors())
+
+
 def _profile_config_import_data(config: dict) -> dict:
     return {
         field: config[field]
@@ -1186,7 +1190,28 @@ async def delete_proxy_provider_preset(preset_id: str, request: Request):
 
 
 @app.post("/api/proxies/{proxy_id}/assign", response_model=ProxyAssignResponse)
-async def assign_proxy_to_profiles(proxy_id: str, req: ProxyAssignRequest):
+async def assign_proxy_to_profiles(proxy_id: str, request: Request):
+    try:
+        req = ProxyAssignRequest.model_validate(await request.json())
+    except ValidationError as exc:
+        if _validation_error_includes_field(exc, "confirm_assign"):
+            raise HTTPException(
+                status_code=422,
+                detail="Proxy assignment requires explicit confirmation",
+            ) from None
+        raise HTTPException(status_code=422, detail=_validation_error_messages(exc)) from exc
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy assignment requires explicit confirmation",
+        ) from None
+
+    if req.confirm_assign is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Proxy assignment requires explicit confirmation",
+        )
+
     proxy = db.get_proxy(proxy_id)
     if not proxy:
         raise HTTPException(status_code=404, detail="Proxy not found")
@@ -1229,7 +1254,28 @@ async def assign_proxy_to_profiles(proxy_id: str, req: ProxyAssignRequest):
 
 
 @app.post("/api/proxies/assign/random", response_model=ProxyRandomAssignResponse)
-async def assign_random_proxy_to_profiles(req: ProxyRandomAssignRequest):
+async def assign_random_proxy_to_profiles(request: Request):
+    try:
+        req = ProxyRandomAssignRequest.model_validate(await request.json())
+    except ValidationError as exc:
+        if _validation_error_includes_field(exc, "confirm_assign"):
+            raise HTTPException(
+                status_code=422,
+                detail="Random proxy assignment requires explicit confirmation",
+            ) from None
+        raise HTTPException(status_code=422, detail=_validation_error_messages(exc)) from exc
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Random proxy assignment requires explicit confirmation",
+        ) from None
+
+    if req.confirm_assign is not True:
+        raise HTTPException(
+            status_code=422,
+            detail="Random proxy assignment requires explicit confirmation",
+        )
+
     preset = None
     if req.provider_preset_id:
         preset = db.get_proxy_provider_preset(req.provider_preset_id)

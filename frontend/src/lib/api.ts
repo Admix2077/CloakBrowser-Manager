@@ -680,13 +680,13 @@ export const api = {
   assignProxyToProfiles: (id: string, profileIds: string[]) =>
     request<ProxyAssignResponse>(`/api/proxies/${id}/assign`, {
       method: "POST",
-      body: JSON.stringify({ profile_ids: profileIds }),
+      body: JSON.stringify({ profile_ids: profileIds, confirm_assign: true }),
     }),
 
   assignRandomProxyToProfiles: (data: ProxyRandomAssignRequestData) =>
     request<ProxyRandomAssignResponse>("/api/proxies/assign/random", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, confirm_assign: true }),
     }),
 
   listAutomationTasks: (params?: AutomationTaskListParams) =>

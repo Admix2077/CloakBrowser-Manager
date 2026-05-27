@@ -921,3 +921,43 @@ git diff --check
 - `/tmp/cloakbrowser-proxy-manager-csv-import-screens/desktop-csv-import-success.png`
 - `/tmp/cloakbrowser-proxy-manager-csv-import-screens/mobile-csv-import-preview.png`
 - `/tmp/cloakbrowser-proxy-manager-csv-import-screens/mobile-csv-import-success.png`
+
+## 2026-05-27 Proxy 分配强制确认小闭环
+
+背景：
+
+- proxy assignment 会批量改写 profile 的代理出口，直接影响账号环境的地理位置、风控画像和后续自动化行为。
+- 本小闭环只收口后端安全确认和前端 API body，不改变 Proxy Manager 既有弹窗交互，不迁移 `profiles.proxy` 为 `proxy_id`。
+
+已完成：
+
+- [x] `backend/models.py`
+  - `ProxyAssignRequest` 新增 `confirm_assign: StrictBool = False`。
+  - `ProxyRandomAssignRequest` 新增 `confirm_assign: StrictBool = False`。
+- [x] `backend/main.py`
+  - `POST /api/proxies/{proxy_id}/assign` 必须显式传入 JSON boolean `confirm_assign: true`。
+  - `POST /api/proxies/assign/random` 必须显式传入 JSON boolean `confirm_assign: true`。
+  - 缺失确认、`false` 或字符串 `"true"` 均返回固定 422。
+  - 未确认时不改写 profile proxy，不写 `proxy.assigned` / `proxy.random_assigned` audit。
+- [x] `frontend/src/lib/api.ts`
+  - `api.assignProxyToProfiles()` 固定发送 `{ confirm_assign: true }`。
+  - `api.assignRandomProxyToProfiles()` 固定发送 `{ confirm_assign: true }`。
+
+范围说明：
+
+- 本轮不改 Project Mileage app/payload。
+- 本轮不新增 Project Mileage DTO，不实现订单、钱包、权限、扣费、续期或 viewer token 逻辑。
+- 本轮不改变 Proxy Manager 页面 UI 文案和选择流程。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 24 passed
+
+cd frontend && npm test -- src/lib/api.test.ts --run
+# 37 passed
+
+cd frontend && npm test -- src/components/ProxyManagerPage.test.tsx --run
+# 22 passed
+```

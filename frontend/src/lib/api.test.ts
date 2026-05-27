@@ -546,7 +546,7 @@ describe("api.bulkCheckProxies", () => {
 });
 
 describe("api.assignProxyToProfiles", () => {
-  it("sends POST with profile ids to the assign endpoint", async () => {
+  it("sends POST with profile ids and explicit confirmation to the assign endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({
       proxy_id: "proxy-1",
       proxy: { id: "proxy-1", name: "US pool", url: "http://proxy.example:8080" },
@@ -564,12 +564,15 @@ describe("api.assignProxyToProfiles", () => {
     const [url, options] = mockFetch.mock.calls[0];
     expect(url).toBe("/api/proxies/proxy-1/assign");
     expect(options.method).toBe("POST");
-    expect(JSON.parse(options.body)).toEqual({ profile_ids: ["profile-1", "missing"] });
+    expect(JSON.parse(options.body)).toEqual({
+      profile_ids: ["profile-1", "missing"],
+      confirm_assign: true,
+    });
   });
 });
 
 describe("api.assignRandomProxyToProfiles", () => {
-  it("sends selected profile ids and proxy selection filters to the random assign endpoint", async () => {
+  it("sends selected profile ids, proxy filters, and explicit confirmation to the random assign endpoint", async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({
       strategy: "random",
       provider_preset_id: null,
@@ -601,6 +604,7 @@ describe("api.assignRandomProxyToProfiles", () => {
       country_code: "JP",
       provider: "ProxyJP",
       tags: ["mobile"],
+      confirm_assign: true,
     });
   });
 });

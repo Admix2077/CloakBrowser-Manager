@@ -267,6 +267,7 @@ class ProxyBulkCheckResponse(BaseModel):
 
 class ProxyAssignRequest(BaseModel):
     profile_ids: list[str] = Field(min_length=1)
+    confirm_assign: StrictBool = False
 
 
 class ProxyAssignResult(BaseModel):
@@ -290,6 +291,7 @@ class ProxyRandomAssignRequest(BaseModel):
     provider: str | None = None
     country_code: str | None = None
     tags: list[str] = Field(default_factory=list)
+    confirm_assign: StrictBool = False
 
 
 class ProxyRandomAssignResult(BaseModel):

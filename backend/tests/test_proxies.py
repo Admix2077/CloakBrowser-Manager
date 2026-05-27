@@ -487,7 +487,10 @@ def test_proxy_assigns_raw_url_to_profiles_without_leaking_credentials(app_clien
 
     resp = app_client.post(
         f"/api/proxies/{proxy['id']}/assign",
-        json={"profile_ids": [first["id"], second["id"], "missing"]},
+        json={
+            "profile_ids": [first["id"], second["id"], "missing"],
+            "confirm_assign": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -512,6 +515,34 @@ def test_proxy_assigns_raw_url_to_profiles_without_leaking_credentials(app_clien
     assert stored_second["proxy"] == "http://user:hiddenpass@assign.example:8080"
 
 
+def test_proxy_assign_requires_explicit_confirmation_without_side_effects(app_client: TestClient):
+    proxy = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Assignable confirm",
+            "url": "http://user:hiddenpass@assign-confirm.example:8080",
+        },
+    ).json()
+    profile = app_client.post(
+        "/api/profiles",
+        json={"name": "Assign Confirm", "proxy": "http://old.example:8080"},
+    ).json()
+
+    for payload in (
+        {"profile_ids": [profile["id"]]},
+        {"profile_ids": [profile["id"]], "confirm_assign": False},
+        {"profile_ids": [profile["id"]], "confirm_assign": "true"},
+    ):
+        resp = app_client.post(f"/api/proxies/{proxy['id']}/assign", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Proxy assignment requires explicit confirmation"}
+
+    stored = db.get_profile(profile["id"])
+    assert stored is not None
+    assert stored["proxy"] == "http://old.example:8080"
+    assert _proxy_bulk_audit_events() == []
+
+
 def test_proxy_assign_writes_redacted_audit_event(app_client: TestClient):
     proxy = app_client.post(
         "/api/proxies",
@@ -522,7 +553,10 @@ def test_proxy_assign_writes_redacted_audit_event(app_client: TestClient):
 
     resp = app_client.post(
         f"/api/proxies/{proxy['id']}/assign",
-        json={"profile_ids": [first["id"], second["id"], "missing"]},
+        json={
+            "profile_ids": [first["id"], second["id"], "missing"],
+            "confirm_assign": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -545,8 +579,14 @@ def test_proxy_assign_not_found_and_empty_profiles(app_client: TestClient):
         json={"name": "Assignable", "url": "http://assign.example:8080"},
     ).json()
 
-    assert app_client.post("/api/proxies/missing/assign", json={"profile_ids": ["profile"]}).status_code == 404
-    assert app_client.post(f"/api/proxies/{proxy['id']}/assign", json={"profile_ids": []}).status_code == 422
+    assert app_client.post(
+        "/api/proxies/missing/assign",
+        json={"profile_ids": ["profile"], "confirm_assign": True},
+    ).status_code == 404
+    assert app_client.post(
+        f"/api/proxies/{proxy['id']}/assign",
+        json={"profile_ids": [], "confirm_assign": True},
+    ).status_code == 422
 
 
 def test_random_proxy_assignment_filters_by_country_tag_and_preset_without_leaking_credentials(
@@ -593,6 +633,7 @@ def test_random_proxy_assignment_filters_by_country_tag_and_preset_without_leaki
             "profile_ids": [first["id"], second["id"], "missing"],
             "provider_preset_id": preset["id"],
             "tags": ["warmup"],
+            "confirm_assign": True,
         },
     )
 
@@ -665,7 +706,11 @@ def test_random_proxy_assignment_writes_redacted_audit_event(app_client: TestCli
 
     resp = app_client.post(
         "/api/proxies/assign/random",
-        json={"profile_ids": [first["id"], second["id"], "missing"], "provider_preset_id": preset["id"]},
+        json={
+            "profile_ids": [first["id"], second["id"], "missing"],
+            "provider_preset_id": preset["id"],
+            "confirm_assign": True,
+        },
     )
 
     assert resp.status_code == 200
@@ -687,6 +732,37 @@ def test_random_proxy_assignment_writes_redacted_audit_event(app_client: TestCli
     assert "mobile" not in serialized_event
 
 
+def test_random_proxy_assignment_requires_explicit_confirmation_without_side_effects(
+    app_client: TestClient,
+):
+    app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Random confirm",
+            "url": "http://user:hiddenpass@random-confirm.example:8080",
+            "country_code": "JP",
+        },
+    )
+    profile = app_client.post(
+        "/api/profiles",
+        json={"name": "Random Confirm", "proxy": "http://old.example:8080"},
+    ).json()
+
+    for payload in (
+        {"profile_ids": [profile["id"]], "country_code": "JP"},
+        {"profile_ids": [profile["id"]], "country_code": "JP", "confirm_assign": False},
+        {"profile_ids": [profile["id"]], "country_code": "JP", "confirm_assign": "true"},
+    ):
+        resp = app_client.post("/api/proxies/assign/random", json=payload)
+        assert resp.status_code == 422
+        assert resp.json() == {"detail": "Random proxy assignment requires explicit confirmation"}
+
+    stored = db.get_profile(profile["id"])
+    assert stored is not None
+    assert stored["proxy"] == "http://old.example:8080"
+    assert _proxy_bulk_audit_events() == []
+
+
 def test_random_proxy_assignment_rejects_missing_selection(app_client: TestClient):
     profile = app_client.post("/api/profiles", json={"name": "No candidate"}).json()
     app_client.post(
@@ -705,6 +781,7 @@ def test_random_proxy_assignment_rejects_missing_selection(app_client: TestClien
             "profile_ids": [profile["id"]],
             "country_code": "JP",
             "tags": ["mobile"],
+            "confirm_assign": True,
         },
     )
 
