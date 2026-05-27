@@ -35,6 +35,14 @@
 
 最新已提交小闭环：
 
+- 本轮进入 08 Cookie、Profile 导入导出，完成 Cookie JSON v1 格式层小闭环：
+  - 新增 `backend/cookie_formats.py`，定义 `cloakbrowser.cookie-json.v1` / `schema_version=1`。
+  - 单条 cookie 支持 `name/value/domain/url/path/expires/secure/httpOnly/sameSite`，并要求至少提供 `domain` 或 `url`。
+  - `CookieJsonDocument` 用作导入格式校验；`build_cookie_json_export()` 可生成导出文档；`cookies_for_playwright()` 可转换为 Playwright `context.add_cookies()` 可用字段。
+  - 新增 `cookie_json_audit_summary()`，只输出低敏计数，不包含 cookie value、cookie name、domain、URL 或 query。
+  - Cookie 模型 repr 不显示 `value`，降低测试失败、日志或调试输出泄露 cookie 明文的风险。
+  - 本小闭环只定义格式层，不新增公开 REST API、不读写浏览器 context、不写 `audit_events`、不新增前端入口、不接 Project Mileage DTO。
+  - 本小闭环只修改 CloakBrowser 本仓，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 07 Automation API 与脚本运行器，完成 Automation worker lifecycle 配置无效值防护小闭环：
   - `_env_float()` 现在会把 `NaN`、`Infinity`、`-Infinity` 这类非有限浮点配置视为无效值。
   - `AUTOMATION_WORKER_LEASE_SECONDS` 低于最小值、`AUTOMATION_WORKER_IDLE_SLEEP_SECONDS` 非有限、`AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS` 非法字符串时，lifespan 回退默认值。

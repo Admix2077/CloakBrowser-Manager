@@ -6,8 +6,8 @@
 
 ## 任务清单
 
-- [ ] 定义 cookie JSON import 格式。
-- [ ] 定义 cookie JSON export 格式。
+- [x] 定义 cookie JSON import 格式。
+- [x] 定义 cookie JSON export 格式。
 - [ ] 支持 Netscape cookie import。
 - [ ] 支持 Netscape cookie export。
 - [ ] 仅运行中 profile 允许通过 browser context 导入 cookie。
@@ -32,6 +32,36 @@
 - cookie 导出文件不自动提交。
 - proxy password 默认遮蔽。
 - profile bundle 导出必须带风险提示。
+
+## 2026-05-27 Cookie JSON v1 格式层小闭环
+
+当前状态：
+
+- 已新增后端格式辅助模块 `backend/cookie_formats.py`。
+- Cookie JSON v1 格式名为 `cloakbrowser.cookie-json.v1`，`schema_version` 固定为 `1`。
+- 单条 cookie 支持字段：
+  - `name`。
+  - `value`。
+  - `domain` 或 `url`，必须至少提供一个。
+  - `path`，默认 `/`。
+  - `expires`。
+  - `secure`。
+  - `httpOnly`。
+  - `sameSite`：`Strict | Lax | None`。
+- `CookieJsonDocument` 可作为导入格式校验模型。
+- `build_cookie_json_export()` 可基于 Playwright 风格 cookie dict 生成导出文档。
+- `cookies_for_playwright()` 可把格式文档转换回 Playwright `context.add_cookies()` 可用的 dict 列表。
+- `cookie_json_audit_summary()` 只返回低敏计数：cookie 数、domain/url scope 数、secure/httpOnly 数、session/persistent 数和 sameSite 计数。
+- 模型 repr 不显示 cookie `value`；低敏审计摘要不包含 cookie value、cookie name、domain、URL 或 query。
+- 本小闭环只定义格式层，不新增公开 API，不读写浏览器 context，不写 `audit_events`，不新增前端入口，不接 Project Mileage DTO。
+- Project Mileage app/payload 本轮无需配合；App 未来仍不能直连 CloakBrowser cookie/runtime API，必须通过 Payload 安全 DTO。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_cookies.py -q
+# 4 passed
+```
 
 ## 验证
 
