@@ -536,6 +536,42 @@ class StatusResponse(BaseModel):
     automation_task_counts: dict[str, int] = Field(default_factory=dict)
 
 
+class DiagnosticsStorageResponse(BaseModel):
+    data_dir_exists: bool
+    db_exists: bool
+
+
+class DiagnosticsCountsResponse(BaseModel):
+    running: int
+    launching: int = 0
+    profiles_total: int
+    proxy_count: int = 0
+    queued_tasks: int = 0
+    failed_tasks: int = 0
+    automation_task_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class DiagnosticsRuntimeResponse(BaseModel):
+    active_displays: list[int] = Field(default_factory=list)
+    active_vnc_ws_ports: list[int] = Field(default_factory=list)
+
+
+class DiagnosticsAutomationWorkerResponse(BaseModel):
+    enabled: bool
+    lease_seconds: int
+    idle_sleep_seconds: float
+    shutdown_timeout_seconds: float
+
+
+class DiagnosticsResponse(BaseModel):
+    status: Literal["ok"]
+    binary_version: str
+    storage: DiagnosticsStorageResponse
+    counts: DiagnosticsCountsResponse
+    runtime: DiagnosticsRuntimeResponse
+    automation_worker: DiagnosticsAutomationWorkerResponse
+
+
 class ProfileStatusResponse(BaseModel):
     status: str  # "running" | "stopped"
     vnc_ws_port: int | None = None

@@ -175,6 +175,13 @@ def test_healthcheck_always_accessible(client_auth: TestClient):
     assert resp.status_code == 200
 
 
+def test_diagnostics_requires_auth(client_auth: TestClient):
+    """GET /api/diagnostics is not a healthcheck and must require auth."""
+    resp = client_auth.get("/api/diagnostics")
+    assert resp.status_code == 401
+    assert resp.json() == {"detail": "Unauthorized"}
+
+
 def test_auth_status_always_accessible(client_auth: TestClient):
     """GET /api/auth/status must work without auth (frontend bootstrap)."""
     resp = client_auth.get("/api/auth/status")

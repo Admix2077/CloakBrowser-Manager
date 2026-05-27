@@ -823,6 +823,101 @@ def test_system_status_uses_count_queries_without_loading_sensitive_rows(
     assert resp.json()["profiles_total"] >= 1
 
 
+def test_system_diagnostics_returns_low_sensitive_snapshot(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    main.browser_mgr.running.clear()
+    profile = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Diagnostics Test",
+            "proxy": "http://user:secret-password@diagnostics.proxy.example:8080",
+            "notes": "secret note",
+        },
+    ).json()
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        steps=[{"type": "open_url", "url": "https://example.com/?token=secret-token"}],
+    )
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        status="failed",
+        steps=[{"type": "fill", "selector": "#password", "value": "secret-value"}],
+    )
+    main.browser_mgr.running[profile["id"]] = RunningProfile(
+        profile_id=profile["id"],
+        context=MagicMock(),
+        display=100,
+        ws_port=6100,
+        engine="invisible_playwright",
+    )
+
+    monkeypatch.setenv("AUTH_TOKEN", "secret-auth-token")
+    monkeypatch.setenv("RUNTIME_SERVICE_TOKEN", "secret-runtime-token")
+    monkeypatch.setenv("AUTOMATION_WORKER_ENABLED", "true")
+    monkeypatch.setenv("AUTOMATION_WORKER_LEASE_SECONDS", "secret-lease")
+
+    try:
+        resp = app_client.get("/api/diagnostics")
+    finally:
+        main.browser_mgr.running.pop(profile["id"], None)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "ok"
+    assert data["binary_version"] == "invisible-playwright"
+    assert data["storage"]["data_dir_exists"] is True
+    assert data["storage"]["db_exists"] is True
+    assert data["counts"]["running"] == 1
+    assert data["counts"]["launching"] == 0
+    assert data["counts"]["profiles_total"] >= 1
+    assert data["counts"]["queued_tasks"] >= 1
+    assert data["counts"]["failed_tasks"] >= 1
+    assert data["automation_worker"]["enabled"] is True
+    assert "lease_seconds" in data["automation_worker"]
+    assert data["runtime"]["active_displays"] == [100]
+    assert data["runtime"]["active_vnc_ws_ports"] == [6100]
+
+    serialized = json.dumps(data)
+    assert str(main.db.DATA_DIR) not in serialized
+    assert str(main.db.DB_PATH) not in serialized
+    assert profile["id"] not in serialized
+    assert "secret-password" not in serialized
+    assert "diagnostics.proxy.example" not in serialized
+    assert "secret note" not in serialized
+    assert "secret-token" not in serialized
+    assert "secret-value" not in serialized
+    assert "secret-auth-token" not in serialized
+    assert "secret-runtime-token" not in serialized
+    assert "secret-lease" not in serialized
+    assert "steps" not in serialized
+    assert "url" not in serialized
+    assert "selector" not in serialized
+
+
+def test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    app_client.post("/api/profiles", json={"name": "Diagnostics Count Only"})
+
+    monkeypatch.setattr(main.db, "list_profiles", lambda: (_ for _ in ()).throw(
+        AssertionError("diagnostics must not load full profile rows")
+    ))
+    monkeypatch.setattr(main.db, "list_proxies", lambda: (_ for _ in ()).throw(
+        AssertionError("diagnostics must not load full proxy rows")
+    ))
+    monkeypatch.setattr(main.db, "list_automation_tasks", lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("diagnostics must not load full automation task rows")
+    ))
+
+    resp = app_client.get("/api/diagnostics")
+
+    assert resp.status_code == 200
+    assert resp.json()["counts"]["profiles_total"] >= 1
+
+
 # ── Launch Args ─────────────────────────────────────────────────────────────
 
 

@@ -35,6 +35,13 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 `/api/diagnostics` 低敏诊断小闭环：
+  - 新增受保护的 `GET /api/diagnostics`；该接口不加入 healthcheck/auth exempt，`AUTH_TOKEN` 开启时未认证返回 401。
+  - 响应只返回低敏诊断快照：`status`、`binary_version`、`data_dir_exists`、`db_exists`、运行/启动中/profile/proxy/task 计数、active display/ws port 数值列表，以及 automation worker 的解析后配置。
+  - diagnostics 计数继续只使用 `count_profiles()`、`count_proxies()` 和 `count_automation_tasks_by_status()`，不读取完整 profile/proxy/automation task rows。
+  - 响应不回显真实 `DATA_DIR`/`DB_PATH` 路径、profile id、profile notes、proxy URL/host/username/password、automation steps/result/error、URL/query/fragment、selector、fill value、env 原文、token、cookie/local storage、viewer/runtime service token 或 Project Mileage 钱包/订单/权限/审计事实。
+  - 该接口仍是 CloakBrowser 本地可信管理 API；未来 Project Mileage 远程工作台如需诊断能力，必须由 Payload 通过安全 DTO 重新定义，App 不能直连 CloakBrowser diagnostics/runtime API。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 `/api/status` 低敏运行计数小闭环：
   - `StatusResponse` 增加 `launching_count`、`failed_count`、`proxy_count`、`task_queue_count` 和 `automation_task_counts`。
   - `/api/status` 仍作为 Docker healthcheck 免登录接口，只返回低敏计数，不返回明细。

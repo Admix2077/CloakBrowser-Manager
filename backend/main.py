@@ -73,6 +73,11 @@ from .models import (
     CookieExportResponse,
     CookieImportConfirmRequest,
     CookieImportResponse,
+    DiagnosticsAutomationWorkerResponse,
+    DiagnosticsCountsResponse,
+    DiagnosticsResponse,
+    DiagnosticsRuntimeResponse,
+    DiagnosticsStorageResponse,
     NetscapeCookieExportResponse,
     NetscapeCookieImportRequest,
     LaunchResponse,
@@ -213,6 +218,15 @@ def _env_float(name: str, *, default: float, minimum: float) -> float:
         logger.warning("Ignoring out-of-range float config for %s", name)
         return default
     return value
+
+
+def _automation_worker_diagnostics() -> DiagnosticsAutomationWorkerResponse:
+    return DiagnosticsAutomationWorkerResponse(
+        enabled=_env_bool("AUTOMATION_WORKER_ENABLED", default=False),
+        lease_seconds=_env_int("AUTOMATION_WORKER_LEASE_SECONDS", default=60, minimum=1),
+        idle_sleep_seconds=_env_float("AUTOMATION_WORKER_IDLE_SLEEP_SECONDS", default=1.0, minimum=0.0),
+        shutdown_timeout_seconds=_env_float("AUTOMATION_WORKER_SHUTDOWN_TIMEOUT_SECONDS", default=5.0, minimum=0.0),
+    )
 
 
 def _check_auth(scope: Scope) -> bool:
@@ -2506,6 +2520,35 @@ async def get_system_status():
         proxy_count=db.count_proxies(),
         task_queue_count=task_counts.get("queued", 0),
         automation_task_counts=task_counts,
+    )
+
+
+@app.get("/api/diagnostics", response_model=DiagnosticsResponse)
+async def get_system_diagnostics():
+    task_counts = db.count_automation_tasks_by_status()
+    running_profiles = list(browser_mgr.running.values())
+
+    return DiagnosticsResponse(
+        status="ok",
+        binary_version="invisible-playwright",
+        storage=DiagnosticsStorageResponse(
+            data_dir_exists=db.DATA_DIR.exists(),
+            db_exists=db.DB_PATH.exists(),
+        ),
+        counts=DiagnosticsCountsResponse(
+            running=len(running_profiles),
+            launching=browser_mgr.launching_count,
+            profiles_total=db.count_profiles(),
+            proxy_count=db.count_proxies(),
+            queued_tasks=task_counts.get("queued", 0),
+            failed_tasks=task_counts.get("failed", 0),
+            automation_task_counts=task_counts,
+        ),
+        runtime=DiagnosticsRuntimeResponse(
+            active_displays=sorted(running.display for running in running_profiles),
+            active_vnc_ws_ports=sorted(running.ws_port for running in running_profiles),
+        ),
+        automation_worker=_automation_worker_diagnostics(),
     )
 
 
