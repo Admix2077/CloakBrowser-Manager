@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -27,6 +28,16 @@ DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
 MAX_RUNNING_PROFILES_ENV = "MAX_RUNNING_PROFILES"
 WEBRTC_PUBLIC_IP_ENV = "STEALTHFOX_WEBRTC_PUBLIC_IP"
+MANAGED_FIREFOX_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) "
+    "Gecko/20100101 Firefox/149.0"
+)
+MANAGED_FIREFOX_IDENTITY_PREFS = {
+    "general.useragent.override": MANAGED_FIREFOX_USER_AGENT,
+    "general.appversion.override": "5.0 (Windows)",
+    "general.platform.override": "Win32",
+    "general.oscpu.override": "Windows NT 10.0; Win64; x64",
+}
 WEBRTC_LOCAL_IP_SUPPRESSION_PREFS = {
     "media.peerconnection.ice.no_host": True,
     "media.peerconnection.ice.default_address_only": True,
@@ -165,6 +176,22 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     return pin
 
 
+def _coherent_webgl_renderer_override(profile: dict[str, Any]) -> str:
+    renderer = str(profile.get("gpu_renderer") or "").strip()
+    if "NVIDIA" in renderer and "GeForce" in renderer:
+        return "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    if renderer:
+        return renderer
+    return "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+
+
+def _with_coherent_webgl_identity(profile: dict[str, Any]) -> dict[str, Any]:
+    renderer = _coherent_webgl_renderer_override(profile)
+    if profile.get("gpu_renderer") == renderer:
+        return profile
+    return {**profile, "gpu_renderer": renderer}
+
+
 _BLOCKED_FIREFOX_ARG_PREFIXES = (
     "--remote-debugging-port",
     "--remote-debugging-address",
@@ -244,6 +271,10 @@ def _filter_firefox_launch_args(raw_args: list[str] | None) -> list[str]:
 
 def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     """Build kwargs for InvisiblePlaywright from a Manager profile."""
+    extra_prefs = {
+        **MANAGED_FIREFOX_IDENTITY_PREFS,
+        **WEBRTC_LOCAL_IP_SUPPRESSION_PREFS,
+    }
     return {
         "seed": profile.get("fingerprint_seed"),
         "pin": _build_invisible_pin(profile),
@@ -253,7 +284,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         "humanize": bool(profile.get("humanize", False)),
         "locale": profile.get("locale") or "en-US",
         "timezone": profile.get("timezone") or "",
-        "extra_prefs": dict(WEBRTC_LOCAL_IP_SUPPRESSION_PREFS),
+        "extra_prefs": extra_prefs,
         "profile_dir": str(profile["user_data_dir"]),
     }
 
@@ -276,14 +307,31 @@ def _accept_language_header(locale: str | None) -> str:
     return f"{lang},{base};q=0.9"
 
 
+@lru_cache(maxsize=1)
+def _firefox_build_id_override() -> str | None:
+    try:
+        from invisible_playwright.download import ensure_binary
+
+        application_ini = Path(ensure_binary()).parent / "application.ini"
+        for line in application_ini.read_text(errors="ignore").splitlines():
+            if line.startswith("BuildID="):
+                build_id = line.split("=", 1)[1].strip()
+                return build_id or None
+    except Exception as exc:
+        logger.debug("Firefox BuildID detection skipped: %s", exc)
+    return None
+
+
 def _browser_init_script(locale: str | None) -> str:
     lang = (locale or "en-US").replace("_", "-")
     language_json = json.dumps(lang)
     languages_json = json.dumps([lang])
+    build_id_json = json.dumps(_firefox_build_id_override())
     return f"""
         (() => {{
             const __managerLanguage = {language_json};
             const __managerLanguages = {languages_json};
+            const __managerBuildID = {build_id_json};
             try {{
                 Object.defineProperty(Navigator.prototype, 'language', {{
                     get: () => __managerLanguage,
@@ -293,6 +341,13 @@ def _browser_init_script(locale: str | None) -> str:
                     get: () => __managerLanguages.slice(),
                     configurable: true
                 }});
+                if (__managerBuildID) {{
+                    Object.defineProperty(Navigator.prototype, 'buildID', {{
+                        get: () => __managerBuildID,
+                        enumerable: true,
+                        configurable: true
+                    }});
+                }}
             }} catch (e) {{}}
 
             window.__clipboardText = '';
@@ -444,6 +499,7 @@ class BrowserManager:
             )
 
             resolved_profile = await resolve_profile_network_fingerprint(profile)
+            resolved_profile = _with_coherent_webgl_identity(resolved_profile)
             kwargs = _build_invisible_kwargs(resolved_profile)
             runner = InvisiblePlaywright(**kwargs)
 

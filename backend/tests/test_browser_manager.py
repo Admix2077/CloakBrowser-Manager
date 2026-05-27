@@ -235,6 +235,25 @@ def test_build_invisible_kwargs_suppresses_webrtc_host_candidates(tmp_path: Path
     assert kwargs["extra_prefs"]["media.peerconnection.ice.disableIPv6"] is True
 
 
+def test_build_invisible_kwargs_pins_managed_firefox_identity(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "user_agent": "Mozilla/5.0 custom",
+        "proxy": None,
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US",
+        "launch_args": None,
+    })
+
+    prefs = kwargs["extra_prefs"]
+    assert prefs["general.useragent.override"] == bm.MANAGED_FIREFOX_USER_AGENT
+    assert "Firefox/149.0" in prefs["general.useragent.override"]
+    assert prefs["general.appversion.override"] == "5.0 (Windows)"
+    assert prefs["general.platform.override"] == "Win32"
+    assert prefs["general.oscpu.override"] == "Windows NT 10.0; Win64; x64"
+
+
 def test_build_invisible_kwargs_drops_user_window_size_overrides(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,
@@ -260,6 +279,41 @@ def test_browser_init_script_aligns_navigator_languages():
     assert "Navigator.prototype" in script
     assert "languages" in script
     assert "__clipboardText" in script
+
+
+def test_browser_init_script_overrides_stale_navigator_build_id(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(bm, "_firefox_build_id_override", lambda: "20260521160037")
+
+    script = bm._browser_init_script("en-US")
+
+    assert '"20260521160037"' in script
+    assert "'buildID'" in script
+    assert "Navigator.prototype" in script
+
+
+def test_coherent_webgl_renderer_collapses_modern_nvidia_to_firefox_sanitize_bucket():
+    renderer = bm._coherent_webgl_renderer_override({
+        "gpu_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)"
+    })
+
+    assert renderer == (
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    )
+
+
+def test_with_coherent_webgl_identity_rewrites_profile_renderer():
+    profile = {
+        "gpu_vendor": "Google Inc. (NVIDIA)",
+        "gpu_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)",
+    }
+
+    rewritten = bm._with_coherent_webgl_identity(profile)
+
+    assert rewritten is not profile
+    assert rewritten["gpu_renderer"] == (
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    )
+    assert profile["gpu_renderer"].endswith("RTX 3060 Direct3D11 vs_5_0 ps_5_0)")
 
 
 def test_clean_firefox_startup_state_removes_session_restore_without_lock(tmp_path: Path):
