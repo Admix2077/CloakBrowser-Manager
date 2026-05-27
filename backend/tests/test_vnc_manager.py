@@ -44,6 +44,25 @@ async def test_allocate_fills_gap(vnc: VNCManager):
 
 
 @pytest.mark.asyncio
+async def test_allocate_skips_unavailable_display_or_ws_port(
+    vnc: VNCManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    unavailable = {(100, 6100)}
+    monkeypatch.setattr(
+        vnc,
+        "_is_resource_available",
+        lambda display, ws_port: (display, ws_port) not in unavailable,
+    )
+
+    display, ws_port = await vnc.allocate()
+
+    assert (display, ws_port) == (101, 6101)
+    assert 100 not in vnc._allocated
+    assert 101 in vnc._allocated
+
+
+@pytest.mark.asyncio
 async def test_allocate_tracks_instances(vnc: VNCManager):
     await vnc.allocate()
     await vnc.allocate()

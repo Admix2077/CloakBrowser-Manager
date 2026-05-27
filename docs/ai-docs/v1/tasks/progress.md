@@ -35,6 +35,12 @@
 
 最新已提交小闭环：
 
+- 本轮继续 12 部署、观测与资源治理，完成 VNC display / ws port 启动前可用性检查小闭环：
+  - `VNCManager.allocate()` 会同时检查内部 `_allocated`、`/tmp/.X{display}-lock`、`/tmp/.X11-unix/X{display}` 和 `127.0.0.1:{ws_port}` bind 可用性。
+  - 如果 `:display/ws_port` 不可用，会跳过该组合继续尝试下一个，避免把已占用资源分配给新 profile。
+  - warning 只记录 display 数字或 port 数字，不记录 profile id、proxy、token、请求体、viewer URL 或 Project Mileage 钱包/订单/权限/审计事实。
+  - 该检查只保护 CloakBrowser 本地 VNC 资源分配，不替代 `cleanup_stale()`，不创建/停止/修改 runtime session 或业务事实。
+  - 本小闭环不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 12 部署、观测与资源治理，完成 `VITE_BULK_LAUNCH_CONCURRENCY` 前端批量启动并发小闭环：
   - 前端 `launchProfiles()` 不再硬编码批量启动并发 2，而是读取构建时环境变量 `VITE_BULK_LAUNCH_CONCURRENCY`。
   - 默认仍为 2；缺失或非法值回退默认，合法值钳制在 `1..8`。

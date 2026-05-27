@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import socket
 import shutil
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 logger = logging.getLogger("invisible_browser.manager.vnc")
 
@@ -30,11 +32,30 @@ class VNCManager:
         """Returns (display_number, ws_port) for a new profile."""
         async with self._lock:
             display = self.BASE_DISPLAY
-            while display in self._allocated:
+            while True:
+                ws_port = self.BASE_WS_PORT + (display - self.BASE_DISPLAY)
+                if display not in self._allocated and self._is_resource_available(display, ws_port):
+                    break
                 display += 1
-            ws_port = self.BASE_WS_PORT + (display - self.BASE_DISPLAY)
             self._allocated[display] = VNCInstance(display=display, ws_port=ws_port)
             return display, ws_port
+
+    def _is_resource_available(self, display: int, ws_port: int) -> bool:
+        if Path(f"/tmp/.X{display}-lock").exists():
+            logger.warning("Skipping unavailable X display :%d", display)
+            return False
+        if Path(f"/tmp/.X11-unix/X{display}").exists():
+            logger.warning("Skipping unavailable X display :%d", display)
+            return False
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("127.0.0.1", ws_port))
+            except OSError:
+                logger.warning("Skipping unavailable VNC websocket port %d", ws_port)
+                return False
+        return True
 
     async def start_vnc(
         self,

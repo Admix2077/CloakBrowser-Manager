@@ -19,7 +19,7 @@
 
 - [x] 配置最大同时运行 profile 数。
 - [x] 配置批量启动并发。
-- [ ] 启动前检查可用 display / ws port。
+- [x] 启动前检查可用 display / ws port。
 - [ ] 停止时释放 VNC 和 browser context。
 - [ ] 清理 stale process。
 
@@ -223,4 +223,39 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 
 npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launch concurrency"
 # 1 passed, 26 skipped
+```
+
+## 2026-05-28 VNC display / ws port 启动前可用性检查小闭环
+
+背景：
+
+- 如果旧 Xvnc 残留、外部进程或系统状态占用了 `:display` 或 WebSocket port，旧实现可能仍分配该资源，直到 `start_vnc()` 或后续连接阶段才失败。
+- 资源冲突应该在 `VNCManager.allocate()` 阶段尽早跳过，降低启动失败概率。
+- 本轮只修改 CloakBrowser 本仓，不新增 Project Mileage DTO，不修改 Project Mileage app/payload。
+
+已完成：
+
+- `backend/vnc_manager.py`
+  - `allocate()` 不再只看内部 `_allocated`，还会调用 `_is_resource_available(display, ws_port)`。
+  - display 检查 `/tmp/.X{display}-lock` 和 `/tmp/.X11-unix/X{display}` 是否存在。
+  - ws port 检查尝试 bind `127.0.0.1:{port}`。
+  - 不可用时跳过该 display/port 组合，继续尝试下一个。
+  - warning 只记录 display 数字或 port 数字，不记录 profile id、路径以外的业务数据、proxy、token 或请求体。
+- `backend/tests/test_vnc_manager.py`
+  - 覆盖 `:100/6100` 不可用时，`allocate()` 跳到 `:101/6101`，且不登记不可用 display。
+
+边界：
+
+- 该检查只保护 CloakBrowser 本地 VNC 资源分配，不创建、不停止、不修改 profile/runtime session/订单/钱包/权限事实。
+- 该检查不替代 `cleanup_stale()`；残留进程清理仍由现有启动清理逻辑负责。
+- Project Mileage 远程工作台如果需要展示资源不足或启动失败原因，仍必须通过 Payload 安全 DTO 定义，不允许 App 直连 CloakBrowser runtime API。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_allocate_skips_unavailable_display_or_ws_port -q
+# RED: AttributeError，当前没有 _is_resource_available 钩子
+
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_allocate_skips_unavailable_display_or_ws_port backend/tests/test_vnc_manager.py::test_allocate_first backend/tests/test_vnc_manager.py::test_allocate_sequential backend/tests/test_vnc_manager.py::test_allocate_fills_gap -q
+# 4 passed
 ```
