@@ -31,6 +31,14 @@ def _audit_events_of_type(event_type: str) -> list[dict]:
     ]
 
 
+def _automation_task_audit_events() -> list[dict]:
+    return [
+        event
+        for event in main.db.list_audit_events()
+        if event["event_type"].startswith("automation.task.")
+    ]
+
+
 # ── Profile CRUD ─────────────────────────────────────────────────────────────
 
 
@@ -2350,6 +2358,135 @@ def test_create_automation_task_queues_steps_without_running_script(app_client: 
     assert data["finished_at"] is None
 
 
+def test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskAuditProfile"})
+    pid = create.json()["id"]
+    page = _automation_page("about:blank", "Before")
+    _automation_running_profile(pid, [page])
+    secret_url = "https://sensitive.example.com/app?token=super-secret#frag"
+    secret_selector = "input[name='account-token']"
+    secret_value = "fill-super-secret-value"
+    steps = [
+        {
+            "type": "open_url",
+            "url": secret_url,
+            "page_ref": "0",
+            "wait_until": "domcontentloaded",
+            "timeout_ms": 5000,
+        },
+        {
+            "type": "fill",
+            "selector": secret_selector,
+            "value": secret_value,
+            "page_ref": "0",
+            "timeout_ms": 5000,
+        },
+    ]
+
+    created = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps}).json()
+    cancel_resp = app_client.post(f"/api/tasks/{created['id']}/cancel")
+    retry_resp = app_client.post(f"/api/tasks/{created['id']}/retry")
+    run_resp = app_client.post(f"/api/tasks/{retry_resp.json()['id']}/run")
+
+    failing_task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "unknown", "value": "payload-super-secret"}]},
+    ).json()
+    fail_resp = app_client.post(f"/api/tasks/{failing_task['id']}/run")
+
+    running_task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+    main.db.update_automation_task(running_task["id"], status="running")
+    cancel_requested_resp = app_client.post(f"/api/tasks/{running_task['id']}/cancel")
+
+    assert cancel_resp.status_code == 200
+    assert retry_resp.status_code == 201
+    assert run_resp.status_code == 200
+    assert fail_resp.status_code == 400
+    assert cancel_requested_resp.status_code == 200
+
+    events = _automation_task_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "automation.task.created",
+        "automation.task.cancelled",
+        "automation.task.retried",
+        "automation.task.succeeded",
+        "automation.task.created",
+        "automation.task.failed",
+        "automation.task.created",
+        "automation.task.cancel_requested",
+    ]
+    assert all(event["actor_type"] == "local_admin" for event in events)
+    assert all(event["profile_id"] == pid for event in events)
+    assert all(event["runtime_session_id"] is None for event in events)
+
+    assert events[0]["metadata"] == {
+        "task_id": created["id"],
+        "status": "queued",
+        "step_count": 2,
+        "step_types": ["open_url", "fill"],
+    }
+    assert events[1]["metadata"] == {
+        "task_id": created["id"],
+        "previous_status": "queued",
+        "status": "cancelled",
+        "step_count": 2,
+        "step_types": ["open_url", "fill"],
+    }
+    assert events[2]["metadata"] == {
+        "task_id": retry_resp.json()["id"],
+        "source_task_id": created["id"],
+        "new_task_id": retry_resp.json()["id"],
+        "status": "queued",
+        "step_count": 2,
+        "step_types": ["open_url", "fill"],
+    }
+    assert events[3]["metadata"] == {
+        "task_id": retry_resp.json()["id"],
+        "status": "succeeded",
+        "step_count": 2,
+        "step_types": ["open_url", "fill"],
+        "runner_type": "api",
+        "succeeded_step_count": 2,
+        "failed_step_count": 0,
+        "cancelled_step_count": 0,
+    }
+    assert events[5]["metadata"] == {
+        "task_id": failing_task["id"],
+        "status": "failed",
+        "step_count": 1,
+        "step_types": ["unknown"],
+        "runner_type": "api",
+        "succeeded_step_count": 0,
+        "failed_step_count": 1,
+        "cancelled_step_count": 0,
+        "reason_code": "unsupported_step_type",
+    }
+    assert events[7]["metadata"] == {
+        "task_id": running_task["id"],
+        "previous_status": "running",
+        "status": "cancel_requested",
+        "step_count": 1,
+        "step_types": ["wait"],
+    }
+
+    serialized_events = json.dumps(events, sort_keys=True)
+    assert secret_url not in serialized_events
+    assert "sensitive.example.com" not in serialized_events
+    assert "super-secret" not in serialized_events
+    assert "#frag" not in serialized_events
+    assert secret_selector not in serialized_events
+    assert secret_value not in serialized_events
+    assert "payload-super-secret" not in serialized_events
+    assert "steps" not in serialized_events
+    assert "result" not in serialized_events
+    assert "error" not in serialized_events
+    assert "lease_owner" not in serialized_events
+    assert "lease_expires_at" not in serialized_events
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_task_responses_do_not_expose_worker_lease_metadata(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskLeaseRedactProfile"})
     pid = create.json()["id"]
@@ -3323,6 +3460,41 @@ async def test_automation_worker_run_once_executes_claimed_task_and_clears_lease
     assert persisted is not None
     assert persisted["lease_owner"] is None
     assert persisted["lease_expires_at"] is None
+    main.browser_mgr.running.pop(pid, None)
+
+
+@pytest.mark.asyncio
+async def test_automation_worker_run_once_writes_redacted_terminal_audit_event(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskWorkerAuditProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    task = app_client.post("/api/tasks", json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]}).json()
+
+    result = await main.run_automation_worker_once(lease_owner="worker-secret-owner")
+
+    assert result is not None
+    assert result["status"] == "succeeded"
+    events = _automation_task_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "automation.task.created",
+        "automation.task.succeeded",
+    ]
+    assert events[1]["actor_type"] == "local_admin"
+    assert events[1]["profile_id"] == pid
+    assert events[1]["metadata"] == {
+        "task_id": task["id"],
+        "status": "succeeded",
+        "step_count": 1,
+        "step_types": ["wait"],
+        "runner_type": "worker",
+        "succeeded_step_count": 1,
+        "failed_step_count": 0,
+        "cancelled_step_count": 0,
+    }
+    serialized_events = json.dumps(events, sort_keys=True)
+    assert "worker-secret-owner" not in serialized_events
+    assert "lease_owner" not in serialized_events
+    assert "lease_expires_at" not in serialized_events
     main.browser_mgr.running.pop(pid, None)
 
 

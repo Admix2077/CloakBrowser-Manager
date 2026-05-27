@@ -35,6 +35,16 @@
 
 最新已提交小闭环：
 
+- 本轮继续 10 审计、安全与权限，完成 automation task audit 小闭环：
+  - `POST /api/tasks` 成功创建 queued task 后写 `automation.task.created`。
+  - `POST /api/tasks/{id}/cancel` 对 queued task 写 `automation.task.cancelled`，对 running task 写 `automation.task.cancel_requested`。
+  - `POST /api/tasks/{id}/retry` 成功创建新 queued task 后写 `automation.task.retried`。
+  - `POST /api/tasks/{id}/run` 和内部 `run_automation_worker_once()` 终态写 `automation.task.succeeded`、`automation.task.failed` 或 `automation.task.cancelled_by_runner`。
+  - `GET /api/tasks`、`GET /api/tasks/{id}`、claim/lease renew/heartbeat/worker loop idle、逐 step 成功失败不写 audit，避免噪声和 payload 泄露。
+  - audit actor 固定为 `local_admin`；顶层 `profile_id` 指向目标 profile；metadata 只记录 `task_id/status/previous_status/step_count/step_types/runner_type/source_task_id/new_task_id/succeeded_step_count/failed_step_count/cancelled_step_count/reason_code` 等低敏字段。
+  - metadata 不记录原始 steps、完整 result、error 原文、URL/query/fragment/host/path、selector、fill value、keyboard text、evaluate expression/result、screenshot、clipboard、console/network、headers、body、lease owner、profile dir、cookie/local storage、token、proxy URL、notes 或 Project Mileage 钱包/订单/权限/审计事实。
+  - 新增 automation task audit 测试覆盖 create/cancel/retry/API run success/API run failure/running cancel request/worker terminal audit，并断言敏感 step payload 和 worker owner 不泄露。
+  - 本小闭环只修改 CloakBrowser 本仓 automation task 审计，不新增 Project Mileage DTO，不修改 Project Mileage app/payload；当前没有 Project Mileage 配合需求。
 - 本轮继续 10 审计、安全与权限，完成 health check audit 小闭环：
   - `POST /api/profiles/{profile_id}/health/check` 主动检测完成后写 `profile.health_checked` audit event。
   - `GET /api/profiles/{profile_id}/health` 不写 audit，避免前端只读刷新产生噪声；missing profile 不写 audit，避免扫描 path 或伪造 ID 落库。

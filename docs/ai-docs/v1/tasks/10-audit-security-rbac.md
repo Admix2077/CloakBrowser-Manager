@@ -63,7 +63,15 @@
   - metadata 只含 `status/warning_codes/warning_count/lookup_attempted/lookup_result/geoip_source/geoip_country_code/manual_*_override/runtime_status` 等低敏字段。
   - metadata 不记录 proxy URL、proxy host、proxy username/password、IP、timezone/locale 原文、warning message/action、异常 message、请求体、headers、token、cookie、`user_data_dir`、viewer URL、VNC 地址、automation URL 或 Project Mileage 业务字段。
 - [ ] bulk action 写 audit。
-- [ ] automation task 写 audit。
+- [x] automation task 写 audit：
+  - `POST /api/tasks` 成功创建 queued task 后写 `automation.task.created`。
+  - `POST /api/tasks/{id}/cancel` 对 queued task 成功终止写 `automation.task.cancelled`；对 running task 成功接受协作取消写 `automation.task.cancel_requested`。
+  - `POST /api/tasks/{id}/retry` 成功创建新 queued task 后写 `automation.task.retried`。
+  - `POST /api/tasks/{id}/run` 同步 runner 终态写 `automation.task.succeeded`、`automation.task.failed` 或 `automation.task.cancelled_by_runner`。
+  - 内部 `run_automation_worker_once()` worker 终态同样写任务级低敏 audit。
+  - `GET /api/tasks`、`GET /api/tasks/{id}`、claim/lease renew/heartbeat/worker loop idle、逐 step 成功失败不写 audit，避免噪声和 payload 泄露。
+  - metadata 只含 `task_id/status/previous_status/step_count/step_types/runner_type/source_task_id/new_task_id/succeeded_step_count/failed_step_count/cancelled_step_count/reason_code` 等低敏字段。
+  - metadata 不记录原始 steps、完整 result、error 原文、URL/query/fragment/host/path、selector、fill value、keyboard text、evaluate expression/result、screenshot、clipboard、console/network、headers、body、lease owner、profile dir、cookie/local storage、token、proxy URL、notes 或 Project Mileage 业务字段。
 - [x] runtime session 写 audit：
   - 当前已覆盖 runtime service API 成功动作。
   - 当前已覆盖 runtime VNC 成功 connected/disconnected。

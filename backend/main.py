@@ -2316,6 +2316,129 @@ def _automation_task_finished_response(
     )
 
 
+def _automation_task_step_types(task: dict) -> list[str]:
+    steps = task.get("steps") or []
+    return [str(step.get("type", "")) for step in steps if isinstance(step, dict)]
+
+
+def _automation_task_result_counts(task: dict) -> dict[str, int]:
+    counts = {
+        "succeeded_step_count": 0,
+        "failed_step_count": 0,
+        "cancelled_step_count": 0,
+    }
+    result = task.get("result")
+    steps = result.get("steps") if isinstance(result, dict) else None
+    if not isinstance(steps, list):
+        return counts
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        status = step.get("status")
+        if status == "succeeded":
+            counts["succeeded_step_count"] += 1
+        elif status == "failed":
+            counts["failed_step_count"] += 1
+        elif status == "cancelled":
+            counts["cancelled_step_count"] += 1
+    return counts
+
+
+def _automation_task_failure_reason_code(task: dict) -> str:
+    error = task.get("error")
+    reason_by_error = {
+        "Unsupported automation step type": "unsupported_step_type",
+        "Invalid click step": "invalid_step",
+        "Invalid evaluate step": "invalid_step",
+        "Invalid fill step": "invalid_step",
+        "Invalid keyboard_type step": "invalid_step",
+        "Invalid open_url step": "invalid_step",
+        "Invalid screenshot step": "invalid_step",
+        "Invalid scroll step": "invalid_step",
+        "Invalid wait step": "invalid_step",
+        "Invalid wait_for_selector step": "invalid_step",
+        "Automation step failed": "automation_step_failed",
+        "Click step failed": "automation_step_failed",
+        "Evaluate step failed": "automation_step_failed",
+        "Fill step failed": "automation_step_failed",
+        "Keyboard type step failed": "automation_step_failed",
+        "Open URL step failed": "automation_step_failed",
+        "Screenshot step failed": "automation_step_failed",
+        "Scroll step failed": "automation_step_failed",
+        "Wait for selector step failed": "automation_step_failed",
+    }
+    return reason_by_error.get(str(error), "automation_step_failed")
+
+
+def _automation_task_audit_metadata(
+    task: dict,
+    *,
+    previous_status: str | None = None,
+    runner_type: str | None = None,
+    source_task_id: str | None = None,
+    new_task_id: str | None = None,
+    reason_code: str | None = None,
+) -> dict:
+    metadata = {
+        "task_id": task.get("id"),
+        "status": task.get("status"),
+        "step_count": len(task.get("steps") or []),
+        "step_types": _automation_task_step_types(task),
+    }
+    if previous_status is not None:
+        metadata["previous_status"] = previous_status
+    if runner_type is not None:
+        metadata["runner_type"] = runner_type
+        metadata.update(_automation_task_result_counts(task))
+    if source_task_id is not None:
+        metadata["source_task_id"] = source_task_id
+    if new_task_id is not None:
+        metadata["new_task_id"] = new_task_id
+    if reason_code is not None:
+        metadata["reason_code"] = reason_code
+    return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _audit_automation_task_event(
+    event_type: str,
+    task: dict,
+    *,
+    previous_status: str | None = None,
+    runner_type: str | None = None,
+    source_task_id: str | None = None,
+    new_task_id: str | None = None,
+    reason_code: str | None = None,
+) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="local_admin",
+        profile_id=str(task["profile_id"]),
+        metadata=_automation_task_audit_metadata(
+            task,
+            previous_status=previous_status,
+            runner_type=runner_type,
+            source_task_id=source_task_id,
+            new_task_id=new_task_id,
+            reason_code=reason_code,
+        ),
+    )
+
+
+def _audit_automation_task_terminal_event(task: dict, *, runner_type: str) -> None:
+    status = task.get("status")
+    if status == "succeeded":
+        _audit_automation_task_event("automation.task.succeeded", task, runner_type=runner_type)
+    elif status == "failed":
+        _audit_automation_task_event(
+            "automation.task.failed",
+            task,
+            runner_type=runner_type,
+            reason_code=_automation_task_failure_reason_code(task),
+        )
+    elif status == "cancelled":
+        _audit_automation_task_event("automation.task.cancelled_by_runner", task, runner_type=runner_type)
+
+
 def _automation_task_step_result(index: int, step: dict, status: str) -> dict:
     return {
         "index": index,
@@ -2511,6 +2634,7 @@ async def create_automation_task(req: AutomationTaskCreate):
         profile_id=req.profile_id,
         steps=_automation_task_persisted_steps(req.steps),
     )
+    _audit_automation_task_event("automation.task.created", task)
     return _automation_task_response(task)
 
 
@@ -2551,6 +2675,8 @@ async def cancel_automation_task(task_id: str):
     )
     if cancelled is None:
         raise HTTPException(status_code=404, detail="Automation task not found")
+    event_type = "automation.task.cancelled" if next_status == "cancelled" else "automation.task.cancel_requested"
+    _audit_automation_task_event(event_type, cancelled, previous_status=task["status"])
     return _automation_task_response(cancelled)
 
 
@@ -2566,6 +2692,12 @@ async def retry_automation_task(task_id: str):
     retry_task = db.create_automation_task(
         profile_id=task["profile_id"],
         steps=_automation_task_persisted_steps(task.get("steps") or []),
+    )
+    _audit_automation_task_event(
+        "automation.task.retried",
+        retry_task,
+        source_task_id=task["id"],
+        new_task_id=retry_task["id"],
     )
     return _automation_task_response(retry_task)
 
@@ -3017,6 +3149,7 @@ async def run_automation_worker_once(
         )
         if finished is None:
             raise HTTPException(status_code=409, detail=_AUTOMATION_WORKER_LOST_LEASE_DETAIL)
+    _audit_automation_task_terminal_event(finished, runner_type="worker")
     return finished
 
 
@@ -3081,6 +3214,7 @@ async def run_automation_task(task_id: str):
         raise HTTPException(status_code=404, detail="Automation task not found")
 
     finished, status_code = await _execute_running_automation_task(running_task)
+    _audit_automation_task_terminal_event(finished, runner_type="api")
     if status_code == 200:
         return _automation_task_response(finished)
     return _automation_task_finished_response(finished, status_code=status_code)
