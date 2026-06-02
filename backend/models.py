@@ -555,6 +555,9 @@ class DiagnosticsRuntimeResponse(BaseModel):
     active_displays: list[int] = Field(default_factory=list)
     active_vnc_ws_ports: list[int] = Field(default_factory=list)
     max_running_profiles: int | None = None
+    managed_user_agent_version: str | None = None
+    firefox_binary_version: str | None = None
+    firefox_binary_build_id: str | None = None
 
 
 class DiagnosticsAutomationWorkerResponse(BaseModel):

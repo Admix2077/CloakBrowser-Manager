@@ -598,3 +598,52 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 . .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_and_stop_logs_include_action_and_profile_id -q
 # 1 passed
 ```
+
+## 2026-06-03 diagnostics Firefox identity 小闭环
+
+背景：
+
+- Pixelscan root-cause 诊断需要反复确认 Manager 对外 managed UA 版本、底层 Firefox `application.ini` 版本和 BuildID。
+- 之前只能临时进入 Docker 镜像读取 `invisible_playwright` 二进制目录，排障成本高，也容易把路径或完整 UA 混入临时记录。
+- 本轮只新增低敏 diagnostics 摘要，不暴露完整 UA、profile id、profile dir、proxy、headers、cookie、local storage、token 或页面内容。
+
+已完成：
+
+- `backend/browser_manager.py`
+  - 新增 `managed_firefox_identity_summary()`。
+  - 从 managed UA 常量提取 `managed_user_agent_version`。
+  - 从底层 Firefox `application.ini` 读取 `firefox_binary_version` 和 `firefox_binary_build_id`；读取失败时返回 `None`。
+- `GET /api/diagnostics`
+  - `runtime` 节点新增：
+    - `managed_user_agent_version`
+    - `firefox_binary_version`
+    - `firefox_binary_build_id`
+- 前端 System diagnostics Runtime 区块显示 Managed UA、Firefox binary 和 Firefox BuildID。
+
+边界：
+
+- diagnostics 仍不加载 profile/proxy/task 明细；继续使用 count helper。
+- 不返回完整 UA 字符串、二进制路径、profile dir、proxy URL/host、username/password、automation steps/result、headers、cookie/local storage、viewer token、runtime service token、AUTH_TOKEN 或 Project Mileage 订单/钱包/权限/审计事实。
+- 该改动只提高观测能力，不代表 Pixelscan/IPhey gate 已通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: KeyError: 'managed_user_agent_version'
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
+# RED: Unable to find group "Managed UA: Firefox 149.0"
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 2 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
+# 3 passed
+
+npm --prefix frontend test -- api.test.ts
+# 39 passed
+
+npm --prefix frontend run build
+# built successfully
+```

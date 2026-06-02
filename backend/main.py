@@ -33,7 +33,12 @@ import starlette.requests
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import database as db
-from .browser_manager import BrowserManager, BrowserResourceLimitError, get_max_running_profiles_limit
+from .browser_manager import (
+    BrowserManager,
+    BrowserResourceLimitError,
+    get_max_running_profiles_limit,
+    managed_firefox_identity_summary,
+)
 from .cookie_formats import (
     CookieJsonDocument,
     build_cookie_json_export,
@@ -2539,6 +2544,7 @@ async def get_system_status():
 async def get_system_diagnostics():
     task_counts = db.count_automation_tasks_by_status()
     running_profiles = list(browser_mgr.running.values())
+    firefox_identity = managed_firefox_identity_summary()
 
     return DiagnosticsResponse(
         status="ok",
@@ -2560,6 +2566,9 @@ async def get_system_diagnostics():
             active_displays=sorted(running.display for running in running_profiles),
             active_vnc_ws_ports=sorted(running.ws_port for running in running_profiles),
             max_running_profiles=get_max_running_profiles_limit(),
+            managed_user_agent_version=firefox_identity["managed_user_agent_version"],
+            firefox_binary_version=firefox_identity["firefox_binary_version"],
+            firefox_binary_build_id=firefox_identity["firefox_binary_build_id"],
         ),
         automation_worker=_automation_worker_diagnostics(),
     )

@@ -315,17 +315,43 @@ def _accept_language_header(locale: str | None) -> str:
 
 
 @lru_cache(maxsize=1)
-def _firefox_build_id_override() -> str | None:
+def _firefox_application_ini_metadata() -> dict[str, str]:
     try:
         from invisible_playwright.download import ensure_binary
 
         application_ini = Path(ensure_binary()).parent / "application.ini"
+        metadata: dict[str, str] = {}
         for line in application_ini.read_text(errors="ignore").splitlines():
-            if line.startswith("BuildID="):
-                build_id = line.split("=", 1)[1].strip()
-                return build_id or None
+            key, separator, value = line.partition("=")
+            if separator and key in {"Version", "BuildID"}:
+                metadata[key] = value.strip()
+        return {key: value for key, value in metadata.items() if value}
     except Exception as exc:
-        logger.debug("Firefox BuildID detection skipped: %s", exc)
+        logger.debug("Firefox application.ini metadata detection skipped: %s", exc)
+    return {}
+
+
+def _managed_user_agent_version() -> str | None:
+    marker = "Firefox/"
+    if marker not in MANAGED_FIREFOX_USER_AGENT:
+        return None
+    version = MANAGED_FIREFOX_USER_AGENT.rsplit(marker, 1)[1].split()[0].strip()
+    return version or None
+
+
+def managed_firefox_identity_summary() -> dict[str, str | None]:
+    metadata = _firefox_application_ini_metadata()
+    return {
+        "managed_user_agent_version": _managed_user_agent_version(),
+        "firefox_binary_version": metadata.get("Version"),
+        "firefox_binary_build_id": metadata.get("BuildID"),
+    }
+
+
+def _firefox_build_id_override() -> str | None:
+    build_id = _firefox_application_ini_metadata().get("BuildID")
+    if build_id:
+        return build_id
     return None
 
 

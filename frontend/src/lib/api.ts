@@ -436,6 +436,9 @@ export interface SystemDiagnostics {
     active_displays: number[];
     active_vnc_ws_ports: number[];
     max_running_profiles: number | null;
+    managed_user_agent_version: string | null;
+    firefox_binary_version: string | null;
+    firefox_binary_build_id: string | null;
   };
   automation_worker: {
     enabled: boolean;

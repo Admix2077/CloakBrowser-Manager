@@ -599,3 +599,40 @@ A/B 边界：
 - 本轮没有保存截图、cookie、local storage、完整 headers、token、IP 值、profile dir 内容、完整页面文本、完整 URL 参数、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
 - Pixelscan/IPhey gate 仍未标记完成。
 - US/JP/DE proxy-country 外站矩阵仍未覆盖。
+
+## 2026-06-03 diagnostics Firefox identity observability
+
+背景：
+
+- Pixelscan root-cause 诊断确认 Manager 对外 Firefox 149 identity 与底层 Firefox `application.ini` `Version=150.0.1` / `BuildID=20260521160037` 同时存在。
+- 为避免后续排障再次临时进入容器读取依赖包，本轮把该低敏 identity 摘要纳入受保护 diagnostics。
+
+已覆盖：
+
+- `GET /api/diagnostics` 的 `runtime` 节点新增：
+  - `managed_user_agent_version`
+  - `firefox_binary_version`
+  - `firefox_binary_build_id`
+- 前端 System diagnostics Runtime 区块显示 Managed UA、Firefox binary 和 Firefox BuildID。
+- 后端 diagnostics 测试继续断言不加载 profile/proxy/task 明细，不泄漏 profile id、路径、proxy、token、automation steps 等敏感内容，并新增完整 UA 不出现在响应中的 guardrail。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 2 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
+# 3 passed
+
+npm --prefix frontend test -- api.test.ts
+# 39 passed
+
+npm --prefix frontend run build
+# built successfully
+```
+
+边界：
+
+- 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。

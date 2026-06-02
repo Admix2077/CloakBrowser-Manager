@@ -82,6 +82,12 @@ export function SystemDiagnosticsPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <InfoRow label="Active displays" value={formatDisplays(diagnostics.runtime.active_displays)} />
                 <InfoRow label="Active VNC ports" value={formatNumbers(diagnostics.runtime.active_vnc_ws_ports)} />
+                <InfoRow
+                  label="Managed UA"
+                  value={diagnostics.runtime.managed_user_agent_version ? `Firefox ${diagnostics.runtime.managed_user_agent_version}` : "unknown"}
+                />
+                <InfoRow label="Firefox binary" value={diagnostics.runtime.firefox_binary_version ?? "unknown"} />
+                <InfoRow label="Firefox BuildID" value={diagnostics.runtime.firefox_binary_build_id ?? "unknown"} />
               </div>
             </section>
           </div>

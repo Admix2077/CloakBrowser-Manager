@@ -914,10 +914,14 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["runtime"]["active_displays"] == [100]
     assert data["runtime"]["active_vnc_ws_ports"] == [6100]
     assert data["runtime"]["max_running_profiles"] == 7
+    assert data["runtime"]["managed_user_agent_version"] == "149.0"
+    assert "firefox_binary_version" in data["runtime"]
+    assert "firefox_binary_build_id" in data["runtime"]
 
     serialized = json.dumps(data)
     assert str(main.db.DATA_DIR) not in serialized
     assert str(main.db.DB_PATH) not in serialized
+    assert "Mozilla/5.0" not in serialized
     assert profile["id"] not in serialized
     assert "secret-password" not in serialized
     assert "diagnostics.proxy.example" not in serialized
