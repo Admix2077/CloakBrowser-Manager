@@ -644,11 +644,21 @@ def test_launch_invalid_proxy_400(app_client: TestClient):
     with patch.object(
         main.browser_mgr,
         "launch",
-        new=AsyncMock(side_effect=ValueError("Invalid proxy scheme 'ftp'")),
+        new=AsyncMock(
+            side_effect=ValueError(
+                "Invalid proxy scheme 'ftp' for "
+                "http://user:hiddenpass@launch-error.example:8080 token=super-secret"
+            )
+        ),
     ):
         resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
     assert resp.status_code == 400
-    assert "ftp" in resp.json()["detail"]
+    assert resp.json() == {"detail": "Invalid proxy scheme"}
+    serialized = str(resp.json())
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "launch-error.example" not in serialized
+    assert "user:" not in serialized
 
 
 def test_launch_invalid_proxy_real_validation_400(app_client: TestClient):
@@ -664,7 +674,7 @@ def test_launch_invalid_proxy_real_validation_400(app_client: TestClient):
         resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
 
     assert resp.status_code == 400
-    assert "Invalid proxy scheme 'ftp'" in resp.json()["detail"]
+    assert resp.json() == {"detail": "Invalid proxy scheme"}
 
 
 def test_launch_failure_500(app_client: TestClient):

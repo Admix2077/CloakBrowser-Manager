@@ -1448,3 +1448,50 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Proxy/launch API error detail redaction guardrail
+
+背景：
+
+- Proxy Manager create/update、profile 当前 proxy 保存为资产、profile launch、runtime session create 都可能在 release smoke 和 proxy-country triage 中返回 4xx 错误。
+- 旧实现会把底层 `ValueError` 原文放进 HTTP detail；异常文本可能包含 proxy URL、host、credentials、token、profile/runtime 上下文或内部路径。
+
+已覆盖：
+
+- Proxy asset create/update/storage failure 的 HTTP detail 只暴露固定低敏 proxy 错误类别。
+- Profile proxy asset 保存失败的 HTTP detail 只暴露固定低敏 proxy 错误类别。
+- Profile launch 与 runtime session create 的 proxy validation failure 只暴露固定低敏 proxy 错误类别。
+- 正常 proxy CRUD、profile proxy asset 保存、runtime session create 和 profile launch 错误映射保持原有状态码语义。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "redacts_sensitive_storage_error_detail"
+# RED then GREEN；最终 3 passed, 25 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 28 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_invalid_proxy_400 backend/tests/test_api.py::test_launch_invalid_proxy_real_validation_400 backend/tests/test_session_broker.py::test_runtime_session_create_redacts_sensitive_launch_value_error_detail -q
+# RED then GREEN；最终 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py -q -k "runtime_session_create or launch"
+# 21 passed, 223 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 546 passed in 33.12s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.78s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

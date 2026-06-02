@@ -172,6 +172,42 @@ def test_runtime_session_create_respects_max_running_profiles(
     assert "runtime.session.created" not in _audit_event_types()
 
 
+def test_runtime_session_create_redacts_sensitive_launch_value_error_detail(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client, "Sensitive Runtime Launch")
+
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(
+            side_effect=ValueError(
+                "Proxy URL invalid port: "
+                "http://user:hiddenpass@runtime-launch.example:99999 token=super-secret"
+            )
+        ),
+    ):
+        resp = app_client.post(
+            "/api/runtime/sessions",
+            headers=runtime_headers,
+            json={
+                "external_session_id": "pm-session-sensitive-launch",
+                "profile_id": profile_id,
+                "lease_seconds": 900,
+            },
+        )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Proxy URL invalid port"}
+    serialized = str(resp.json())
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "runtime-launch.example" not in serialized
+    assert "user:" not in serialized
+    assert "runtime.session.created" not in _audit_event_types()
+
+
 def test_runtime_session_create_from_template_creates_profile_then_launches(
     app_client: TestClient,
     runtime_headers: dict[str, str],

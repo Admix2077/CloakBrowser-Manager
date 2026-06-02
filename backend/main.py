@@ -1093,6 +1093,23 @@ def _safe_proxy_check_error(exc: Exception, raw_url: str) -> str:
     return message
 
 
+_SAFE_PROXY_ASSET_ERROR_DETAILS = (
+    ("Invalid proxy scheme", "Invalid proxy scheme"),
+    ("Invalid proxy URL", "Invalid proxy URL"),
+    ("Proxy URL missing hostname", "Proxy URL missing hostname"),
+    ("Proxy URL invalid port", "Proxy URL invalid port"),
+    ("Proxy URL missing port", "Proxy URL missing port"),
+)
+
+
+def _safe_proxy_asset_error_detail(exc: ValueError) -> str:
+    message = str(exc)
+    for prefix, detail in _SAFE_PROXY_ASSET_ERROR_DETAILS:
+        if message.startswith(prefix):
+            return detail
+    return "Invalid proxy URL"
+
+
 async def _run_proxy_check(proxy: dict) -> dict:
     raw_url = str(proxy["url"])
     check_at = db._now()
@@ -1137,7 +1154,7 @@ async def create_proxy(req: ProxyCreate):
     try:
         proxy = db.create_proxy(**data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
     _audit_proxy_event("proxy.created", proxy)
     return _proxy_response(proxy)
 
@@ -1159,7 +1176,7 @@ async def update_proxy(proxy_id: str, req: ProxyUpdate):
     try:
         proxy = db.update_proxy(proxy_id, **data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
     if not proxy:
         raise HTTPException(status_code=404, detail="Proxy not found")
     _audit_proxy_event("proxy.updated", proxy, updated_fields=audit_fields)
@@ -1578,7 +1595,7 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         try:
             running = await browser_mgr.launch(profile)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
         except BrowserResourceLimitError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
@@ -2300,7 +2317,7 @@ async def save_profile_proxy_as_asset(profile_id: str, req: ProxyFromProfileCrea
     try:
         proxy = db.create_proxy(**data)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
     return _proxy_response(proxy)
 
 
@@ -2402,7 +2419,7 @@ async def launch_profile(profile_id: str, request: Request):
     try:
         running = await browser_mgr.launch(profile)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
     except BrowserResourceLimitError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:

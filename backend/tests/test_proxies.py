@@ -253,6 +253,67 @@ def test_proxy_api_rejects_invalid_url_without_leaking_credentials(app_client: T
     assert app_client.get("/api/proxies").json() == []
 
 
+def test_create_proxy_api_redacts_sensitive_storage_error_detail(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def fail_create_proxy(**_fields):
+        raise ValueError(
+            "Proxy insert rejected http://user:hiddenpass@create-error.example:8080 "
+            "token=super-secret"
+        )
+
+    monkeypatch.setattr(main.db, "create_proxy", fail_create_proxy)
+
+    resp = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Sensitive create failure",
+            "url": "http://user:hiddenpass@create-error.example:8080",
+        },
+    )
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body == {"detail": "Invalid proxy URL"}
+    serialized = str(body)
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "create-error.example" not in serialized
+    assert "user:" not in serialized
+
+
+def test_update_proxy_api_redacts_sensitive_storage_error_detail(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    proxy = db.create_proxy(name="Existing proxy", url="http://proxy.example:8080")
+
+    def fail_update_proxy(*_args, **_fields):
+        raise ValueError(
+            "Proxy update rejected http://user:hiddenpass@update-error.example:8080 "
+            "token=super-secret"
+        )
+
+    monkeypatch.setattr(main.db, "update_proxy", fail_update_proxy)
+
+    resp = app_client.put(
+        f"/api/proxies/{proxy['id']}",
+        json={
+            "url": "http://user:hiddenpass@update-error.example:8080",
+        },
+    )
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body == {"detail": "Invalid proxy URL"}
+    serialized = str(body)
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "update-error.example" not in serialized
+    assert "user:" not in serialized
+
+
 def test_proxy_api_not_found(app_client: TestClient):
     assert app_client.get("/api/proxies/missing").status_code == 404
     assert app_client.put("/api/proxies/missing", json={"name": "x"}).status_code == 404
@@ -911,3 +972,38 @@ def test_save_profile_current_proxy_as_asset_rejects_missing_or_invalid_proxy_wi
         json={"name": "Missing profile"},
     )
     assert not_found.status_code == 404
+
+
+def test_save_profile_current_proxy_as_asset_redacts_sensitive_storage_error_detail(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    profile = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Sensitive profile proxy source",
+            "proxy": "http://user:hiddenpass@profile-error.example:8080",
+        },
+    ).json()
+
+    def fail_create_proxy(**_fields):
+        raise ValueError(
+            "Profile proxy save rejected "
+            "http://user:hiddenpass@profile-error.example:8080 token=super-secret"
+        )
+
+    monkeypatch.setattr(main.db, "create_proxy", fail_create_proxy)
+
+    resp = app_client.post(
+        f"/api/profiles/{profile['id']}/proxy-asset",
+        json={"name": "Sensitive save failure"},
+    )
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body == {"detail": "Invalid proxy URL"}
+    serialized = str(body)
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "profile-error.example" not in serialized
+    assert "user:" not in serialized

@@ -1550,3 +1550,57 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸选择、viewer token issuance、profile 存储、VNC command args 或 launch fallback 行为。
 - 不记录或公开 raw exception text、Xvnc log path、profile dir/path、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 Proxy/launch API error detail redaction guardrail
+
+背景：
+
+- Proxy Manager、profile launch 和 runtime session create 都处在 release smoke / proxy-country triage / VNC viewer 入口上。
+- 旧 API 分支会把底层 `ValueError` 原文作为 HTTP detail 返回；异常文本一旦包含 proxy URL、host、credentials、token 或 profile/runtime 上下文，就会被客户端、测试输出或上游服务固化。
+
+已覆盖：
+
+- `/api/proxies` create/update 的 proxy storage `ValueError` 只返回低敏 proxy 错误类别。
+- `/api/profiles/{profile_id}/proxy-asset` 保存当前 profile proxy 为资产时，底层 create failure 只返回低敏 proxy 错误类别。
+- `/api/profiles/{profile_id}/launch` 的 proxy validation `ValueError` 只返回低敏 proxy 错误类别。
+- `/api/runtime/sessions` 创建时由 launch 抛出的 proxy validation `ValueError` 只返回低敏 proxy 错误类别。
+- 已知低敏类别保留为固定文本：`Invalid proxy scheme`、`Invalid proxy URL`、`Proxy URL missing hostname`、`Proxy URL invalid port`、`Proxy URL missing port`；未知 `ValueError` 回落到 `Invalid proxy URL`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "redacts_sensitive_storage_error_detail"
+# RED: 3 failed；HTTP detail 原样包含 proxy URL、credentials、host 和 token 文本
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "redacts_sensitive_storage_error_detail"
+# 3 passed, 25 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 28 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_invalid_proxy_400 backend/tests/test_api.py::test_launch_invalid_proxy_real_validation_400 backend/tests/test_session_broker.py::test_runtime_session_create_redacts_sensitive_launch_value_error_detail -q
+# RED: 3 failed；profile launch/runtime session create HTTP detail 原样包含底层 ValueError 文本
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_invalid_proxy_400 backend/tests/test_api.py::test_launch_invalid_proxy_real_validation_400 backend/tests/test_session_broker.py::test_runtime_session_create_redacts_sensitive_launch_value_error_detail -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py -q -k "runtime_session_create or launch"
+# 21 passed, 223 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 546 passed in 33.12s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.78s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
+- 不记录或公开 raw exception text、proxy URL/host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
