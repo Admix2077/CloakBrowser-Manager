@@ -1219,6 +1219,36 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 BrowserManager diagnostics/bootstrap debug log redaction guardrail
+
+背景：
+
+- 发布 smoke 的 BrowserManager 诊断路径会读取 Firefox application.ini、summarize invisible_playwright stealth prefs，并在 launch 中执行 existing page init、bootstrap page creation、VNC window fit。
+- 旧 debug 日志会输出 raw exception message，可能固化 Firefox binary/application.ini path、profile dir、URL、token 或内部路径。
+
+已覆盖：
+
+- application.ini metadata detection failure 只记录固定 action 和 error_type。
+- stealth pref summary failure 只记录固定 action 和 error_type。
+- window fit failure 只记录固定 action、display、error_type。
+- existing page init 与 bootstrap page creation failure 只记录固定 action、profile_id、error_type。
+- 这些路径仍保持 best-effort：诊断失败回落低敏 fallback，init/bootstrap/window fit 失败不阻断 profile launch。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_identity_metadata_debug_logs_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_stealth_pref_summary_debug_logs_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_fit_firefox_window_debug_log_uses_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_launch_debug_logs_init_and_bootstrap_error_types_without_raw_exception -q
+# RED then GREEN; final focused tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 68 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储或 launch fallback 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 GeoIP/proxy lookup log redaction guardrail
 
 背景：

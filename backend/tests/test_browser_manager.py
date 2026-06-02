@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -337,6 +338,65 @@ def test_invisible_stealth_pref_summary_degrades_without_full_package():
         "stealth_pref_count": None,
         "stealth_pref_categories": [],
     }
+
+
+def test_identity_metadata_debug_logs_error_type_without_raw_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    bm._firefox_application_ini_metadata.cache_clear()
+    caplog.set_level("DEBUG", logger="invisible_browser.manager.browser")
+
+    download_module = ModuleType("invisible_playwright.download")
+
+    def fail_ensure_binary():
+        raise RuntimeError(
+            "metadata-token-super-secret via /tmp/profile-secret/application.ini",
+        )
+
+    download_module.ensure_binary = fail_ensure_binary  # type: ignore[attr-defined]
+    monkeypatch.setattr(sys.modules["invisible_playwright"], "__path__", [], raising=False)
+    monkeypatch.setitem(sys.modules, "invisible_playwright.download", download_module)
+
+    assert bm._firefox_application_ini_metadata() == {}
+    assert (
+        "action=browser.firefox_metadata_detection_skipped error_type=RuntimeError"
+    ) in caplog.text
+    assert "metadata-token-super-secret" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
+
+
+def test_stealth_pref_summary_debug_logs_error_type_without_raw_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    bm._invisible_stealth_pref_summary.cache_clear()
+    caplog.set_level("DEBUG", logger="invisible_browser.manager.browser")
+
+    fpforge_module = ModuleType("invisible_playwright._fpforge")
+    profile_module = ModuleType("invisible_playwright._fpforge.profile")
+    prefs_module = ModuleType("invisible_playwright.prefs")
+
+    def fail_generate_profile(_seed: int):
+        raise RuntimeError("stealth-token-super-secret from https://secret.example")
+
+    profile_module.generate_profile = fail_generate_profile  # type: ignore[attr-defined]
+    prefs_module.translate_profile_to_prefs = lambda *args, **kwargs: {}  # type: ignore[attr-defined]
+    monkeypatch.setattr(sys.modules["invisible_playwright"], "__path__", [], raising=False)
+    monkeypatch.setattr(fpforge_module, "__path__", [], raising=False)
+    monkeypatch.setitem(sys.modules, "invisible_playwright._fpforge", fpforge_module)
+    monkeypatch.setitem(sys.modules, "invisible_playwright._fpforge.profile", profile_module)
+    monkeypatch.setitem(sys.modules, "invisible_playwright.prefs", prefs_module)
+
+    assert bm._invisible_stealth_pref_summary() == {
+        "stealth_pref_count": None,
+        "stealth_pref_categories": [],
+    }
+    assert (
+        "action=browser.stealth_pref_summary_skipped error_type=RuntimeError"
+    ) in caplog.text
+    assert "stealth-token-super-secret" not in caplog.text
+    assert "https://secret.example" not in caplog.text
 
 
 def test_managed_firefox_identity_summary_discards_non_public_version_metadata(
@@ -981,6 +1041,28 @@ async def test_launch_uses_safe_display_dimensions_for_non_public_screen_values(
 
 
 @pytest.mark.asyncio
+async def test_fit_firefox_window_debug_log_uses_error_type_without_raw_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("DEBUG", logger="invisible_browser.manager.browser")
+
+    async def fail_subprocess(*args, **kwargs):
+        raise RuntimeError("xdotool-token-super-secret via /tmp/profile-secret")
+
+    monkeypatch.setattr(bm.shutil, "which", lambda _name: "/usr/bin/xdotool")
+    monkeypatch.setattr(bm.asyncio, "create_subprocess_exec", fail_subprocess)
+
+    await bm._fit_firefox_window_to_vnc(100, 1920, 1080)
+
+    assert (
+        "action=profile.fit_window_skipped display=:100 error_type=RuntimeError"
+    ) in caplog.text
+    assert "xdotool-token-super-secret" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_launch_does_not_block_on_existing_page_init_script_timeout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1026,6 +1108,73 @@ async def test_launch_does_not_block_on_existing_page_init_script_timeout(
     assert mgr.get_status("profile-slow-existing-page")["status"] == "running"
 
     await mgr.stop("profile-slow-existing-page")
+
+
+@pytest.mark.asyncio
+async def test_launch_debug_logs_init_and_bootstrap_error_types_without_raw_exception(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    mock_invisible_playwright,
+):
+    caplog.set_level("DEBUG", logger="invisible_browser.manager.browser")
+
+    class InternalPage:
+        url = "about:home"
+
+        async def evaluate(self, script: str):
+            raise RuntimeError("init-token-super-secret via https://secret.example/app")
+
+    async def fake_enter(self):
+        self.context.pages = [InternalPage()]
+        self.context.new_page = AsyncMock(
+            side_effect=RuntimeError("bootstrap-token-super-secret /tmp/profile-secret"),
+        )
+        return self.context
+
+    async def fake_fit(display: int, width: int, height: int) -> None:
+        return None
+
+    monkeypatch.setattr(mock_invisible_playwright, "__aenter__", fake_enter)
+    monkeypatch.setattr(bm, "_fit_firefox_window_to_vnc", fake_fit)
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    running = await mgr.launch({
+        "id": "profile-debug-redaction",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": 1366,
+        "screen_height": 768,
+        "proxy": None,
+        "timezone": "Asia/Shanghai",
+        "locale": "zh-CN",
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+
+    assert running.profile_id == "profile-debug-redaction"
+    assert (
+        "action=profile.existing_page_init_failed profile_id=profile-debug-redaction "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert (
+        "action=profile.bootstrap_page_failed profile_id=profile-debug-redaction "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "init-token-super-secret" not in caplog.text
+    assert "bootstrap-token-super-secret" not in caplog.text
+    assert "https://secret.example" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
+
+    await mgr.stop("profile-debug-redaction")
 
 
 @pytest.mark.asyncio

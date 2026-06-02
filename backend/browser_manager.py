@@ -461,7 +461,10 @@ def _firefox_application_ini_metadata() -> dict[str, str]:
                 metadata[key] = value.strip()
         return {key: value for key, value in metadata.items() if value}
     except Exception as exc:
-        logger.debug("Firefox application.ini metadata detection skipped: %s", exc)
+        logger.debug(
+            "action=browser.firefox_metadata_detection_skipped error_type=%s",
+            type(exc).__name__,
+        )
     return {}
 
 
@@ -533,7 +536,10 @@ def _invisible_stealth_pref_summary() -> dict[str, Any]:
             "stealth_pref_categories": categories,
         }
     except Exception as exc:
-        logger.debug("invisible_playwright stealth pref summary skipped: %s", exc)
+        logger.debug(
+            "action=browser.stealth_pref_summary_skipped error_type=%s",
+            type(exc).__name__,
+        )
     return {"stealth_pref_count": None, "stealth_pref_categories": []}
 
 
@@ -669,7 +675,11 @@ async def _fit_firefox_window_to_vnc(display: int, width: int, height: int) -> N
         )
         await asyncio.wait_for(proc.wait(), timeout=1.0)
     except Exception as exc:
-        logger.debug("Firefox window fit skipped: %s", exc)
+        logger.debug(
+            "action=profile.fit_window_skipped display=:%d error_type=%s",
+            display,
+            type(exc).__name__,
+        )
 
 
 def _page_url(page: Any) -> str:
@@ -788,14 +798,22 @@ class BrowserManager:
                         timeout=EXISTING_PAGE_INIT_TIMEOUT_SECONDS,
                     )
                 except Exception as exc:
-                    logger.debug("Browser init failed on existing page: %s", exc)
+                    logger.debug(
+                        "action=profile.existing_page_init_failed profile_id=%s error_type=%s",
+                        profile_id,
+                        type(exc).__name__,
+                    )
 
             if not any(not _is_internal_firefox_page(p) for p in context.pages):
                 try:
                     failure_stage = "bootstrap_page"
                     await context.new_page()
                 except Exception as exc:
-                    logger.debug("Automation bootstrap page creation failed: %s", exc)
+                    logger.debug(
+                        "action=profile.bootstrap_page_failed profile_id=%s error_type=%s",
+                        profile_id,
+                        type(exc).__name__,
+                    )
 
             failure_stage = "fit_window"
             await _fit_firefox_window_to_vnc(

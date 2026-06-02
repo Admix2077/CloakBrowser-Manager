@@ -1424,3 +1424,36 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance 或 profile 存储行为。
 - 不记录或公开 raw exception text、viewer URL/token、backend URL、proxy host/credentials、headers、profile dir、cookies、local storage、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 BrowserManager diagnostics/bootstrap debug log redaction guardrail
+
+背景：
+
+- Firefox identity metadata、invisible_playwright stealth pref summary、window fit、existing page init script、bootstrap page creation 都属于 release smoke/triage 的 BrowserManager 诊断路径。
+- 旧 debug 日志会拼接 raw exception message；异常文本可能包含 Firefox binary/application.ini path、profile dir、URL、token、provider text 或内部路径。
+
+已覆盖：
+
+- Firefox application.ini metadata detection failure 只记录固定 `action=browser.firefox_metadata_detection_skipped` 和 error_type。
+- invisible_playwright stealth pref summary failure 只记录固定 `action=browser.stealth_pref_summary_skipped` 和 error_type。
+- Firefox window fit failure 只记录固定 `action=profile.fit_window_skipped`、display 和 error_type。
+- existing page init script failure 与 bootstrap page creation failure 只记录固定 action、profile_id 和 error_type。
+- 原有 best-effort 降级语义不变；metadata/stealth summary 仍返回低敏 fallback，window/bootstrap/init 失败仍不阻断正常 launch。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_identity_metadata_debug_logs_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_stealth_pref_summary_debug_logs_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_fit_firefox_window_debug_log_uses_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_launch_debug_logs_init_and_bootstrap_error_types_without_raw_exception -q
+# RED: BrowserManager debug logs exposed raw exception text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_identity_metadata_debug_logs_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_stealth_pref_summary_debug_logs_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_fit_firefox_window_debug_log_uses_error_type_without_raw_exception backend/tests/test_browser_manager.py::test_launch_debug_logs_init_and_bootstrap_error_types_without_raw_exception -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 68 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储或 launch fallback 行为。
+- 不记录或公开 raw exception text、Firefox binary/application.ini path、profile dir、URL、token、proxy host/credentials、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
