@@ -506,3 +506,44 @@ git diff --check
 - 本轮只记录单项 `Accept-Language` 值和页面端低敏语言摘要；没有保存完整 headers、network payload、cookie、local storage、token、profile dir 内容、截图或完整页面文本。
 - 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
 - Pixelscan/IPhey 和多国家代理矩阵仍未标记完成。
+
+## 2026-06-03 Pixelscan / IPhey diagnostic smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-pixelscan-iphey-smoke`
+- 临时数据卷：`cloakbrowser-pixelscan-iphey-smoke-data`
+- profile：无 proxy，`geoip=true`，Windows profile，`fingerprint_seed=24680`，`1920x1080`，`hardwareConcurrency=8`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 running、0 profile、0 proxy，`binary_version=invisible-playwright`。
+- profile launch 成功，返回 `display=:100`、`vnc_ws_port=6100`。
+- Pixelscan `https://pixelscan.net/fingerprint` 通过 direct Automation 打开，最终路径为 `pixelscan.net/fingerprint-check`，页面 `readyState=complete`。
+- Pixelscan managed identity 断言通过：
+  - Firefox 149 UA 断言通过，`navigator.buildID=20260521160037`
+  - `navigator.webdriver=false`
+  - `navigator.platform=Win32`
+  - `navigator.language=en-US`、`navigator.languages=["en-US","en"]`
+  - `Intl.DateTimeFormat().resolvedOptions().locale=en-US`
+  - timezone 为 `America/Los_Angeles`
+  - `hardwareConcurrency=8`
+  - WebGL renderer 为 NVIDIA / Direct3D11 形态，未出现 SwiftShader / llvmpipe / Mesa 标记。
+- IPhey `https://iphey.com/` 通过 direct Automation 打开，页面 title 为 `Iphey - Real-Time Browser Fingerprinting Test -  IPhey`，低敏状态行包含 `Trustworthy`。
+- IPhey home managed identity 断言同样通过。
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy。
+
+失败 / 未完成项：
+
+- Pixelscan 页面实际状态行显示 `Your Browser Fingerprint is inconsistent`。
+- Pixelscan 诊断行还显示 Browser、Location、Fingerprint、WebRTC IP Address、Timezone from JS、HardwareConcurency、Language、Languages from Javascript、Accept-Language header 和 Hardware 等卡片，说明这不是单纯说明文案。
+- IPhey `/leaks` 返回 `ERROR: The request could not be satisfied`，不能作为有效 leak check 通过证据。
+- 已创建 `cbim-23h.6` 跟踪 Pixelscan no-proxy fingerprint inconsistency 根因修复。
+
+边界：
+
+- 本轮没有保存截图、cookie、local storage、headers、token、IP 值、profile dir 内容、完整页面文本、完整 URL 参数、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
+- `Pixelscan/IPhey 无 IP、timezone、language、WebRTC、hardware/software 高风险不一致` 仍未标记完成。
+- 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
