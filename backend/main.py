@@ -2567,6 +2567,7 @@ async def get_system_diagnostics():
             active_vnc_ws_ports=sorted(running.ws_port for running in running_profiles),
             max_running_profiles=get_max_running_profiles_limit(),
             managed_user_agent_version=firefox_identity["managed_user_agent_version"],
+            invisible_playwright_version=firefox_identity["invisible_playwright_version"],
             firefox_binary_version=firefox_identity["firefox_binary_version"],
             firefox_binary_build_id=firefox_identity["firefox_binary_build_id"],
         ),

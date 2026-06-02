@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import json
 import logging
 import os
@@ -339,10 +340,19 @@ def _managed_user_agent_version() -> str | None:
     return version or None
 
 
+def _invisible_playwright_package_version() -> str | None:
+    try:
+        version = importlib.metadata.version("invisible_playwright")
+    except importlib.metadata.PackageNotFoundError:
+        return None
+    return version or None
+
+
 def managed_firefox_identity_summary() -> dict[str, str | None]:
     metadata = _firefox_application_ini_metadata()
     return {
         "managed_user_agent_version": _managed_user_agent_version(),
+        "invisible_playwright_version": _invisible_playwright_package_version(),
         "firefox_binary_version": metadata.get("Version"),
         "firefox_binary_build_id": metadata.get("BuildID"),
     }

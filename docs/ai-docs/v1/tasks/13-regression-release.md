@@ -579,7 +579,7 @@ git diff --check
   - language / Intl locale / Accept-Language 对齐。
   - timezone 与 Pixelscan 页面显示的 location/timezone 对齐。
   - WebGL 为 NVIDIA / Direct3D11 形态，无 SwiftShader / llvmpipe / Mesa 标记。
-- 镜像内底层 `invisible_playwright` 版本为 `0.1.0`；Firefox `application.ini` 显示 `Version=150.0.1`、`BuildID=20260521160037`。
+- 后续复核确认 `invisible-browser-manager:automation-console-redaction` 镜像内底层 `invisible_playwright` 版本为 `0.1.8`；Firefox `application.ini` 显示 `Version=150.0.1`、`BuildID=20260521160037`。
 - 底层 `invisible_playwright` 的 `seed` 会生成完整 stealth fingerprint profile，并写入 `zoom.stealth.*` prefs，包括 canvas、audio、WebGL、font、screen、hardware 和 cross-process seed；当前 Pixelscan 红灯与这类 fingerprint masking 行为一致。
 
 A/B 边界：
@@ -611,22 +611,32 @@ A/B 边界：
 
 - `GET /api/diagnostics` 的 `runtime` 节点新增：
   - `managed_user_agent_version`
+  - `invisible_playwright_version`
   - `firefox_binary_version`
   - `firefox_binary_build_id`
-- 前端 System diagnostics Runtime 区块显示 Managed UA、Firefox binary 和 Firefox BuildID。
+- 前端 System diagnostics Runtime 区块显示 Managed UA、Engine package、Firefox binary 和 Firefox BuildID。
 - 后端 diagnostics 测试继续断言不加载 profile/proxy/task 明细，不泄漏 profile id、路径、proxy、token、automation steps 等敏感内容，并新增完整 UA 不出现在响应中的 guardrail。
 
 验证：
 
 ```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: KeyError: 'invisible_playwright_version'
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
+# RED: Unable to find group "Engine package: invisible_playwright 0.1.8"
+
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
 # 2 passed
 
 npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
 # 3 passed
 
-npm --prefix frontend test -- api.test.ts
-# 39 passed
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 508 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
 
 npm --prefix frontend run build
 # built successfully

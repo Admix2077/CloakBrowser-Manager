@@ -86,6 +86,10 @@ export function SystemDiagnosticsPage() {
                   label="Managed UA"
                   value={diagnostics.runtime.managed_user_agent_version ? `Firefox ${diagnostics.runtime.managed_user_agent_version}` : "unknown"}
                 />
+                <InfoRow
+                  label="Engine package"
+                  value={diagnostics.runtime.invisible_playwright_version ? `invisible_playwright ${diagnostics.runtime.invisible_playwright_version}` : "unknown"}
+                />
                 <InfoRow label="Firefox binary" value={diagnostics.runtime.firefox_binary_version ?? "unknown"} />
                 <InfoRow label="Firefox BuildID" value={diagnostics.runtime.firefox_binary_build_id ?? "unknown"} />
               </div>

@@ -41,6 +41,7 @@ function diagnostics(overrides: Partial<SystemDiagnostics> = {}): SystemDiagnost
       active_vnc_ws_ports: [6100, 6101],
       max_running_profiles: 6,
       managed_user_agent_version: "149.0",
+      invisible_playwright_version: "0.1.8",
       firefox_binary_version: "150.0.1",
       firefox_binary_build_id: "20260521160037",
     },
@@ -78,6 +79,7 @@ describe("SystemDiagnosticsPage", () => {
     expect(within(page).getByRole("group", { name: "Active VNC ports: 6100, 6101" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Max running: 6" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Managed UA: Firefox 149.0" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Engine package: invisible_playwright 0.1.8" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox binary: 150.0.1" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox BuildID: 20260521160037" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "State: enabled" })).toBeTruthy();

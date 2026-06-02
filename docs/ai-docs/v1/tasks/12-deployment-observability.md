@@ -612,18 +612,20 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 - `backend/browser_manager.py`
   - 新增 `managed_firefox_identity_summary()`。
   - 从 managed UA 常量提取 `managed_user_agent_version`。
+  - 从已安装包 metadata 提取 `invisible_playwright_version`，只返回版本号，不返回安装路径。
   - 从底层 Firefox `application.ini` 读取 `firefox_binary_version` 和 `firefox_binary_build_id`；读取失败时返回 `None`。
 - `GET /api/diagnostics`
   - `runtime` 节点新增：
     - `managed_user_agent_version`
+    - `invisible_playwright_version`
     - `firefox_binary_version`
     - `firefox_binary_build_id`
-- 前端 System diagnostics Runtime 区块显示 Managed UA、Firefox binary 和 Firefox BuildID。
+- 前端 System diagnostics Runtime 区块显示 Managed UA、Engine package、Firefox binary 和 Firefox BuildID。
 
 边界：
 
 - diagnostics 仍不加载 profile/proxy/task 明细；继续使用 count helper。
-- 不返回完整 UA 字符串、二进制路径、profile dir、proxy URL/host、username/password、automation steps/result、headers、cookie/local storage、viewer token、runtime service token、AUTH_TOKEN 或 Project Mileage 订单/钱包/权限/审计事实。
+- 不返回完整 UA 字符串、包安装路径、二进制路径、profile dir、proxy URL/host、username/password、automation steps/result、headers、cookie/local storage、viewer token、runtime service token、AUTH_TOKEN 或 Project Mileage 订单/钱包/权限/审计事实。
 - 该改动只提高观测能力，不代表 Pixelscan/IPhey gate 已通过。
 
 验证记录：
@@ -635,14 +637,23 @@ npm test -- --run src/hooks/useProfiles.test.ts -t "honors configured bulk launc
 npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
 # RED: Unable to find group "Managed UA: Firefox 149.0"
 
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: KeyError: 'invisible_playwright_version'
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
+# RED: Unable to find group "Engine package: invisible_playwright 0.1.8"
+
 . .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
 # 2 passed
 
 npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx
 # 3 passed
 
-npm --prefix frontend test -- api.test.ts
-# 39 passed
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 508 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
 
 npm --prefix frontend run build
 # built successfully
