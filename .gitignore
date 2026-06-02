@@ -23,5 +23,14 @@ _research/upstream/
 .claude/
 CLAUDE.md
 publish-docker.sh
-.beads
 debug
+
+# Beads issue tracking
+.beads/*
+!.beads/
+!.beads/issues.jsonl
+
+# Beads / Dolt local files
+.dolt/
+*.db
+.beads-credential-key
