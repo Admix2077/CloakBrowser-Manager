@@ -440,6 +440,40 @@ def test_health_check_lookup_failure_writes_redacted_audit_event(app_client: Tes
     assert "secret-token" not in serialized_event
 
 
+def test_health_check_lookup_failure_logs_error_type_without_raw_exception(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Health Log Failure",
+            "proxy": "http://audit-user:secret-proxy-password@health-log.example:8080",
+        },
+    )
+    pid = create.json()["id"]
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    with patch(
+        "backend.main.resolve_network_geo",
+        new=AsyncMock(
+            side_effect=RuntimeError(
+                "provider-token-super-secret via http://health-log.example:8080/path",
+            ),
+        ),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+    assert (
+        f"action=profile.health_geoip_lookup_failed profile_id={pid} "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "provider-token-super-secret" not in caplog.text
+    assert "secret-proxy-password" not in caplog.text
+    assert "health-log.example" not in caplog.text
+
+
 def test_get_profile_health_does_not_write_audit(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Health GET Audit"})
     pid = create.json()["id"]

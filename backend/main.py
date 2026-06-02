@@ -2492,7 +2492,11 @@ async def check_profile_health(profile_id: str):
     try:
         geo = await resolve_network_geo(proxy_url)
     except Exception as exc:
-        logger.warning("Health GeoIP lookup failed for %s: %s", profile_id, exc)
+        logger.warning(
+            "action=profile.health_geoip_lookup_failed profile_id=%s error_type=%s",
+            profile_id,
+            type(exc).__name__,
+        )
         health = compute_profile_health(
             profile,
             runtime_status,

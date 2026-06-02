@@ -1219,6 +1219,33 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Health GeoIP lookup failure log redaction guardrail
+
+背景：
+
+- 发布 smoke 会通过 `/api/profiles/{profile_id}/health/check` 触发 proxy/GeoIP/timezone/locale 检查。
+- 旧 lookup failure 日志会输出 raw exception message，可能固化 provider URL、proxy host、credentials、token 或 query。
+
+已覆盖：
+
+- GeoIP lookup failure 只记录固定 action、profile_id、error_type。
+- health response、profile last_geoip cache、health audit metadata 语义保持。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_check_lookup_failure_logs_error_type_without_raw_exception -q
+# RED then GREEN; final focused test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 18 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、health status/warning/audit 语义或 launch fallback 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 BrowserManager diagnostics/bootstrap debug log redaction guardrail
 
 背景：

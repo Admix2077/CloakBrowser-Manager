@@ -1457,3 +1457,33 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储或 launch fallback 行为。
 - 不记录或公开 raw exception text、Firefox binary/application.ini path、profile dir、URL、token、proxy host/credentials、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 Health GeoIP lookup failure log redaction guardrail
+
+背景：
+
+- `/api/profiles/{profile_id}/health/check` 是 release smoke 里的 proxy/GeoIP/timezone/locale triage 路径。
+- 旧 GeoIP lookup failure 日志会拼接 raw exception message；异常文本可能包含 provider URL、proxy host、credentials、token 或 query。
+
+已覆盖：
+
+- Health GeoIP lookup failure 现在只记录固定 `action=profile.health_geoip_lookup_failed`、profile_id 和 error_type。
+- health response、health audit、last_geoip fallback/cache 行为不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_check_lookup_failure_logs_error_type_without_raw_exception -q
+# RED: health GeoIP failure log exposed raw provider exception text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_check_lookup_failure_logs_error_type_without_raw_exception -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 18 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、health status/warning/audit 语义或 launch fallback 行为。
+- 不记录或公开 raw exception text、provider URL/message/reason、proxy host/credentials、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
