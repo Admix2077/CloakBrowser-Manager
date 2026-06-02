@@ -29,6 +29,7 @@ EXISTING_PAGE_INIT_TIMEOUT_SECONDS = 2.0
 INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
 DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
+DEFAULT_WEBGL_RENDERER = "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
 MAX_RUNNING_PROFILES_ENV = "MAX_RUNNING_PROFILES"
 WEBRTC_PUBLIC_IP_ENV = "STEALTHFOX_WEBRTC_PUBLIC_IP"
 MANAGED_FIREFOX_USER_AGENT = (
@@ -52,6 +53,11 @@ PUBLIC_VERSION_RE = re.compile(r"^\d+(?:\.\d+){0,5}$")
 PUBLIC_FIREFOX_BUILD_ID_RE = re.compile(r"^\d{8,20}$")
 PUBLIC_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2,8}|\d{3})){0,2}$")
 PUBLIC_TIMEZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+){0,3}$")
+PUBLIC_GPU_TEXT_RE = re.compile(r"^[A-Za-z0-9 .,_()+:/\\-]{1,160}$")
+SENSITIVE_TEXT_RE = re.compile(
+    r"(?:https?://|[?&#]|authorization:|bearer\s+|token=|password=|secret=|cookie=)",
+    re.IGNORECASE,
+)
 STEALTH_PREF_CATEGORY_ALIASES = {
     "fpp": "fingerprint",
     "hw_concurrency": "hardware",
@@ -201,10 +207,10 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
         )
         pin["screen.avail_height"] = max(1, height_int - taskbar_height)
 
-    gpu_vendor = profile.get("gpu_vendor")
+    gpu_vendor = _public_gpu_text(profile.get("gpu_vendor"))
     if gpu_vendor:
         pin["gpu.vendor"] = gpu_vendor
-    gpu_renderer = profile.get("gpu_renderer")
+    gpu_renderer = _public_gpu_text(profile.get("gpu_renderer"))
     if gpu_renderer:
         pin["gpu.renderer"] = gpu_renderer
 
@@ -221,13 +227,24 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     return pin
 
 
+def _public_gpu_text(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    text = value.strip()
+    if not PUBLIC_GPU_TEXT_RE.fullmatch(text):
+        return ""
+    if SENSITIVE_TEXT_RE.search(text):
+        return ""
+    return text
+
+
 def _coherent_webgl_renderer_override(profile: dict[str, Any]) -> str:
-    renderer = str(profile.get("gpu_renderer") or "").strip()
+    renderer = _public_gpu_text(profile.get("gpu_renderer"))
     if "NVIDIA" in renderer and "GeForce" in renderer:
-        return "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+        return DEFAULT_WEBGL_RENDERER
     if renderer:
         return renderer
-    return "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    return DEFAULT_WEBGL_RENDERER
 
 
 def _with_coherent_webgl_identity(profile: dict[str, Any]) -> dict[str, Any]:

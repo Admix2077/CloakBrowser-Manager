@@ -155,6 +155,17 @@ def test_build_invisible_pin_uses_realistic_1080p_available_height():
     assert pin["screen.avail_height"] == 1032
 
 
+def test_build_invisible_pin_drops_non_public_gpu_text():
+    pin = bm._build_invisible_pin({
+        "gpu_vendor": "Google Inc. (NVIDIA)\nAuthorization: Bearer gpu-super-secret",
+        "gpu_renderer": "ANGLE (NVIDIA)\nhttps://example.test/?token=gpu-super-secret",
+    })
+
+    assert "gpu.vendor" not in pin
+    assert "gpu.renderer" not in pin
+    assert "gpu-super-secret" not in repr(pin)
+
+
 def test_build_invisible_pin_light_theme():
     assert bm._build_invisible_pin({"color_scheme": "light"})["dark_theme"] is False
 
@@ -433,6 +444,18 @@ def test_with_coherent_webgl_identity_rewrites_profile_renderer():
         "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
     )
     assert profile["gpu_renderer"].endswith("RTX 3060 Direct3D11 vs_5_0 ps_5_0)")
+
+
+def test_with_coherent_webgl_identity_drops_non_public_renderer_text():
+    rewritten = bm._with_coherent_webgl_identity({
+        "gpu_vendor": "Google Inc. (NVIDIA)",
+        "gpu_renderer": "ANGLE (NVIDIA)\nAuthorization: Bearer gpu-super-secret",
+    })
+
+    assert rewritten["gpu_renderer"] == (
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+    )
+    assert "gpu-super-secret" not in repr(rewritten)
 
 
 def test_clean_firefox_startup_state_removes_session_restore_without_lock(tmp_path: Path):

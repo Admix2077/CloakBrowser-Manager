@@ -1231,3 +1231,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、proxy、GeoIP 填充或 profile 存储行为。
 - 不记录或公开 raw timezone input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 GPU/WebGL launch pin public-value guardrail
+
+背景：
+
+- `gpu_vendor` / `gpu_renderer` 会进入 invisible fingerprint pin，并影响 BrowserLeaks/Pixelscan 的 Hardware/WebGL 证据面。
+- 这些字段来自 profile/API/CSV/template 自由文本路径；如果传入 header、URL、token 或 path 风格文本，旧逻辑会把它带进 launch pin 或 coherent WebGL renderer。
+
+已覆盖：
+
+- `_build_invisible_pin()` 只把短的公开可见 GPU/WebGL 文本写入 `gpu.vendor` / `gpu.renderer` pin。
+- URL、header、token、password、secret、cookie、query/fragment 或控制字符风格文本会从 launch pin 中移除。
+- `_coherent_webgl_renderer_override()` 对非公开 renderer 文本回落到固定 Firefox WebGL renderer bucket。
+- profile 存储、模板和前端展示语义不变；guardrail 只作用于浏览器启动身份面。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_non_public_gpu_text backend/tests/test_browser_manager.py::test_with_coherent_webgl_identity_drops_non_public_renderer_text -q
+# RED: polluted GPU/WebGL text reached pin/coherent renderer
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_non_public_gpu_text backend/tests/test_browser_manager.py::test_with_coherent_webgl_identity_drops_non_public_renderer_text backend/tests/test_browser_manager.py::test_build_invisible_pin_screen_gpu_hardware_dark_theme backend/tests/test_browser_manager.py::test_coherent_webgl_renderer_collapses_modern_nvidia_to_firefox_sanitize_bucket backend/tests/test_browser_manager.py::test_with_coherent_webgl_identity_rewrites_profile_renderer -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 58 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
+- 不记录或公开 raw GPU input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
