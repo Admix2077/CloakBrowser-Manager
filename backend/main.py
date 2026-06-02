@@ -3788,10 +3788,18 @@ async def get_clipboard(profile_id: str):
                 if text:
                     return {"text": text[:_CLIPBOARD_MAX_READ]}
             except Exception as exc:
-                logger.debug("Clipboard read failed on page: %s", exc)
+                logger.debug(
+                    "action=profile.clipboard_page_read_failed profile_id=%s error_type=%s",
+                    profile_id,
+                    type(exc).__name__,
+                )
                 continue
     except Exception as exc:
-        logger.debug("Playwright clipboard read failed: %s", exc)
+        logger.debug(
+            "action=profile.clipboard_context_read_failed profile_id=%s error_type=%s",
+            profile_id,
+            type(exc).__name__,
+        )
 
     # Fallback: xclip for non-browser clipboard owners.
     import os
@@ -4242,7 +4250,12 @@ async def _automation_page_summary(running, index: int, page) -> AutomationPageR
     try:
         title = await page.title()
     except Exception as exc:
-        logger.debug("Automation page title failed for index %d: %s", index, exc)
+        logger.debug(
+            "action=automation.page_title_failed profile_id=%s page_index=%d error_type=%s",
+            running.profile_id,
+            index,
+            type(exc).__name__,
+        )
         title = ""
     return AutomationPageResponse(
         page_id=_automation_page_id(running, page),

@@ -1225,6 +1225,83 @@ def test_get_clipboard_from_page(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_get_clipboard_page_failure_logs_error_type_without_raw_exception(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "ClipReadPageFailure"})
+    pid = create.json()["id"]
+
+    mock_page = AsyncMock()
+    mock_page.evaluate = AsyncMock(
+        side_effect=RuntimeError("clipboard-token-super-secret from https://secret.example/app"),
+    )
+
+    mock_context = MagicMock()
+    mock_context.pages = [mock_page]
+
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = 100
+    mock_running.engine = "invisible_playwright"
+    mock_running.context = mock_context
+    main.browser_mgr.running[pid] = mock_running
+
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    caplog.set_level("DEBUG", logger="invisible_browser.manager")
+
+    with patch("backend.main.asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_proc):
+        resp = app_client.get(f"/api/profiles/{pid}/clipboard")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"text": ""}
+    assert (
+        f"action=profile.clipboard_page_read_failed profile_id={pid} "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "clipboard-token-super-secret" not in caplog.text
+    assert "https://secret.example" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_get_clipboard_context_failure_logs_error_type_without_raw_exception(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "ClipReadContextFailure"})
+    pid = create.json()["id"]
+
+    class FailingContext:
+        @property
+        def pages(self):
+            raise RuntimeError("context-token-super-secret via /tmp/profile-secret")
+
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = 100
+    mock_running.engine = "invisible_playwright"
+    mock_running.context = FailingContext()
+    main.browser_mgr.running[pid] = mock_running
+
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    caplog.set_level("DEBUG", logger="invisible_browser.manager")
+
+    with patch("backend.main.asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_proc):
+        resp = app_client.get(f"/api/profiles/{pid}/clipboard")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"text": ""}
+    assert (
+        f"action=profile.clipboard_context_read_failed profile_id={pid} "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "context-token-super-secret" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 # ── Response shape ───────────────────────────────────────────────────────────
 
 
@@ -2573,6 +2650,33 @@ def test_automation_pages_lists_existing_pages(app_client: TestClient):
     assert data["pages"][1]["title"] == "Example"
     assert isinstance(data["pages"][1]["page_id"], str)
     assert data["pages"][0]["page_id"] != data["pages"][1]["page_id"]
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_page_title_failure_logs_error_type_without_raw_exception(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "AutomationPageTitleFailure"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/app", "unused")
+    page.title = AsyncMock(
+        side_effect=RuntimeError("title-token-super-secret from https://secret.example/title"),
+    )
+    _automation_running_profile(pid, [page])
+    caplog.set_level("DEBUG", logger="invisible_browser.manager")
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["pages"][0]["title"] == ""
+    assert (
+        f"action=automation.page_title_failed profile_id={pid} "
+        "page_index=0 error_type=RuntimeError"
+    ) in caplog.text
+    assert "title-token-super-secret" not in caplog.text
+    assert "https://secret.example" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
 
 

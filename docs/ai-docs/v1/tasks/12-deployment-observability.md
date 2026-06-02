@@ -1487,3 +1487,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、health status/warning/audit 语义或 launch fallback 行为。
 - 不记录或公开 raw exception text、provider URL/message/reason、proxy host/credentials、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 Automation/clipboard introspection debug log redaction guardrail
+
+背景：
+
+- clipboard read fallback 和 automation page summary 都会在 release smoke / VNC viewer / automation debugging 中读取页面状态。
+- 旧 debug 日志会拼接 raw exception message；异常文本可能包含页面 URL、token、profile path 或页面内容片段。
+
+已覆盖：
+
+- Clipboard page evaluate failure 只记录固定 `action=profile.clipboard_page_read_failed`、profile_id 和 error_type。
+- Clipboard context/pages failure 只记录固定 `action=profile.clipboard_context_read_failed`、profile_id 和 error_type。
+- Automation page title failure 只记录固定 `action=automation.page_title_failed`、profile_id、page_index 和 error_type。
+- Clipboard fallback 到 xclip、automation pages title 空字符串 fallback 和响应结构保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_get_clipboard_page_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_get_clipboard_context_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_automation_page_title_failure_logs_error_type_without_raw_exception -q
+# RED: clipboard/page-title debug logs exposed raw exception text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_get_clipboard_page_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_get_clipboard_context_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_automation_page_title_failure_logs_error_type_without_raw_exception -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_set_clipboard_not_running backend/tests/test_api.py::test_get_clipboard_not_running backend/tests/test_api.py::test_set_clipboard_success backend/tests/test_api.py::test_get_clipboard_from_page backend/tests/test_api.py::test_get_clipboard_page_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_get_clipboard_context_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_automation_pages_lists_existing_pages backend/tests/test_api.py::test_automation_page_title_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_automation_pages_hide_internal_about_home_from_numeric_refs backend/tests/test_api.py::test_automation_pages_create_new_page -q
+# 10 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、clipboard text source order、automation page response shape 或 launch fallback 行为。
+- 不记录或公开 raw exception text、page URL、profile dir/path、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
