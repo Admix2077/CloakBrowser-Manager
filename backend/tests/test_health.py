@@ -201,6 +201,74 @@ def test_health_check_success_persists_geoip_without_overwriting_manual_fields(
     assert profile["last_geoip_source"] == "ipwho.is"
 
 
+def test_health_check_redacts_sensitive_geoip_source(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Health Sensitive Source"})
+    pid = create.json()["id"]
+    sensitive_source = (
+        "https://geo.example/check?token=super-secret "
+        "Authorization=Bearer super-secret"
+    )
+
+    with patch(
+        "backend.main.resolve_network_geo",
+        new=AsyncMock(
+            return_value=GeoIPResult(
+                timezone="Asia/Tokyo",
+                locale="ja-JP",
+                ip="203.0.113.20",
+                country_code="JP",
+                source=sensitive_source,
+            )
+        ),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["geoip"]["source"] == "unknown"
+    for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(body, sort_keys=True)
+
+    profile = db.get_profile(pid)
+    assert profile is not None
+    assert profile["last_geoip_source"] == "unknown"
+    for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(dict(profile), sort_keys=True)
+
+    events = _health_audit_events()
+    assert len(events) == 1
+    assert events[0]["metadata"]["geoip_source"] == "unknown"
+    for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(events[0], sort_keys=True)
+
+
+def test_health_get_redacts_persisted_sensitive_geoip_source(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Health Existing Source"})
+    pid = create.json()["id"]
+    sensitive_source = (
+        "https://geo.example/check?token=super-secret "
+        "Authorization=Bearer super-secret"
+    )
+    db.update_profile_geoip_result(
+        pid,
+        {
+            "ip": "203.0.113.20",
+            "country_code": "JP",
+            "timezone": "Asia/Tokyo",
+            "locale": "ja-JP",
+            "source": sensitive_source,
+        },
+    )
+
+    resp = app_client.get(f"/api/profiles/{pid}/health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["geoip"]["source"] == "unknown"
+    for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(body, sort_keys=True)
+
+
 def test_health_check_success_writes_redacted_audit_event(app_client: TestClient):
     create = app_client.post(
         "/api/profiles",

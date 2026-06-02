@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import math
 import os
+import re
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -42,6 +43,26 @@ COUNTRY_LOCALE_MAP: dict[str, str] = {
 
 _transport_for_tests: httpx.AsyncBaseTransport | None = None
 _cache: dict[str, tuple[float, "GeoIPResult"]] = {}
+_PUBLIC_GEOIP_SOURCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+_SENSITIVE_GEOIP_SOURCE_RE = re.compile(
+    r"https?://|socks5://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
+    re.IGNORECASE,
+)
+
+
+def public_geoip_source(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    source = value.strip()
+    if not source:
+        return None
+    if (
+        len(source) > 32
+        or _SENSITIVE_GEOIP_SOURCE_RE.search(source)
+        or not _PUBLIC_GEOIP_SOURCE_RE.fullmatch(source)
+    ):
+        return "unknown"
+    return source
 
 
 @dataclass(frozen=True)
@@ -58,7 +79,7 @@ class GeoIPResult:
             "locale": self.locale,
             "ip": self.ip,
             "country_code": self.country_code,
-            "source": self.source,
+            "source": public_geoip_source(self.source),
         }
 
 

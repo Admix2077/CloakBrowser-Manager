@@ -8,7 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from .browser_manager import _normalize_proxy, _validate_proxy
-from .geoip import GeoIPResult
+from .geoip import GeoIPResult, public_geoip_source
 
 HealthStatus = Literal["good", "warning", "error", "unknown"]
 WarningSeverity = Literal["info", "warning", "error"]
@@ -92,7 +92,7 @@ def _profile_geoip(profile: dict[str, Any]) -> HealthGeoIP | None:
         country_code=_nonempty(profile.get("last_geoip_country_code")),
         timezone=_nonempty(profile.get("last_geoip_timezone")),
         locale=_nonempty(profile.get("last_geoip_locale")),
-        source=_nonempty(profile.get("last_geoip_source")),
+        source=public_geoip_source(profile.get("last_geoip_source")),
         resolved_at=_nonempty(profile.get("last_geoip_resolved_at")),
     )
 
@@ -125,7 +125,7 @@ def _geoip_from_result(result: GeoIPResult) -> HealthGeoIP | None:
         country_code=result.country_code,
         timezone=result.timezone,
         locale=result.locale,
-        source=result.source,
+        source=public_geoip_source(result.source),
         resolved_at=now_iso(),
     )
 

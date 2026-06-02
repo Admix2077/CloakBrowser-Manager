@@ -48,7 +48,7 @@ from .cookie_formats import (
     netscape_cookie_audit_summary,
     parse_netscape_cookies,
 )
-from .geoip import resolve_network_geo
+from .geoip import public_geoip_source, resolve_network_geo
 from .health import (
     ProfileHealthResponse,
     compute_profile_health,
@@ -1131,7 +1131,7 @@ async def _run_proxy_check(proxy: dict) -> dict:
             last_check_country_code=geo.country_code,
             last_check_timezone=geo.timezone,
             last_check_locale=geo.locale,
-            last_check_source=geo.source,
+            last_check_source=public_geoip_source(geo.source),
             last_check_error=None,
             last_check_at=check_at,
         )

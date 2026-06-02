@@ -1668,3 +1668,41 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy storage URL、proxy validation、GeoIP lookup behavior、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、VNC、viewer token、profile 存储或 runtime session 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 GeoIP source public-value guardrail
+
+背景：
+
+- GeoIP success source 会出现在 proxy check、profile health、persisted health cache 和 health audit metadata 中。
+- 真实 provider 当前返回固定 label，但成功路径没有防御 future provider/test double/historical DB source 中的 URL、query token、Authorization/Bearer 或 host/path 文本。
+
+已覆盖：
+
+- `public_geoip_source` 只保留短公开 label，非公开 source 折叠为 `unknown`。
+- Proxy check 成功 response/DB 的 `last_check_source` 已过滤。
+- Profile health check 新写入、GET health 读取历史 cache、health audit metadata 的 `geoip_source` 已过滤。
+- GeoIP fallback、proxy check success、health warning/audit、manual override mismatch 行为保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_check_redacts_sensitive_success_source backend/tests/test_health.py::test_health_check_redacts_sensitive_geoip_source backend/tests/test_health.py::test_health_get_redacts_persisted_sensitive_geoip_source -q
+# RED then GREEN；初始 3 failed，最终 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# 65 passed in 4.66s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 557 passed in 33.19s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.87s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 GeoIP provider order、lookup URL、proxy normalization、IP/country/timezone/locale parsing、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、profile 存储 schema 或 runtime session 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

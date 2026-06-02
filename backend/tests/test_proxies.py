@@ -365,6 +365,51 @@ def test_proxy_check_updates_last_check_fields(app_client: TestClient, monkeypat
     assert "hiddenpass" not in str(data)
 
 
+def test_proxy_check_redacts_sensitive_success_source(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sensitive_source = (
+        "https://geo.example/check?token=super-secret "
+        "Authorization=Bearer super-secret"
+    )
+
+    async def fake_resolve(proxy_url: str | None):
+        return GeoIPResult(
+            timezone="Asia/Tokyo",
+            locale="ja-JP",
+            ip="203.0.113.8",
+            country_code="JP",
+            source=sensitive_source,
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Sensitive source",
+            "url": "socks5://user:hiddenpass@source.proxy.example:1080",
+        },
+    )
+    proxy_id = create.json()["id"]
+
+    resp = app_client.post(f"/api/proxies/{proxy_id}/check")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["last_check_status"] == "good"
+    assert data["last_check_source"] == "unknown"
+    for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(data, sort_keys=True)
+
+    stored = db.get_proxy(proxy_id)
+    assert stored is not None
+    assert stored["last_check_status"] == "good"
+    assert stored["last_check_source"] == "unknown"
+    for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(stored, sort_keys=True)
+
+
 def test_proxy_check_records_failure_without_leaking_credentials(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

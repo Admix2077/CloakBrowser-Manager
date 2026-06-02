@@ -1786,3 +1786,44 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy storage URL、proxy validation、GeoIP lookup behavior、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、VNC、viewer token、profile 存储或 runtime session 行为。
 - 不记录或公开 raw proxy check exception text、provider URL/host/query token、Authorization/Bearer、proxy host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 GeoIP source public-value guardrail
+
+背景：
+
+- GeoIP success metadata 会进入 proxy `last_check_source`、profile `last_geoip_source`、profile health response 和 health audit metadata。
+- 当前真实 provider 返回固定 source label，但 API/DB 层原本直接信任 `GeoIPResult.source`；测试替身、未来 provider 或历史 DB 值若带入 URL、query token、Authorization/Bearer、host/path 文本，会被成功路径固化。
+
+已覆盖：
+
+- 新增共享 `public_geoip_source`，仅保留短的公开 source label（例如 `ip-api`、`ipapi.co`、`ipwho.is`、`qa`），非公开文本折叠为 `unknown`。
+- Proxy check 成功路径写入 `last_check_source` 前会过滤 source。
+- `GeoIPResult.as_dict()`、profile health 新 lookup response、persisted health cache response 和 health audit metadata 均使用低敏 source。
+- 现有 GeoIP provider fallback、proxy check 成功字段、profile health stale/mismatch/audit 语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_check_redacts_sensitive_success_source backend/tests/test_health.py::test_health_check_redacts_sensitive_geoip_source backend/tests/test_health.py::test_health_get_redacts_persisted_sensitive_geoip_source -q
+# RED: 3 failed；proxy/health source 原样包含 provider URL、token、Authorization/Bearer
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_check_redacts_sensitive_success_source backend/tests/test_health.py::test_health_check_redacts_sensitive_geoip_source backend/tests/test_health.py::test_health_get_redacts_persisted_sensitive_geoip_source -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# 65 passed in 4.66s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 557 passed in 33.19s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.87s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 GeoIP provider order、lookup URL、proxy normalization、IP/country/timezone/locale parsing、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、profile 存储 schema 或 runtime session 行为。
+- 不记录或公开 raw GeoIP source URL/host/query token、Authorization/Bearer、proxy host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
