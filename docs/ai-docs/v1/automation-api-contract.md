@@ -445,8 +445,8 @@ GET /api/tasks
   - 搜索只过滤当前已加载的最近 50 条 task，不新增 API query，不调用新的后端接口。
   - 搜索不匹配、不读取、不渲染 `steps`、`result`、`error` 或任何自动化 payload 内容。
 - 表格行提供只读详情入口，打开后在 drawer 中展示该 task 的完整低敏 `steps` 和完整低敏 `result.steps[]`，不再使用表格摘要的 4 条截断上限。
-- 前端只渲染 step 白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page`。
-- 前端只渲染 result 白名单字段：`index/type/status`。
+- 前端只渲染 step 白名单字段：`type/page_ref/ms/wait_until/state/timeout_ms/delay_ms/delta_x/delta_y/full_page`；未知或非白名单 step `type` 只显示低敏 `unknown`。
+- 前端只渲染 result 白名单字段：`index/type/status`；历史或异常 result 中非整数 `index` 收口为 `null`，非白名单 `type/status` 收口为 `unknown`。
 - 前端不渲染 `open_url.url`、URL query、fragment、token、selector、fill value、keyboard text、evaluate expression/result、screenshot bytes/base64/path、clipboard、console text、network URL、headers、body 或未知字段。
 - 前端不提供 `run`、`cancel`、`retry` 按钮，详情 drawer 也不提供这些动作，避免在日志页面制造高权限自动化入口。
 - 该页面仍属于 CloakBrowser 本地可信管理台，不是 Project Mileage App 对接面；Project Mileage App 后续只能通过 Payload 安全 DTO 获取经过账号归属、订单、权限和审计裁剪后的数据。
@@ -528,7 +528,7 @@ POST /api/tasks/{id}/run
   - `screenshot`：`{"type": "screenshot", "page_ref": "0", "full_page": false}`。
   - `scroll`：`{"type": "scroll", "page_ref": "0", "delta_x": 0, "delta_y": 600}`。
   - `wait`：`{"type": "wait", "ms": 1..300000}`，内部执行 `asyncio.sleep(ms / 1000)`。
-- 当前不支持的 step 会让 task 进入 `failed`，并返回 `400`。
+- 当前不支持的 step 会让 task 进入 `failed`，并返回 `400`；未知或非白名单 `type` 入库、响应、result summary 和 audit `step_types` 均收口为低敏 `unknown`。
 - 当前非法 `wait.ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `open_url.url`、`wait_until` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
 - 当前非法 `wait_for_selector.selector`、`state` 或 `timeout_ms` 会让 task 进入 `failed`，并返回 `400`。
@@ -539,8 +539,8 @@ POST /api/tasks/{id}/run
 - 当前非法 `screenshot.full_page` 会让 task 进入 `failed`，并返回 `400`；`full_page` 必须是布尔值。
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
 - `cancel_requested` 只在 step 边界生效，不承诺中断正在执行或正在 await 的 Playwright 操作；收束为 `cancelled` 后 `result.steps[]` 只包含已执行 step 的 `succeeded/failed` 低敏摘要和一个未执行 step 的 `cancelled` 低敏摘要。
-- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显低敏 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显低敏 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显低敏 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显低敏 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显低敏 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显低敏 `page_ref`，不回显 expression；对 `screenshot` 只回显低敏 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显低敏 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，并把非 index/UUID 的 `page_ref` 收口为 `invalid`，降低未知字段和调用方文本落库风险。
-- 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
+- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显低敏 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显低敏 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显低敏 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显低敏 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显低敏 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显低敏 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显低敏 `page_ref`，不回显 expression；对 `screenshot` 只回显低敏 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显低敏 `page_ref/delta_x/delta_y`；未知 step 的 `type` 统一显示为 `unknown`，其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，并把非 index/UUID 的 `page_ref` 收口为 `invalid`，把未知或非白名单 `type` 收口为 `unknown`，降低未知字段和调用方文本落库风险。
+- 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64、本地路径，或污染 `index/type/status` 摘要字段，响应也只返回清洗后的 `result.steps[]` 的 `index`、`type`、`status`；非整数 `index` 为 `null`，未知 `type/status` 为 `unknown`。
 - 当前已提供内部 worker 单次运行入口和内部 loop 骨架，但不启动后台常驻任务或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
 
 ### 内部 Task Claim / Lease

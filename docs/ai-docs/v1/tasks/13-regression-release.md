@@ -738,3 +738,51 @@ git diff --check
 
 - 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。
+
+## 2026-06-03 automation task type/result summary redaction guardrail
+
+背景：
+
+- `cbim-23h.6` 下一阶段范围要求持续保护 automation payload、result、audit metadata 和历史数据响应边界。
+- 未知 step `type` 是调用方可控字符串，旧实现会把它原样持久化、响应并写入 audit `step_types`。
+- 历史 result summary 的 `index/type/status` 旧实现也允许非整数 index 或非白名单 type/status 原样回显。
+
+已覆盖：
+
+- 未知或非字符串 task step `type` 统一归一化为 `unknown`。
+- 归一化覆盖 create/get/list/cancel/run 响应、persisted task、runner result step type 和 automation audit `step_types`。
+- `result.steps[]` 摘要字段清洗：
+  - `index` 只保留非负整数，否则为 `null`。
+  - `type` 只保留支持的 step type，否则为 `unknown`。
+  - `status` 只保留 `succeeded | failed | cancelled`，否则为 `unknown`。
+- 前端 Automation task viewer 对 `index: null` 显示为 `-`。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit backend/tests/test_api.py::test_automation_task_result_summary_sanitizes_corrupted_summary_fields -q
+# RED: unknown step type and corrupted result summary fields leaked raw sensitive values
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit backend/tests/test_api.py::test_automation_task_result_summary_sanitizes_corrupted_summary_fields backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps backend/tests/test_api.py::test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events -q
+# 5 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# 1 file / 6 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 513 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。

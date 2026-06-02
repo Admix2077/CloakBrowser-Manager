@@ -756,3 +756,52 @@ npm --prefix frontend run build
 git diff --check
 # no output
 ```
+
+## 2026-06-03 automation task type/result summary redaction guardrail
+
+背景：
+
+- Automation task redaction 已隐藏 URL、selector、表单值、evaluate expression、screenshot payload 和 `page_ref` 中的敏感调用方文本。
+- 继续检查时发现 step `type` 本身也是调用方可控字段：未知 step type 会原样持久化、响应并写入 audit `step_types`。
+- 历史或异常 task result 中的 `result.steps[].index/type/status` 虽然是摘要字段，但旧实现仍会原样回显非整数 index、非白名单 type/status。
+
+已完成：
+
+- 新增 automation step type 白名单。
+- 未知或非字符串 step `type` 在入库、响应、run result 和 audit metadata 中统一收口为低敏 `unknown`。
+- `result.steps[]` 摘要继续只返回 `index/type/status`，并进一步清洗：
+  - `index` 必须是非负整数，否则返回 `null`。
+  - `type` 必须是支持的 automation step type，否则返回 `unknown`。
+  - `status` 必须是 `succeeded | failed | cancelled`，否则返回 `unknown`。
+- 前端 Automation task result index 类型调整为 `number | null`，`null` 显示为 `-`。
+
+边界：
+
+- 不改变支持的 step 类型或 runner 行为。
+- 不把未知 step type 的调用方原文写入 task response、persisted task、result summary 或 audit metadata。
+- 该改动只收紧 Automation task redaction 和历史数据防御，不修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit backend/tests/test_api.py::test_automation_task_result_summary_sanitizes_corrupted_summary_fields -q
+# RED: unknown step type and corrupted result summary fields leaked raw sensitive values
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit backend/tests/test_api.py::test_automation_task_result_summary_sanitizes_corrupted_summary_fields backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding backend/tests/test_api.py::test_automation_task_responses_redact_persisted_result_steps backend/tests/test_api.py::test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events -q
+# 5 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# 1 file / 6 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 513 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```

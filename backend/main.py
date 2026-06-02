@@ -2584,7 +2584,7 @@ async def get_system_diagnostics():
 def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
     redacted_steps = []
     for step in steps:
-        step_type = str(step.get("type", ""))
+        step_type = _automation_task_public_step_type(step.get("type"))
         redacted = {"type": step_type}
         if step_type == "wait" and isinstance(step.get("ms"), int) and not isinstance(step.get("ms"), bool):
             redacted["ms"] = step["ms"]
@@ -2672,6 +2672,42 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
     return redacted_steps
 
 
+_AUTOMATION_STEP_TYPES = {
+    "click",
+    "evaluate",
+    "fill",
+    "keyboard_type",
+    "open_url",
+    "screenshot",
+    "scroll",
+    "wait",
+    "wait_for_selector",
+}
+_AUTOMATION_RESULT_STATUSES = {"cancelled", "failed", "succeeded"}
+_AUTOMATION_UNKNOWN_STEP_TYPE = "unknown"
+_AUTOMATION_UNKNOWN_RESULT_STATUS = "unknown"
+
+
+def _automation_task_public_step_type(value: object) -> str:
+    if not isinstance(value, str):
+        return _AUTOMATION_UNKNOWN_STEP_TYPE
+    return value if value in _AUTOMATION_STEP_TYPES else _AUTOMATION_UNKNOWN_STEP_TYPE
+
+
+def _automation_task_public_result_status(value: object) -> str:
+    if not isinstance(value, str):
+        return _AUTOMATION_UNKNOWN_RESULT_STATUS
+    return value if value in _AUTOMATION_RESULT_STATUSES else _AUTOMATION_UNKNOWN_RESULT_STATUS
+
+
+def _automation_task_public_result_index(value: object) -> int | None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    if value < 0 or value > 1_000_000:
+        return None
+    return value
+
+
 def _automation_task_safe_page_ref(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -2709,9 +2745,10 @@ def _automation_task_persisted_steps(steps: list[dict]) -> list[dict]:
         "wait_for_selector": {"type", "selector", "page_ref", "state", "timeout_ms"},
     }
     for step in steps:
-        step_type = str(step.get("type", ""))
+        step_type = _automation_task_public_step_type(step.get("type"))
         allowed_keys = allowed_keys_by_type.get(step_type, {"type"})
         persisted_step = {key: value for key, value in step.items() if key in allowed_keys}
+        persisted_step["type"] = step_type
         page_ref = _automation_task_public_page_ref(step)
         if page_ref is not None and "page_ref" in allowed_keys:
             persisted_step["page_ref"] = page_ref
@@ -2730,9 +2767,9 @@ def _automation_task_redacted_result(result: dict | None) -> dict | None:
         if not isinstance(step, dict):
             continue
         redacted_step = {
-            "index": step.get("index"),
-            "type": str(step.get("type", "")),
-            "status": str(step.get("status", "")),
+            "index": _automation_task_public_result_index(step.get("index")),
+            "type": _automation_task_public_step_type(step.get("type")),
+            "status": _automation_task_public_result_status(step.get("status")),
         }
         redacted_steps.append(redacted_step)
     return {"steps": redacted_steps}
@@ -2759,7 +2796,7 @@ def _automation_task_finished_response(
 
 def _automation_task_step_types(task: dict) -> list[str]:
     steps = task.get("steps") or []
-    return [str(step.get("type", "")) for step in steps if isinstance(step, dict)]
+    return [_automation_task_public_step_type(step.get("type")) for step in steps if isinstance(step, dict)]
 
 
 def _automation_task_result_counts(task: dict) -> dict[str, int]:
@@ -2883,8 +2920,8 @@ def _audit_automation_task_terminal_event(task: dict, *, runner_type: str) -> No
 def _automation_task_step_result(index: int, step: dict, status: str) -> dict:
     return {
         "index": index,
-        "type": str(step.get("type", "")),
-        "status": status,
+        "type": _automation_task_public_step_type(step.get("type")),
+        "status": _automation_task_public_result_status(status),
     }
 
 

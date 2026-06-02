@@ -466,7 +466,7 @@ export interface AutomationTaskStep {
 }
 
 export interface AutomationTaskResultStep {
-  index: number;
+  index: number | null;
   type: string;
   status: string;
   [key: string]: unknown;

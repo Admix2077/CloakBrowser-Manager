@@ -3521,6 +3521,61 @@ def test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_respo
     assert "#frag" not in serialized
 
 
+def test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskTypeRedactProfile"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [_automation_page()])
+    secret_type = "https://app.example.com/automation?token=step-type-super-secret#frag"
+    steps = [{"type": secret_type, "payload": {"token": "payload-super-secret"}}]
+    expected_steps = [{"type": "unknown"}]
+
+    create_resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+    task_id = create_resp.json()["id"]
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+    run_resp = app_client.post(f"/api/tasks/{task_id}/run")
+    persisted = main.db.get_automation_task(task_id)
+    events = _automation_task_audit_events()
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["steps"] == expected_steps
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["steps"] == expected_steps
+    assert run_resp.status_code == 400
+    assert run_resp.json()["steps"] == expected_steps
+    assert run_resp.json()["result"] == {
+        "steps": [{"index": 0, "type": "unknown", "status": "failed"}],
+    }
+    assert persisted is not None
+    assert persisted["steps"] == expected_steps
+    assert events[0]["metadata"]["step_types"] == ["unknown"]
+    assert events[1]["metadata"]["step_types"] == ["unknown"]
+    assert events[1]["metadata"]["reason_code"] == "unsupported_step_type"
+
+    serialized = json.dumps(
+        {
+            "create": create_resp.json(),
+            "get": get_resp.json(),
+            "list": list_resp.json(),
+            "run": run_resp.json(),
+            "persisted": persisted,
+            "events": events,
+        },
+        sort_keys=True,
+    )
+    assert secret_type not in serialized
+    assert "step-type-super-secret" not in serialized
+    assert "payload-super-secret" not in serialized
+    assert "token=" not in serialized
+    assert "#frag" not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_create_automation_task_persists_sanitized_screenshot_step(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskScreenshotPersistProfile"})
     pid = create.json()["id"]
@@ -3669,6 +3724,51 @@ def test_automation_task_responses_redact_persisted_result_steps(app_client: Tes
     assert "window.localStorage" not in str(list_resp.json())
     assert "c3VwZXItc2VjcmV0" not in str(list_resp.json())
     assert "super-secret" not in str(list_resp.json())
+
+
+def test_automation_task_result_summary_sanitizes_corrupted_summary_fields(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskResultSummarySanitizeProfile"})
+    pid = create.json()["id"]
+    create_resp = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    )
+    task_id = create_resp.json()["id"]
+    main.db.update_automation_task(
+        task_id,
+        status="failed",
+        result={
+            "steps": [
+                {
+                    "index": {"token": "index-super-secret"},
+                    "type": "evaluate-token-super-secret",
+                    "status": "failed-token-super-secret",
+                    "payload": {"token": "payload-super-secret"},
+                }
+            ],
+            "raw_result": {"token": "raw-super-secret"},
+        },
+    )
+
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["result"] == {
+        "steps": [{"index": None, "type": "unknown", "status": "unknown"}],
+    }
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["result"] == {
+        "steps": [{"index": None, "type": "unknown", "status": "unknown"}],
+    }
+
+    serialized = json.dumps({"get": get_resp.json(), "list": list_resp.json()}, sort_keys=True)
+    assert "index-super-secret" not in serialized
+    assert "evaluate-token-super-secret" not in serialized
+    assert "failed-token-super-secret" not in serialized
+    assert "payload-super-secret" not in serialized
+    assert "raw-super-secret" not in serialized
 
 
 def test_get_automation_task_returns_persisted_task(app_client: TestClient):

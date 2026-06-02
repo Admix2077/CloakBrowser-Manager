@@ -371,7 +371,7 @@ function ResultList({ steps, maxItems = 4 }: { steps: AutomationTaskResultStep[]
     <div className="flex max-w-[260px] flex-col gap-1">
       {visibleSteps.map((step) => (
         <span key={`${step.index}-${step.type}-${step.status}`} className="font-mono text-[11px] text-slate-700">
-          {step.index} {safeLabel(step.type)} {safeLabel(step.status)}
+          {formatResultIndex(step.index)} {safeLabel(step.type)} {safeLabel(step.status)}
         </span>
       ))}
       {hiddenCount > 0 && (
@@ -482,6 +482,10 @@ function shortId(value: string): string {
 
 function safeLabel(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 40) || "-";
+}
+
+function formatResultIndex(value: number | null): string {
+  return typeof value === "number" ? String(value) : "-";
 }
 
 function taskMatchesStatusFilter(status: string, filter: TaskStatusFilter): boolean {
