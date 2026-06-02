@@ -892,6 +892,22 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     monkeypatch.setenv("AUTOMATION_WORKER_ENABLED", "true")
     monkeypatch.setenv("AUTOMATION_WORKER_LEASE_SECONDS", "secret-lease")
     monkeypatch.setenv("MAX_RUNNING_PROFILES", "7")
+    monkeypatch.setattr(main, "managed_firefox_identity_summary", lambda: {
+        "managed_user_agent_version": "149.0",
+        "invisible_playwright_version": "0.1.8",
+        "firefox_binary_version": "150.0.1",
+        "firefox_binary_build_id": "20260521160037",
+        "stealth_pref_count": 29,
+        "stealth_pref_categories": [
+            "audio",
+            "canvas",
+            "fingerprint",
+            "hardware",
+            "screen",
+            "webgl",
+            "webrtc",
+        ],
+    })
 
     try:
         resp = app_client.get("/api/diagnostics")
@@ -919,6 +935,16 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["runtime"]["invisible_playwright_version"]
     assert "firefox_binary_version" in data["runtime"]
     assert "firefox_binary_build_id" in data["runtime"]
+    assert data["runtime"]["stealth_pref_count"] >= 20
+    assert {
+        "audio",
+        "canvas",
+        "fingerprint",
+        "hardware",
+        "screen",
+        "webgl",
+        "webrtc",
+    }.issubset(set(data["runtime"]["stealth_pref_categories"]))
 
     serialized = json.dumps(data)
     assert str(main.db.DATA_DIR) not in serialized
@@ -938,6 +964,9 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert "steps" not in serialized
     assert "url" not in serialized
     assert "selector" not in serialized
+    assert "zoom.stealth" not in serialized
+    assert "hw_seed" not in serialized
+    assert "192.168." not in serialized
 
 
 def test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows(

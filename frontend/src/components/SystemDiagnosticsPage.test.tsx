@@ -44,6 +44,8 @@ function diagnostics(overrides: Partial<SystemDiagnostics> = {}): SystemDiagnost
       invisible_playwright_version: "0.1.8",
       firefox_binary_version: "150.0.1",
       firefox_binary_build_id: "20260521160037",
+      stealth_pref_count: 29,
+      stealth_pref_categories: ["audio", "canvas", "fingerprint", "hardware", "screen", "webgl", "webrtc"],
     },
     automation_worker: {
       enabled: true,
@@ -82,6 +84,8 @@ describe("SystemDiagnosticsPage", () => {
     expect(within(page).getByRole("group", { name: "Engine package: invisible_playwright 0.1.8" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox binary: 150.0.1" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox BuildID: 20260521160037" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Stealth prefs: 29 keys" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Stealth categories: audio, canvas, fingerprint, hardware, screen, webgl, webrtc" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "State: enabled" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Lease: 60s" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Idle sleep: 1s" })).toBeTruthy();
@@ -94,6 +98,8 @@ describe("SystemDiagnosticsPage", () => {
     expect(page.textContent).not.toContain("http://");
     expect(page.textContent).not.toContain("profile-");
     expect(page.textContent).not.toContain("selector");
+    expect(page.textContent).not.toContain("zoom.stealth");
+    expect(page.textContent).not.toContain("hw_seed");
   });
 
   it("refreshes diagnostics on demand", async () => {

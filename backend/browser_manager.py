@@ -45,6 +45,12 @@ WEBRTC_LOCAL_IP_SUPPRESSION_PREFS = {
     "media.peerconnection.ice.obfuscate_host_addresses": False,
     "media.peerconnection.ice.disableIPv6": True,
 }
+STEALTH_PREF_CATEGORY_ALIASES = {
+    "fpp": "fingerprint",
+    "hw_concurrency": "hardware",
+    "seed": "fingerprint",
+    "webgl2": "webgl",
+}
 
 
 class BrowserResourceLimitError(RuntimeError):
@@ -348,13 +354,57 @@ def _invisible_playwright_package_version() -> str | None:
     return version or None
 
 
-def managed_firefox_identity_summary() -> dict[str, str | None]:
+def _stealth_pref_category(pref_key: str) -> str | None:
+    prefix = "zoom.stealth."
+    if not pref_key.startswith(prefix):
+        return None
+    category = pref_key.removeprefix(prefix).split(".", 1)[0]
+    return STEALTH_PREF_CATEGORY_ALIASES.get(category, category)
+
+
+@lru_cache(maxsize=1)
+def _invisible_stealth_pref_summary() -> dict[str, Any]:
+    try:
+        from invisible_playwright._fpforge.profile import generate_profile
+        from invisible_playwright.prefs import translate_profile_to_prefs
+
+        profile = generate_profile(1)
+        prefs = translate_profile_to_prefs(
+            profile,
+            locale="en-US",
+            timezone="UTC",
+            extra_prefs={
+                **MANAGED_FIREFOX_IDENTITY_PREFS,
+                **WEBRTC_LOCAL_IP_SUPPRESSION_PREFS,
+            },
+        )
+        stealth_keys = [key for key in prefs if key.startswith("zoom.stealth.")]
+        categories = sorted(
+            {
+                category
+                for key in stealth_keys
+                if (category := _stealth_pref_category(key))
+            }
+        )
+        return {
+            "stealth_pref_count": len(stealth_keys),
+            "stealth_pref_categories": categories,
+        }
+    except Exception as exc:
+        logger.debug("invisible_playwright stealth pref summary skipped: %s", exc)
+    return {"stealth_pref_count": None, "stealth_pref_categories": []}
+
+
+def managed_firefox_identity_summary() -> dict[str, Any]:
     metadata = _firefox_application_ini_metadata()
+    stealth_summary = _invisible_stealth_pref_summary()
     return {
         "managed_user_agent_version": _managed_user_agent_version(),
         "invisible_playwright_version": _invisible_playwright_package_version(),
         "firefox_binary_version": metadata.get("Version"),
         "firefox_binary_build_id": metadata.get("BuildID"),
+        "stealth_pref_count": stealth_summary["stealth_pref_count"],
+        "stealth_pref_categories": stealth_summary["stealth_pref_categories"],
     }
 
 

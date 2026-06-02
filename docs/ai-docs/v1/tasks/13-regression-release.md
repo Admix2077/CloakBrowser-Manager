@@ -689,3 +689,52 @@ git diff --check
 
 - 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。
+
+## 2026-06-03 diagnostics stealth pref surface observability
+
+背景：
+
+- Pixelscan no-proxy blocker 当前唯一 failed card 是 `PXLSCN-FINGERPRINT-MASKING` / `Masking detected Fingerprint`。
+- 继续排障需要确认当前 Manager 所用 `invisible_playwright` 包生成的 stealth pref 结构面，但 release notes 不能保存 seed、IP、pref value、完整 key、profile dir、proxy、headers、cookies、local storage 或页面文本。
+
+已覆盖：
+
+- `GET /api/diagnostics` 的 `runtime` 节点新增：
+  - `stealth_pref_count`
+  - `stealth_pref_categories`
+- categories 是低敏粗分类，例如 canvas、fingerprint、hardware、screen、webgl、webrtc。
+- 原始 `zoom.stealth.*` key 不出现在 API 响应或前端页面；`hw_seed`、seed value、WebRTC host IP、pref value 和 package path 均不返回。
+- 前端 System diagnostics 显示 Stealth prefs 和 Stealth categories，长分类列表在视觉上截断但保留完整 aria-label 供测试和辅助技术读取。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: KeyError: 'stealth_pref_count'
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts -t "diagnostics"
+# RED: Unable to find group "Stealth prefs: 29 keys"
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys backend/tests/test_browser_manager.py::test_invisible_stealth_pref_summary_degrades_without_full_package -q
+# 3 passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts -t "diagnostics"
+# 2 files / 3 tests passed, 39 skipped
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 511 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。

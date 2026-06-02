@@ -242,6 +242,8 @@ describe("api.getDiagnostics", () => {
         active_displays: [100],
         active_vnc_ws_ports: [6100],
         max_running_profiles: 6,
+        stealth_pref_count: 29,
+        stealth_pref_categories: ["canvas", "fingerprint", "webgl", "webrtc"],
       },
       automation_worker: {
         enabled: false,

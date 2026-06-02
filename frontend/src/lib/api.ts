@@ -440,6 +440,8 @@ export interface SystemDiagnostics {
     invisible_playwright_version: string | null;
     firefox_binary_version: string | null;
     firefox_binary_build_id: string | null;
+    stealth_pref_count: number | null;
+    stealth_pref_categories: string[];
   };
   automation_worker: {
     enabled: boolean;

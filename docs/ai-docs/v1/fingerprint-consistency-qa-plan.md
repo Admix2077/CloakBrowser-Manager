@@ -207,6 +207,7 @@ Project Mileage 的账号商品和远程工作台场景决定了 CloakBrowser �
 下一步：
 
 - 需要底层 runtime/prefs A/B，找到同时满足 Pixelscan、BrowserScan、BrowserLeaks、CreepJS 和 seed-stability 的替代方案。
+- 受保护 diagnostics 现在返回低敏 `runtime.stealth_pref_count` 和 `runtime.stealth_pref_categories`，用于比较当前 `invisible_playwright` package 的 stealth surface；该摘要不返回 `zoom.stealth.*` 原始 key、pref value、seed、IP、profile dir、proxy、headers、cookie/local storage 或页面内容。
 - 在替代方案通过前，Pixelscan/IPhey gate 保持未完成，`cbim-23h.6` 保持 release blocker。
 
 ## 下一步顺序

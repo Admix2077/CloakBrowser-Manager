@@ -2571,6 +2571,8 @@ async def get_system_diagnostics():
             invisible_playwright_version=firefox_identity["invisible_playwright_version"],
             firefox_binary_version=firefox_identity["firefox_binary_version"],
             firefox_binary_build_id=firefox_identity["firefox_binary_build_id"],
+            stealth_pref_count=firefox_identity["stealth_pref_count"],
+            stealth_pref_categories=firefox_identity["stealth_pref_categories"],
         ),
         automation_worker=_automation_worker_diagnostics(),
     )

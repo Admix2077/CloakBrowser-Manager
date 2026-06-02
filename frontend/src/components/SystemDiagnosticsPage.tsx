@@ -92,6 +92,8 @@ export function SystemDiagnosticsPage() {
                 />
                 <InfoRow label="Firefox binary" value={diagnostics.runtime.firefox_binary_version ?? "unknown"} />
                 <InfoRow label="Firefox BuildID" value={diagnostics.runtime.firefox_binary_build_id ?? "unknown"} />
+                <InfoRow label="Stealth prefs" value={formatStealthPrefCount(diagnostics.runtime.stealth_pref_count)} />
+                <InfoRow label="Stealth categories" value={formatStringList(diagnostics.runtime.stealth_pref_categories)} />
               </div>
             </section>
           </div>
@@ -187,4 +189,12 @@ function formatNumbers(values: number[]): string {
 
 function formatDisplays(values: number[]): string {
   return values.length > 0 ? values.map((value) => `:${value}`).join(", ") : "none";
+}
+
+function formatStealthPrefCount(value: number | null): string {
+  return value === null ? "unknown" : `${value} keys`;
+}
+
+function formatStringList(values: string[]): string {
+  return values.length > 0 ? values.join(", ") : "none";
 }

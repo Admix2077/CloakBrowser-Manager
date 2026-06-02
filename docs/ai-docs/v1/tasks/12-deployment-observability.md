@@ -702,3 +702,57 @@ npm --prefix frontend run build
 git diff --check
 # no output
 ```
+
+## 2026-06-03 diagnostics stealth pref surface observability
+
+背景：
+
+- Pixelscan no-proxy root-cause 已稳定收敛到 `PXLSCN-FINGERPRINT-MASKING` / `Masking detected Fingerprint`。
+- 本地 `invisible_playwright` 包通过 `translate_profile_to_prefs()` 写入 `zoom.stealth.*` prefs；后续排障需要能快速比较当前 runtime 的 stealth pref 结构面，但不能把 seed、host IP、完整 pref key/value、profile dir 或 proxy 信息写入 diagnostics。
+
+已完成：
+
+- `backend/browser_manager.py`
+  - 新增低敏 stealth pref summary helper。
+  - 只统计 `zoom.stealth.*` pref 数量，并把 key prefix 归一化成粗分类。
+  - `seed` / `fpp` 归类为 `fingerprint`，`hw_concurrency` 归类为 `hardware`，`webgl2` 归类为 `webgl`，避免暴露 `hw_seed` 等原始 key。
+  - 完整 `invisible_playwright` package 不可用时返回 `stealth_pref_count=None` 和空分类，不让 diagnostics 硬失败。
+- `GET /api/diagnostics`
+  - `runtime` 节点新增：
+    - `stealth_pref_count`
+    - `stealth_pref_categories`
+- 前端 System diagnostics Runtime 区块显示 Stealth prefs 和 Stealth categories。
+
+边界：
+
+- 不返回任何 `zoom.stealth.*` 原始 key。
+- 不返回 pref value、seed、WebRTC host IP、timezone value、font list、GPU renderer value、完整 UA、包路径、profile dir、proxy URL/host、automation payload、headers、cookie/local storage、viewer token 或 runtime service token。
+- 该改动只提升 Pixelscan root-cause 的低敏观测能力，不改变 Firefox / `invisible_playwright` 行为，不代表 Pixelscan/IPhey gate 已通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: KeyError: 'stealth_pref_count'
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts -t "diagnostics"
+# RED: Unable to find group "Stealth prefs: 29 keys"
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys backend/tests/test_browser_manager.py::test_invisible_stealth_pref_summary_degrades_without_full_package -q
+# 3 passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts -t "diagnostics"
+# 2 files / 3 tests passed, 39 skipped
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 511 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```

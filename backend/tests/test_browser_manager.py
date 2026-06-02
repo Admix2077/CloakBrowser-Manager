@@ -254,6 +254,26 @@ def test_build_invisible_kwargs_pins_managed_firefox_identity(tmp_path: Path):
     assert prefs["general.oscpu.override"] == "Windows NT 10.0; Win64; x64"
 
 
+def test_stealth_pref_category_normalizes_sensitive_pref_keys():
+    assert bm._stealth_pref_category("zoom.stealth.fpp.hw_seed") == "fingerprint"
+    assert bm._stealth_pref_category("zoom.stealth.seed") == "fingerprint"
+    assert bm._stealth_pref_category("zoom.stealth.hw_concurrency") == "hardware"
+    assert bm._stealth_pref_category("zoom.stealth.webgl2.extensions") == "webgl"
+    assert bm._stealth_pref_category("zoom.stealth.canvas.noise_skip_mask") == "canvas"
+    assert bm._stealth_pref_category("general.useragent.override") is None
+
+
+def test_invisible_stealth_pref_summary_degrades_without_full_package():
+    bm._invisible_stealth_pref_summary.cache_clear()
+
+    summary = bm._invisible_stealth_pref_summary()
+
+    assert summary == {
+        "stealth_pref_count": None,
+        "stealth_pref_categories": [],
+    }
+
+
 def test_build_invisible_kwargs_drops_user_window_size_overrides(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,

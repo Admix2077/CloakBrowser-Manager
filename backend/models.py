@@ -559,6 +559,8 @@ class DiagnosticsRuntimeResponse(BaseModel):
     invisible_playwright_version: str | None = None
     firefox_binary_version: str | None = None
     firefox_binary_build_id: str | None = None
+    stealth_pref_count: int | None = None
+    stealth_pref_categories: list[str] = Field(default_factory=list)
 
 
 class DiagnosticsAutomationWorkerResponse(BaseModel):
