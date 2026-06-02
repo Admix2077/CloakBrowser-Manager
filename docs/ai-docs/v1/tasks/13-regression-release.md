@@ -35,7 +35,7 @@
 - [x] BrowserScan browser-checker 内核版本与 UA 一致。
 - [x] BrowserScan WebRTC 不泄漏 local IP。
 - [x] BrowserLeaks WebRTC / Canvas / WebGL / Fonts 无明显平台不一致。
-- [ ] CreepJS 无 webdriver/headless/lie detection 严重红灯。
+- [x] CreepJS 无 webdriver/headless/lie detection 严重红灯。
 - [ ] Pixelscan/IPhey 无 IP、timezone、language、WebRTC、hardware/software 高风险不一致。
 - [x] 同一 seed 停止/重启后核心指纹稳定。
 - [x] 不同 seed 的 profile 核心指纹有合理差异。
@@ -425,3 +425,49 @@ git diff --check
 - 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整页面文本、完整 URL 参数、完整 network payload 或完整 audit metadata。
 - 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
 - Pixelscan/IPhey、CreepJS、`language 与 Accept-Language 一致` 和多国家代理矩阵仍未标记完成。
+
+## 2026-06-03 CreepJS smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-creepjs-diagnostic`
+- 临时数据卷：`cloakbrowser-creepjs-diagnostic-data`
+- profile：无 proxy，`geoip=true`，Windows profile，`fingerprint_seed=24680`，`1920x1080`，`hardwareConcurrency=8`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- CreepJS 页面 `https://abrahamjuliot.github.io/creepjs/` 通过 direct Automation 打开并进入 `readyState=complete`。
+- 页面 title 为 `CreepJS`，页面文本长度为 3842。
+- 低敏计数：
+  - `lies=0`
+  - `webdriver=0`
+  - `severe=0`
+  - `headless=3`
+- `headless` 命中行均为非风险结论：
+  - `0% like headless: bada4467`
+  - `0% headless: 52defe05`
+- 页面上下文显示 managed identity：
+  - Firefox 149 UA 断言通过，`navigator.buildID=20260521160037`
+  - `navigator.webdriver=false`
+  - `navigator.platform=Win32`
+  - `navigator.language=en-US`、`navigator.languages=["en-US","en"]`
+  - `Intl.DateTimeFormat().resolvedOptions().locale=en-US`
+  - timezone 为 `America/Los_Angeles`
+  - `hardwareConcurrency=8`
+- 页面主身份行包含 Windows / Win32 / Windows 10 / Firefox 149。
+- WebGL 摘要显示硬件形态 renderer：`ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar`。
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy。
+
+诊断记录：
+
+- 首次 CreepJS smoke 以全文 `linux` 关键词为硬失败条件，命中 `linuxMention=true`。
+- 后续低敏诊断确认该命中来自单行 `Sans:Linux`，不是 UA、navigator platform、WebGL renderer、webdriver、headless 或 lie detection 严重红灯。
+
+边界：
+
+- CreepJS 对字体类别显示 `Sans:Linux`，本轮不将其判定为 webdriver/headless/lie detection 严重红灯；但该字体分类线应在后续更细的字体一致性工作中继续观察。
+- 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整页面文本、完整 URL 参数、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
+- 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
+- Pixelscan/IPhey、`language 与 Accept-Language 一致` 和多国家代理矩阵仍未标记完成。
