@@ -37,8 +37,8 @@
 - [ ] BrowserLeaks WebRTC / Canvas / WebGL / Fonts 无明显平台不一致。
 - [ ] CreepJS 无 webdriver/headless/lie detection 严重红灯。
 - [ ] Pixelscan/IPhey 无 IP、timezone、language、WebRTC、hardware/software 高风险不一致。
-- [ ] 同一 seed 停止/重启后核心指纹稳定。
-- [ ] 不同 seed 的 profile 核心指纹有合理差异。
+- [x] 同一 seed 停止/重启后核心指纹稳定。
+- [x] 不同 seed 的 profile 核心指纹有合理差异。
 
 详细矩阵见 `../fingerprint-consistency-qa-plan.md`。
 
@@ -309,3 +309,36 @@ git diff --check
 - 本轮没有启动真实代理出口，也没有完成 US/JP/DE proxy-country 外站矩阵。
 - 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整 proxy URL 或完整 audit metadata。
 - BrowserLeaks、Pixelscan/IPhey、CreepJS、same-seed restart stability 和 different-seed variation 仍未标记完成。
+
+## 2026-06-03 Seed stability / variation release smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-seed-stability-smoke`
+- 临时数据卷：`cloakbrowser-seed-stability-smoke-data`
+- 两个无代理 Windows profile，均为 `geoip=false`、`timezone=America/Los_Angeles`、`locale=en-US`、`1280x720`、`hardwareConcurrency=4`
+- same-seed profile seed 为 `24680`；different-seed 对照 profile seed 为 `97531`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 running、0 profile、0 proxy，`binary_version=invisible-playwright`。
+- 同一 profile 使用 seed `24680` launch、evaluate、stop、relaunch、evaluate、stop。
+- 同一 seed 重启前后低敏核心指纹摘要 hash 均为 `930cebe5f91b4041`，`diff_keys=[]`。
+- 不同 seed 对照 hash 为 `5db346eac7a0defa`，与 seed `24680` 不同。
+- 不同 seed 差异字段为 `audioHash`、`canvasHash`、`webglVendor`。
+- 检查字段包括 UA/appVersion、BuildID、webdriver、platform/vendor、language/languages、timezone、hardwareConcurrency、screen、colorDepth/pixelDepth、maxTouchPoints、WebGL vendor/renderer/version/shading language、canvas hash 和 audio hash。
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy。
+
+诊断记录：
+
+- 首次 smoke 的 evaluate 脚本在 `about:blank` 调用了 `crypto.subtle.digest` 导致固定错误 `Automation page action failed`。
+- 分段诊断确认 Firefox 页面 `isSecureContext=false` 且 `crypto.subtle=undefined`；navigator、WebGL、canvas 和 audio 分段均可用。
+- 最终 smoke 改用页面内简单哈希，避免依赖 secure context；该问题属于 smoke 脚本前提错误，不是 Manager runtime 缺口。
+
+边界：
+
+- 本轮没有访问外部检测站，也没有启动真实代理出口。
+- 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整 canvas data URL、完整 audio buffer、完整 proxy URL 或完整 audit metadata。
+- BrowserLeaks、Pixelscan/IPhey、CreepJS 和 US/JP/DE proxy-country 外站矩阵仍未标记完成。
