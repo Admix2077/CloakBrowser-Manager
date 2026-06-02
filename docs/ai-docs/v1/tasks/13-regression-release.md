@@ -14,10 +14,10 @@
 - [x] VNC viewer。
 - [x] clipboard sync。
 - [x] Automation API。
-- [ ] GeoIP 自动同步。
+- [x] GeoIP 自动同步。
 - [x] health check。
-- [ ] Proxy Manager。
-- [ ] bulk actions。
+- [x] Proxy Manager。
+- [x] bulk actions。
 - [x] audit。
 - [x] Docker build。
 - [x] Docker run。
@@ -255,3 +255,57 @@ git diff --check
 - 本轮没有保存截图、cookie、local storage、headers、proxy、token、profile dir 内容或完整 console/network payload。
 - GeoIP 自动同步未覆盖，因为 smoke profile 明确设置 `geoip=false`。
 - Proxy Manager、bulk actions、BrowserLeaks、Pixelscan/IPhey、CreepJS 和多国家代理矩阵仍未标记完成。
+
+## 2026-06-03 GeoIP / Proxy Manager / bulk actions release smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-release-proxy-bulk-smoke`
+- 临时数据卷：`cloakbrowser-release-proxy-bulk-smoke-data`
+- 服务端口：随机绑定到 `127.0.0.1:32781`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 running、0 profile、0 proxy。
+- GeoIP profile 创建后调用 `/api/profiles/{id}/health/check`：
+  - `status=good`
+  - `has_geoip=true`
+  - country 为 `US`
+  - timezone 为 `America/Los_Angeles`
+  - locale 为 `en-US`
+  - warning codes 为空。
+- Proxy Manager：
+  - 创建 2 个 proxy asset。
+  - 更新 proxy city/notes。
+  - list proxies 返回 2 条。
+  - 显式确认 assign，把 proxy 分配给 2 个 profile，`assign_succeeded=2`。
+  - random assign 使用 provider/country/tag 过滤，candidate count 为 2，`random_succeeded=1`。
+  - bulk check 传入 2 个 proxy 和 1 个 missing id，`total=3`、`succeeded=2`、`failed=1`。
+  - Proxy Manager 响应未回显 fake credential secret，也未回显 userinfo。
+- Bulk actions：
+  - CSV import preview：`total=1`、`valid=1`。
+  - CSV import：`succeeded=1`。
+  - profile config export：`total=4`、`exported=3`、`failed=1`。
+  - profile config import：`imported=1`。
+  - profile export 响应不回显 userinfo。
+- `/api/status` smoke 后返回 0 running、5 profiles、2 proxies；API cleanup 后返回 0 running、0 profiles、0 proxies。
+- audit 只做容器内 SQLite 低敏查询，event types 为：
+  - `profile.created`
+  - `profile.health_checked`
+  - `proxy.created`
+  - `proxy.updated`
+  - `proxy.assigned`
+  - `proxy.random_assigned`
+  - `proxy.bulk_checked`
+  - `profile.imported`
+  - `profile.config_exported`
+  - `profile.config_imported`
+  metadata keys 只包含 name/platform/tag_count、geoip country/source、lookup/status/warning counts、proxy/task/profile counts、provider/country/tag counts、schema/source format、updated_fields 和 include_sensitive 标志等低敏键。
+
+边界：
+
+- 本轮没有启动真实代理出口，也没有完成 US/JP/DE proxy-country 外站矩阵。
+- 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整 proxy URL 或完整 audit metadata。
+- BrowserLeaks、Pixelscan/IPhey、CreepJS、same-seed restart stability 和 different-seed variation 仍未标记完成。
