@@ -460,10 +460,7 @@ def managed_firefox_identity_summary() -> dict[str, Any]:
 
 
 def _firefox_build_id_override() -> str | None:
-    build_id = _firefox_application_ini_metadata().get("BuildID")
-    if build_id:
-        return build_id
-    return None
+    return _public_firefox_build_id(_firefox_application_ini_metadata().get("BuildID"))
 
 
 def _browser_init_script(locale: str | None) -> str:

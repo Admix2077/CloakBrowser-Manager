@@ -1054,3 +1054,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Firefox BuildID init script redaction guardrail
+
+背景：
+
+- Release smoke 需要继续比较 BrowserScan/Pixelscan/IPhey 中的 UA、Firefox binary 和 `navigator.buildID` 证据。
+- diagnostics 层已限制 Firefox BuildID 只公开数字值，但页面 init script 覆盖路径也必须保持同样边界，避免污染 metadata 进入浏览器上下文。
+
+已覆盖：
+
+- `_firefox_build_id_override()` 只返回 8-20 位数字 BuildID。
+- 污染 BuildID 会在 init script 中降为 `null`，不会进入脚本文本。
+- 合法数字 BuildID 覆盖 `navigator.buildID` 的行为保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_browser_init_script_drops_non_public_firefox_build_id -q
+# RED then GREEN; final focused test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_browser_init_script_drops_non_public_firefox_build_id backend/tests/test_browser_manager.py::test_browser_init_script_overrides_stale_navigator_build_id backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 516 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

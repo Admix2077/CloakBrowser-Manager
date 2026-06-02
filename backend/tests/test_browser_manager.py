@@ -354,6 +354,20 @@ def test_browser_init_script_overrides_stale_navigator_build_id(monkeypatch: pyt
     assert "Navigator.prototype" in script
 
 
+def test_browser_init_script_drops_non_public_firefox_build_id(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        bm,
+        "_firefox_application_ini_metadata",
+        lambda: {"BuildID": "20260521160037-token-super-secret"},
+    )
+
+    script = bm._browser_init_script("en-US")
+
+    assert "token-super-secret" not in script
+    assert "20260521160037-token-super-secret" not in script
+    assert "const __managerBuildID = null" in script
+
+
 def test_coherent_webgl_renderer_collapses_modern_nvidia_to_firefox_sanitize_bucket():
     renderer = bm._coherent_webgl_renderer_override({
         "gpu_renderer": "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)"

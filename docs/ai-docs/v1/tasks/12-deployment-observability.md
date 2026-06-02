@@ -1125,3 +1125,45 @@ npm --prefix frontend run build
 git diff --check
 # no output
 ```
+
+## 2026-06-03 Firefox BuildID init script redaction guardrail
+
+背景：
+
+- Firefox identity diagnostics 已经只公开数字版本和数字 BuildID。
+- `_browser_init_script()` 仍通过 `_firefox_build_id_override()` 读取 `application.ini` 的原始 BuildID，用于覆盖 `navigator.buildID`。
+- 如果未来 patched Firefox metadata 被污染，原始 BuildID 文本可能进入页面 init script，破坏低敏诊断边界。
+
+已覆盖：
+
+- `_firefox_build_id_override()` 复用 `_public_firefox_build_id()` 白名单。
+- 只允许 8-20 位数字 BuildID 进入 init script。
+- 非字符串或带 token/path/secret 风格后缀的 BuildID 会降为 `None`，页面 init script 中对应 `const __managerBuildID = null`。
+- 回归测试覆盖污染 BuildID 不出现在 script 文本中，合法数字 BuildID 覆盖仍保留。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_browser_init_script_drops_non_public_firefox_build_id -q
+# RED: polluted BuildID was present in browser init script
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_browser_init_script_drops_non_public_firefox_build_id backend/tests/test_browser_manager.py::test_browser_init_script_overrides_stale_navigator_build_id backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 516 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- 不记录或公开 full UA、profile id、profile dir、proxy、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
