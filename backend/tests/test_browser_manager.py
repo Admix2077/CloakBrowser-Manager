@@ -484,6 +484,68 @@ async def test_stop_without_runner_closes_context_and_releases_vnc():
 
 
 @pytest.mark.asyncio
+async def test_launch_clears_launching_state_when_vnc_allocation_fails(tmp_path: Path):
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(side_effect=RuntimeError("no display available"))  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    with pytest.raises(RuntimeError, match="no display available"):
+        await mgr.launch({
+            "id": "profile-alloc-fail",
+            "fingerprint_seed": 123,
+            "user_data_dir": str(user_data_dir),
+            "screen_width": 1366,
+            "screen_height": 768,
+            "proxy": None,
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "humanize": False,
+            "headless": False,
+            "launch_args": [],
+        })
+
+    assert "profile-alloc-fail" not in mgr._launching
+
+
+@pytest.mark.asyncio
+async def test_launch_releases_vnc_when_startup_state_cleanup_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    def fail_cleanup(_path: Path) -> None:
+        raise PermissionError("startup state locked")
+
+    monkeypatch.setattr(bm, "_clean_firefox_startup_state", fail_cleanup)
+
+    with pytest.raises(PermissionError, match="startup state locked"):
+        await mgr.launch({
+            "id": "profile-cleanup-fail",
+            "fingerprint_seed": 123,
+            "user_data_dir": str(user_data_dir),
+            "screen_width": 1366,
+            "screen_height": 768,
+            "proxy": None,
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "humanize": False,
+            "headless": False,
+            "launch_args": [],
+        })
+
+    assert "profile-cleanup-fail" not in mgr._launching
+    mgr.vnc.stop_vnc.assert_awaited_once_with(100)
+
+
+@pytest.mark.asyncio
 async def test_launch_uses_invisible_playwright_on_vnc_display(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

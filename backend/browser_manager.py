@@ -483,13 +483,14 @@ class BrowserManager:
                 raise BrowserResourceLimitError("Maximum running profiles reached")
             self._launching.add(profile_id)
 
-        display, ws_port = await self.vnc.allocate()
-
-        user_data_dir = Path(profile["user_data_dir"])
-        _clean_firefox_startup_state(user_data_dir)
-
         runner: InvisiblePlaywright | None = None
+        display: int | None = None
         try:
+            display, ws_port = await self.vnc.allocate()
+
+            user_data_dir = Path(profile["user_data_dir"])
+            _clean_firefox_startup_state(user_data_dir)
+
             # Start KasmVNC on the allocated display
             await self.vnc.start_vnc(
                 display,
@@ -587,7 +588,8 @@ class BrowserManager:
                     await runner.__aexit__(None, None, None)
                 except Exception as exc:
                     logger.debug("InvisiblePlaywright teardown failed after launch error: %s", exc)
-            await self.vnc.stop_vnc(display)
+            if display is not None:
+                await self.vnc.stop_vnc(display)
             raise
 
     async def _on_browser_closed(self, profile_id: str):
