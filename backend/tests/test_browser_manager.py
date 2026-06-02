@@ -155,6 +155,33 @@ def test_build_invisible_pin_uses_realistic_1080p_available_height():
     assert pin["screen.avail_height"] == 1032
 
 
+def test_build_invisible_pin_drops_non_public_screen_and_hardware_values():
+    pin = bm._build_invisible_pin({
+        "screen_width": 99999,
+        "screen_height": -20,
+        "hardware_concurrency": 999,
+    })
+
+    assert "screen.width" not in pin
+    assert "screen.height" not in pin
+    assert "screen.avail_width" not in pin
+    assert "screen.avail_height" not in pin
+    assert "hardware.concurrency" not in pin
+
+
+def test_build_invisible_pin_drops_corrupted_screen_and_hardware_text():
+    pin = bm._build_invisible_pin({
+        "screen_width": "1920\nAuthorization: Bearer screen-super-secret",
+        "screen_height": "1080?token=screen-super-secret",
+        "hardware_concurrency": "8 cookie=screen-super-secret",
+    })
+
+    assert "screen.width" not in pin
+    assert "screen.height" not in pin
+    assert "hardware.concurrency" not in pin
+    assert "screen-super-secret" not in repr(pin)
+
+
 def test_build_invisible_pin_drops_non_public_gpu_text():
     pin = bm._build_invisible_pin({
         "gpu_vendor": "Google Inc. (NVIDIA)\nAuthorization: Bearer gpu-super-secret",

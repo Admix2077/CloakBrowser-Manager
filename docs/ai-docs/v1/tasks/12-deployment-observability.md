@@ -1263,3 +1263,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - 不记录或公开 raw GPU input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 screen and hardware launch pin public-value guardrail
+
+背景：
+
+- `screen_width`、`screen_height` 和 `hardware_concurrency` 会进入 invisible fingerprint pin，并影响 BrowserLeaks/Pixelscan 的 Screen/Hardware 证据面。
+- 这些字段来自 profile/API/CSV/template 路径；极端值会形成异常 fingerprint，损坏/污染文本还可能在 `int()` 转换时造成 launch failure。
+
+已覆盖：
+
+- `_build_invisible_pin()` 只把合理范围内的 screen dimension 写入 `screen.*` pin。
+- `hardware.concurrency` 只接受常见低敏公开核心数。
+- 极端数值、布尔值、不可转换文本、header/token/cookie 风格字符串不会进入 launch pin，也不会在 pin 构建阶段抛异常。
+- profile 存储、模板和前端展示语义不变；guardrail 只作用于浏览器启动身份面。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_non_public_screen_and_hardware_values -q
+# RED: extreme screen and hardware values reached launch pin
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_non_public_screen_and_hardware_values backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_corrupted_screen_and_hardware_text backend/tests/test_browser_manager.py::test_build_invisible_pin_screen_gpu_hardware_dark_theme backend/tests/test_browser_manager.py::test_build_invisible_pin_uses_realistic_1080p_available_height backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 60 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
+- 不记录或公开 raw screen/hardware input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。

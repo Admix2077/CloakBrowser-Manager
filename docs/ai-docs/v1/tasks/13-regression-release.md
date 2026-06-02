@@ -1187,3 +1187,34 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 screen and hardware launch pin public-value guardrail
+
+背景：
+
+- BrowserLeaks/Pixelscan release smoke 会检查 Screen/Hardware 面；screen 和 hardware concurrency pin 必须保持现实范围。
+- profile screen/hardware 字段可能来自导入或历史数据，旧启动路径会把极端值传播到 invisible fingerprint pin，损坏文本还可能触发 pin 构建异常。
+
+已覆盖：
+
+- 极端 screen width/height 和 hardware concurrency 不再进入 launch pin。
+- 污染 screen/hardware 字符串不会进入 pin，也不会导致 pin 构建崩溃。
+- 正常 2560x1440、1920x1080、1366x768 和 hardware concurrency 8/12 等相邻路径已复验。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_non_public_screen_and_hardware_values -q
+# RED then GREEN; final focused test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_non_public_screen_and_hardware_values backend/tests/test_browser_manager.py::test_build_invisible_pin_drops_corrupted_screen_and_hardware_text backend/tests/test_browser_manager.py::test_build_invisible_pin_screen_gpu_hardware_dark_theme backend/tests/test_browser_manager.py::test_build_invisible_pin_uses_realistic_1080p_available_height backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 60 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

@@ -30,6 +30,9 @@ INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
 DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
 DEFAULT_WEBGL_RENDERER = "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+MIN_SCREEN_DIMENSION_PX = 320
+MAX_SCREEN_DIMENSION_PX = 8192
+PUBLIC_HARDWARE_CONCURRENCY_VALUES = frozenset({1, 2, 4, 6, 8, 10, 12, 16, 24, 32})
 MAX_RUNNING_PROFILES_ENV = "MAX_RUNNING_PROFILES"
 WEBRTC_PUBLIC_IP_ENV = "STEALTHFOX_WEBRTC_PUBLIC_IP"
 MANAGED_FIREFOX_USER_AGENT = (
@@ -192,20 +195,19 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     """Map Manager profile fields to invisible_playwright pin keys."""
     pin: dict[str, Any] = {}
 
-    width = profile.get("screen_width")
-    height = profile.get("screen_height")
-    if width:
-        pin["screen.width"] = int(width)
-        pin["screen.avail_width"] = int(width)
-    if height:
-        height_int = int(height)
-        pin["screen.height"] = height_int
+    width = _public_screen_dimension(profile.get("screen_width"))
+    height = _public_screen_dimension(profile.get("screen_height"))
+    if width is not None:
+        pin["screen.width"] = width
+        pin["screen.avail_width"] = width
+    if height is not None:
+        pin["screen.height"] = height
         taskbar_height = (
             WINDOWS_1080P_TASKBAR_HEIGHT_PX
-            if height_int == 1080
+            if height == 1080
             else DEFAULT_TASKBAR_HEIGHT_PX
         )
-        pin["screen.avail_height"] = max(1, height_int - taskbar_height)
+        pin["screen.avail_height"] = max(1, height - taskbar_height)
 
     gpu_vendor = _public_gpu_text(profile.get("gpu_vendor"))
     if gpu_vendor:
@@ -214,9 +216,9 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
     if gpu_renderer:
         pin["gpu.renderer"] = gpu_renderer
 
-    hardware_concurrency = profile.get("hardware_concurrency")
+    hardware_concurrency = _public_hardware_concurrency(profile.get("hardware_concurrency"))
     if hardware_concurrency is not None:
-        pin["hardware.concurrency"] = int(hardware_concurrency)
+        pin["hardware.concurrency"] = hardware_concurrency
 
     color_scheme = profile.get("color_scheme")
     if color_scheme == "dark":
@@ -225,6 +227,31 @@ def _build_invisible_pin(profile: dict[str, Any]) -> dict[str, Any]:
         pin["dark_theme"] = False
 
     return pin
+
+
+def _public_int(value: object) -> int | None:
+    try:
+        if isinstance(value, bool):
+            return None
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _public_screen_dimension(value: object) -> int | None:
+    dimension = _public_int(value)
+    if dimension is None:
+        return None
+    if MIN_SCREEN_DIMENSION_PX <= dimension <= MAX_SCREEN_DIMENSION_PX:
+        return dimension
+    return None
+
+
+def _public_hardware_concurrency(value: object) -> int | None:
+    concurrency = _public_int(value)
+    if concurrency in PUBLIC_HARDWARE_CONCURRENCY_VALUES:
+        return concurrency
+    return None
 
 
 def _public_gpu_text(value: object) -> str:
