@@ -227,7 +227,7 @@ def compute_profile_health(
         warnings.append(
             HealthWarning(
                 code="manual_timezone_mismatch",
-                message=f"手动 timezone 为 {manual_timezone}，当前出口建议为 {geoip.timezone}。",
+                message="手动 timezone 与当前出口建议不一致。",
                 severity="warning",
                 action="确认是否需要保留手动覆盖，或清空 timezone 交给 GeoIP 自动匹配。",
             )
@@ -236,7 +236,7 @@ def compute_profile_health(
         warnings.append(
             HealthWarning(
                 code="manual_locale_mismatch",
-                message=f"手动 locale 为 {manual_locale}，当前出口建议为 {geoip.locale}。",
+                message="手动 locale 与当前出口建议不一致。",
                 severity="warning",
                 action="确认是否需要保留手动覆盖，或清空 locale 交给 GeoIP 自动匹配。",
             )

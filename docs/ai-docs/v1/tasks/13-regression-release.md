@@ -1746,3 +1746,43 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy validation semantics、profile proxy 存储、GeoIP lookup、health status/warning code、audit event shape、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Health manual mismatch warning redaction guardrail
+
+背景：
+
+- Profile health manual timezone/locale mismatch warning 是 release smoke 中会出现在 API/UI 的健康提示。
+- 旧文案直接回显手动 timezone/locale 和 GeoIP 建议值；用户输入、CSV/import 或历史 DB 值若包含 URL/token/header 样式文本，会被 warning message 暴露。
+
+已覆盖：
+
+- Manual timezone mismatch warning 使用固定低敏文案。
+- Manual locale mismatch warning 使用固定低敏文案。
+- mismatch 判断、manual override flags、GeoIP values、warning code/severity/action、audit metadata 和前端 rendering 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_manual_mismatch_warning_does_not_echo_manual_values -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 22 passed in 1.74s
+
+npm --prefix frontend test -- --run HealthBadge ProfileList
+# Test Files 2 passed；Tests 16 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 559 passed in 33.22s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.21s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 profile timezone/locale 存储、GeoIP timezone/locale parsing、mismatch detection、health status/warning code、audit event shape、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

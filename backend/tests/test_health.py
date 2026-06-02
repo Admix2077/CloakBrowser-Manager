@@ -159,6 +159,39 @@ def test_health_warns_on_manual_timezone_and_locale_mismatch():
     assert result.geoip.locale == "ja-JP"
 
 
+def test_health_manual_mismatch_warning_does_not_echo_manual_values():
+    sensitive_timezone = "https://timezone.example/?token=super-secret Authorization=Bearer super-secret"
+    sensitive_locale = "Bearer super-secret"
+    result = compute_profile_health(
+        _profile(
+            timezone=sensitive_timezone,
+            locale=sensitive_locale,
+            last_geoip_ip="203.0.113.20",
+            last_geoip_country_code="JP",
+            last_geoip_timezone="Asia/Tokyo",
+            last_geoip_locale="ja-JP",
+            last_geoip_source="ipwho.is",
+            last_geoip_resolved_at="2026-05-25T00:00:00Z",
+        ),
+        _runtime(),
+        checked_at="2026-05-25T00:05:00Z",
+    )
+
+    warnings = {warning.code: warning for warning in result.warnings}
+    assert warnings["manual_timezone_mismatch"].message == "手动 timezone 与当前出口建议不一致。"
+    assert warnings["manual_locale_mismatch"].message == "手动 locale 与当前出口建议不一致。"
+    serialized = result.model_dump_json()
+    for leaked in (
+        sensitive_timezone,
+        sensitive_locale,
+        "timezone.example",
+        "super-secret",
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized
+
+
 def test_health_warns_when_running_runtime_urls_are_missing():
     result = compute_profile_health(
         _profile(
