@@ -547,3 +547,55 @@ git diff --check
 - 本轮没有保存截图、cookie、local storage、headers、token、IP 值、profile dir 内容、完整页面文本、完整 URL 参数、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
 - `Pixelscan/IPhey 无 IP、timezone、language、WebRTC、hardware/software 高风险不一致` 仍未标记完成。
 - 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
+
+## 2026-06-03 Pixelscan root-cause diagnostic
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：
+  - `cloakbrowser-pixelscan-rootcause-step`
+  - `cloakbrowser-pixelscan-dom`
+  - `cloakbrowser-pixelscan-minimal`
+- 对应临时数据卷均已删除。
+
+新增证据：
+
+- 阶段化复现稳定到达 `pixelscan.net/fingerprint-check`，页面 `readyState=complete`，cleanup 后 `/api/status` 返回 0 running、0 profile。
+- Pixelscan DOM 明确显示总状态条 `data-state=error`，状态文本为 `Your Browser Fingerprint is inconsistent`。
+- 失败卡片不是 Proxy、Location、Language、WebRTC 或 Bot check：
+  - Proxy 卡片：`No proxy detected Proxy`，未带 failed class。
+  - Location 卡片：`United States / Los Angeles Location`，未带 failed class。
+  - Bot check 卡片：`No automated behavior detected Bot check`，未带 failed class。
+  - 唯一 failed card 为 `PXLSCN-FINGERPRINT-MASKING`，class 为 `checker-card--failed`，文本为 `Masking detected Fingerprint`。
+- 最小 profile 对照复现仍失败在同一张卡：
+  - 去掉显式 `gpu_vendor`、`gpu_renderer`、`hardware_concurrency` 后，Pixelscan 仍返回 `failedCards=["Masking detected Fingerprint"]`。
+  - 这说明失败不是 Manager 显式 GPU/hardwareConcurrency pin 单点导致。
+- 页面端低敏身份仍保持一致：
+  - HTTP UA 与 JavaScript UA 均为 Firefox 149 Windows 形态。
+  - `navigator.webdriver=false`。
+  - `navigator.platform=Win32`。
+  - `navigator.buildID=20260521160037`。
+  - language / Intl locale / Accept-Language 对齐。
+  - timezone 与 Pixelscan 页面显示的 location/timezone 对齐。
+  - WebGL 为 NVIDIA / Direct3D11 形态，无 SwiftShader / llvmpipe / Mesa 标记。
+- 镜像内底层 `invisible_playwright` 版本为 `0.1.0`；Firefox `application.ini` 显示 `Version=150.0.1`、`BuildID=20260521160037`。
+- 底层 `invisible_playwright` 的 `seed` 会生成完整 stealth fingerprint profile，并写入 `zoom.stealth.*` prefs，包括 canvas、audio、WebGL、font、screen、hardware 和 cross-process seed；当前 Pixelscan 红灯与这类 fingerprint masking 行为一致。
+
+A/B 边界：
+
+- 尝试在一次性容器内覆盖 `zoom.stealth.fpp.hw_seed=0`、`zoom.stealth.seed=0` 和极低 canvas noise 频率，Firefox launch 失败；不作为生产修复候选。
+- 尝试只把 `zoom.stealth.canvas.noise_skip_mask` 提高到较低噪声值也导致 Firefox launch 失败；不作为生产修复候选。
+- 本轮未找到一个同时满足 Pixelscan、BrowserScan、BrowserLeaks、CreepJS 和 seed-stability 的 Manager 侧安全修复。
+
+当前判断：
+
+- `cbim-23h.6` 继续保持 open / in-progress。
+- 根因更接近底层 patched Firefox / `invisible_playwright` 的 fingerprint masking 可检测面，而不是 Manager 的 proxy、GeoIP、language、WebRTC 或显式 GPU/hardwareConcurrency 配置。
+- 在没有通过全矩阵验证的替代 runtime/prefs 前，不应为了单个 Pixelscan 红灯移除 seed-based fingerprint profile；否则会破坏同 seed 稳定性、不同 seed 差异、Windows WebGL 形态或其他已通过 gate。
+
+边界：
+
+- 本轮没有保存截图、cookie、local storage、完整 headers、token、IP 值、profile dir 内容、完整页面文本、完整 URL 参数、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
+- Pixelscan/IPhey gate 仍未标记完成。
+- US/JP/DE proxy-country 外站矩阵仍未覆盖。

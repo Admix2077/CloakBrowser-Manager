@@ -191,6 +191,24 @@ Project Mileage 的账号商品和远程工作台场景决定了 CloakBrowser �
 
 - 新 profile 中 WebGL vendor/renderer 为 `Google Inc. (NVIDIA)` / `ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar`，且 `Function.prototype.toString.call(gl.getParameter)` 仍显示 native code。
 
+### Pixelscan fingerprint masking blocker
+
+问题：
+
+- no-proxy Pixelscan release smoke 稳定进入 `pixelscan.net/fingerprint-check`，但总状态为 `Your Browser Fingerprint is inconsistent`。
+- DOM 结构确认唯一 failed checker card 为 `PXLSCN-FINGERPRINT-MASKING`，文本为 `Masking detected Fingerprint`。
+- Proxy、Location、Bot check、language、timezone、WebRTC 和 WebGL 展示值未显示高风险不一致；最小 profile 去掉显式 GPU/hardwareConcurrency pin 后仍失败在同一张 fingerprint masking 卡。
+
+当前判断：
+
+- 该 blocker 更接近底层 patched Firefox / `invisible_playwright` 的 `zoom.stealth.*` fingerprint masking 可检测面，而不是 Manager 的 proxy、GeoIP、language、WebRTC 或显式硬件字段单点配置。
+- Manager 不应在缺少全矩阵验证时移除 seed-based fingerprint profile；这会影响同 seed 稳定性、不同 seed 差异、Windows WebGL 形态和已经通过的 BrowserScan / BrowserLeaks / CreepJS gate。
+
+下一步：
+
+- 需要底层 runtime/prefs A/B，找到同时满足 Pixelscan、BrowserScan、BrowserLeaks、CreepJS 和 seed-stability 的替代方案。
+- 在替代方案通过前，Pixelscan/IPhey gate 保持未完成，`cbim-23h.6` 保持 release blocker。
+
 ## 下一步顺序
 
 1. 把 BrowserScan 分项验收自动化成脚本：创建临时 profile、启动、跑 browser-checker/webrtc/timezone/bot-detection/canvas，保存低敏 JSON 摘要和截图。
