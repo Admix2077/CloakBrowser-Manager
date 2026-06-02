@@ -24,15 +24,15 @@
 
 ## BrowserScan / 检测站人工验收
 
-- [ ] 无代理场景。
+- [x] 无代理场景。
 - [ ] US proxy。
 - [ ] JP proxy。
 - [ ] DE proxy。
-- [ ] timezone 与出口一致。
+- [x] timezone 与出口一致。
 - [ ] language 与 Accept-Language 一致。
 - [ ] BrowserScan 无 `Language mismatch`。
-- [ ] BrowserScan 无 `Different time zones`。
-- [ ] BrowserScan browser-checker 内核版本与 UA 一致。
+- [x] BrowserScan 无 `Different time zones`。
+- [x] BrowserScan browser-checker 内核版本与 UA 一致。
 - [x] BrowserScan WebRTC 不泄漏 local IP。
 - [ ] BrowserLeaks WebRTC / Canvas / WebGL / Fonts 无明显平台不一致。
 - [ ] CreepJS 无 webdriver/headless/lie detection 严重红灯。
@@ -88,3 +88,26 @@ cd /home/jeff/code/project-mileage-v3-payload && pnpm build
 - [ ] 不包含敏感文件。
 - [ ] `git diff --check` 通过。
 - [ ] 当前工作区只包含预期变更。
+
+## 2026-06-02 BrowserScan no-proxy P0 复验
+
+环境：
+
+- 镜像：`invisible-browser-manager:goal-smoke`
+- 临时容器和临时 `/data`，复验后已清理。
+- profile：无 proxy，`geoip=true`，Windows profile，`fingerprint_seed=24680`，`1920x1080`，`hardwareConcurrency=8`。
+
+结果：
+
+- browser-checker 页显示 `You are currently using Firefox 149`。
+- browser-checker 页显示 `Your browser version and User Agent match`。
+- `navigator.userAgent` 为 `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0`。
+- `navigator.buildID` 为 `20260521160037`，`navigator.webdriver=false`。
+- WebRTC 页显示 `No Public IP Leak`，public IP 为 `23.144.4.92`，页面文本未显示 local IP。
+- timezone 页显示 IP timezone、JavaScript Date timezone、Intl timezone 均为 `America/Los_Angeles`。
+- bot-detection 页显示 WebDriver、WebDriver Advance、Selenium、Headless Chrome、CDP、Dev Tool 均为 `Normal`。
+
+边界：
+
+- 本轮只完成 no-proxy BrowserScan P0 复验；US/JP/DE proxy、BrowserLeaks、Pixelscan/IPhey、CreepJS、同 seed 重启稳定性和不同 seed 差异仍未标记完成。
+- 复验输出只记录低敏页面结论、UA、BuildID、language/timezone 和固定 Normal/Leak 文本；不保存 cookie、local storage、proxy、token、headers、截图或 profile dir 内容。
