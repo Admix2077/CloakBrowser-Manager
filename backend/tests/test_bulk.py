@@ -168,6 +168,34 @@ def test_profile_csv_import_preview_redacts_sensitive_missing_template_ref(
     assert "user:" not in serialized
 
 
+def test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers(
+    app_client: TestClient,
+):
+    resp = app_client.post(
+        "/api/profiles/import/preview",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,token=super-secret,notes,platform",
+                    "Bad source,http://user:hiddenpass@unsupported-secret.example:8080?token=super-secret,"
+                    "authorization=Bearer-super-secret,ios",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    row = resp.json()["rows"][0]
+    assert row["ok"] is False
+    assert "Unsupported column" in row["errors"]
+    assert row["source"]["notes"] == "[redacted]"
+    serialized = resp.text
+    assert "token=super-secret" not in serialized
+    assert "hiddenpass" not in serialized
+    assert "unsupported-secret.example" not in serialized
+    assert "authorization=Bearer-super-secret" not in serialized
+
+
 def test_profile_csv_import_preview_rejects_empty_or_headerless_csv(app_client: TestClient):
     empty = app_client.post("/api/profiles/import/preview", json={"csv_text": ""})
     assert empty.status_code == 422
@@ -288,6 +316,36 @@ def test_profile_csv_import_redacts_sensitive_missing_template_ref(
     assert "super-secret" not in serialized
     assert "template-secret.example" not in serialized
     assert "user:" not in serialized
+    assert db.list_profiles() == []
+
+
+def test_profile_csv_import_redacts_sensitive_source_fields_and_headers(
+    app_client: TestClient,
+):
+    resp = app_client.post(
+        "/api/profiles/import",
+        json={
+            "confirm_import": True,
+            "csv_text": "\n".join(
+                [
+                    "name,token=super-secret,notes,platform",
+                    "Bad source,http://user:hiddenpass@unsupported-secret.example:8080?token=super-secret,"
+                    "authorization=Bearer-super-secret,ios",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    result = resp.json()["results"][0]
+    assert result["ok"] is False
+    assert "Unsupported column" in result["errors"]
+    assert result["source"]["notes"] == "[redacted]"
+    serialized = resp.text
+    assert "token=super-secret" not in serialized
+    assert "hiddenpass" not in serialized
+    assert "unsupported-secret.example" not in serialized
+    assert "authorization=Bearer-super-secret" not in serialized
     assert db.list_profiles() == []
 
 

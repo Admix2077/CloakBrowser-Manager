@@ -154,8 +154,8 @@ def _parse_row(line_number: int, row: dict[str, str]) -> ParsedProfileImportRow:
     source = _redacted_source(row)
 
     unknown_columns = [column for column in row if column and column not in SUPPORTED_COLUMNS]
-    for column in unknown_columns:
-        errors.append(f"Unsupported column: {column}")
+    if unknown_columns:
+        errors.append("Unsupported column")
 
     data: dict[str, Any] = {}
     explicit_fields: set[str] = set()
@@ -349,11 +349,20 @@ def _resolve_template(template_ref: str) -> dict[str, Any] | None:
 
 
 def _redacted_source(row: dict[str, str]) -> dict[str, str]:
-    source = dict(row)
-    if source.get("proxy"):
-        source["proxy"] = redact_proxy_asset_url(source["proxy"])
-    if source.get("template"):
-        source["template"] = _redact_template_ref(source["template"])
+    source: dict[str, str] = {}
+    unsupported_count = 0
+    for field, value in row.items():
+        if field not in SUPPORTED_COLUMNS:
+            unsupported_count += 1
+            continue
+        if field == "proxy":
+            source[field] = redact_proxy_asset_url(value) if value else value
+        elif field == "template":
+            source[field] = _redact_csv_source_text(value)
+        else:
+            source[field] = _redact_csv_source_text(value)
+    if unsupported_count:
+        source["unsupported_column_count"] = str(unsupported_count)
     return source
 
 
@@ -361,7 +370,7 @@ def _redact_optional_proxy(proxy: object) -> str | None:
     return redact_proxy_asset_url(str(proxy)) if proxy else None
 
 
-def _redact_template_ref(value: str) -> str:
+def _redact_csv_source_text(value: str) -> str:
     lowered = value.casefold()
     if (
         "://" in value
@@ -375,6 +384,7 @@ def _redact_template_ref(value: str) -> str:
         or "password" in lowered
         or "cookie" in lowered
         or "authorization" in lowered
+        or "bearer" in lowered
     ):
         return "[redacted]"
     return value

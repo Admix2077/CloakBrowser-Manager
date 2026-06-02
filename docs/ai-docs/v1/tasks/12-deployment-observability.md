@@ -1650,3 +1650,53 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV parser 支持字段。
 - 不记录或公开 raw missing template URL/host/username/password/query token/path、headers、cookies、local storage、viewer token、runtime service token、automation payload 或 profile dir 内容。
+
+## 2026-06-03 CSV profile import source/header redaction guardrail
+
+背景：
+
+- CSV profile import preview/import 会返回 row `source` 和行级 errors，帮助用户定位批量导入问题。
+- 旧 `source` 会复制整行输入；unsupported column 错误会拼接原始 header。上传的 header/value 如果包含 URL、credential、token、authorization、path 或 secret，会进入响应体。
+
+已覆盖：
+
+- Unsupported column 错误固定为 `Unsupported column`，不再拼接原始 header。
+- `source` 只保留支持字段；unsupported/extra columns 只暴露低敏 `unsupported_column_count`。
+- 支持字段的 source value 如果像 URL/userinfo/query/fragment/path/token/secret/password/cookie/authorization/bearer，则返回 `[redacted]`。
+- 普通 CSV preview/import、proxy redaction、template lookup、profile config import 和 profile bundle import 相关路径保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_source_fields_and_headers -q
+# RED: 2 failed；unsupported column error 包含 raw token header
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_source_fields_and_headers -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "csv_import"
+# 12 passed, 5 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 17 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_api.py -q -k "profile_config or profile_bundle or csv_import or import_profile_configs or import_profile_bundle"
+# 39 passed, 193 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 550 passed in 33.26s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.90s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV 支持字段。
+- 不记录或公开 raw unsupported header/value、extra CSV values、URL/host/username/password/query token/path、authorization/bearer text、headers、cookies、local storage、viewer token、runtime service token、automation payload 或 profile dir 内容。

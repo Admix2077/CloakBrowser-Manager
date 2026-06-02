@@ -1538,3 +1538,50 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV parser 支持字段。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 CSV profile import source/header redaction guardrail
+
+背景：
+
+- CSV profile import preview/import 的 row `source` 和 errors 会进入管理台响应，用于用户检查批量导入问题。
+- 旧实现会复制整行 source，并在 unsupported column error 中拼接原始 header；上传内容中的 token、URL、credential、authorization 或 path 样式文本可能被响应固化。
+
+已覆盖：
+
+- Unsupported column error 固定为 `Unsupported column`。
+- Unsupported/extra CSV columns 不再作为原始 key/value 出现在 `source`；只返回低敏 `unsupported_column_count`。
+- 支持字段的 source value 若像 URL、userinfo、query、fragment、path、token、secret、password、cookie、authorization 或 bearer，则返回 `[redacted]`。
+- 普通 CSV import preview/import、proxy redaction、template lookup、profile config import、profile bundle import 相关测试保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_source_fields_and_headers -q
+# RED then GREEN；最终 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "csv_import"
+# 12 passed, 5 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 17 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_api.py -q -k "profile_config or profile_bundle or csv_import or import_profile_configs or import_profile_bundle"
+# 39 passed, 193 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 550 passed in 33.26s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.90s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV 支持字段。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
