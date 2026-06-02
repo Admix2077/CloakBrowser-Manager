@@ -1827,3 +1827,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 GeoIP provider order、lookup URL、proxy normalization、IP/country/timezone/locale parsing、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、profile 存储 schema 或 runtime session 行为。
 - 不记录或公开 raw GeoIP source URL/host/query token、Authorization/Bearer、proxy host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Health proxy warning detail redaction guardrail
+
+背景：
+
+- Profile health warnings 会直接进入 `/api/profiles/{profile_id}/health`、`/api/profiles/{profile_id}/health/check` 和前端 summary/table UI。
+- `_validate_proxy()` 已隐藏 credential，但 missing port / invalid port 等错误仍会把 redacted proxy host 拼进 message，例如 `Proxy URL missing port: http://proxy.example`；host 本身仍可能是敏感资产信息。
+
+已覆盖：
+
+- Health `proxy_invalid` warning message 现在映射为固定低敏分类：`Invalid proxy scheme`、`Invalid proxy URL`、`Proxy URL missing hostname`、`Proxy URL invalid port`、`Proxy URL missing port`。
+- `compute_profile_health()` 直接调用和 `/health/check` invalid proxy API 路径都不再回显 scheme detail、proxy host、userinfo、password 或 raw proxy URL。
+- Health audit 仍只记录 warning codes/count 和低敏 lookup/runtime metadata，不记录 warning message。
+- Frontend 现有 health summary/table message handling 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_invalid_proxy_returns_error backend/tests/test_health.py::test_health_invalid_proxy_warning_uses_low_sensitive_detail backend/tests/test_health.py::test_health_check_invalid_proxy_warning_does_not_echo_proxy_host -q
+# RED: 3 failed；warning message 原样包含 scheme detail 或 proxy host
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_invalid_proxy_returns_error backend/tests/test_health.py::test_health_invalid_proxy_warning_uses_low_sensitive_detail backend/tests/test_health.py::test_health_check_invalid_proxy_warning_does_not_echo_proxy_host -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 21 passed in 1.81s
+
+npm --prefix frontend test -- --run ProfileSummaryPanel ProfileTable
+# Test Files 2 passed；Tests 39 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 558 passed in 32.65s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.36s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy validation semantics、profile proxy 存储、GeoIP lookup、health status/warning code、audit event shape、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- 不记录或公开 raw proxy validation exception text、proxy host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

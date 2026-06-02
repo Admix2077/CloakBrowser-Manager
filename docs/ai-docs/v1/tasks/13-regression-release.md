@@ -1706,3 +1706,43 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 GeoIP provider order、lookup URL、proxy normalization、IP/country/timezone/locale parsing、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、profile 存储 schema 或 runtime session 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Health proxy warning detail redaction guardrail
+
+背景：
+
+- Profile health `proxy_invalid` warning message 会进入 API response 和前端 summary/table。
+- 旧实现直接使用 `_validate_proxy()` 的 exception text；missing port / invalid port 等错误会保留 redacted proxy host，仍可能暴露 proxy asset 信息。
+
+已覆盖：
+
+- Health proxy warning detail 固定为低敏分类，不再包含 scheme raw detail、proxy host、userinfo、password 或 raw URL。
+- `compute_profile_health()` 和 `/api/profiles/{profile_id}/health/check` invalid proxy 路径均覆盖。
+- Health status、warning code、lookup skip、audit metadata 和前端 message rendering 语义保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_invalid_proxy_returns_error backend/tests/test_health.py::test_health_invalid_proxy_warning_uses_low_sensitive_detail backend/tests/test_health.py::test_health_check_invalid_proxy_warning_does_not_echo_proxy_host -q
+# RED then GREEN；初始 3 failed，最终 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q
+# 21 passed in 1.81s
+
+npm --prefix frontend test -- --run ProfileSummaryPanel ProfileTable
+# Test Files 2 passed；Tests 39 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 558 passed in 32.65s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.36s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy validation semantics、profile proxy 存储、GeoIP lookup、health status/warning code、audit event shape、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

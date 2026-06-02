@@ -37,6 +37,13 @@ HEALTH_WARNING_CODES: set[str] = {
 }
 
 GEOIP_STALE_AFTER_SECONDS = 24 * 60 * 60
+_SAFE_PROXY_ERROR_DETAILS = (
+    ("Invalid proxy scheme", "Invalid proxy scheme"),
+    ("Invalid proxy URL", "Invalid proxy URL"),
+    ("Proxy URL missing hostname", "Proxy URL missing hostname"),
+    ("Proxy URL invalid port", "Proxy URL invalid port"),
+    ("Proxy URL missing port", "Proxy URL missing port"),
+)
 
 
 class HealthWarning(BaseModel):
@@ -149,6 +156,13 @@ def validate_profile_proxy(profile: dict[str, Any]) -> str | None:
     return normalized
 
 
+def _safe_proxy_error_detail(message: str) -> str:
+    for prefix, detail in _SAFE_PROXY_ERROR_DETAILS:
+        if message.startswith(prefix):
+            return detail
+    return "Invalid proxy URL"
+
+
 def compute_profile_health(
     profile: dict[str, Any],
     runtime_status: dict[str, Any],
@@ -168,6 +182,7 @@ def compute_profile_health(
         except ValueError as exc:
             proxy_error = str(exc)
     if proxy_error:
+        proxy_error = _safe_proxy_error_detail(proxy_error)
         warnings.append(
             HealthWarning(
                 code="proxy_invalid",

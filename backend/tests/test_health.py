@@ -86,10 +86,10 @@ def test_health_invalid_proxy_returns_error():
     assert result.status == "error"
     warnings = {warning.code: warning for warning in result.warnings}
     assert warnings["proxy_invalid"].severity == "error"
-    assert "ftp" in warnings["proxy_invalid"].message
+    assert warnings["proxy_invalid"].message == "Invalid proxy scheme"
 
 
-def test_health_invalid_proxy_warning_redacts_proxy_credentials():
+def test_health_invalid_proxy_warning_uses_low_sensitive_detail():
     result = compute_profile_health(
         _profile(proxy="http://user:hiddenpass@proxy.example"),
         _runtime(),
@@ -97,9 +97,42 @@ def test_health_invalid_proxy_warning_redacts_proxy_credentials():
     )
 
     warning = {item.code: item for item in result.warnings}["proxy_invalid"]
+    assert warning.message == "Proxy URL missing port"
     assert "hiddenpass" not in warning.message
     assert "user:" not in warning.message
-    assert "http://proxy.example" in warning.message
+    assert "proxy.example" not in warning.message
+    assert "http://proxy.example" not in warning.message
+
+
+def test_health_check_invalid_proxy_warning_does_not_echo_proxy_host(
+    app_client: TestClient,
+):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bad Proxy Host",
+            "proxy": "http://user:hiddenpass@health-proxy.example",
+        },
+    )
+    pid = create.json()["id"]
+
+    with patch("backend.main.resolve_network_geo", new=AsyncMock(side_effect=AssertionError("network"))):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    warning = body["warnings"][0]
+    assert warning["code"] == "proxy_invalid"
+    assert warning["message"] == "Proxy URL missing port"
+    serialized = json.dumps(body, sort_keys=True)
+    for leaked in (
+        "hiddenpass",
+        "user:",
+        "health-proxy.example",
+        "http://user:hiddenpass@health-proxy.example",
+        "http://health-proxy.example",
+    ):
+        assert leaked not in serialized
 
 
 def test_health_warns_on_manual_timezone_and_locale_mismatch():
