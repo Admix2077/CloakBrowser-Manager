@@ -29,7 +29,7 @@
 - [ ] JP proxy。
 - [ ] DE proxy。
 - [x] timezone 与出口一致。
-- [ ] language 与 Accept-Language 一致。
+- [x] language 与 Accept-Language 一致。
 - [x] BrowserScan 无 `Language mismatch`。
 - [x] BrowserScan 无 `Different time zones`。
 - [x] BrowserScan browser-checker 内核版本与 UA 一致。
@@ -471,3 +471,38 @@ git diff --check
 - 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整页面文本、完整 URL 参数、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
 - 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
 - Pixelscan/IPhey、`language 与 Accept-Language 一致` 和多国家代理矩阵仍未标记完成。
+
+## 2026-06-03 Accept-Language echo smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-accept-language-smoke`
+- 临时数据卷：`cloakbrowser-accept-language-smoke-data`
+- profile：无 proxy，`geoip=false`，Windows profile，`fingerprint_seed=24680`，`1280x720`，`hardwareConcurrency=4`，`locale=en-US`，`timezone=America/Los_Angeles`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 running、0 profile、0 proxy，`binary_version=invisible-playwright`。
+- 容器内启动只记录 `Accept-Language` 的本地 echo server，Firefox 通过 direct Automation 访问 `127.0.0.1` echo 页面。
+- profile launch 成功，返回 `display=:100`、`vnc_ws_port=6100`。
+- echo server 捕获的浏览器请求头：
+  - `Accept-Language=en-US,en;q=0.9`
+- 页面端语言值：
+  - `navigator.language=en-US`
+  - `navigator.languages=["en-US","en"]`
+  - `Intl.DateTimeFormat().resolvedOptions().locale=en-US`
+- 其他 managed identity 断言：
+  - Firefox 149 UA 断言通过，`navigator.buildID=20260521160037`
+  - `navigator.webdriver=false`
+  - `navigator.platform=Win32`
+  - timezone 为 `America/Los_Angeles`
+  - `hardwareConcurrency=4`
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy。
+
+边界：
+
+- 本轮只记录单项 `Accept-Language` 值和页面端低敏语言摘要；没有保存完整 headers、network payload、cookie、local storage、token、profile dir 内容、截图或完整页面文本。
+- 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
+- Pixelscan/IPhey 和多国家代理矩阵仍未标记完成。
