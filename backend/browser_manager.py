@@ -30,6 +30,8 @@ INTERNAL_FIREFOX_PAGE_URLS = {"about:home", "about:newtab", "about:welcome"}
 DEFAULT_TASKBAR_HEIGHT_PX = 40
 WINDOWS_1080P_TASKBAR_HEIGHT_PX = 48
 DEFAULT_WEBGL_RENDERER = "ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+DEFAULT_DISPLAY_WIDTH_PX = 1920
+DEFAULT_DISPLAY_HEIGHT_PX = 1080
 MIN_SCREEN_DIMENSION_PX = 320
 MAX_SCREEN_DIMENSION_PX = 8192
 PUBLIC_HARDWARE_CONCURRENCY_VALUES = frozenset({1, 2, 4, 6, 8, 10, 12, 16, 24, 32})
@@ -245,6 +247,15 @@ def _public_screen_dimension(value: object) -> int | None:
     if MIN_SCREEN_DIMENSION_PX <= dimension <= MAX_SCREEN_DIMENSION_PX:
         return dimension
     return None
+
+
+def _public_display_dimensions(profile: dict[str, Any]) -> tuple[int, int]:
+    width = _public_screen_dimension(profile.get("screen_width"))
+    height = _public_screen_dimension(profile.get("screen_height"))
+    return (
+        width if width is not None else DEFAULT_DISPLAY_WIDTH_PX,
+        height if height is not None else DEFAULT_DISPLAY_HEIGHT_PX,
+    )
 
 
 def _public_hardware_concurrency(value: object) -> int | None:
@@ -722,14 +733,15 @@ class BrowserManager:
             user_data_dir = Path(profile["user_data_dir"])
             failure_stage = "cleanup_startup_state"
             _clean_firefox_startup_state(user_data_dir)
+            display_width, display_height = _public_display_dimensions(profile)
 
             # Start KasmVNC on the allocated display
             failure_stage = "start_vnc"
             await self.vnc.start_vnc(
                 display,
                 ws_port,
-                width=profile.get("screen_width", 1920),
-                height=profile.get("screen_height", 1080),
+                width=display_width,
+                height=display_height,
             )
 
             failure_stage = "resolve_network_fingerprint"
@@ -788,8 +800,8 @@ class BrowserManager:
             failure_stage = "fit_window"
             await _fit_firefox_window_to_vnc(
                 display,
-                int(profile.get("screen_width") or 1920),
-                int(profile.get("screen_height") or 1080),
+                display_width,
+                display_height,
             )
 
             running = RunningProfile(

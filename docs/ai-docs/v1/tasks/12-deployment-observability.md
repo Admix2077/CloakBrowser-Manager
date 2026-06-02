@@ -1295,3 +1295,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - 不记录或公开 raw screen/hardware input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 VNC/window display dimension launch guardrail
+
+背景：
+
+- 前一轮已经清洗 `screen_width` / `screen_height` / `hardware_concurrency` 的 invisible fingerprint pin。
+- `BrowserManager.launch()` 仍把 profile 原始 screen 值传给 KasmVNC，并在 window fit 阶段直接 `int()` 转换；污染文本或极端值可能造成 VNC 尺寸异常、launch failure，或把非公开文本留在调用参数中。
+
+已覆盖：
+
+- 新增共享 display 尺寸 helper，复用现有公开 screen dimension 范围。
+- VNC start 和 Firefox window fit 现在使用同一组安全 display dimensions。
+- 非公开、污染或不可转换 screen 值回落到 `1920x1080`，不再进入 VNC/window fit 调用参数，也不会在 fit 阶段触发 `ValueError`。
+- fingerprint pin 语义不变；无效 screen 仍不会被写入 invisible pin。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_uses_safe_display_dimensions_for_non_public_screen_values -q
+# RED: polluted screen text caused fit_window ValueError
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_uses_safe_display_dimensions_for_non_public_screen_values -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 61 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
+- 不记录或公开 raw screen input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。

@@ -872,6 +872,49 @@ async def test_launch_fits_firefox_window_to_vnc_after_start(
 
 
 @pytest.mark.asyncio
+async def test_launch_uses_safe_display_dimensions_for_non_public_screen_values(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_invisible_playwright,
+):
+    calls: list[tuple[int, int, int]] = []
+
+    async def fake_fit(display: int, width: int, height: int) -> None:
+        calls.append((display, width, height))
+
+    monkeypatch.setattr(bm, "_fit_firefox_window_to_vnc", fake_fit)
+
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock(return_value=(100, 6100))  # type: ignore[attr-defined]
+    mgr.vnc.start_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+
+    user_data_dir = tmp_path / "profile"
+    user_data_dir.mkdir()
+
+    running = await mgr.launch({
+        "id": "profile-safe-display",
+        "fingerprint_seed": 123,
+        "user_data_dir": str(user_data_dir),
+        "screen_width": "1920\nAuthorization: Bearer vnc-super-secret",
+        "screen_height": "1080?token=vnc-super-secret",
+        "proxy": None,
+        "timezone": "Asia/Shanghai",
+        "locale": "zh-CN",
+        "humanize": False,
+        "headless": False,
+        "launch_args": [],
+    })
+
+    assert running.profile_id == "profile-safe-display"
+    mgr.vnc.start_vnc.assert_awaited_once_with(100, 6100, width=1920, height=1080)
+    assert calls == [(100, 1920, 1080)]
+    assert "vnc-super-secret" not in repr(mgr.vnc.start_vnc.await_args)
+
+    await mgr.stop("profile-safe-display")
+
+
+@pytest.mark.asyncio
 async def test_launch_does_not_block_on_existing_page_init_script_timeout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

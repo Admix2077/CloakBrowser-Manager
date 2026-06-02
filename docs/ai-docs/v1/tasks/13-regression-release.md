@@ -1218,3 +1218,31 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 VNC/window display dimension launch guardrail
+
+背景：
+
+- 发布 smoke 依赖 VNC 可见工作区稳定；profile screen 值既会影响 fingerprint pin，也会影响 VNC start/window fit。
+- 上一轮已清洗 fingerprint pin，但 VNC/window 生命周期仍直接使用原始 `screen_width` / `screen_height`。
+
+已覆盖：
+
+- 非公开或污染 screen 值不再传入 KasmVNC start。
+- Firefox window fit 使用同一组安全 display dimensions，避免 `int()` 解析污染文本导致 launch 失败。
+- 正常 screen 值仍按 profile 使用；无效值回落到 `1920x1080`。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_uses_safe_display_dimensions_for_non_public_screen_values -q
+# RED then GREEN; final focused test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 61 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
