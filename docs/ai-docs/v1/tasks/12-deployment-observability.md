@@ -659,6 +659,59 @@ npm --prefix frontend run build
 # built successfully
 ```
 
+## 2026-06-03 Firefox identity diagnostics version redaction
+
+背景：
+
+- `managed_user_agent_version`、`invisible_playwright_version`、`firefox_binary_version` 和 `firefox_binary_build_id` 是 Pixelscan/BrowserScan 排障用的低敏 identity 摘要。
+- 旧实现直接信任 managed UA 常量、package metadata 和 Firefox `application.ini` 值；如果这些元数据异常或被污染，非版本文本可能进入 diagnostics。
+
+已覆盖：
+
+- 版本字段只允许数字段版本格式，例如 `149.0`、`0.1.8`、`150.0.1`。
+- Firefox BuildID 只允许 8 到 20 位数字。
+- 非白名单值返回 `None`，前端继续显示 `unknown`。
+- 当前本地有效 summary 仍保留 `managed_user_agent_version=149.0`、`invisible_playwright_version=0.1.8`、`firefox_binary_version=150.0.1`、`firefox_binary_build_id=20260521160037`。
+
+边界：
+
+- 不改变 UA override、Firefox binary、`invisible_playwright` package、stealth prefs、seed、WebGL、WebRTC 或 profile launch 行为。
+- 不返回完整 UA、package path、binary path、profile dir、proxy data、headers、cookies/local storage、automation payload、viewer token 或 runtime service token。
+- 这是 diagnostics redaction guardrail，不代表 Pixelscan/IPhey gate 已通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata -q
+# RED: 149.0-token-super-secret was returned as managed_user_agent_version
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys backend/tests/test_browser_manager.py::test_invisible_stealth_pref_summary_degrades_without_full_package backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# 4 passed
+
+. .venv/bin/activate && python - <<'PY'
+from backend import browser_manager as bm
+bm._firefox_application_ini_metadata.cache_clear()
+bm._invisible_stealth_pref_summary.cache_clear()
+print(bm.managed_firefox_identity_summary())
+PY
+# {'managed_user_agent_version': '149.0', 'invisible_playwright_version': '0.1.8', 'firefox_binary_version': '150.0.1', 'firefox_binary_build_id': '20260521160037', 'stealth_pref_count': 29, 'stealth_pref_categories': ['audio', 'canvas', 'debugger', 'fingerprint', 'font', 'hardware', 'screen', 'storage', 'timezone', 'voices', 'webgl', 'webrtc']}
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 515 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
 ## 2026-06-03 automation task page_ref redaction guardrail
 
 背景：

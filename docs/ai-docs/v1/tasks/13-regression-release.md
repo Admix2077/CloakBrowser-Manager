@@ -647,6 +647,55 @@ npm --prefix frontend run build
 - 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。
 
+## 2026-06-03 Firefox identity diagnostics version redaction
+
+背景：
+
+- Firefox identity diagnostics 是 release smoke 中比对 Manager managed UA、installed `invisible_playwright` package、Firefox `application.ini` version 和 BuildID 的低敏信号。
+- 为防御异常 package/application metadata，版本字段和 BuildID 不能把非版本文本原样展示成 diagnostics 值。
+
+已覆盖：
+
+- `managed_user_agent_version`、`invisible_playwright_version` 和 `firefox_binary_version` 只公开数字段版本。
+- `firefox_binary_build_id` 只公开 8 到 20 位数字。
+- 非白名单值返回 `None`，前端显示 `unknown`。
+- 当前本地有效 summary 仍保留 Firefox 149 / invisible_playwright 0.1.8 / Firefox binary 150.0.1 / BuildID 20260521160037。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata -q
+# RED then GREEN; final 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_managed_firefox_identity_summary_discards_non_public_version_metadata backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys backend/tests/test_browser_manager.py::test_invisible_stealth_pref_summary_degrades_without_full_package backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# 4 passed
+
+. .venv/bin/activate && python - <<'PY'
+from backend import browser_manager as bm
+bm._firefox_application_ini_metadata.cache_clear()
+bm._invisible_stealth_pref_summary.cache_clear()
+print(bm.managed_firefox_identity_summary())
+PY
+# {'managed_user_agent_version': '149.0', 'invisible_playwright_version': '0.1.8', 'firefox_binary_version': '150.0.1', 'firefox_binary_build_id': '20260521160037', 'stealth_pref_count': 29, 'stealth_pref_categories': ['audio', 'canvas', 'debugger', 'fingerprint', 'font', 'hardware', 'screen', 'storage', 'timezone', 'voices', 'webgl', 'webrtc']}
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 515 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 automation task page_ref redaction guardrail
 
 背景：

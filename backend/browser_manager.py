@@ -7,6 +7,7 @@ import importlib.metadata
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -45,6 +46,8 @@ WEBRTC_LOCAL_IP_SUPPRESSION_PREFS = {
     "media.peerconnection.ice.obfuscate_host_addresses": False,
     "media.peerconnection.ice.disableIPv6": True,
 }
+PUBLIC_VERSION_RE = re.compile(r"^\d+(?:\.\d+){0,5}$")
+PUBLIC_FIREFOX_BUILD_ID_RE = re.compile(r"^\d{8,20}$")
 STEALTH_PREF_CATEGORY_ALIASES = {
     "fpp": "fingerprint",
     "hw_concurrency": "hardware",
@@ -374,7 +377,7 @@ def _managed_user_agent_version() -> str | None:
     if marker not in MANAGED_FIREFOX_USER_AGENT:
         return None
     version = MANAGED_FIREFOX_USER_AGENT.rsplit(marker, 1)[1].split()[0].strip()
-    return version or None
+    return _public_version_string(version)
 
 
 def _invisible_playwright_package_version() -> str | None:
@@ -382,7 +385,21 @@ def _invisible_playwright_package_version() -> str | None:
         version = importlib.metadata.version("invisible_playwright")
     except importlib.metadata.PackageNotFoundError:
         return None
-    return version or None
+    return _public_version_string(version)
+
+
+def _public_version_string(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    version = value.strip()
+    return version if PUBLIC_VERSION_RE.fullmatch(version) else None
+
+
+def _public_firefox_build_id(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return None
+    build_id = value.strip()
+    return build_id if PUBLIC_FIREFOX_BUILD_ID_RE.fullmatch(build_id) else None
 
 
 def _stealth_pref_category(pref_key: str) -> str | None:
@@ -432,9 +449,11 @@ def managed_firefox_identity_summary() -> dict[str, Any]:
     stealth_summary = _invisible_stealth_pref_summary()
     return {
         "managed_user_agent_version": _managed_user_agent_version(),
-        "invisible_playwright_version": _invisible_playwright_package_version(),
-        "firefox_binary_version": metadata.get("Version"),
-        "firefox_binary_build_id": metadata.get("BuildID"),
+        "invisible_playwright_version": _public_version_string(
+            _invisible_playwright_package_version(),
+        ),
+        "firefox_binary_version": _public_version_string(metadata.get("Version")),
+        "firefox_binary_build_id": _public_firefox_build_id(metadata.get("BuildID")),
         "stealth_pref_count": stealth_summary["stealth_pref_count"],
         "stealth_pref_categories": stealth_summary["stealth_pref_categories"],
     }

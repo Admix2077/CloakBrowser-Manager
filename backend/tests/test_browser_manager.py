@@ -275,6 +275,42 @@ def test_invisible_stealth_pref_summary_degrades_without_full_package():
     }
 
 
+def test_managed_firefox_identity_summary_discards_non_public_version_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        bm,
+        "MANAGED_FIREFOX_USER_AGENT",
+        "Mozilla/5.0 Firefox/149.0-token-super-secret",
+    )
+    monkeypatch.setattr(
+        bm,
+        "_invisible_playwright_package_version",
+        lambda: "0.1.8-token-super-secret",
+    )
+    monkeypatch.setattr(
+        bm,
+        "_firefox_application_ini_metadata",
+        lambda: {
+            "Version": "150.0.1-token-super-secret",
+            "BuildID": "20260521160037-token-super-secret",
+        },
+    )
+    monkeypatch.setattr(
+        bm,
+        "_invisible_stealth_pref_summary",
+        lambda: {"stealth_pref_count": 1, "stealth_pref_categories": ["canvas"]},
+    )
+
+    summary = bm.managed_firefox_identity_summary()
+
+    assert summary["managed_user_agent_version"] is None
+    assert summary["invisible_playwright_version"] is None
+    assert summary["firefox_binary_version"] is None
+    assert summary["firefox_binary_build_id"] is None
+    assert "token-super-secret" not in str(summary)
+
+
 def test_build_invisible_kwargs_drops_user_window_size_overrides(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,
