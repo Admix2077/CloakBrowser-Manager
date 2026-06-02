@@ -83,6 +83,7 @@ from .models import (
     DiagnosticsCountsResponse,
     DiagnosticsResponse,
     DiagnosticsRuntimeResponse,
+    DiagnosticsRuntimeSessionsResponse,
     DiagnosticsStorageResponse,
     NetscapeCookieExportResponse,
     NetscapeCookieImportRequest,
@@ -2584,6 +2585,11 @@ async def get_system_diagnostics():
             firefox_binary_build_id=firefox_identity["firefox_binary_build_id"],
             stealth_pref_count=firefox_identity["stealth_pref_count"],
             stealth_pref_categories=firefox_identity["stealth_pref_categories"],
+        ),
+        runtime_sessions=DiagnosticsRuntimeSessionsResponse(
+            status_counts=db.count_runtime_sessions_by_status(),
+            live_count=db.count_live_runtime_sessions(),
+            active_viewer_token_count=db.count_active_runtime_viewer_tokens(),
         ),
         automation_worker=_automation_worker_diagnostics(),
     )

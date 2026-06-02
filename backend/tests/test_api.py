@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 from pathlib import Path
 import sys
@@ -879,6 +880,23 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
         status="failed",
         steps=[{"type": "fill", "selector": "#password", "value": "secret-value"}],
     )
+    active_runtime_session = main.db.create_runtime_session(
+        profile_id=profile["id"],
+        external_session_id="runtime-external-session-secret",
+        lease_seconds=900,
+    )
+    viewer_token_hash = "viewer-token-hash-secret"
+    main.db.set_runtime_session_viewer_token(
+        active_runtime_session["id"],
+        viewer_token_hash,
+        (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=60)).isoformat(),
+    )
+    terminated_runtime_session = main.db.create_runtime_session(
+        profile_id=profile["id"],
+        external_session_id="runtime-terminated-session-secret",
+        lease_seconds=900,
+        status="terminated",
+    )
     main.browser_mgr.running[profile["id"]] = RunningProfile(
         profile_id=profile["id"],
         context=MagicMock(),
@@ -925,6 +943,10 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["counts"]["profiles_total"] >= 1
     assert data["counts"]["queued_tasks"] >= 1
     assert data["counts"]["failed_tasks"] >= 1
+    assert data["runtime_sessions"]["status_counts"]["active"] == 1
+    assert data["runtime_sessions"]["status_counts"]["terminated"] == 1
+    assert data["runtime_sessions"]["live_count"] == 1
+    assert data["runtime_sessions"]["active_viewer_token_count"] == 1
     assert data["automation_worker"]["enabled"] is True
     assert "lease_seconds" in data["automation_worker"]
     assert data["runtime"]["active_displays"] == [100]
@@ -960,6 +982,12 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert "secret note" not in serialized
     assert "secret-token" not in serialized
     assert "secret-value" not in serialized
+    assert active_runtime_session["id"] not in serialized
+    assert terminated_runtime_session["id"] not in serialized
+    assert "runtime-external-session-secret" not in serialized
+    assert "runtime-terminated-session-secret" not in serialized
+    assert viewer_token_hash not in serialized
+    assert "viewer-token" not in serialized
     assert "secret-auth-token" not in serialized
     assert "secret-runtime-token" not in serialized
     assert "secret-lease" not in serialized
@@ -1035,6 +1063,12 @@ def test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows(
     ))
     monkeypatch.setattr(main.db, "list_automation_tasks", lambda *args, **kwargs: (_ for _ in ()).throw(
         AssertionError("diagnostics must not load full automation task rows")
+    ))
+    monkeypatch.setattr(main.db, "get_runtime_session", lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("diagnostics must not load full runtime session rows")
+    ))
+    monkeypatch.setattr(main.db, "list_audit_events", lambda *args, **kwargs: (_ for _ in ()).throw(
+        AssertionError("diagnostics must not load audit rows")
     ))
 
     resp = app_client.get("/api/diagnostics")

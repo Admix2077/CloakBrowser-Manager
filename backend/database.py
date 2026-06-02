@@ -570,6 +570,39 @@ def set_runtime_session_viewer_token(
     return get_runtime_session(session_id)
 
 
+def count_runtime_sessions_by_status() -> dict[str, int]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS count FROM runtime_sessions GROUP BY status",
+        ).fetchall()
+    return {str(row["status"] or "unknown"): int(row["count"]) for row in rows}
+
+
+def count_live_runtime_sessions(now: str | None = None) -> int:
+    cutoff = now or datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT COUNT(*) AS count FROM runtime_sessions
+            WHERE status = ? AND lease_expires_at > ?""",
+            ("active", cutoff),
+        ).fetchone()
+    return int(row["count"] or 0) if row else 0
+
+
+def count_active_runtime_viewer_tokens(now: str | None = None) -> int:
+    cutoff = now or datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT COUNT(*) AS count FROM runtime_sessions
+            WHERE status = ?
+              AND viewer_token_hash IS NOT NULL
+              AND viewer_token_expires_at IS NOT NULL
+              AND viewer_token_expires_at > ?""",
+            ("active", cutoff),
+        ).fetchone()
+    return int(row["count"] or 0) if row else 0
+
+
 def terminate_runtime_session(session_id: str) -> dict[str, Any] | None:
     with get_db() as conn:
         cursor = conn.execute(

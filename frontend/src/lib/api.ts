@@ -445,6 +445,11 @@ export interface SystemDiagnostics {
     stealth_pref_count: number | null;
     stealth_pref_categories: string[];
   };
+  runtime_sessions: {
+    status_counts: Record<string, number>;
+    live_count: number;
+    active_viewer_token_count: number;
+  };
   automation_worker: {
     enabled: boolean;
     lease_seconds: number;

@@ -565,6 +565,12 @@ class DiagnosticsRuntimeResponse(BaseModel):
     stealth_pref_categories: list[str] = Field(default_factory=list)
 
 
+class DiagnosticsRuntimeSessionsResponse(BaseModel):
+    status_counts: dict[str, int] = Field(default_factory=dict)
+    live_count: int = 0
+    active_viewer_token_count: int = 0
+
+
 class DiagnosticsAutomationWorkerResponse(BaseModel):
     enabled: bool
     lease_seconds: int
@@ -578,6 +584,7 @@ class DiagnosticsResponse(BaseModel):
     storage: DiagnosticsStorageResponse
     counts: DiagnosticsCountsResponse
     runtime: DiagnosticsRuntimeResponse
+    runtime_sessions: DiagnosticsRuntimeSessionsResponse
     automation_worker: DiagnosticsAutomationWorkerResponse
 
 

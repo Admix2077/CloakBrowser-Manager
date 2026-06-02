@@ -860,3 +860,63 @@ npm --prefix frontend run build
 git diff --check
 # no output
 ```
+
+## 2026-06-03 runtime session diagnostics summary
+
+背景：
+
+- Runtime session / viewer VNC 链路已有 service token、viewer credential、audit redaction 和 WebSocket 拒绝路径测试。
+- 但 `GET /api/diagnostics` 只显示 browser runtime / automation worker 状态，不显示 runtime session 状态面；排查 Project Mileage viewer 或 VNC 入口时缺少低敏聚合信号。
+- 该诊断必须避免读取或返回 runtime session id、external session id、profile id、viewer credential、viewer hash、viewer URL、audit rows 或 profile/proxy 详情。
+
+已覆盖：
+
+- `backend/database.py` 新增 runtime session 聚合查询：
+  - `count_runtime_sessions_by_status()`
+  - `count_live_runtime_sessions()`
+  - `count_active_runtime_viewer_tokens()`
+- `GET /api/diagnostics` 新增 top-level `runtime_sessions`：
+  - `status_counts`
+  - `live_count`
+  - `active_viewer_token_count`
+- 前端 System diagnostics 新增 Runtime sessions 区块：
+  - Live sessions
+  - Viewer credentials
+  - Runtime session statuses
+
+边界：
+
+- diagnostics 只返回聚合数字和固定状态名。
+- 不返回 runtime session id、external session id、profile id、viewer credential/hash/URL、lease timestamp、headers、cookie/local storage、automation payload、audit rows、proxy data 或 page content。
+- 本轮不改变 runtime session 创建、续期、终止、viewer credential TTL、VNC proxy 或底层 Firefox fingerprint 行为。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# RED: diagnostics response had no runtime_sessions node
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# RED: System diagnostics page did not render Live sessions / Viewer credentials / Runtime session statuses
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 2 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# 2 files / 42 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 30 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```

@@ -247,6 +247,11 @@ describe("api.getDiagnostics", () => {
         stealth_pref_count: 29,
         stealth_pref_categories: ["canvas", "fingerprint", "webgl", "webrtc"],
       },
+      runtime_sessions: {
+        status_counts: { active: 1 },
+        live_count: 1,
+        active_viewer_token_count: 1,
+      },
       automation_worker: {
         enabled: false,
         lease_seconds: 60,

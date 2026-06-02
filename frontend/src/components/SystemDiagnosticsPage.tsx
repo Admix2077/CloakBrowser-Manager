@@ -101,6 +101,18 @@ export function SystemDiagnosticsPage() {
                 <InfoRow label="Stealth categories" value={formatStringList(diagnostics.runtime.stealth_pref_categories)} />
               </div>
             </section>
+
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
+              <h3 className="text-sm font-semibold text-slate-950">Runtime sessions</h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <InfoRow label="Live sessions" value={diagnostics.runtime_sessions.live_count} />
+                <InfoRow label="Viewer credentials" value={diagnostics.runtime_sessions.active_viewer_token_count} />
+                <InfoRow
+                  label="Runtime session statuses"
+                  value={formatCountMap(diagnostics.runtime_sessions.status_counts)}
+                />
+              </div>
+            </section>
           </div>
 
           <aside className="min-w-0 space-y-4">
@@ -205,6 +217,10 @@ function formatStringList(values: string[]): string {
 }
 
 function formatStageCounts(values: Record<string, number>): string {
+  return formatCountMap(values);
+}
+
+function formatCountMap(values: Record<string, number>): string {
   const entries = Object.entries(values)
     .filter(([, count]) => count > 0)
     .sort(([left], [right]) => left.localeCompare(right));
