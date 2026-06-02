@@ -831,6 +831,49 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 runtime session status diagnostics redaction
+
+背景：
+
+- `runtime_sessions.status_counts` 是 release smoke 中排查 viewer/session 生命周期的低敏聚合信号。
+- 为防御历史/损坏 DB row，status counts 不能把非白名单 status 原样展示成可见 diagnostics key。
+
+已覆盖：
+
+- Runtime session diagnostics status counts 只公开 `active`、`terminated` 和 `unknown`。
+- 非白名单 status 归并到 `unknown`，测试覆盖敏感 status 文本不会出现在 API 响应序列化中。
+- 相邻 session broker、diagnostics、前端 diagnostics、完整后端/前端门禁重新验证。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED then GREEN; final focused diagnostics test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 30 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# 2 files / 42 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 runtime session diagnostics summary
 
 背景：

@@ -920,3 +920,53 @@ npm --prefix frontend run build
 git diff --check
 # no output
 ```
+
+## 2026-06-03 runtime session status diagnostics redaction
+
+背景：
+
+- Runtime session diagnostics 已新增 `runtime_sessions.status_counts`。
+- 该字段来自数据库聚合；如果历史或损坏 DB row 含有非白名单 status，旧实现会把原始 status 字符串作为 diagnostics key 返回。
+- status 字段通常由服务端写入，但 diagnostics 边界仍应防御历史数据、手工修复或导入异常，不让 token/path/secret 风格文本成为可见状态名。
+
+已覆盖：
+
+- `count_runtime_sessions_by_status()` 只保留低敏公开状态：
+  - `active`
+  - `terminated`
+- 其他 status 统一归并到 `unknown`。
+- diagnostics 测试覆盖 corrupted status 不出现在响应序列化文本中，且 `unknown` 计数正确累加。
+
+边界：
+
+- 不改变 runtime session 表结构。
+- 不修改 create/renew/terminate/viewer credential/VNC proxy 行为。
+- 不返回 runtime session id、external session id、profile id、viewer credential/hash/URL、lease timestamp、audit rows 或 profile/proxy 详情。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: status_counts did not include unknown and raw corrupted status remained available
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 30 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# 2 files / 42 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```

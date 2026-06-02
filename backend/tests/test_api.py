@@ -897,6 +897,12 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
         lease_seconds=900,
         status="terminated",
     )
+    corrupted_runtime_session = main.db.create_runtime_session(
+        profile_id=profile["id"],
+        external_session_id="runtime-corrupted-session-secret",
+        lease_seconds=900,
+        status="active-token-super-secret",
+    )
     main.browser_mgr.running[profile["id"]] = RunningProfile(
         profile_id=profile["id"],
         context=MagicMock(),
@@ -945,6 +951,7 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["counts"]["failed_tasks"] >= 1
     assert data["runtime_sessions"]["status_counts"]["active"] == 1
     assert data["runtime_sessions"]["status_counts"]["terminated"] == 1
+    assert data["runtime_sessions"]["status_counts"]["unknown"] == 1
     assert data["runtime_sessions"]["live_count"] == 1
     assert data["runtime_sessions"]["active_viewer_token_count"] == 1
     assert data["automation_worker"]["enabled"] is True
@@ -984,8 +991,11 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert "secret-value" not in serialized
     assert active_runtime_session["id"] not in serialized
     assert terminated_runtime_session["id"] not in serialized
+    assert corrupted_runtime_session["id"] not in serialized
     assert "runtime-external-session-secret" not in serialized
     assert "runtime-terminated-session-secret" not in serialized
+    assert "runtime-corrupted-session-secret" not in serialized
+    assert "active-token-super-secret" not in serialized
     assert viewer_token_hash not in serialized
     assert "viewer-token" not in serialized
     assert "secret-auth-token" not in serialized
