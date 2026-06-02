@@ -1585,3 +1585,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV 支持字段。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Launch resource-limit API detail redaction guardrail
+
+背景：
+
+- Profile launch 与 runtime session create 都会向调用方返回 resource-limit 409。
+- 旧实现直接返回 `BrowserResourceLimitError` 原文；异常文本如果带入 proxy URL、credential、token 或 profile/runtime 上下文，会进入 API 响应。
+
+已覆盖：
+
+- Profile launch resource-limit 409 detail 固定为 `Maximum running profiles reached`。
+- Runtime session create resource-limit 409 detail 固定为 `Maximum running profiles reached`。
+- 现有 max running profile、profile launch、runtime session create、proxy validation 和状态码语义保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_resource_limit_detail_does_not_echo_exception_text backend/tests/test_session_broker.py::test_runtime_session_create_resource_limit_detail_does_not_echo_exception_text -q
+# RED then GREEN；最终 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py -q -k "runtime_session_create or launch"
+# 23 passed, 223 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 552 passed in 33.79s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.89s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 resource limit 判断、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

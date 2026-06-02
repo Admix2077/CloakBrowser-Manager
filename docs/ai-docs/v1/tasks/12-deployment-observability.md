@@ -1700,3 +1700,46 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV 支持字段。
 - 不记录或公开 raw unsupported header/value、extra CSV values、URL/host/username/password/query token/path、authorization/bearer text、headers、cookies、local storage、viewer token、runtime service token、automation payload 或 profile dir 内容。
+
+## 2026-06-03 Launch resource-limit API detail redaction guardrail
+
+背景：
+
+- Profile launch 和 runtime session create 都会把 `BrowserResourceLimitError` 映射为 409。
+- 旧实现把 exception text 作为 HTTP detail 返回；如果底层资源限制异常带入 profile/proxy/token/path 文本，就会被客户端响应固化。
+
+已覆盖：
+
+- `/api/profiles/{profile_id}/launch` 的 resource-limit detail 固定为 `Maximum running profiles reached`。
+- `/api/runtime/sessions` 创建时 launch resource-limit detail 固定为 `Maximum running profiles reached`。
+- 现有 max running profile、proxy validation、runtime session create 和 launch 状态码语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_resource_limit_detail_does_not_echo_exception_text backend/tests/test_session_broker.py::test_runtime_session_create_resource_limit_detail_does_not_echo_exception_text -q
+# RED: 2 failed；409 detail 原样包含 proxy URL、credentials 和 token 文本
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_resource_limit_detail_does_not_echo_exception_text backend/tests/test_session_broker.py::test_runtime_session_create_resource_limit_detail_does_not_echo_exception_text -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py -q -k "runtime_session_create or launch"
+# 23 passed, 223 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 552 passed in 33.79s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.89s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 resource limit 判断、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
+- 不记录或公开 raw resource-limit exception text、proxy URL/host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

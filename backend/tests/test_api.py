@@ -637,6 +637,33 @@ def test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc
     allocate.assert_not_awaited()
 
 
+def test_launch_resource_limit_detail_does_not_echo_exception_text(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "LimitLeak"})
+    pid = create.json()["id"]
+
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(
+            side_effect=main.BrowserResourceLimitError(
+                "Maximum running profiles reached for "
+                "http://user:hiddenpass@limit-error.example:8080 token=super-secret"
+            )
+        ),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
+
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Maximum running profiles reached"}
+    serialized = str(resp.json())
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "limit-error.example" not in serialized
+    assert "user:" not in serialized
+
+
 def test_launch_invalid_proxy_400(app_client: TestClient):
     """ValueError from browser_mgr.launch should map to 400."""
     create = app_client.post("/api/profiles", json={"name": "BadProxy"})

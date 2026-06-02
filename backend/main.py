@@ -1100,6 +1100,7 @@ _SAFE_PROXY_ASSET_ERROR_DETAILS = (
     ("Proxy URL invalid port", "Proxy URL invalid port"),
     ("Proxy URL missing port", "Proxy URL missing port"),
 )
+_RESOURCE_LIMIT_ERROR_DETAIL = "Maximum running profiles reached"
 
 
 def _safe_proxy_asset_error_detail(exc: ValueError) -> str:
@@ -1597,7 +1598,7 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
         except BrowserResourceLimitError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise HTTPException(status_code=409, detail=_RESOURCE_LIMIT_ERROR_DETAIL) from exc
         except Exception as exc:
             logger.error(
                 "Failed to launch runtime session profile %s error_type=%s",
@@ -2421,7 +2422,7 @@ async def launch_profile(profile_id: str, request: Request):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=_safe_proxy_asset_error_detail(exc)) from exc
     except BrowserResourceLimitError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=_RESOURCE_LIMIT_ERROR_DETAIL) from exc
     except Exception as exc:
         logger.error(
             "Failed to launch profile %s error_type=%s",

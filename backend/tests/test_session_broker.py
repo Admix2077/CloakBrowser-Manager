@@ -172,6 +172,42 @@ def test_runtime_session_create_respects_max_running_profiles(
     assert "runtime.session.created" not in _audit_event_types()
 
 
+def test_runtime_session_create_resource_limit_detail_does_not_echo_exception_text(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client, "Sensitive Runtime Limit")
+
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(
+            side_effect=main.BrowserResourceLimitError(
+                "Maximum running profiles reached for "
+                "http://user:hiddenpass@runtime-limit.example:8080 token=super-secret"
+            )
+        ),
+    ):
+        resp = app_client.post(
+            "/api/runtime/sessions",
+            headers=runtime_headers,
+            json={
+                "external_session_id": "pm-session-sensitive-limit",
+                "profile_id": profile_id,
+                "lease_seconds": 900,
+            },
+        )
+
+    assert resp.status_code == 409
+    assert resp.json() == {"detail": "Maximum running profiles reached"}
+    serialized = str(resp.json())
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "runtime-limit.example" not in serialized
+    assert "user:" not in serialized
+    assert "runtime.session.created" not in _audit_event_types()
+
+
 def test_runtime_session_create_redacts_sensitive_launch_value_error_detail(
     app_client: TestClient,
     runtime_headers: dict[str, str],
