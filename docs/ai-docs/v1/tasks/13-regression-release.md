@@ -786,3 +786,47 @@ git diff --check
 
 - 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。
+
+## 2026-06-03 launch failure stage diagnostics
+
+背景：
+
+- `cbim-23h.6` 仍然指向 Pixelscan `PXLSCN-FINGERPRINT-MASKING`，但 release smoke 也需要能快速排除 VNC、profile startup cleanup、GeoIP resolution、engine enter 和 context configuration 这类启动链路失败。
+- 旧 `/api/diagnostics` 没有最近 launch failure 的低敏 stage 摘要，外站 smoke 失败后很难判断是否需要先处理 runtime 稳定性。
+
+已覆盖：
+
+- `BrowserManager` 记录当前进程内 launch failure stage counts。
+- `/api/diagnostics` Runtime 节点返回 `launch_failure_count` 和 `launch_failure_stage_counts`。
+- System diagnostics 页面展示 Launch failures 与 Launch failure stages。
+- profile launch / runtime session launch 的 500 日志不再记录异常消息正文，只保留固定错误类型，避免把 token、路径、proxy host 或 URL 文本写入日志。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_clears_launching_state_when_vnc_allocation_fails backend/tests/test_browser_manager.py::test_launch_releases_vnc_when_startup_state_cleanup_fails backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_reports_low_sensitive_launch_failure_summary -q
+# RED then GREEN; final 4 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# RED then GREEN; final 2 files / 42 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc backend/tests/test_api.py::test_launch_invalid_proxy_real_validation_400 backend/tests/test_api.py::test_launch_failure_500 backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows backend/tests/test_session_broker.py::test_runtime_session_create_respects_max_running_profiles backend/tests/test_browser_manager.py::test_launch_uses_invisible_playwright_on_vnc_display -q
+# 6 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

@@ -1581,7 +1581,11 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         except BrowserResourceLimitError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except Exception as exc:
-            logger.error("Failed to launch runtime session profile %s: %s", profile_id, exc)
+            logger.error(
+                "Failed to launch runtime session profile %s error_type=%s",
+                profile_id,
+                type(exc).__name__,
+            )
             raise HTTPException(status_code=500, detail="Failed to launch browser") from exc
         db.update_profile_geoip_result(profile_id, getattr(running, "resolved_geoip", None))
 
@@ -2401,7 +2405,11 @@ async def launch_profile(profile_id: str, request: Request):
     except BrowserResourceLimitError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
-        logger.error("Failed to launch profile %s: %s", profile_id, exc)
+        logger.error(
+            "Failed to launch profile %s error_type=%s",
+            profile_id,
+            type(exc).__name__,
+        )
         raise HTTPException(status_code=500, detail="Failed to launch browser") from exc
 
     db.update_profile_geoip_result(profile_id, getattr(running, "resolved_geoip", None))
@@ -2546,6 +2554,7 @@ async def get_system_diagnostics():
     task_counts = db.count_automation_tasks_by_status()
     running_profiles = list(browser_mgr.running.values())
     firefox_identity = managed_firefox_identity_summary()
+    launch_failure_summary = browser_mgr.launch_failure_summary()
 
     return DiagnosticsResponse(
         status="ok",
@@ -2567,6 +2576,8 @@ async def get_system_diagnostics():
             active_displays=sorted(running.display for running in running_profiles),
             active_vnc_ws_ports=sorted(running.ws_port for running in running_profiles),
             max_running_profiles=get_max_running_profiles_limit(),
+            launch_failure_count=launch_failure_summary["launch_failure_count"],
+            launch_failure_stage_counts=launch_failure_summary["launch_failure_stage_counts"],
             managed_user_agent_version=firefox_identity["managed_user_agent_version"],
             invisible_playwright_version=firefox_identity["invisible_playwright_version"],
             firefox_binary_version=firefox_identity["firefox_binary_version"],

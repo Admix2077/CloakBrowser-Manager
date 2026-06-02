@@ -805,3 +805,58 @@ npm --prefix frontend run build
 git diff --check
 # no output
 ```
+
+## 2026-06-03 launch failure stage diagnostics
+
+背景：
+
+- Pixelscan / IPhey 外站 smoke 排障需要区分“浏览器已正常启动但 fingerprint masking 被检测”与“runtime/profile/VNC/engine 启动链路不稳”。
+- 旧 diagnostics 只有 `launching` 数量；一次 launch 失败后没有低敏 stage 摘要，排障只能依赖日志或现场复现。
+- 旧 launch 失败日志会插入异常消息，异常消息可能包含 URL、proxy host、profile path 或 token 文本。
+
+已覆盖：
+
+- `BrowserManager` 新增内存级 launch failure stage 计数。
+- 固定 stage 包括 `allocate_vnc`、`cleanup_startup_state`、`start_vnc`、`resolve_network_fingerprint`、`build_launch_kwargs`、`enter_browser`、`configure_context`、`bootstrap_page`、`fit_window`、`resource_limit` 等。
+- `GET /api/diagnostics` 的 `runtime` 节点新增：
+  - `launch_failure_count`
+  - `launch_failure_stage_counts`
+- 前端 System diagnostics Runtime 区块显示 Launch failures 和 Launch failure stages。
+- profile launch 和 runtime session launch 的 500 日志改为记录固定错误类型，不再记录异常消息正文。
+
+边界：
+
+- launch failure summary 只保存在当前 Manager 进程内存中，不持久化，不做跨重启统计。
+- diagnostics 不返回 profile id、profile dir、proxy URL/host/username/password、异常消息、完整 traceback、headers、cookie/local storage、viewer token、runtime service token、automation payload 或页面内容。
+- 本轮只提升 runtime 启动链路低敏观测能力，不修改底层 Firefox / `invisible_playwright` fingerprint masking 行为，不代表 Pixelscan/IPhey gate 已通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_clears_launching_state_when_vnc_allocation_fails backend/tests/test_browser_manager.py::test_launch_releases_vnc_when_startup_state_cleanup_fails backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_reports_low_sensitive_launch_failure_summary -q
+# RED: BrowserManager had no launch_failure_summary; diagnostics runtime had no launch_failure_count / launch_failure_stage_counts
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# RED: System diagnostics page did not render Launch failures / Launch failure stages
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_clears_launching_state_when_vnc_allocation_fails backend/tests/test_browser_manager.py::test_launch_releases_vnc_when_startup_state_cleanup_fails backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_reports_low_sensitive_launch_failure_summary -q
+# 4 passed
+
+npm --prefix frontend test -- SystemDiagnosticsPage.test.tsx api.test.ts
+# 2 files / 42 tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_rejects_when_max_running_profiles_reached_without_allocating_vnc backend/tests/test_api.py::test_launch_invalid_proxy_real_validation_400 backend/tests/test_api.py::test_launch_failure_500 backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows backend/tests/test_session_broker.py::test_runtime_session_create_respects_max_running_profiles backend/tests/test_browser_manager.py::test_launch_uses_invisible_playwright_on_vnc_display -q
+# 6 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```

@@ -930,6 +930,8 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["runtime"]["active_displays"] == [100]
     assert data["runtime"]["active_vnc_ws_ports"] == [6100]
     assert data["runtime"]["max_running_profiles"] == 7
+    assert data["runtime"]["launch_failure_count"] == 0
+    assert data["runtime"]["launch_failure_stage_counts"] == {}
     assert data["runtime"]["managed_user_agent_version"] == "149.0"
     assert isinstance(data["runtime"]["invisible_playwright_version"], str)
     assert data["runtime"]["invisible_playwright_version"]
@@ -967,6 +969,56 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert "zoom.stealth" not in serialized
     assert "hw_seed" not in serialized
     assert "192.168." not in serialized
+
+
+def test_system_diagnostics_reports_low_sensitive_launch_failure_summary(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    profile = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Diagnostics Launch Failure",
+            "proxy": "http://user:secret-password@diagnostics.proxy.example:8080",
+            "notes": "secret note",
+        },
+    ).json()
+
+    with caplog.at_level("ERROR"):
+        with patch.object(
+            main.browser_mgr.vnc,
+            "allocate",
+            new=AsyncMock(side_effect=RuntimeError("display-token-secret /data/profile diagnostics.proxy.example")),
+        ):
+            launch = app_client.post(
+                f"/api/profiles/{profile['id']}/launch",
+                json={"confirm_launch": True},
+            )
+
+    assert launch.status_code == 500
+    assert launch.json() == {"detail": "Failed to launch browser"}
+
+    resp = app_client.get("/api/diagnostics")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["runtime"]["launch_failure_count"] == 1
+    assert data["runtime"]["launch_failure_stage_counts"] == {"allocate_vnc": 1}
+
+    serialized = json.dumps(data, sort_keys=True)
+    assert profile["id"] not in serialized
+    assert "secret-password" not in serialized
+    assert "diagnostics.proxy.example" not in serialized
+    assert "secret note" not in serialized
+    assert "display-token-secret" not in serialized
+    assert "/data/profile" not in serialized
+    assert "RuntimeError" not in serialized
+
+    log_text = caplog.text
+    assert "display-token-secret" not in log_text
+    assert "/data/profile" not in log_text
+    assert "diagnostics.proxy.example" not in log_text
+    assert "secret-password" not in log_text
 
 
 def test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows(

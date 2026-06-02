@@ -436,6 +436,8 @@ export interface SystemDiagnostics {
     active_displays: number[];
     active_vnc_ws_ports: number[];
     max_running_profiles: number | null;
+    launch_failure_count: number;
+    launch_failure_stage_counts: Record<string, number>;
     managed_user_agent_version: string | null;
     invisible_playwright_version: string | null;
     firefox_binary_version: string | null;

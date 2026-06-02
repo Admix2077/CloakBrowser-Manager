@@ -85,6 +85,7 @@ def app_client(tmp_db: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(main.browser_mgr, "cleanup_stale", AsyncMock())
     monkeypatch.setattr(main.browser_mgr, "cleanup_all", AsyncMock())
     monkeypatch.setattr(main.browser_mgr.vnc, "cleanup_stale", AsyncMock())
+    main.browser_mgr.reset_launch_failure_summary()
 
     from starlette.testclient import TestClient
 

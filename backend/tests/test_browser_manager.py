@@ -533,6 +533,10 @@ async def test_launch_clears_launching_state_when_vnc_allocation_fails(tmp_path:
         })
 
     assert "profile-alloc-fail" not in mgr._launching
+    assert mgr.launch_failure_summary() == {
+        "launch_failure_count": 1,
+        "launch_failure_stage_counts": {"allocate_vnc": 1},
+    }
 
 
 @pytest.mark.asyncio
@@ -569,6 +573,10 @@ async def test_launch_releases_vnc_when_startup_state_cleanup_fails(
 
     assert "profile-cleanup-fail" not in mgr._launching
     mgr.vnc.stop_vnc.assert_awaited_once_with(100)
+    assert mgr.launch_failure_summary() == {
+        "launch_failure_count": 1,
+        "launch_failure_stage_counts": {"cleanup_startup_state": 1},
+    }
 
 
 @pytest.mark.asyncio

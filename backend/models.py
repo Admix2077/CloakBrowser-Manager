@@ -555,6 +555,8 @@ class DiagnosticsRuntimeResponse(BaseModel):
     active_displays: list[int] = Field(default_factory=list)
     active_vnc_ws_ports: list[int] = Field(default_factory=list)
     max_running_profiles: int | None = None
+    launch_failure_count: int = 0
+    launch_failure_stage_counts: dict[str, int] = Field(default_factory=dict)
     managed_user_agent_version: str | None = None
     invisible_playwright_version: str | None = None
     firefox_binary_version: str | None = None

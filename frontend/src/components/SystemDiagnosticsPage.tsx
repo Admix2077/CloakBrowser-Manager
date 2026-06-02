@@ -82,6 +82,11 @@ export function SystemDiagnosticsPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <InfoRow label="Active displays" value={formatDisplays(diagnostics.runtime.active_displays)} />
                 <InfoRow label="Active VNC ports" value={formatNumbers(diagnostics.runtime.active_vnc_ws_ports)} />
+                <InfoRow label="Launch failures" value={diagnostics.runtime.launch_failure_count} />
+                <InfoRow
+                  label="Launch failure stages"
+                  value={formatStageCounts(diagnostics.runtime.launch_failure_stage_counts)}
+                />
                 <InfoRow
                   label="Managed UA"
                   value={diagnostics.runtime.managed_user_agent_version ? `Firefox ${diagnostics.runtime.managed_user_agent_version}` : "unknown"}
@@ -197,4 +202,13 @@ function formatStealthPrefCount(value: number | null): string {
 
 function formatStringList(values: string[]): string {
   return values.length > 0 ? values.join(", ") : "none";
+}
+
+function formatStageCounts(values: Record<string, number>): string {
+  const entries = Object.entries(values)
+    .filter(([, count]) => count > 0)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return entries.length > 0
+    ? entries.map(([stage, count]) => `${stage} (${count})`).join(", ")
+    : "none";
 }

@@ -40,6 +40,11 @@ function diagnostics(overrides: Partial<SystemDiagnostics> = {}): SystemDiagnost
       active_displays: [100, 101],
       active_vnc_ws_ports: [6100, 6101],
       max_running_profiles: 6,
+      launch_failure_count: 3,
+      launch_failure_stage_counts: {
+        allocate_vnc: 2,
+        enter_browser: 1,
+      },
       managed_user_agent_version: "149.0",
       invisible_playwright_version: "0.1.8",
       firefox_binary_version: "150.0.1",
@@ -80,6 +85,8 @@ describe("SystemDiagnosticsPage", () => {
     expect(within(page).getByRole("group", { name: "Active displays: :100, :101" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Active VNC ports: 6100, 6101" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Max running: 6" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Launch failures: 3" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Launch failure stages: allocate_vnc (2), enter_browser (1)" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Managed UA: Firefox 149.0" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Engine package: invisible_playwright 0.1.8" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox binary: 150.0.1" })).toBeTruthy();

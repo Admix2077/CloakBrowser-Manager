@@ -51,6 +51,22 @@ STEALTH_PREF_CATEGORY_ALIASES = {
     "seed": "fingerprint",
     "webgl2": "webgl",
 }
+LAUNCH_FAILURE_STAGES = frozenset({
+    "validate_proxy",
+    "claim_launch_slot",
+    "resource_limit",
+    "allocate_vnc",
+    "cleanup_startup_state",
+    "start_vnc",
+    "resolve_network_fingerprint",
+    "build_launch_kwargs",
+    "enter_browser",
+    "configure_context",
+    "bootstrap_page",
+    "fit_window",
+    "publish_running",
+    "unknown",
+})
 
 
 class BrowserResourceLimitError(RuntimeError):
@@ -556,6 +572,7 @@ class BrowserManager:
     def __init__(self):
         self.running: dict[str, RunningProfile] = {}
         self._launching: set[str] = set()  # profile IDs currently being launched
+        self._launch_failure_stage_counts: dict[str, int] = {}
         self.vnc = VNCManager()
         self._lock = asyncio.Lock()
         self._launch_env_lock = asyncio.Lock()
@@ -564,27 +581,36 @@ class BrowserManager:
     async def launch(self, profile: dict[str, Any]) -> RunningProfile:
         """Launch a browser instance for the given profile."""
         profile_id = profile["id"]
-        raw_proxy = profile.get("proxy")
-        if raw_proxy:
-            _validate_proxy(_normalize_proxy(raw_proxy))
-
-        async with self._lock:
-            if profile_id in self.running or profile_id in self._launching:
-                raise RuntimeError(f"Profile {profile_id} is already running")
-            max_running = get_max_running_profiles_limit()
-            if max_running is not None and len(self.running) + len(self._launching) >= max_running:
-                raise BrowserResourceLimitError("Maximum running profiles reached")
-            self._launching.add(profile_id)
-
         runner: InvisiblePlaywright | None = None
         display: int | None = None
+        launch_registered = False
+        failure_stage = "validate_proxy"
         try:
+            raw_proxy = profile.get("proxy")
+            if raw_proxy:
+                _validate_proxy(_normalize_proxy(raw_proxy))
+
+            failure_stage = "claim_launch_slot"
+            async with self._lock:
+                if profile_id in self.running or profile_id in self._launching:
+                    failure_stage = "already_running"
+                    raise RuntimeError(f"Profile {profile_id} is already running")
+                max_running = get_max_running_profiles_limit()
+                if max_running is not None and len(self.running) + len(self._launching) >= max_running:
+                    failure_stage = "resource_limit"
+                    raise BrowserResourceLimitError("Maximum running profiles reached")
+                self._launching.add(profile_id)
+                launch_registered = True
+
+            failure_stage = "allocate_vnc"
             display, ws_port = await self.vnc.allocate()
 
             user_data_dir = Path(profile["user_data_dir"])
+            failure_stage = "cleanup_startup_state"
             _clean_firefox_startup_state(user_data_dir)
 
             # Start KasmVNC on the allocated display
+            failure_stage = "start_vnc"
             await self.vnc.start_vnc(
                 display,
                 ws_port,
@@ -592,14 +618,17 @@ class BrowserManager:
                 height=profile.get("screen_height", 1080),
             )
 
+            failure_stage = "resolve_network_fingerprint"
             resolved_profile = await resolve_profile_network_fingerprint(profile)
             resolved_profile = _with_coherent_webgl_identity(resolved_profile)
+            failure_stage = "build_launch_kwargs"
             kwargs = _build_invisible_kwargs(resolved_profile)
             runner = InvisiblePlaywright(**kwargs)
 
             # invisible_playwright builds its env from os.environ in __aenter__.
             # Keep this mutation serialized and restore it immediately after
             # Firefox has inherited the display.
+            failure_stage = "enter_browser"
             async with self._launch_env_lock:
                 old_display = os.environ.get("DISPLAY")
                 old_webrtc_public_ip = os.environ.get(WEBRTC_PUBLIC_IP_ENV)
@@ -620,6 +649,7 @@ class BrowserManager:
                         os.environ[WEBRTC_PUBLIC_IP_ENV] = old_webrtc_public_ip
 
             accept_language = _accept_language_header(kwargs.get("locale"))
+            failure_stage = "configure_context"
             await context.set_extra_http_headers({"Accept-Language": accept_language})
 
             init_js = _browser_init_script(kwargs.get("locale"))
@@ -636,10 +666,12 @@ class BrowserManager:
 
             if not any(not _is_internal_firefox_page(p) for p in context.pages):
                 try:
+                    failure_stage = "bootstrap_page"
                     await context.new_page()
                 except Exception as exc:
                     logger.debug("Automation bootstrap page creation failed: %s", exc)
 
+            failure_stage = "fit_window"
             await _fit_firefox_window_to_vnc(
                 display,
                 int(profile.get("screen_width") or 1920),
@@ -662,6 +694,7 @@ class BrowserManager:
                 self._on_browser_closed(profile_id)
             ))
 
+            failure_stage = "publish_running"
             async with self._lock:
                 self.running[profile_id] = running
                 self._launching.discard(profile_id)
@@ -674,8 +707,11 @@ class BrowserManager:
             return running
 
         except BaseException:
-            async with self._lock:
-                self._launching.discard(profile_id)
+            if failure_stage != "already_running":
+                self._record_launch_failure(profile_id, failure_stage)
+            if launch_registered:
+                async with self._lock:
+                    self._launching.discard(profile_id)
             if runner is not None:
                 try:
                     await runner.__aexit__(None, None, None)
@@ -684,6 +720,31 @@ class BrowserManager:
             if display is not None:
                 await self.vnc.stop_vnc(display)
             raise
+
+    def _record_launch_failure(self, profile_id: str, stage: str) -> None:
+        public_stage = stage if stage in LAUNCH_FAILURE_STAGES else "unknown"
+        self._launch_failure_stage_counts[public_stage] = (
+            self._launch_failure_stage_counts.get(public_stage, 0) + 1
+        )
+        logger.warning(
+            "action=profile.launch_failed profile_id=%s stage=%s",
+            profile_id,
+            public_stage,
+        )
+
+    def launch_failure_summary(self) -> dict[str, Any]:
+        stage_counts = {
+            stage: self._launch_failure_stage_counts[stage]
+            for stage in sorted(self._launch_failure_stage_counts)
+            if self._launch_failure_stage_counts[stage] > 0
+        }
+        return {
+            "launch_failure_count": sum(stage_counts.values()),
+            "launch_failure_stage_counts": stage_counts,
+        }
+
+    def reset_launch_failure_summary(self) -> None:
+        self._launch_failure_stage_counts.clear()
 
     async def _on_browser_closed(self, profile_id: str):
         """Called when browser exits (crash, user closed via VNC, or stop())."""
