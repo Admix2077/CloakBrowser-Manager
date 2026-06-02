@@ -649,6 +649,72 @@ async def test_stop_without_runner_closes_context_and_releases_vnc():
     assert "profile-context" not in mgr.running
 
 
+@pytest.mark.asyncio
+async def test_stop_logs_fixed_error_type_without_runner_exception_text(
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("WARNING", logger="invisible_browser.manager.browser")
+
+    mgr = BrowserManager()
+    runner = SimpleNamespace(
+        __aexit__=AsyncMock(
+            side_effect=RuntimeError("runner-token-super-secret /tmp/profile-secret")
+        )
+    )
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.running["profile-runner-log"] = bm.RunningProfile(
+        profile_id="profile-runner-log",
+        context=SimpleNamespace(close=AsyncMock()),
+        display=111,
+        ws_port=6111,
+        engine="invisible_playwright",
+        runner=runner,
+    )
+
+    await mgr.stop("profile-runner-log")
+
+    mgr.vnc.stop_vnc.assert_awaited_once_with(111)
+    assert (
+        "action=profile.stop_runner_close_failed profile_id=profile-runner-log "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "runner-token-super-secret" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_stop_logs_fixed_error_type_without_context_exception_text(
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("WARNING", logger="invisible_browser.manager.browser")
+
+    mgr = BrowserManager()
+    context = SimpleNamespace(
+        close=AsyncMock(
+            side_effect=RuntimeError("context-token-super-secret /tmp/profile-secret")
+        )
+    )
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+    mgr.running["profile-context-log"] = bm.RunningProfile(
+        profile_id="profile-context-log",
+        context=context,
+        display=111,
+        ws_port=6111,
+        engine="invisible_playwright",
+        runner=None,
+    )
+
+    await mgr.stop("profile-context-log")
+
+    mgr.vnc.stop_vnc.assert_awaited_once_with(111)
+    assert (
+        "action=profile.stop_context_close_failed profile_id=profile-context-log "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "context-token-super-secret" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
+
+
 # ── launch lifecycle ─────────────────────────────────────────────────────────
 
 
@@ -1057,3 +1123,38 @@ async def test_auto_launch_all_launches_only_enabled_profiles(
     await mgr.auto_launch_all()
 
     assert launched == ["auto-1", "auto-2"]
+
+
+@pytest.mark.asyncio
+async def test_auto_launch_all_logs_profile_ids_and_error_types_without_sensitive_text(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    from backend import database as db
+
+    caplog.set_level("INFO", logger="invisible_browser.manager.browser")
+    mgr = BrowserManager()
+
+    profiles = [
+        {"id": "auto-ok", "name": "ok-token-super-secret", "auto_launch": True},
+        {"id": "auto-fail", "name": "fail-token-super-secret", "auto_launch": True},
+    ]
+
+    async def fake_launch(profile: dict):
+        if profile["id"] == "auto-fail":
+            raise RuntimeError("launch-token-super-secret /tmp/profile-secret")
+
+    monkeypatch.setattr(db, "list_profiles", lambda: profiles)
+    monkeypatch.setattr(mgr, "launch", fake_launch)
+
+    await mgr.auto_launch_all()
+
+    assert "action=profile.auto_launch_succeeded profile_id=auto-ok" in caplog.text
+    assert (
+        "action=profile.auto_launch_failed profile_id=auto-fail "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert "ok-token-super-secret" not in caplog.text
+    assert "fail-token-super-secret" not in caplog.text
+    assert "launch-token-super-secret" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text

@@ -842,7 +842,11 @@ class BrowserManager:
                 try:
                     await runner.__aexit__(None, None, None)
                 except Exception as exc:
-                    logger.debug("InvisiblePlaywright teardown failed after launch error: %s", exc)
+                    logger.debug(
+                        "action=profile.launch_teardown_failed profile_id=%s error_type=%s",
+                        profile_id,
+                        type(exc).__name__,
+                    )
             if display is not None:
                 await self.vnc.stop_vnc(display)
             raise
@@ -883,7 +887,11 @@ class BrowserManager:
                 try:
                     await running.runner.__aexit__(None, None, None)
                 except Exception as exc:
-                    logger.debug("InvisiblePlaywright teardown failed for %s: %s", profile_id, exc)
+                    logger.debug(
+                        "action=profile.browser_closed_teardown_failed profile_id=%s error_type=%s",
+                        profile_id,
+                        type(exc).__name__,
+                    )
             await self.vnc.stop_vnc(running.display)
 
     async def stop(self, profile_id: str):
@@ -901,12 +909,20 @@ class BrowserManager:
             try:
                 await running.runner.__aexit__(None, None, None)
             except Exception as exc:
-                logger.warning("Error closing invisible_playwright runner for %s: %s", profile_id, exc)
+                logger.warning(
+                    "action=profile.stop_runner_close_failed profile_id=%s error_type=%s",
+                    profile_id,
+                    type(exc).__name__,
+                )
         else:
             try:
                 await running.context.close()
             except Exception as exc:
-                logger.warning("Error closing context for %s: %s", profile_id, exc)
+                logger.warning(
+                    "action=profile.stop_context_close_failed profile_id=%s error_type=%s",
+                    profile_id,
+                    type(exc).__name__,
+                )
 
         await self.vnc.stop_vnc(running.display)
         logger.info("action=profile.stop_finished profile_id=%s", profile_id)
@@ -970,10 +986,14 @@ class BrowserManager:
         for profile in auto_profiles:
             try:
                 await asyncio.wait_for(self.launch(profile), timeout=60)
-                logger.info("Auto-launched profile %s (%s)", profile["name"], profile["id"])
+                logger.info(
+                    "action=profile.auto_launch_succeeded profile_id=%s",
+                    profile["id"],
+                )
             except Exception as exc:
                 logger.error(
-                    "Auto-launch failed for profile %s (%s): %s",
-                    profile["name"], profile["id"], exc,
+                    "action=profile.auto_launch_failed profile_id=%s error_type=%s",
+                    profile["id"],
+                    type(exc).__name__,
                 )
         logger.info("Auto-launch complete: %d running", len(self.running))

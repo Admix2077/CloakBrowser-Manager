@@ -1219,6 +1219,34 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 BrowserManager lifecycle log redaction guardrail
+
+背景：
+
+- 发布 smoke 和生产 triage 依赖 runtime/profile lifecycle 日志，但日志不能固化 profile 自由文本、exception message、profile dir、proxy 或 token。
+- stop/teardown/auto-launch 是 release runtime 收敛路径的一部分；旧日志在这些边界会输出 raw exception text，auto-launch 还会输出 profile name。
+
+已覆盖：
+
+- stop runner/context close failure、launch teardown failure、browser closed teardown failure 统一记录固定 action、profile_id、error_type。
+- auto-launch 成功/失败日志不再记录 profile name；失败日志不再记录 raw exception message。
+- 原有 launch succeeded/failed、stop requested/finished、browser closed 低敏 action 日志语义保持。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stop_logs_fixed_error_type_without_runner_exception_text backend/tests/test_browser_manager.py::test_stop_logs_fixed_error_type_without_context_exception_text backend/tests/test_browser_manager.py::test_auto_launch_all_logs_profile_ids_and_error_types_without_sensitive_text -q
+# RED then GREEN; final focused tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 64 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 VNC/window display dimension launch guardrail
 
 背景：

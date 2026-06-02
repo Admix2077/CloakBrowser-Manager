@@ -1327,3 +1327,34 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - 不记录或公开 raw screen input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 BrowserManager lifecycle log redaction guardrail
+
+背景：
+
+- `BrowserManager.launch()` 的主失败日志已经只记录固定 stage，但若 teardown/stop/auto-launch 边界发生异常，部分日志仍会输出 raw exception message。
+- auto-launch 成功/失败日志还会输出 profile name；profile name 是用户可控自由文本，可能来自导入、运营备注或外部系统命名。
+
+已覆盖：
+
+- stop runner close failure 与 context close failure 现在只记录固定 action、profile_id 和 error_type。
+- launch error cleanup 与 browser closed cleanup 的 debug 日志也只记录固定 action、profile_id 和 error_type。
+- auto-launch 成功日志只记录 profile_id；auto-launch 失败日志只记录 profile_id 和 error_type，不再记录 profile name 或 raw exception text。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stop_logs_fixed_error_type_without_runner_exception_text backend/tests/test_browser_manager.py::test_stop_logs_fixed_error_type_without_context_exception_text backend/tests/test_browser_manager.py::test_auto_launch_all_logs_profile_ids_and_error_types_without_sensitive_text -q
+# RED: lifecycle logs exposed raw exception text and auto-launch profile names
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stop_logs_fixed_error_type_without_runner_exception_text backend/tests/test_browser_manager.py::test_stop_logs_fixed_error_type_without_context_exception_text backend/tests/test_browser_manager.py::test_auto_launch_all_logs_profile_ids_and_error_types_without_sensitive_text -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 64 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
+- 不记录或公开 raw exception text、profile name、raw screen input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
