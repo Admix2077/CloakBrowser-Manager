@@ -14,6 +14,7 @@ import logging
 import math
 import os
 import random
+import re
 import secrets
 import struct
 import shutil
@@ -166,6 +167,13 @@ RUNTIME_SERVICE_TOKEN: str | None = os.environ.get("RUNTIME_SERVICE_TOKEN") or N
 _AUTOMATION_CONSOLE_LOG_LIMIT = 200
 _AUTOMATION_NETWORK_EVENT_LIMIT = 200
 _AUTOMATION_WORKER_LOST_LEASE_DETAIL = "Automation task lease no longer owned by worker"
+_AUTOMATION_TEXT_URL_RE = re.compile(r"https?://[^\s\"'<>]+")
+_AUTOMATION_SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"\b(authorization|auth_token|cookie|password|runtime_service_token|secret|service_token|token|viewer_token)"
+    r"\s*=\s*([^\s&#]+)",
+    re.IGNORECASE,
+)
+_AUTOMATION_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
@@ -3994,14 +4002,17 @@ def _automation_console_log_entry(message) -> dict:
         location = {}
     if not isinstance(location, dict):
         location = {}
+    safe_location = {
+        key: value
+        for key, value in location.items()
+        if key in {"url", "lineNumber", "columnNumber", "line", "column"}
+    }
+    if "url" in safe_location:
+        safe_location["url"] = _automation_safe_url(str(safe_location["url"]))
     return {
         "type": str(getattr(message, "type", "")),
-        "text": str(getattr(message, "text", "")),
-        "location": {
-            key: value
-            for key, value in location.items()
-            if key in {"url", "lineNumber", "columnNumber", "line", "column"}
-        },
+        "text": _automation_redact_text(str(getattr(message, "text", ""))),
+        "location": safe_location,
     }
 
 
@@ -4033,6 +4044,18 @@ def _automation_safe_url(raw_url: str) -> str:
     if parsed.port:
         host = f"{host}:{parsed.port}"
     return parsed._replace(netloc=host, params="", query="", fragment="").geturl()
+
+
+def _automation_redact_text(text: str) -> str:
+    redacted = _AUTOMATION_TEXT_URL_RE.sub(
+        lambda match: _automation_safe_url(match.group(0)) or "[redacted-url]",
+        text,
+    )
+    redacted = _AUTOMATION_SENSITIVE_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}=[redacted]",
+        redacted,
+    )
+    return _AUTOMATION_BEARER_TOKEN_RE.sub("Bearer [redacted]", redacted)
 
 
 def _automation_network_event(event: str, request=None, response=None, failure: str | None = None) -> dict:

@@ -163,3 +163,48 @@ git diff --check
 
 - 本轮 Docker smoke 只验证镜像构建、服务启动和 `/api/status` 低敏 health JSON；没有启动真实 profile、VNC 或外站检测页。
 - 手工 create/edit/delete、launch/stop、VNC viewer、clipboard sync、Automation API、GeoIP、Proxy Manager、bulk actions、audit、代理国家矩阵和 BrowserLeaks/Pixelscan/IPhey/CreepJS 仍未标记完成。
+
+## 2026-06-03 Automation console summary 低敏 guardrail
+
+本轮补强 direct Automation API 的 console log 摘要边界：
+
+- console message text 中的 `http://` / `https://` URL 只保留 scheme、host、port 和 path，移除 userinfo、query、fragment。
+- console message text 中的 `token=`、`authorization=`、`password=`、`cookie=`、`*_token=`、`secret=` 等敏感键值会替换为 `[redacted]`。
+- `Bearer ...` token 会替换为 `Bearer [redacted]`。
+- console message location URL 同样只保留低敏 URL 形态。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_sensitive_text_and_location_urls backend/tests/test_api.py::test_automation_console_logs_returns_in_memory_page_logs backend/tests/test_api.py::test_automation_console_logs_captures_recent_console_messages backend/tests/test_api.py::test_automation_network_summary_redacts_urls_and_returns_recent_events backend/tests/test_api.py::test_automation_network_summary_keeps_recent_redacted_events -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "automation" -q
+# 75 passed, 132 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 508 passed in 29.65s
+
+cd frontend && npm test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+cd frontend && npm run build
+# tsc -b && vite build；built in 4.91s
+
+docker build --network=host --platform linux/amd64 -t invisible-browser-manager:automation-console-redaction .
+# Successfully tagged invisible-browser-manager:automation-console-redaction
+
+docker run -d --rm --name cloakbrowser-automation-console-redaction-smoke -p 127.0.0.1::8080 invisible-browser-manager:automation-console-redaction
+curl -fsS http://127.0.0.1:32776/api/status
+# {"running_count":0,"launching_count":0,"failed_count":0,"binary_version":"invisible-playwright","profiles_total":0,"proxy_count":0,"task_queue_count":0,"automation_task_counts":{}}
+docker stop cloakbrowser-automation-console-redaction-smoke
+# cloakbrowser-automation-console-redaction-smoke
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 Automation API 摘要层 guardrail，不代表手工 Automation API 外站验收或 VNC 交互 smoke 已完成。
+- 不记录真实 console payload、headers、cookies、local storage、proxy、token、截图或 profile dir 内容。

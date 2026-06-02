@@ -353,6 +353,42 @@ git diff --check
 # 10 passed, 196 deselected
 ```
 
+## 2026-06-03 direct Automation console/network 摘要低敏小闭环
+
+背景：
+
+- release smoke 和运维排障会查看 direct Automation API 的 console/network 摘要。
+- network summary 已经只保留低敏 URL，但 console log capture 此前会原样保存 `message.text` 和 `message.location.url`。
+- console 文本和 location URL 可能包含 URL query token、fragment、Bearer token、cookie、password 或其他敏感键值。
+
+已完成：
+
+- `backend/main.py`
+  - 新增 `_automation_redact_text()`，清理 console text 中的 URL、敏感键值和 Bearer token。
+  - `_automation_console_log_entry()` 现在对 `message.text` 和 `location.url` 做低敏处理。
+  - URL 低敏口径与 `_automation_safe_url()` 一致：保留 scheme、host、port 和 path，移除 userinfo、query、fragment。
+- `backend/tests/test_api.py`
+  - 新增 console log redaction guardrail，覆盖 text 和 location URL 中的 `token`、`authorization`、userinfo、query、fragment、Bearer token 不进入响应。
+  - 复跑 console/network summary 和 automation 切片，确认既有 ring buffer、URL summary 和任务脱敏不被破坏。
+
+边界：
+
+- console/network summary 仍是 CloakBrowser 本地可信管理侧能力，不能直接暴露给 Project Mileage App。
+- 摘要只适合低敏排障；不能记录或转发 headers、body、cookie/local storage、真实 proxy URL、token、完整 console payload、截图或 profile dir 内容。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_sensitive_text_and_location_urls -q
+# RED: 1 failed；旧实现原样返回 sensitive console text 和 location URL
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_sensitive_text_and_location_urls backend/tests/test_api.py::test_automation_console_logs_returns_in_memory_page_logs backend/tests/test_api.py::test_automation_console_logs_captures_recent_console_messages backend/tests/test_api.py::test_automation_network_summary_redacts_urls_and_returns_recent_events backend/tests/test_api.py::test_automation_network_summary_keeps_recent_redacted_events -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "automation" -q
+# 75 passed, 132 deselected
+```
+
 ## 2026-05-28 `MAX_RUNNING_PROFILES` 运行资源限制小闭环
 
 背景：

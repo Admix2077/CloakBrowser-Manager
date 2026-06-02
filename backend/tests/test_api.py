@@ -2752,6 +2752,53 @@ def test_automation_console_logs_captures_recent_console_messages(app_client: Te
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    _, callback = page.on.call_args.args
+    message = MagicMock()
+    message.type = "warning"
+    message.text = (
+        "loaded https://user:pass@example.com/app?token=super-secret#frag "
+        "token=standalone-secret Authorization: Bearer bearer-secret"
+    )
+    message.location = {
+        "url": "https://user:pass@example.com/static/app.js?authorization=super-secret#frag",
+        "lineNumber": 12,
+        "columnNumber": 3,
+    }
+    callback(message)
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    logs = resp.json()["logs"]
+    assert logs == [
+        {
+            "type": "warning",
+            "text": "loaded https://example.com/app token=[redacted] Authorization: Bearer [redacted]",
+            "location": {
+                "url": "https://example.com/static/app.js",
+                "lineNumber": 12,
+                "columnNumber": 3,
+            },
+        }
+    ]
+    assert "super-secret" not in str(resp.json())
+    assert "standalone-secret" not in str(resp.json())
+    assert "bearer-secret" not in str(resp.json())
+    assert "user:pass" not in str(resp.json())
+    assert "?token" not in str(resp.json())
+    assert "#frag" not in str(resp.json())
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_network_summary_redacts_urls_and_returns_recent_events(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationNetworkSummary"})
     pid = create.json()["id"]
