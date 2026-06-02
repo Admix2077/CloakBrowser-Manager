@@ -387,14 +387,70 @@ def test_proxy_check_records_failure_without_leaking_credentials(
     assert resp.status_code == 200
     data = resp.json()
     assert data["last_check_status"] == "error"
-    assert "http://proxy.example:8080" in data["last_check_error"]
+    assert data["last_check_error"] == "Proxy check failed"
+    assert "proxy.example" not in data["last_check_error"]
     assert "hiddenpass" not in data["last_check_error"]
     assert "hiddenpass" not in str(data)
 
     stored = db.get_proxy(proxy_id)
     assert stored is not None
     assert stored["last_check_status"] == "error"
+    assert stored["last_check_error"] == "Proxy check failed"
+    assert "proxy.example" not in stored["last_check_error"]
     assert "hiddenpass" not in stored["last_check_error"]
+
+
+def test_proxy_check_records_generic_failure_without_leaking_provider_details(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_resolve(proxy_url: str | None):
+        raise RuntimeError(
+            "provider failed https://geo.example/check?token=super-secret "
+            f"Authorization=Bearer super-secret via {proxy_url}"
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Provider failure",
+            "url": "http://user:hiddenpass@provider-failure.example:8080",
+        },
+    )
+    proxy_id = create.json()["id"]
+
+    resp = app_client.post(f"/api/proxies/{proxy_id}/check")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["last_check_status"] == "error"
+    assert data["last_check_error"] == "Proxy check failed"
+    for leaked in (
+        "hiddenpass",
+        "super-secret",
+        "geo.example",
+        "Authorization",
+        "Bearer",
+        "provider-failure.example",
+        "http://user:hiddenpass@provider-failure.example:8080",
+    ):
+        assert leaked not in data["last_check_error"]
+
+    stored = db.get_proxy(proxy_id)
+    assert stored is not None
+    assert stored["last_check_status"] == "error"
+    assert stored["last_check_error"] == "Proxy check failed"
+    for leaked in (
+        "hiddenpass",
+        "super-secret",
+        "geo.example",
+        "Authorization",
+        "Bearer",
+        "provider-failure.example",
+        "http://user:hiddenpass@provider-failure.example:8080",
+    ):
+        assert leaked not in stored["last_check_error"]
 
 
 def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
@@ -460,10 +516,13 @@ def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
 
     assert broken_result["proxy_id"] == broken["id"]
     assert broken_result["ok"] is False
-    assert "http://broken.example:8080" in broken_result["error"]
+    assert broken_result["error"] == "Proxy check failed"
+    assert "broken.example" not in broken_result["error"]
     assert "hiddenpass" not in broken_result["error"]
     assert broken_result["proxy"]["url"] == "http://broken.example:8080"
     assert broken_result["proxy"]["last_check_status"] == "error"
+    assert broken_result["proxy"]["last_check_error"] == "Proxy check failed"
+    assert "broken.example" not in broken_result["proxy"]["last_check_error"]
     assert "hiddenpass" not in broken_result["proxy"]["last_check_error"]
 
     assert missing_result == {
@@ -481,7 +540,75 @@ def test_proxy_bulk_check_records_partial_results_without_leaking_credentials(
     stored_broken = db.get_proxy(broken["id"])
     assert stored_broken is not None
     assert stored_broken["last_check_status"] == "error"
+    assert stored_broken["last_check_error"] == "Proxy check failed"
+    assert "broken.example" not in stored_broken["last_check_error"]
     assert "hiddenpass" not in stored_broken["last_check_error"]
+
+
+def test_proxy_bulk_check_records_generic_failure_without_leaking_provider_details(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_resolve(proxy_url: str | None):
+        raise RuntimeError(
+            "provider failed https://geo.example/check?token=super-secret "
+            f"Authorization=Bearer super-secret via {proxy_url}"
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    broken = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Broken provider bulk",
+            "url": "http://user:hiddenpass@provider-bulk.example:8080",
+        },
+    ).json()
+
+    resp = app_client.post(
+        "/api/proxies/bulk/check",
+        json={
+            "proxy_ids": [broken["id"]],
+            "confirm_bulk_check": True,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["succeeded"] == 0
+    assert data["failed"] == 1
+    result = data["results"][0]
+    assert result["proxy_id"] == broken["id"]
+    assert result["ok"] is False
+    assert result["error"] == "Proxy check failed"
+    assert result["proxy"]["last_check_status"] == "error"
+    assert result["proxy"]["last_check_error"] == "Proxy check failed"
+    for leaked in (
+        "hiddenpass",
+        "super-secret",
+        "geo.example",
+        "Authorization",
+        "Bearer",
+        "provider-bulk.example",
+        "http://user:hiddenpass@provider-bulk.example:8080",
+    ):
+        assert leaked not in result["error"]
+        assert leaked not in result["proxy"]["last_check_error"]
+
+    stored = db.get_proxy(broken["id"])
+    assert stored is not None
+    assert stored["last_check_status"] == "error"
+    assert stored["last_check_error"] == "Proxy check failed"
+    for leaked in (
+        "hiddenpass",
+        "super-secret",
+        "geo.example",
+        "Authorization",
+        "Bearer",
+        "provider-bulk.example",
+        "http://user:hiddenpass@provider-bulk.example:8080",
+    ):
+        assert leaked not in stored["last_check_error"]
 
 
 def test_proxy_bulk_check_requires_explicit_confirmation_without_side_effects(

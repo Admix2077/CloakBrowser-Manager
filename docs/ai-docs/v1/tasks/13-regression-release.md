@@ -1625,3 +1625,46 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 resource limit 判断、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Proxy check API/DB error redaction guardrail
+
+背景：
+
+- Proxy check failure 是 release smoke 中会被 API response 和 persisted `last_check_error` 反复读取的错误面。
+- 旧实现把 exception text 做局部替换后返回；provider URL、query token、Authorization/Bearer、provider host 或 redacted proxy host 仍可能出现在单个 check 与 bulk check 结果里。
+
+已覆盖：
+
+- `/api/proxies/{proxy_id}/check` 失败时 `last_check_error` 固定为 `Proxy check failed`。
+- `/api/proxies/bulk/check` 失败 result 的 `error` 与嵌套 proxy `last_check_error` 固定为 `Proxy check failed`。
+- 成功 check、bulk partial result、missing proxy、stored proxy URL redaction 和 audit 语义保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "generic_failure_without_leaking_provider_details"
+# RED then GREEN；初始 2 failed，最终相关用例通过
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "proxy_check"
+# 3 passed, 27 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 30 passed in 2.96s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 554 passed in 33.75s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.28s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy storage URL、proxy validation、GeoIP lookup behavior、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、VNC、viewer token、profile 存储或 runtime session 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

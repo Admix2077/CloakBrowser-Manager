@@ -1743,3 +1743,46 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 resource limit 判断、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
 - 不记录或公开 raw resource-limit exception text、proxy URL/host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Proxy check API/DB error redaction guardrail
+
+背景：
+
+- Proxy check failure 会通过 `/api/proxies/{proxy_id}/check`、`/api/proxies/bulk/check` 和 persisted `last_check_error` 进入管理台与数据库。
+- 旧实现只替换 raw proxy URL 和 parsed password；provider exception 中独立出现的 lookup URL、query token、Authorization/Bearer、provider host 或 proxy host 仍可能被固化。
+
+已覆盖：
+
+- Proxy check 失败统一写入固定低敏 `Proxy check failed`。
+- Bulk proxy check 的 per-result `error` 与嵌套 proxy `last_check_error` 使用同一固定低敏文本。
+- 成功 check、GeoIP field update、bulk partial success/missing proxy 语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "generic_failure_without_leaking_provider_details"
+# RED: 2 failed；last_check_error / bulk error 原样包含 provider URL、token、Authorization/Bearer 和 proxy host
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "proxy_check"
+# 3 passed, 27 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q
+# 30 passed in 2.96s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 554 passed in 33.75s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.28s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 proxy storage URL、proxy validation、GeoIP lookup behavior、stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、VNC、viewer token、profile 存储或 runtime session 行为。
+- 不记录或公开 raw proxy check exception text、provider URL/host/query token、Authorization/Bearer、proxy host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

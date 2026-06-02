@@ -1084,13 +1084,11 @@ def _runtime_viewer_token_is_valid(session: dict, viewer_token: str | None) -> b
     return _runtime_viewer_token_failure_reason(session, viewer_token) is None
 
 
-def _safe_proxy_check_error(exc: Exception, raw_url: str) -> str:
-    redacted_url = redact_proxy_asset_url(raw_url)
-    message = str(exc).replace(raw_url, redacted_url)
-    parsed = urlparse(raw_url)
-    if parsed.password:
-        message = message.replace(parsed.password, "[redacted]")
-    return message
+_PROXY_CHECK_ERROR_DETAIL = "Proxy check failed"
+
+
+def _safe_proxy_check_error(_exc: Exception, _raw_url: str) -> str:
+    return _PROXY_CHECK_ERROR_DETAIL
 
 
 _SAFE_PROXY_ASSET_ERROR_DETAILS = (
@@ -1485,7 +1483,7 @@ async def bulk_check_proxies(request: Request):
             ProxyBulkCheckResult(
                 proxy_id=proxy_id,
                 ok=ok,
-                error=None if ok else updated.get("last_check_error") or "Proxy check failed",
+                error=None if ok else updated.get("last_check_error") or _PROXY_CHECK_ERROR_DETAIL,
                 proxy=_proxy_response(updated),
             )
         )
