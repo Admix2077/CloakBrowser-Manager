@@ -6,21 +6,21 @@
 
 ## Manager 回归清单
 
-- [ ] profile 创建。
-- [ ] profile 编辑。
-- [ ] profile 删除。
-- [ ] launch。
-- [ ] stop。
-- [ ] VNC viewer。
-- [ ] clipboard sync。
-- [ ] Automation API。
+- [x] profile 创建。
+- [x] profile 编辑。
+- [x] profile 删除。
+- [x] launch。
+- [x] stop。
+- [x] VNC viewer。
+- [x] clipboard sync。
+- [x] Automation API。
 - [ ] GeoIP 自动同步。
-- [ ] health check。
+- [x] health check。
 - [ ] Proxy Manager。
 - [ ] bulk actions。
-- [ ] audit。
-- [ ] Docker build。
-- [ ] Docker run。
+- [x] audit。
+- [x] Docker build。
+- [x] Docker run。
 
 ## BrowserScan / 检测站人工验收
 
@@ -208,3 +208,50 @@ git diff --check
 
 - 这是 Automation API 摘要层 guardrail，不代表手工 Automation API 外站验收或 VNC 交互 smoke 已完成。
 - 不记录真实 console payload、headers、cookies、local storage、proxy、token、截图或 profile dir 内容。
+
+## 2026-06-03 Docker profile/VNC/Automation release smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-release-profile-smoke`
+- 临时数据卷：`cloakbrowser-release-profile-smoke-data`
+- 服务端口：随机绑定到 `127.0.0.1:32777`
+- profile：无 proxy，`geoip=false`，Windows profile，`fingerprint_seed=24680`，`1280x720`，`hardwareConcurrency=4`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 运行、0 profile、0 proxy、0 task。
+- profile create 成功，返回 stopped。
+- profile launch 需要 `confirm_launch=true`；确认后返回 running、`display=:100`、`vnc_ws_port=6100`、Automation URL。
+- `/api/status` launch 后返回 `running_count=1`、`profiles_total=1`。
+- Automation info/pages 可用，初始 page 为 `about:blank`。
+- Direct Automation `goto` 打开低敏 `data:` 页面，`wait-for-selector` 命中 `#ready`。
+- Direct Automation `evaluate` 返回低敏 fingerprint 摘要：
+  - UA 为 Firefox 149 managed identity。
+  - `navigator.webdriver=false`。
+  - `navigator.language=en-US`、`navigator.languages=["en-US","en"]`。
+  - timezone 为 `America/Los_Angeles`。
+  - `hardwareConcurrency=4`。
+  - screen 为 `1280x720`，`availHeight=672`。
+- VNC WebSocket 连接 `/api/profiles/{id}/vnc` 成功并收到 `RFB 003.008` greeting。
+- Queued Automation task create/run 成功；响应只回显 step type/status，不回显 evaluate result。
+- Clipboard set/get 低敏文本成功。
+- profile health endpoint 可用；因为本 profile 关闭 GeoIP，返回 `geoip_missing` info warning。
+- profile edit 成功，支持 name、notes、tags 更新。
+- profile stop 成功；随后 `/api/status` 返回 `running_count=0`。
+- profile delete 成功；随后 `/api/status` 返回 `profiles_total=0`，profile list 为空。
+- audit 只做容器内 SQLite 低敏查询，event types 为：
+  - `profile.created`
+  - `automation.task.created`
+  - `automation.task.succeeded`
+  - `profile.updated`
+  - `profile.deleted`
+  metadata keys 只包含 name/platform/tag_count、task id、status、step types/count、runner/result counts 和 updated_fields。
+
+边界：
+
+- 本轮没有保存截图、cookie、local storage、headers、proxy、token、profile dir 内容或完整 console/network payload。
+- GeoIP 自动同步未覆盖，因为 smoke profile 明确设置 `geoip=false`。
+- Proxy Manager、bulk actions、BrowserLeaks、Pixelscan/IPhey、CreepJS 和多国家代理矩阵仍未标记完成。
