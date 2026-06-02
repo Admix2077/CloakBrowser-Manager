@@ -136,9 +136,36 @@ def test_profile_csv_import_preview_reports_row_errors_without_blocking_valid_ro
     assert invalid["ok"] is False
     assert invalid["profile"] is None
     assert "name is required" in invalid["errors"]
-    assert "Template not found: missing" in invalid["errors"]
+    assert "Template not found" in invalid["errors"]
     assert "platform must be one of: windows, macos, linux" in invalid["errors"]
     assert app_client.get("/api/profiles").json() == []
+
+
+def test_profile_csv_import_preview_redacts_sensitive_missing_template_ref(
+    app_client: TestClient,
+):
+    resp = app_client.post(
+        "/api/profiles/import/preview",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,template,platform",
+                    "Bad template,http://user:hiddenpass@template-secret.example:8080?token=super-secret,linux",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    row = resp.json()["rows"][0]
+    assert row["ok"] is False
+    assert "Template not found" in row["errors"]
+    assert row["source"]["template"] == "[redacted]"
+    serialized = resp.text
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "template-secret.example" not in serialized
+    assert "user:" not in serialized
 
 
 def test_profile_csv_import_preview_rejects_empty_or_headerless_csv(app_client: TestClient):
@@ -227,12 +254,41 @@ def test_profile_csv_import_creates_valid_rows_and_keeps_invalid_row_errors(app_
     assert bad["ok"] is False
     assert bad["profile"] is None
     assert "name is required" in bad["errors"]
-    assert "Template not found: missing" in bad["errors"]
+    assert "Template not found" in bad["errors"]
     assert "platform must be one of: windows, macos, linux" in bad["errors"]
     assert "hiddenpass" not in str(bad)
 
     profiles = app_client.get("/api/profiles").json()
     assert [profile["name"] for profile in profiles] == ["Imported Good"]
+
+
+def test_profile_csv_import_redacts_sensitive_missing_template_ref(
+    app_client: TestClient,
+):
+    resp = app_client.post(
+        "/api/profiles/import",
+        json={
+            "confirm_import": True,
+            "csv_text": "\n".join(
+                [
+                    "name,template,platform",
+                    "Bad template,http://user:hiddenpass@template-secret.example:8080?token=super-secret,linux",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    result = resp.json()["results"][0]
+    assert result["ok"] is False
+    assert "Template not found" in result["errors"]
+    assert result["source"]["template"] == "[redacted]"
+    serialized = resp.text
+    assert "hiddenpass" not in serialized
+    assert "super-secret" not in serialized
+    assert "template-secret.example" not in serialized
+    assert "user:" not in serialized
+    assert db.list_profiles() == []
 
 
 def test_profile_csv_import_requires_explicit_confirmation_without_side_effects(app_client: TestClient):

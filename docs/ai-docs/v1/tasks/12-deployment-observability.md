@@ -1604,3 +1604,49 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
 - 不记录或公开 raw exception text、proxy URL/host/username/password、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 CSV profile import template reference redaction guardrail
+
+背景：
+
+- CSV profile import preview/import 是批量 profile 创建入口，会处理用户上传的 template、proxy、notes、locale、timezone 等自由文本。
+- 旧缺失模板错误会返回 `Template not found: <template_ref>`；当 template_ref 是 URL、token、path 或 credential 样式文本时，会进入 preview/import 的 row errors 和 source payload。
+
+已覆盖：
+
+- 缺失模板错误固定为 `Template not found`，不再拼接原始 template 引用。
+- `source.template` 对 URL、userinfo、query、fragment、path、token/secret/password/cookie/authorization 样式文本返回 `[redacted]`。
+- 普通模板名/ID lookup、模板字段复制、显式字段覆盖、CSV import preview/import 成功路径和行级错误结构保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "csv_import"
+# RED: 4 failed；缺失模板错误仍包含 raw template ref，敏感 URL host 出现在响应中
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "csv_import"
+# 10 passed, 5 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 15 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_api.py -q -k "profile_config or profile_bundle or csv_import or import_profile_configs or import_profile_bundle"
+# 37 passed, 193 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 548 passed in 32.28s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.66s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV parser 支持字段。
+- 不记录或公开 raw missing template URL/host/username/password/query token/path、headers、cookies、local storage、viewer token、runtime service token、automation payload 或 profile dir 内容。

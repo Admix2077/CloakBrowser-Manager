@@ -1495,3 +1495,46 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、runtime session persistence 或 launch fallback 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 CSV profile import template reference redaction guardrail
+
+背景：
+
+- CSV profile import preview/import 会返回行级 errors 和 source，用于批量导入前审阅与导入结果展示。
+- 旧缺失模板错误会把原始 template 引用拼进响应；若用户上传 URL、credential、token 或 path 样式模板值，响应会固化这些文本。
+
+已覆盖：
+
+- 缺失模板错误固定为 `Template not found`。
+- URL/userinfo/query/fragment/path/token/secret/password/cookie/authorization 样式 `source.template` 返回 `[redacted]`。
+- 普通模板名/ID 成功匹配、模板字段复制、显式覆盖、CSV import preview/import 成功路径、bulk audit 和行级错误结构保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "csv_import"
+# RED then GREEN；最终 10 passed, 5 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 15 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py backend/tests/test_api.py -q -k "profile_config or profile_bundle or csv_import or import_profile_configs or import_profile_bundle"
+# 37 passed, 193 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 548 passed in 32.28s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.66s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy normalization、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、profile config import、profile bundle import 或 CSV parser 支持字段。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

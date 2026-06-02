@@ -174,7 +174,7 @@ def _parse_row(line_number: int, row: dict[str, str]) -> ParsedProfileImportRow:
             data["template_id"] = template["id"]
             explicit_fields.add("template_id")
         else:
-            errors.append(f"Template not found: {redact_proxy_asset_url(template_ref)}")
+            errors.append("Template not found")
 
     _set_optional_text(row, data, explicit_fields, "locale")
     _set_optional_text(row, data, explicit_fields, "timezone")
@@ -352,11 +352,32 @@ def _redacted_source(row: dict[str, str]) -> dict[str, str]:
     source = dict(row)
     if source.get("proxy"):
         source["proxy"] = redact_proxy_asset_url(source["proxy"])
+    if source.get("template"):
+        source["template"] = _redact_template_ref(source["template"])
     return source
 
 
 def _redact_optional_proxy(proxy: object) -> str | None:
     return redact_proxy_asset_url(str(proxy)) if proxy else None
+
+
+def _redact_template_ref(value: str) -> str:
+    lowered = value.casefold()
+    if (
+        "://" in value
+        or "/" in value
+        or "\\" in value
+        or "@" in value
+        or "?" in value
+        or "#" in value
+        or "token" in lowered
+        or "secret" in lowered
+        or "password" in lowered
+        or "cookie" in lowered
+        or "authorization" in lowered
+    ):
+        return "[redacted]"
+    return value
 
 
 def _validation_errors(exc: ValidationError) -> list[str]:
