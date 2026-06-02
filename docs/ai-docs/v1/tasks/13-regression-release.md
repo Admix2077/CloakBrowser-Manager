@@ -739,6 +739,54 @@ git diff --check
 - 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。
 
+## 2026-06-03 stealth pref category diagnostics redaction
+
+背景：
+
+- `stealth_pref_categories` 是 release smoke 中排查 Pixelscan fingerprint masking 的低敏聚合信号。
+- 为防御底层 `invisible_playwright` 未来新增异常 `zoom.stealth.*` key，category 不能把非白名单文本原样展示成 diagnostics 值。
+
+已覆盖：
+
+- Stealth pref diagnostics category 只公开已知低敏分类和 `unknown`。
+- `fpp/seed/hw_concurrency/webgl2` 继续归一化为 `fingerprint/hardware/webgl`。
+- 非白名单 category 归并到 `unknown`，测试覆盖敏感 category 文本不会出现在 public category 中。
+- 当前本地 package summary 仍返回 29 个 stealth prefs 和 12 个已知分类，没有引入生产行为变化。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys -q
+# RED then GREEN; final 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys backend/tests/test_browser_manager.py::test_invisible_stealth_pref_summary_degrades_without_full_package backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# 3 passed
+
+. .venv/bin/activate && python - <<'PY'
+from backend import browser_manager as bm
+bm._invisible_stealth_pref_summary.cache_clear()
+print(bm._invisible_stealth_pref_summary())
+PY
+# {'stealth_pref_count': 29, 'stealth_pref_categories': ['audio', 'canvas', 'debugger', 'fingerprint', 'font', 'hardware', 'screen', 'storage', 'timezone', 'voices', 'webgl', 'webrtc']}
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 automation task type/result summary redaction guardrail
 
 背景：

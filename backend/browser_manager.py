@@ -51,6 +51,21 @@ STEALTH_PREF_CATEGORY_ALIASES = {
     "seed": "fingerprint",
     "webgl2": "webgl",
 }
+PUBLIC_STEALTH_PREF_CATEGORIES = frozenset({
+    "audio",
+    "canvas",
+    "debugger",
+    "fingerprint",
+    "font",
+    "hardware",
+    "screen",
+    "storage",
+    "timezone",
+    "voices",
+    "webgl",
+    "webrtc",
+    "unknown",
+})
 LAUNCH_FAILURE_STAGES = frozenset({
     "validate_proxy",
     "claim_launch_slot",
@@ -374,8 +389,9 @@ def _stealth_pref_category(pref_key: str) -> str | None:
     prefix = "zoom.stealth."
     if not pref_key.startswith(prefix):
         return None
-    category = pref_key.removeprefix(prefix).split(".", 1)[0]
-    return STEALTH_PREF_CATEGORY_ALIASES.get(category, category)
+    raw_category = pref_key.removeprefix(prefix).split(".", 1)[0]
+    category = STEALTH_PREF_CATEGORY_ALIASES.get(raw_category, raw_category)
+    return category if category in PUBLIC_STEALTH_PREF_CATEGORIES else "unknown"
 
 
 @lru_cache(maxsize=1)

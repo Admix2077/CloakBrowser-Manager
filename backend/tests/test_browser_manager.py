@@ -260,6 +260,7 @@ def test_stealth_pref_category_normalizes_sensitive_pref_keys():
     assert bm._stealth_pref_category("zoom.stealth.hw_concurrency") == "hardware"
     assert bm._stealth_pref_category("zoom.stealth.webgl2.extensions") == "webgl"
     assert bm._stealth_pref_category("zoom.stealth.canvas.noise_skip_mask") == "canvas"
+    assert bm._stealth_pref_category("zoom.stealth.api-token-super-secret.value") == "unknown"
     assert bm._stealth_pref_category("general.useragent.override") is None
 
 

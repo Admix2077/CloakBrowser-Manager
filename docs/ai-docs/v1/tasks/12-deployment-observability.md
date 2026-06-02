@@ -806,6 +806,59 @@ git diff --check
 # no output
 ```
 
+## 2026-06-03 stealth pref category diagnostics redaction
+
+背景：
+
+- `stealth_pref_categories` 是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 排障用的低敏粗分类。
+- 旧 helper 会把未知 `zoom.stealth.<category>` 的 `<category>` 原样作为 diagnostics category 返回。
+- 虽然当前 `invisible_playwright` 包只返回已知 category，但 diagnostics 边界仍应防御底层包未来新增异常 key，避免 token/path/secret 风格文本成为公开分类。
+
+已覆盖：
+
+- 新增 `PUBLIC_STEALTH_PREF_CATEGORIES` 白名单。
+- `seed` / `fpp` / `hw_concurrency` / `webgl2` alias 保持原有归一化。
+- 非白名单 category 统一返回 `unknown`。
+- 当前本地完整 package summary 仍为 29 个 stealth prefs，分类为 `audio/canvas/debugger/fingerprint/font/hardware/screen/storage/timezone/voices/webgl/webrtc`，没有被误归并。
+
+边界：
+
+- 不改变 `invisible_playwright` prefs、seed、WebGL、WebRTC、UA 或 Firefox 启动行为。
+- 不返回原始 `zoom.stealth.*` key、pref value、seed、`hw_seed`、WebRTC host IP、font list、profile dir、proxy data、headers、cookies/local storage、automation payload、viewer token 或 runtime service token。
+- 这是 diagnostics redaction guardrail，不代表 Pixelscan/IPhey gate 已通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys -q
+# RED: api-token-super-secret was returned as a category
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_stealth_pref_category_normalizes_sensitive_pref_keys backend/tests/test_browser_manager.py::test_invisible_stealth_pref_summary_degrades_without_full_package backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# 3 passed
+
+. .venv/bin/activate && python - <<'PY'
+from backend import browser_manager as bm
+bm._invisible_stealth_pref_summary.cache_clear()
+print(bm._invisible_stealth_pref_summary())
+PY
+# {'stealth_pref_count': 29, 'stealth_pref_categories': ['audio', 'canvas', 'debugger', 'fingerprint', 'font', 'hardware', 'screen', 'storage', 'timezone', 'voices', 'webgl', 'webrtc']}
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
 ## 2026-06-03 automation task type/result summary redaction guardrail
 
 背景：
