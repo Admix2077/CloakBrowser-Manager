@@ -111,3 +111,55 @@ cd /home/jeff/code/project-mileage-v3-payload && pnpm build
 
 - 本轮只完成 no-proxy BrowserScan P0 复验；US/JP/DE proxy、BrowserLeaks、Pixelscan/IPhey、CreepJS、同 seed 重启稳定性和不同 seed 差异仍未标记完成。
 - 复验输出只记录低敏页面结论、UA、BuildID、language/timezone 和固定 Normal/Leak 文本；不保存 cookie、local storage、proxy、token、headers、截图或 profile dir 内容。
+
+## 2026-06-03 Language consistency 自动 guardrail
+
+本轮补强了浏览器启动映射中的语言一致性边界：
+
+- `Accept-Language` 与页面端 `navigator.languages` 现在共用同一 locale 派生逻辑。
+- 区域 locale 会同时暴露精确语言和基础语言回退，例如 `en-US,en;q=0.9` 对应 `navigator.languages=["en-US","en"]`。
+- 单项 locale 仍保持单项，避免重复语言值。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_browser_init_script_aligns_navigator_languages_with_accept_language_fallback backend/tests/test_browser_manager.py::test_accept_language_header_includes_base_language backend/tests/test_browser_manager.py::test_launch_uses_invisible_playwright_on_vnc_display -q
+# 3 passed
+```
+
+边界：
+
+- 这是自动化单元 guardrail，不代表 BrowserScan `Language mismatch`、Pixelscan/IPhey language consistency 或多国家代理矩阵已经通过。
+- 未记录真实 header、cookie、local storage、proxy、token、截图或 profile dir 内容。
+
+## 2026-06-03 自动门禁复跑
+
+本轮在语言一致性 guardrail 变更后复跑 Manager 自动门禁：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 507 passed in 30.53s
+
+cd frontend && npm test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+cd frontend && npm run build
+# tsc -b && vite build；built in 5.30s
+
+docker build --network=host --platform linux/amd64 -t invisible-browser-manager:language-guardrail .
+# Successfully tagged invisible-browser-manager:language-guardrail
+
+docker run -d --rm --name cloakbrowser-language-guardrail-smoke -p 127.0.0.1::8080 invisible-browser-manager:language-guardrail
+curl -fsS http://127.0.0.1:32775/api/status
+# {"running_count":0,"launching_count":0,"failed_count":0,"binary_version":"invisible-playwright","profiles_total":0,"proxy_count":0,"task_queue_count":0,"automation_task_counts":{}}
+docker stop cloakbrowser-language-guardrail-smoke
+# cloakbrowser-language-guardrail-smoke
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 本轮 Docker smoke 只验证镜像构建、服务启动和 `/api/status` 低敏 health JSON；没有启动真实 profile、VNC 或外站检测页。
+- 手工 create/edit/delete、launch/stop、VNC viewer、clipboard sync、Automation API、GeoIP、Proxy Manager、bulk actions、audit、代理国家矩阵和 BrowserLeaks/Pixelscan/IPhey/CreepJS 仍未标记完成。

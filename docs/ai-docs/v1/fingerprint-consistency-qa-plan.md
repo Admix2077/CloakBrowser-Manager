@@ -154,6 +154,26 @@ Project Mileage 的账号商品和远程工作台场景决定了 CloakBrowser �
 - BrowserScan browser-checker 显示 `Your browser version and User Agent match`。
 - 内部检测 `version=149`、`reportVersion=149`、`liedCSS=false`、`liedJS=false`、`liedWindow=false`。
 
+### Navigator language / Accept-Language alignment
+
+问题：
+
+- P0 验收要求 IP、timezone、language 和 Accept-Language 不能明显不一致。
+- 启动时 HTTP `Accept-Language` 会派生基础语言回退，例如 `en-US,en;q=0.9`，但页面 init script 之前只把 `navigator.languages` 固定成单项 `["en-US"]`。
+- 这不一定直接造成所有检测站红灯，但会让 BrowserScan / Pixelscan / IPhey 等语言一致性结果缺少自动 guardrail。
+
+修复：
+
+- `backend/browser_manager.py` 新增 `_navigator_languages()`，统一从 profile locale 生成 JS 语言列表。
+- `_accept_language_header()` 和 `_browser_init_script()` 共用同一语言派生逻辑。
+- 对 `en-US` 这类区域 locale，HTTP header 为 `en-US,en;q=0.9`，页面端 `navigator.language=en-US`、`navigator.languages=["en-US","en"]`。
+- 对 `ja` 这类单项 locale，header 和 `navigator.languages` 都保持单项，避免重复。
+
+验证：
+
+- 单元测试覆盖 init script 必须包含与 `Accept-Language` 回退一致的 `navigator.languages`。
+- 该项只是自动化边界补强；BrowserScan `Language mismatch`、Pixelscan/IPhey language consistency 仍需真实浏览器/检测站复验后才能标记完成。
+
 ### WebGL renderer consistency
 
 问题：

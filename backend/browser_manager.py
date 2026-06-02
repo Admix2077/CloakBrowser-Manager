@@ -299,12 +299,19 @@ def _geoip_exit_ip(profile: dict[str, Any]) -> str | None:
     return None
 
 
-def _accept_language_header(locale: str | None) -> str:
+def _navigator_languages(locale: str | None) -> list[str]:
     lang = (locale or "en-US").replace("_", "-")
     base = lang.split("-")[0]
     if base == lang:
-        return lang
-    return f"{lang},{base};q=0.9"
+        return [lang]
+    return [lang, base]
+
+
+def _accept_language_header(locale: str | None) -> str:
+    languages = _navigator_languages(locale)
+    if len(languages) == 1:
+        return languages[0]
+    return f"{languages[0]},{languages[1]};q=0.9"
 
 
 @lru_cache(maxsize=1)
@@ -325,7 +332,7 @@ def _firefox_build_id_override() -> str | None:
 def _browser_init_script(locale: str | None) -> str:
     lang = (locale or "en-US").replace("_", "-")
     language_json = json.dumps(lang)
-    languages_json = json.dumps([lang])
+    languages_json = json.dumps(_navigator_languages(locale))
     build_id_json = json.dumps(_firefox_build_id_override())
     return f"""
         (() => {{

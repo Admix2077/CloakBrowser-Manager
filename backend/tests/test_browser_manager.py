@@ -281,6 +281,12 @@ def test_browser_init_script_aligns_navigator_languages():
     assert "__clipboardText" in script
 
 
+def test_browser_init_script_aligns_navigator_languages_with_accept_language_fallback():
+    script = bm._browser_init_script("en-US")
+
+    assert '["en-US", "en"]' in script
+
+
 def test_browser_init_script_overrides_stale_navigator_build_id(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(bm, "_firefox_build_id_override", lambda: "20260521160037")
 
