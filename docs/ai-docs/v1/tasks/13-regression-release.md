@@ -34,7 +34,7 @@
 - [x] BrowserScan 无 `Different time zones`。
 - [x] BrowserScan browser-checker 内核版本与 UA 一致。
 - [x] BrowserScan WebRTC 不泄漏 local IP。
-- [ ] BrowserLeaks WebRTC / Canvas / WebGL / Fonts 无明显平台不一致。
+- [x] BrowserLeaks WebRTC / Canvas / WebGL / Fonts 无明显平台不一致。
 - [ ] CreepJS 无 webdriver/headless/lie detection 严重红灯。
 - [ ] Pixelscan/IPhey 无 IP、timezone、language、WebRTC、hardware/software 高风险不一致。
 - [x] 同一 seed 停止/重启后核心指纹稳定。
@@ -342,3 +342,48 @@ git diff --check
 - 本轮没有访问外部检测站，也没有启动真实代理出口。
 - 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整 canvas data URL、完整 audio buffer、完整 proxy URL 或完整 audit metadata。
 - BrowserLeaks、Pixelscan/IPhey、CreepJS 和 US/JP/DE proxy-country 外站矩阵仍未标记完成。
+
+## 2026-06-03 BrowserLeaks WebRTC / Canvas / WebGL / Fonts smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-browserleaks-smoke`
+- 临时数据卷：`cloakbrowser-browserleaks-smoke-data`
+- profile：无 proxy，`geoip=true`，Windows profile，`fingerprint_seed=24680`，`1920x1080`，`hardwareConcurrency=8`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 running、0 profile、0 proxy，`binary_version=invisible-playwright`。
+- BrowserLeaks 页面均通过 direct Automation 打开并进入 `readyState=complete`：
+  - `browserleaks.com/webrtc`：`WebRTC Leak Test - BrowserLeaks`
+  - `browserleaks.com/canvas`：`Canvas Fingerprinting - BrowserLeaks`
+  - `browserleaks.com/webgl`：`WebGL Browser Report - WebGL Fingerprinting - BrowserLeaks`
+  - `browserleaks.com/fonts`：`Font Fingerprinting - BrowserLeaks`
+- 四个页面上下文均显示 managed identity：
+  - Firefox 149 UA 断言通过，`navigator.buildID=20260521160037`
+  - `navigator.webdriver=false`
+  - `navigator.platform=Win32`
+  - `navigator.language=en-US`、`navigator.languages=["en-US","en"]`
+  - timezone 为 `America/Los_Angeles`
+  - `hardwareConcurrency=8`
+- 四个页面的标题/低敏样本文本未出现 `linux`、`x11`、`headless`、`webdriver`、`selenium`、`chromedriver`、`swiftshader`、`llvmpipe`、`mesa`、`debian`、`ubuntu` 风险关键词。
+- WebGL 摘要显示硬件形态 renderer：`ANGLE (NVIDIA, NVIDIA GeForce GTX 980 Direct3D11 vs_5_0 ps_5_0), or similar`；未出现 SwiftShader、llvmpipe、Mesa 等软件渲染风险关键词。
+- Fonts 低敏探针显示常见 Windows 字体 `Arial`、`Times New Roman`、`Courier New`、`Segoe UI`、`Calibri`、`Cambria`、`Consolas` 可用；`DejaVu Sans`、`Liberation Sans` 不可用。
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy。
+
+补充 WebRTC 全文检查：
+
+- 临时容器：`cloakbrowser-browserleaks-webrtc-check`
+- 临时数据卷：`cloakbrowser-browserleaks-webrtc-check-data`
+- BrowserLeaks WebRTC full body 检查 `hasPrivateIpInFullBody=false`。
+- BrowserLeaks WebRTC full body IPv4 candidate count 为 0。
+- 页面包含 Local IP 说明标签文本，但没有 private/local IP pattern。
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy，并删除临时容器和数据卷。
+
+边界：
+
+- 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整页面文本、完整 URL 参数、完整 canvas data URL、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
+- 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
+- Pixelscan/IPhey、CreepJS、BrowserScan `Language mismatch` 外站确认和多国家代理矩阵仍未标记完成。
