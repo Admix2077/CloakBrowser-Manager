@@ -89,6 +89,60 @@ async def test_resolve_network_geo_falls_back_when_proxy_client_cannot_start(
     assert result == geoip.GeoIPResult(None, None, None, None, "failed")
 
 
+def test_geoip_timeout_config_warning_does_not_log_raw_env_value(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    monkeypatch.setenv(
+        geoip.GEOIP_TIMEOUT_ENV,
+        "timeout-token-super-secret",
+    )
+    caplog.set_level("WARNING", logger="invisible_browser.manager.geoip")
+
+    timeout = geoip._geoip_timeout_seconds()
+
+    assert timeout == geoip.DEFAULT_GEOIP_TIMEOUT_SECONDS
+    assert geoip.GEOIP_TIMEOUT_ENV in caplog.text
+    assert "timeout-token-super-secret" not in caplog.text
+
+
+def test_geoip_provider_failure_warning_does_not_log_raw_response_message(
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("WARNING", logger="invisible_browser.manager.geoip")
+
+    result = geoip._parse_ip_api_response({
+        "status": "fail",
+        "message": "rate limited token=geoip-super-secret",
+    })
+
+    assert result == geoip.GeoIPResult(None, None, None, None, "ip-api")
+    assert "source=ip-api" in caplog.text
+    assert "geoip-super-secret" not in caplog.text
+    assert "rate limited" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_resolve_network_geo_warning_does_not_log_raw_lookup_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise RuntimeError("proxy-token-super-secret via proxy.example:8080")
+
+    monkeypatch.setattr(geoip, "_transport_for_tests", httpx.MockTransport(handler))
+    geoip.clear_geoip_cache()
+    caplog.set_level("WARNING", logger="invisible_browser.manager.geoip")
+
+    result = await geoip.resolve_network_geo(None)
+
+    assert result == geoip.GeoIPResult(None, None, None, None, "failed")
+    assert "GeoIP ip-api lookup failed" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert "proxy-token-super-secret" not in caplog.text
+    assert "proxy.example" not in caplog.text
+
+
 @pytest.mark.asyncio
 async def test_resolve_network_geo_falls_back_to_second_provider(monkeypatch: pytest.MonkeyPatch):
     hosts: list[str] = []

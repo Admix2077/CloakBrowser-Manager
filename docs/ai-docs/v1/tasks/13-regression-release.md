@@ -1219,6 +1219,35 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 GeoIP/proxy lookup log redaction guardrail
+
+背景：
+
+- GeoIP lookup 支撑 release smoke 的 no-proxy/proxy-country 证据面；日志需要能排查 provider 和配置问题，但不能固化 proxy、token、URL/query 或 provider 返回的原文。
+- 旧 GeoIP 日志会输出无效 env 原值、provider failure message/reason、lookup exception text。
+
+已覆盖：
+
+- 无效 GeoIP timeout/cache env 只记录配置名和 fallback 值。
+- provider failure 只记录固定 source。
+- lookup exception 只记录 provider 名和 exception type。
+- GeoIP fallback/provider 顺序、proxy 参数传递、timezone/locale 填充行为保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_geoip_timeout_config_warning_does_not_log_raw_env_value backend/tests/test_geoip.py::test_geoip_provider_failure_warning_does_not_log_raw_response_message backend/tests/test_geoip.py::test_resolve_network_geo_warning_does_not_log_raw_lookup_exception -q
+# RED then GREEN; final focused tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py -q
+# 14 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 BrowserManager lifecycle log redaction guardrail
 
 背景：

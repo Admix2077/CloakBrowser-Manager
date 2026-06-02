@@ -1358,3 +1358,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
 - 不记录或公开 raw exception text、profile name、raw screen input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 GeoIP/proxy lookup log redaction guardrail
+
+背景：
+
+- GeoIP lookup 是 no-proxy/proxy-country smoke、timezone/locale 填充和 Pixelscan/IPhey triage 的关键路径。
+- 旧日志会输出无效 GeoIP env 原值、provider failure message/reason，以及 lookup exception text；这些文本可能包含 token、proxy host、URL、query 或 provider 返回的非低敏内容。
+
+已覆盖：
+
+- GeoIP timeout/cache config 无效时只记录固定配置名和 fallback 值，不记录 raw env value。
+- ip-api、ipapi.co、ipwho.is 返回失败时只记录固定 provider source，不记录 provider message/reason。
+- provider 请求异常时只记录 provider 名和 exception type，不记录 raw exception message。
+- GeoIP fallback、proxy lookup、timezone/locale/profile `_geoip_result` 语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_geoip_timeout_config_warning_does_not_log_raw_env_value backend/tests/test_geoip.py::test_geoip_provider_failure_warning_does_not_log_raw_response_message backend/tests/test_geoip.py::test_resolve_network_geo_warning_does_not_log_raw_lookup_exception -q
+# RED: GeoIP logs exposed raw env/provider/exception text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py::test_geoip_timeout_config_warning_does_not_log_raw_env_value backend/tests/test_geoip.py::test_geoip_provider_failure_warning_does_not_log_raw_response_message backend/tests/test_geoip.py::test_resolve_network_geo_warning_does_not_log_raw_lookup_exception -q
+# 3 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py -q
+# 14 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
+- 不记录或公开 raw env value、provider message/reason、raw exception text、proxy host/credentials、headers、profile dir、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。

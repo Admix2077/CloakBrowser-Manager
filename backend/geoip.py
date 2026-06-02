@@ -75,7 +75,7 @@ def _positive_float_env(name: str, default: float) -> float:
     except ValueError:
         value = float("nan")
     if not math.isfinite(value) or value < 0:
-        logger.warning("Invalid %s=%r; using %.1fs", name, raw, default)
+        logger.warning("Invalid %s; using %.1fs", name, default)
         return default
     return value
 
@@ -134,8 +134,7 @@ def _valid_ip(value: object) -> str | None:
 
 def _parse_ip_api_response(data: object) -> GeoIPResult:
     if not isinstance(data, dict) or data.get("status") != "success":
-        message = data.get("message") if isinstance(data, dict) else None
-        logger.warning("GeoIP lookup returned failure: %s", message)
+        logger.warning("GeoIP provider returned failure source=ip-api")
         return GeoIPResult(None, None, None, None, "ip-api")
 
     timezone = data.get("timezone") if isinstance(data.get("timezone"), str) else None
@@ -168,8 +167,7 @@ def _first_language_locale(value: object, country_code: str | None) -> str | Non
 
 def _parse_ipapi_response(data: object) -> GeoIPResult:
     if not isinstance(data, dict) or data.get("error") is True:
-        reason = data.get("reason") if isinstance(data, dict) else None
-        logger.warning("GeoIP ipapi.co lookup returned failure: %s", reason)
+        logger.warning("GeoIP provider returned failure source=ipapi.co")
         return GeoIPResult(None, None, None, None, "ipapi.co")
 
     timezone = data.get("timezone") if isinstance(data.get("timezone"), str) else None
@@ -186,8 +184,7 @@ def _parse_ipapi_response(data: object) -> GeoIPResult:
 
 def _parse_ipwhois_response(data: object) -> GeoIPResult:
     if not isinstance(data, dict) or data.get("success") is False:
-        message = data.get("message") if isinstance(data, dict) else None
-        logger.warning("GeoIP ipwho.is lookup returned failure: %s", message)
+        logger.warning("GeoIP provider returned failure source=ipwho.is")
         return GeoIPResult(None, None, None, None, "ipwho.is")
 
     timezone_data = data.get("timezone")
@@ -244,7 +241,11 @@ async def resolve_network_geo(proxy_url: str | None = None) -> GeoIPResult:
                 response.raise_for_status()
                 result = parser(response.json())
             except Exception as exc:
-                logger.warning("GeoIP %s lookup failed: %s", provider_name, exc)
+                logger.warning(
+                    "GeoIP %s lookup failed: error_type=%s",
+                    provider_name,
+                    type(exc).__name__,
+                )
                 continue
 
             if not any((result.timezone, result.locale, result.ip)):
