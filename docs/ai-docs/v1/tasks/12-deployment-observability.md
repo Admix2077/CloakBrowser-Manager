@@ -1167,3 +1167,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
 - 不记录或公开 full UA、profile id、profile dir、proxy、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 browser locale public-value guardrail
+
+背景：
+
+- profile `locale` 会进入三处浏览器身份面：`invisible_playwright` launch kwargs、`Accept-Language` header、页面 init script 中的 `navigator.language(s)`。
+- 该字段来自 profile/API/CSV 导入等自由文本路径；如果传入 header fragment、URL、token 或路径风格文本，旧逻辑会把它直接传播到浏览器上下文和 header。
+
+已覆盖：
+
+- 新增公开 locale normalizer，只允许常见 BCP47 风格语言标签，支持 `en-US`、`zh_CN`、`ja`、`es-419` 这类低敏值并规范大小写/下划线。
+- 非公开格式统一降级为 `en-US`。
+- `_build_invisible_kwargs()`、`_accept_language_header()` 和 `_browser_init_script()` 共用同一 locale normalizer。
+- 回归测试覆盖污染 locale 不进入 launch kwargs、Accept-Language header 或 init script。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_accept_language_header_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_browser_init_script_drops_non_public_locale_text -q
+# RED: polluted locale reached launch kwargs, Accept-Language, and init script
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_accept_language_header_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_browser_init_script_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_accept_language_header_includes_base_language backend/tests/test_browser_manager.py::test_browser_init_script_aligns_navigator_languages_with_accept_language_fallback backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 6 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 55 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、timezone、proxy 或 patched Firefox 行为。
+- 不记录或公开 raw locale input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。

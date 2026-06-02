@@ -219,6 +219,19 @@ def test_build_invisible_kwargs_omits_empty_optional_values(tmp_path: Path):
     assert kwargs["extra_args"] == []
 
 
+def test_build_invisible_kwargs_drops_non_public_locale_text(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "proxy": None,
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US,fr;q=1 locale-super-secret",
+        "launch_args": None,
+    })
+
+    assert kwargs["locale"] == "en-US"
+
+
 def test_build_invisible_kwargs_suppresses_webrtc_host_candidates(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,
@@ -329,6 +342,14 @@ def test_accept_language_header_includes_base_language():
     assert bm._accept_language_header("ja") == "ja"
 
 
+def test_accept_language_header_drops_non_public_locale_text():
+    header = bm._accept_language_header("en-US\r\nAuthorization: Bearer locale-super-secret")
+
+    assert header == "en-US,en;q=0.9"
+    assert "locale-super-secret" not in header
+    assert "Authorization" not in header
+
+
 def test_browser_init_script_aligns_navigator_languages():
     script = bm._browser_init_script("en-US")
 
@@ -341,6 +362,14 @@ def test_browser_init_script_aligns_navigator_languages():
 def test_browser_init_script_aligns_navigator_languages_with_accept_language_fallback():
     script = bm._browser_init_script("en-US")
 
+    assert '["en-US", "en"]' in script
+
+
+def test_browser_init_script_drops_non_public_locale_text():
+    script = bm._browser_init_script("en-US\r\nAuthorization: Bearer locale-super-secret")
+
+    assert "locale-super-secret" not in script
+    assert "Authorization" not in script
     assert '["en-US", "en"]' in script
 
 

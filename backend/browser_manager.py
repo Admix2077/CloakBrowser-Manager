@@ -34,6 +34,7 @@ MANAGED_FIREFOX_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) "
     "Gecko/20100101 Firefox/149.0"
 )
+DEFAULT_BROWSER_LOCALE = "en-US"
 MANAGED_FIREFOX_IDENTITY_PREFS = {
     "general.useragent.override": MANAGED_FIREFOX_USER_AGENT,
     "general.appversion.override": "5.0 (Windows)",
@@ -48,6 +49,7 @@ WEBRTC_LOCAL_IP_SUPPRESSION_PREFS = {
 }
 PUBLIC_VERSION_RE = re.compile(r"^\d+(?:\.\d+){0,5}$")
 PUBLIC_FIREFOX_BUILD_ID_RE = re.compile(r"^\d{8,20}$")
+PUBLIC_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2,8}|\d{3})){0,2}$")
 STEALTH_PREF_CATEGORY_ALIASES = {
     "fpp": "fingerprint",
     "hw_concurrency": "hardware",
@@ -310,6 +312,27 @@ def _filter_firefox_launch_args(raw_args: list[str] | None) -> list[str]:
     return filtered
 
 
+def _public_locale(value: str | None) -> str:
+    if not isinstance(value, str):
+        return DEFAULT_BROWSER_LOCALE
+    locale = value.strip().replace("_", "-")
+    if not PUBLIC_LOCALE_RE.fullmatch(locale):
+        return DEFAULT_BROWSER_LOCALE
+
+    parts = locale.split("-")
+    canonical = [parts[0].lower()]
+    for part in parts[1:]:
+        if part.isalpha() and len(part) == 2:
+            canonical.append(part.upper())
+        elif part.isalpha() and len(part) == 4:
+            canonical.append(part.title())
+        elif part.isalpha():
+            canonical.append(part.lower())
+        else:
+            canonical.append(part)
+    return "-".join(canonical)
+
+
 def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     """Build kwargs for InvisiblePlaywright from a Manager profile."""
     extra_prefs = {
@@ -323,7 +346,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         "proxy": _proxy_to_invisible(profile.get("proxy") or None),
         "extra_args": _filter_firefox_launch_args(profile.get("launch_args") or []),
         "humanize": bool(profile.get("humanize", False)),
-        "locale": profile.get("locale") or "en-US",
+        "locale": _public_locale(profile.get("locale")),
         "timezone": profile.get("timezone") or "",
         "extra_prefs": extra_prefs,
         "profile_dir": str(profile["user_data_dir"]),
@@ -341,7 +364,7 @@ def _geoip_exit_ip(profile: dict[str, Any]) -> str | None:
 
 
 def _navigator_languages(locale: str | None) -> list[str]:
-    lang = (locale or "en-US").replace("_", "-")
+    lang = _public_locale(locale)
     base = lang.split("-")[0]
     if base == lang:
         return [lang]
@@ -464,7 +487,7 @@ def _firefox_build_id_override() -> str | None:
 
 
 def _browser_init_script(locale: str | None) -> str:
-    lang = (locale or "en-US").replace("_", "-")
+    lang = _public_locale(locale)
     language_json = json.dumps(lang)
     languages_json = json.dumps(_navigator_languages(locale))
     build_id_json = json.dumps(_firefox_build_id_override())
