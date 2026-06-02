@@ -30,7 +30,7 @@
 - [ ] DE proxy。
 - [x] timezone 与出口一致。
 - [ ] language 与 Accept-Language 一致。
-- [ ] BrowserScan 无 `Language mismatch`。
+- [x] BrowserScan 无 `Language mismatch`。
 - [x] BrowserScan 无 `Different time zones`。
 - [x] BrowserScan browser-checker 内核版本与 UA 一致。
 - [x] BrowserScan WebRTC 不泄漏 local IP。
@@ -387,3 +387,41 @@ git diff --check
 - 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整页面文本、完整 URL 参数、完整 canvas data URL、完整 font list、完整 WebRTC candidate 或完整 audit metadata。
 - 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
 - Pixelscan/IPhey、CreepJS、BrowserScan `Language mismatch` 外站确认和多国家代理矩阵仍未标记完成。
+
+## 2026-06-03 BrowserScan language mismatch smoke
+
+环境：
+
+- 镜像：`invisible-browser-manager:automation-console-redaction`
+- 临时容器：`cloakbrowser-browserscan-language-smoke`
+- 临时数据卷：`cloakbrowser-browserscan-language-smoke-data`
+- profile：无 proxy，`geoip=true`，Windows profile，`fingerprint_seed=24680`，`1920x1080`，`hardwareConcurrency=8`
+- smoke 完成后已停止容器并删除临时数据卷。
+
+已覆盖：
+
+- `/api/status` 初始返回 0 running、0 profile、0 proxy，`binary_version=invisible-playwright`。
+- BrowserScan `browser-checker` 页面通过 direct Automation 打开并进入 `readyState=complete`：
+  - title 为 `Browser kernel detection - Browser detection, kernel version detection, version detection, vulnerability detection - BrowserScan | BrowserScan`
+  - full body scan：`languageMismatch=false`、`differentLanguages=false`、`acceptLanguageWarning=false`、`mismatchCount=0`
+- BrowserScan `bot-detection` 页面通过 direct Automation 打开并进入 `readyState=complete`：
+  - title 为 `BrowserScan - Robot Detection/WebDriver | BrowserScan`
+  - full body scan：`languageMismatch=false`、`differentLanguages=false`、`acceptLanguageWarning=false`、`mismatchCount=0`
+  - 页面 `normalCount=18`
+- 两个页面上下文均显示 managed identity：
+  - Firefox 149 UA 断言通过，`navigator.buildID=20260521160037`
+  - `navigator.webdriver=false`
+  - `navigator.platform=Win32`
+  - `navigator.language=en-US`、`navigator.languages=["en-US","en"]`
+  - `Intl.DateTimeFormat().resolvedOptions().locale=en-US`
+  - timezone 为 `America/Los_Angeles`
+  - `hardwareConcurrency=8`
+- 两个页面均未出现 webdriver/headless warning pattern。
+- cleanup 后 `/api/status` 返回 0 running、0 profile、0 proxy。
+
+边界：
+
+- BrowserScan 页面没有直接展示 `Accept-Language` 字段；本轮只标记 BrowserScan `Language mismatch` 外站确认通过，`language 与 Accept-Language 一致` 仍保留未完成。
+- 本轮没有保存截图、cookie、local storage、headers、token、profile dir 内容、完整页面文本、完整 URL 参数、完整 network payload 或完整 audit metadata。
+- 本轮没有启动真实代理出口，也没有覆盖 US/JP/DE proxy-country 外站矩阵。
+- Pixelscan/IPhey、CreepJS、`language 与 Accept-Language 一致` 和多国家代理矩阵仍未标记完成。
