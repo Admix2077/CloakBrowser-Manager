@@ -3435,6 +3435,63 @@ def test_automation_task_responses_redact_screenshot_steps(app_client: TestClien
     assert "do-not-echo" not in str(cancel_resp.json())
 
 
+def test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskPageRefRedactProfile"})
+    pid = create.json()["id"]
+    secret_page_ref = "https://app.example.com/dashboard?token=page-ref-super-secret#frag"
+    steps = [
+        {
+            "type": "click",
+            "selector": "#submit",
+            "page_ref": secret_page_ref,
+            "timeout_ms": 2500,
+        },
+    ]
+    expected_steps = [{"type": "click", "page_ref": "invalid", "timeout_ms": 2500}]
+    expected_persisted_steps = [
+        {"type": "click", "selector": "#submit", "page_ref": "invalid", "timeout_ms": 2500}
+    ]
+
+    create_resp = app_client.post("/api/tasks", json={"profile_id": pid, "steps": steps})
+    task_id = create_resp.json()["id"]
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task_id}/cancel",
+        json=_confirm_cancel_payload(),
+    )
+    persisted = main.db.get_automation_task(task_id)
+
+    assert create_resp.status_code == 201
+    assert create_resp.json()["steps"] == expected_steps
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["steps"] == expected_steps
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == expected_steps
+    assert persisted is not None
+    assert persisted["steps"] == expected_persisted_steps
+
+    serialized = json.dumps(
+        {
+            "create": create_resp.json(),
+            "get": get_resp.json(),
+            "list": list_resp.json(),
+            "cancel": cancel_resp.json(),
+            "persisted": persisted,
+        },
+        sort_keys=True,
+    )
+    assert secret_page_ref not in serialized
+    assert "page-ref-super-secret" not in serialized
+    assert "token=" not in serialized
+    assert "#frag" not in serialized
+
+
 def test_create_automation_task_persists_sanitized_screenshot_step(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskScreenshotPersistProfile"})
     pid = create.json()["id"]

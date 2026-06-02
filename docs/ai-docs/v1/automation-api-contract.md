@@ -359,6 +359,7 @@ POST /api/tasks
 - 不执行脚本，不启动 profile，不读取敏感配置。
 - 对外响应中的 `steps` 统一走白名单脱敏；`open_url.url`、query、fragment 和未知 step 字段不会在响应中回显。
 - 入库前会按 step 类型做执行字段白名单裁剪，保留 runner 必须使用的字段，丢弃未知字段；例如 `screenshot` 仅持久化 `type/page_ref/full_page`，不会持久化调用方附带的 `path`、`filename`、`base64` 或 `note`。
+- `page_ref` 入库和回显前会先收口为低敏引用：只保留十进制 page index 或 UUID page_id；其他字符串或非字符串值统一保存/回显为 `invalid`，避免把 URL、token、路径或任意调用方文本写入 task 表和 API 响应。
 
 返回：
 
@@ -538,7 +539,7 @@ POST /api/tasks/{id}/run
 - 当前非法 `screenshot.full_page` 会让 task 进入 `failed`，并返回 `400`；`full_page` 必须是布尔值。
 - 当前非法 `scroll.delta_x` 或 `scroll.delta_y` 会让 task 进入 `failed`，并返回 `400`。
 - `cancel_requested` 只在 step 边界生效，不承诺中断正在执行或正在 await 的 Playwright 操作；收束为 `cancelled` 后 `result.steps[]` 只包含已执行 step 的 `succeeded/failed` 低敏摘要和一个未执行 step 的 `cancelled` 低敏摘要。
-- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显 `page_ref`，不回显 expression；对 `screenshot` 只回显 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，降低未知字段落库风险。
+- 所有 task 对外响应，包括 create/get/list/cancel/run，都会对 `steps` 做白名单脱敏：只回显 step `type`；对 `wait` 回显安全的 `ms`；对 `open_url` 只回显低敏 `page_ref/wait_until/timeout_ms`，不回显完整 URL、query 或 fragment；对 `wait_for_selector` 只回显低敏 `page_ref/state/timeout_ms`，不回显 selector；对 `click` 只回显低敏 `page_ref/timeout_ms`，不回显 selector；对 `fill` 只回显低敏 `page_ref/timeout_ms`，不回显 selector 或 value；对 `keyboard_type` 只回显低敏 `page_ref/delay_ms`，不回显 text；对 `evaluate` 只回显低敏 `page_ref`，不回显 expression；对 `screenshot` 只回显低敏 `page_ref/full_page`，不回显 PNG bytes、base64、path、filename 或下载 URL；对 `scroll` 只回显低敏 `page_ref/delta_x/delta_y`；未知 step 的其他字段不会出现在响应中。task 创建时的内部持久化也会先按执行字段白名单裁剪，并把非 index/UUID 的 `page_ref` 收口为 `invalid`，降低未知字段和调用方文本落库风险。
 - 所有 task 对外响应也会对 `result` 做白名单脱敏：即使历史持久化数据或后续 runner 误写入完整 step payload、`raw_url`、URL query/fragment、token、业务敏感 URL、evaluate expression、evaluate 返回值、screenshot bytes、base64 或本地路径，响应也只返回 `result.steps[]` 的 `index`、`type`、`status`。
 - 当前已提供内部 worker 单次运行入口和内部 loop 骨架，但不启动后台常驻任务或全局 worker 池；失败重试当前仅支持显式 `POST /api/tasks/{id}/retry` 创建新 queued task，不自动执行。
 

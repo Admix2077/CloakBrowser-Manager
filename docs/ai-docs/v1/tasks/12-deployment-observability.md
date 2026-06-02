@@ -658,3 +658,47 @@ npm --prefix frontend test
 npm --prefix frontend run build
 # built successfully
 ```
+
+## 2026-06-03 automation task page_ref redaction guardrail
+
+背景：
+
+- Automation task response 之前会按 step 类型隐藏 URL、selector、fill value、keyboard text、evaluate expression 和 screenshot payload，但仍原样回显并持久化调用方提交的 `page_ref`。
+- `page_ref` 契约上只应是十进制 page index 或 pages list 返回的 UUID page_id；如果调用方把 URL、token、路径或任意业务文本塞进该字段，旧实现会把它写入 task 表并通过 create/get/list/cancel/run 响应回显。
+
+已完成：
+
+- 新增 page_ref sanitizer：
+  - 十进制 page index 保留。
+  - UUID page_id 规范化为小写 UUID。
+  - 其他字符串或非字符串值统一保存/回显为低敏 `invalid`。
+- `_automation_task_persisted_steps()` 入库前清洗 `page_ref`，避免敏感调用方文本落库。
+- `_automation_task_redacted_steps()` 响应时重复清洗 `page_ref`，防御历史任务数据。
+- 新增回归测试覆盖 create/get/list/cancel 响应和 persisted task 均不包含敏感 `page_ref` URL/query/fragment。
+
+边界：
+
+- task runner 仍只支持 page index 或 UUID page_id；`invalid` page_ref 会在执行时走既有 page-not-found / step failure 路径，不会默认落到 page 0。
+- 该改动只收紧 Automation task redaction 和存储边界，不修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding -q
+# RED: response echoed https://app.example.com/dashboard?token=page-ref-super-secret#frag
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding backend/tests/test_api.py::test_automation_task_responses_redact_evaluate_steps backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_automation_page_id_remains_stable_when_page_order_changes -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 509 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```

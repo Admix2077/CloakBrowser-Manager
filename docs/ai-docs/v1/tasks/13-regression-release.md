@@ -646,3 +646,46 @@ npm --prefix frontend run build
 
 - 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。
+
+## 2026-06-03 automation task page_ref redaction guardrail
+
+背景：
+
+- `cbim-23h.6` 下一阶段范围要求继续保护 automation、proxy、profile、WebRTC、headers、screenshots 和 audit metadata redaction guardrails。
+- 检查 Automation task redaction 时发现 `page_ref` 会原样持久化并在 task create/get/list/cancel/run 响应中回显；契约上它只应是 page index 或 UUID page_id，如果调用方传入 URL/token/path，会形成低敏响应边界缺口。
+
+已覆盖：
+
+- `page_ref` 入库和响应前先清洗：
+  - 十进制 page index 保留。
+  - UUID page_id 规范化为小写 UUID。
+  - 其他字符串或非字符串值统一保存/回显为 `invalid`。
+- 新测试证明带 query/fragment/token 的 `page_ref` 不会出现在 create/get/list/cancel 响应或 persisted task 中。
+- 相邻 focused tests 证明现有 evaluate redaction、worker step failure redaction 和 UUID page_id 稳定性未被破坏。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding -q
+# RED: response echoed https://app.example.com/dashboard?token=page-ref-super-secret#frag
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_page_ref_before_persisting_or_responding backend/tests/test_api.py::test_automation_task_responses_redact_evaluate_steps backend/tests/test_api.py::test_automation_worker_run_once_fails_http_step_errors_without_leaking_payload backend/tests/test_api.py::test_automation_page_id_remains_stable_when_page_order_changes -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 509 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+
+git diff --check
+# no output
+```
+
+边界：
+
+- 本轮没有修改底层 Firefox / `invisible_playwright` fingerprint masking 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker。

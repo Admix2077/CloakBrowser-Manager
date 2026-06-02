@@ -179,6 +179,7 @@ _AUTOMATION_SENSITIVE_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 _AUTOMATION_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
+_AUTOMATION_INVALID_PAGE_REF = "invalid"
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
 _AUTH_EXEMPT = frozenset({"/api/auth/status", "/api/auth/login", "/api/status"})
@@ -2586,8 +2587,9 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
         if step_type == "wait" and isinstance(step.get("ms"), int) and not isinstance(step.get("ms"), bool):
             redacted["ms"] = step["ms"]
         if step_type == "open_url":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if step.get("wait_until") in {"commit", "domcontentloaded", "load", "networkidle"}:
                 redacted["wait_until"] = step["wait_until"]
             if (
@@ -2597,8 +2599,9 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
         if step_type == "wait_for_selector":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if step.get("state") in {"attached", "detached", "visible", "hidden"}:
                 redacted["state"] = step["state"]
             if (
@@ -2608,16 +2611,19 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
         if step_type == "evaluate":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
         if step_type == "screenshot":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if "full_page" in step and isinstance(step.get("full_page"), bool):
                 redacted["full_page"] = step["full_page"]
         if step_type == "click":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if (
                 isinstance(step.get("timeout_ms"), int)
                 and not isinstance(step.get("timeout_ms"), bool)
@@ -2625,8 +2631,9 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
         if step_type == "fill":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if (
                 isinstance(step.get("timeout_ms"), int)
                 and not isinstance(step.get("timeout_ms"), bool)
@@ -2634,8 +2641,9 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
             ):
                 redacted["timeout_ms"] = step["timeout_ms"]
         if step_type == "keyboard_type":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if (
                 isinstance(step.get("delay_ms"), int)
                 and not isinstance(step.get("delay_ms"), bool)
@@ -2643,8 +2651,9 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
             ):
                 redacted["delay_ms"] = step["delay_ms"]
         if step_type == "scroll":
-            if isinstance(step.get("page_ref"), str):
-                redacted["page_ref"] = step["page_ref"]
+            page_ref = _automation_task_public_page_ref(step)
+            if page_ref is not None:
+                redacted["page_ref"] = page_ref
             if (
                 isinstance(step.get("delta_x"), int)
                 and not isinstance(step.get("delta_x"), bool)
@@ -2659,6 +2668,29 @@ def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
                 redacted["delta_y"] = step["delta_y"]
         redacted_steps.append(redacted)
     return redacted_steps
+
+
+def _automation_task_safe_page_ref(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    page_ref = value.strip()
+    if not page_ref:
+        return None
+    if page_ref.isascii() and page_ref.isdecimal():
+        return page_ref
+    try:
+        parsed = uuid.UUID(page_ref)
+    except ValueError:
+        return None
+    if str(parsed) == page_ref.lower():
+        return str(parsed)
+    return None
+
+
+def _automation_task_public_page_ref(step: dict) -> str | None:
+    if "page_ref" not in step:
+        return None
+    return _automation_task_safe_page_ref(step.get("page_ref")) or _AUTOMATION_INVALID_PAGE_REF
 
 
 def _automation_task_persisted_steps(steps: list[dict]) -> list[dict]:
@@ -2677,7 +2709,11 @@ def _automation_task_persisted_steps(steps: list[dict]) -> list[dict]:
     for step in steps:
         step_type = str(step.get("type", ""))
         allowed_keys = allowed_keys_by_type.get(step_type, {"type"})
-        persisted_steps.append({key: value for key, value in step.items() if key in allowed_keys})
+        persisted_step = {key: value for key, value in step.items() if key in allowed_keys}
+        page_ref = _automation_task_public_page_ref(step)
+        if page_ref is not None and "page_ref" in allowed_keys:
+            persisted_step["page_ref"] = page_ref
+        persisted_steps.append(persisted_step)
     return persisted_steps
 
 
