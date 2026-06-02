@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from types import SimpleNamespace
 
 import pytest
@@ -109,6 +110,69 @@ async def test_active_displays_after_allocate(vnc: VNCManager):
     await vnc.allocate()
     await vnc.allocate()
     assert sorted(vnc.active_displays) == [100, 101]
+
+
+# ── start_vnc ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_start_vnc_logs_action_without_internal_log_path(
+    vnc: VNCManager,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    class FakeLogFile:
+        def close(self) -> None:
+            pass
+
+    proc = SimpleNamespace(poll=lambda: None)
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(vm.shutil, "which", lambda _name: "/usr/bin/Xvnc")
+    monkeypatch.setattr(builtins, "open", lambda *args, **kwargs: FakeLogFile())
+    monkeypatch.setattr(vm.subprocess, "Popen", lambda *args, **kwargs: proc)
+    monkeypatch.setattr(vm.asyncio, "sleep", fake_sleep)
+    caplog.set_level("INFO", logger="invisible_browser.manager.vnc")
+
+    started = await vnc.start_vnc(100, 6100)
+
+    assert started is proc
+    assert "action=vnc.start_requested display=:100 ws_port=6100" in caplog.text
+    assert "/tmp/xvnc-100.log" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_start_vnc_log_read_failure_logs_error_type_without_raw_exception(
+    vnc: VNCManager,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    class FakeLogFile:
+        def close(self) -> None:
+            pass
+
+    def fake_open(path: str, mode: str = "r", *args, **kwargs):
+        if mode == "w":
+            return FakeLogFile()
+        raise OSError("xvnc-log-token-super-secret via /tmp/xvnc-100.log")
+
+    proc = SimpleNamespace(poll=lambda: 1)
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(vm.shutil, "which", lambda _name: "/usr/bin/Xvnc")
+    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(vm.subprocess, "Popen", lambda *args, **kwargs: proc)
+    monkeypatch.setattr(vm.asyncio, "sleep", fake_sleep)
+    caplog.set_level("DEBUG", logger="invisible_browser.manager.vnc")
+
+    with pytest.raises(RuntimeError, match=r"Xvnc failed to start on :100"):
+        await vnc.start_vnc(100, 6100)
+
+    assert "action=vnc.start_log_read_failed display=:100 error_type=OSError" in caplog.text
+    assert "xvnc-log-token-super-secret" not in caplog.text
+    assert "/tmp/xvnc-100.log" not in caplog.text
 
 
 # ── cleanup_stale ────────────────────────────────────────────────────────────

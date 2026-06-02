@@ -86,7 +86,13 @@ class VNCManager:
         ]
 
         log_path = f"/tmp/xvnc-{display}.log"
-        logger.info("Starting Xvnc on :%d (ws_port=%d) log=%s", display, ws_port, log_path)
+        logger.info(
+            "action=vnc.start_requested display=:%d ws_port=%d width=%d height=%d",
+            display,
+            ws_port,
+            width,
+            height,
+        )
 
         log_file = open(log_path, "w")
         proc = subprocess.Popen(
@@ -104,7 +110,11 @@ class VNCManager:
                 with open(log_path) as f:
                     err = f.read()
             except Exception as exc:
-                logger.debug("Failed to read Xvnc log %s: %s", log_path, exc)
+                logger.debug(
+                    "action=vnc.start_log_read_failed display=:%d error_type=%s",
+                    display,
+                    type(exc).__name__,
+                )
                 err = ""
             raise RuntimeError(f"Xvnc failed to start on :{display}: {err}")
 

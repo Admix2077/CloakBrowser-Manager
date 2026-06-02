@@ -1219,6 +1219,34 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 VNCManager start log redaction guardrail
+
+背景：
+
+- 发布 smoke 的 launch/VNC viewer 路径依赖 VNCManager `start_vnc()`。
+- 旧 Xvnc start 日志会输出内部 `/tmp/xvnc-*.log` path，log 读取失败时会输出 raw exception message。
+
+已覆盖：
+
+- Xvnc start request 只记录固定 action、display、ws_port、width、height。
+- Xvnc log read failure 只记录固定 action、display、error_type。
+- VNC allocation、start command、process tracking、stop/cleanup 语义保持。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_start_vnc_logs_action_without_internal_log_path backend/tests/test_vnc_manager.py::test_start_vnc_log_read_failure_logs_error_type_without_raw_exception -q
+# RED then GREEN; final focused tests passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py -q
+# 15 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸选择、viewer token issuance、profile 存储、VNC command args 或 launch fallback 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Health GeoIP lookup failure log redaction guardrail
 
 背景：

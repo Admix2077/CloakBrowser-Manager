@@ -1519,3 +1519,34 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance、profile 存储、clipboard text source order、automation page response shape 或 launch fallback 行为。
 - 不记录或公开 raw exception text、page URL、profile dir/path、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 VNCManager start log redaction guardrail
+
+背景：
+
+- VNCManager `start_vnc()` 是 profile launch、runtime viewer 和 VNC smoke 的底层路径。
+- 旧启动日志会输出内部 Xvnc log path，log 读取失败时还会输出 raw exception message；这些文本可能包含内部路径或环境相关细节。
+
+已覆盖：
+
+- Xvnc start request 日志只记录固定 `action=vnc.start_requested`、display、ws_port、width、height。
+- Xvnc log read failure 只记录固定 `action=vnc.start_log_read_failed`、display 和 error_type。
+- VNC allocation、Popen command、process tracking、stop/cleanup 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_start_vnc_logs_action_without_internal_log_path backend/tests/test_vnc_manager.py::test_start_vnc_log_read_failure_logs_error_type_without_raw_exception -q
+# RED: VNCManager logs exposed /tmp Xvnc log path and raw read exception text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_start_vnc_logs_action_without_internal_log_path backend/tests/test_vnc_manager.py::test_start_vnc_log_read_failure_logs_error_type_without_raw_exception -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py -q
+# 15 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸选择、viewer token issuance、profile 存储、VNC command args 或 launch fallback 行为。
+- 不记录或公开 raw exception text、Xvnc log path、profile dir/path、headers、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
