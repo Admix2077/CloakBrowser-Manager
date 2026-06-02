@@ -1248,6 +1248,37 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 VNC proxy failure log redaction guardrail
+
+背景：
+
+- 发布 smoke 会覆盖 regular VNC viewer 与 runtime viewer session；两者共享 `_proxy_running_vnc()`。
+- 旧 VNC proxy failure 日志会输出 raw exception message，可能固化 viewer URL/token、backend URL、端口或内部路径。
+
+已覆盖：
+
+- backend connect failure 只记录固定 action、profile_id、error_type。
+- client→backend、backend→client、websocket close failure 只记录固定 action、profile_id、error_type 和低敏 message count。
+- runtime viewer backend failure audit 仍保持 redacted reason_code。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception -q
+# RED then GREEN; final focused test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_ws_allows_same_origin backend/tests/test_api.py::test_ws_allows_no_origin backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit backend/tests/test_session_broker.py::test_runtime_vnc_accepts_valid_viewer_token_and_proxies_to_profile_vnc backend/tests/test_session_broker.py::test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit -q
+# 3 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance 或 profile 存储行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 BrowserManager lifecycle log redaction guardrail
 
 背景：

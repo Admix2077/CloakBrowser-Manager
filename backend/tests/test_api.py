@@ -5838,3 +5838,40 @@ def test_vnc_proxy_connects_websockify_path(app_client: TestClient, monkeypatch:
     assert kwargs["compression"] is None
     assert kwargs["ping_interval"] is None
     main.browser_mgr.running.pop(pid, None)
+
+
+def test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "VncLogRedaction"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+
+    class FailingConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            raise OSError("backend-vnc-token-super-secret via ws://127.0.0.1:6100")
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FailingConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+    caplog.set_level("ERROR", logger="invisible_browser.manager")
+
+    with app_client.websocket_connect(
+        f"/api/profiles/{pid}/vnc",
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    assert f"action=vnc.proxy_connect_failed profile_id={pid} error_type=OSError" in caplog.text
+    assert "backend-vnc-token-super-secret" not in caplog.text
+    assert "127.0.0.1:6100" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)

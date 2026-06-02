@@ -1390,3 +1390,37 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸或 profile 存储行为。
 - 不记录或公开 raw env value、provider message/reason、raw exception text、proxy host/credentials、headers、profile dir、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 VNC proxy failure log redaction guardrail
+
+背景：
+
+- regular profile VNC 和 runtime viewer session 共享 `_proxy_running_vnc()`。
+- 旧 VNC proxy 连接失败、client→backend 转发失败、backend→client 转发失败、websocket close failure 日志会拼接 raw exception message；这些异常文本可能包含 viewer URL、proxy/backend URL、token、端口或内部路径。
+
+已覆盖：
+
+- VNC backend connect failure 现在只记录固定 `action=vnc.proxy_connect_failed`、profile_id 和 error_type。
+- client→backend、backend→client、websocket close failure 日志只记录固定 action、profile_id、error_type 和低敏 message count。
+- runtime viewer backend failure audit 语义不变，仍只记录 reason_code。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception -q
+# RED: VNC proxy connect error logged raw exception text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_ws_allows_same_origin backend/tests/test_api.py::test_ws_allows_no_origin backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception -q
+# 5 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit backend/tests/test_session_broker.py::test_runtime_vnc_accepts_valid_viewer_token_and_proxies_to_profile_vnc backend/tests/test_session_broker.py::test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit -q
+# 3 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、timezone、proxy、GeoIP 填充、VNC 尺寸、viewer token issuance 或 profile 存储行为。
+- 不记录或公开 raw exception text、viewer URL/token、backend URL、proxy host/credentials、headers、profile dir、cookies、local storage、runtime service token、automation payload 或页面内容。

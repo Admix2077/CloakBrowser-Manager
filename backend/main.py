@@ -3984,7 +3984,12 @@ async def _proxy_running_vnc(
                     disconnect_metadata["close_code"] = exc.code
                     logger.info("VNC proxy [c->v]: WebSocketDisconnect code=%s after %d msgs (%d dropped)", exc.code, count, dropped)
                 except Exception as exc:
-                    logger.warning("VNC proxy [c->v]: %s: %s (after %d msgs)", type(exc).__name__, exc, count)
+                    logger.warning(
+                        "action=vnc.client_to_backend_failed profile_id=%s error_type=%s messages=%d",
+                        profile_id,
+                        type(exc).__name__,
+                        count,
+                    )
 
             async def vnc_to_client():
                 count = 0
@@ -4014,7 +4019,12 @@ async def _proxy_running_vnc(
                     disconnect_metadata["close_code"] = exc.code
                     logger.info("VNC proxy [v->c]: client disconnect code=%s after %d msgs", exc.code, count)
                 except Exception as exc:
-                    logger.warning("VNC proxy [v->c]: %s: %s (after %d msgs)", type(exc).__name__, exc, count)
+                    logger.warning(
+                        "action=vnc.backend_to_client_failed profile_id=%s error_type=%s messages=%d",
+                        profile_id,
+                        type(exc).__name__,
+                        count,
+                    )
 
             c2v = asyncio.create_task(client_to_vnc(), name="c2v")
             v2c = asyncio.create_task(vnc_to_client(), name="v2c")
@@ -4048,7 +4058,11 @@ async def _proxy_running_vnc(
                 task.cancel()
 
     except Exception as exc:
-        logger.error("VNC proxy connect error for %s: %s: %s", profile_id, type(exc).__name__, exc)
+        logger.error(
+            "action=vnc.proxy_connect_failed profile_id=%s error_type=%s",
+            profile_id,
+            type(exc).__name__,
+        )
         if on_connect_failed and not audit_connected:
             on_connect_failed()
     finally:
@@ -4057,7 +4071,11 @@ async def _proxy_running_vnc(
         try:
             await websocket.close()
         except Exception as exc:
-            logger.debug("VNC proxy: websocket.close() failed: %s", exc)
+            logger.debug(
+                "action=vnc.websocket_close_failed profile_id=%s error_type=%s",
+                profile_id,
+                type(exc).__name__,
+            )
 
 
 # ── Automation API ───────────────────────────────────────────────────────────
