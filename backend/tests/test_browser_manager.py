@@ -232,6 +232,19 @@ def test_build_invisible_kwargs_drops_non_public_locale_text(tmp_path: Path):
     assert kwargs["locale"] == "en-US"
 
 
+def test_build_invisible_kwargs_drops_non_public_timezone_text(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "proxy": None,
+        "timezone": "America/Los_Angeles\r\nAuthorization: Bearer timezone-super-secret",
+        "locale": "en-US",
+        "launch_args": None,
+    })
+
+    assert kwargs["timezone"] == ""
+
+
 def test_build_invisible_kwargs_suppresses_webrtc_host_candidates(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,

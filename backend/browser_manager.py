@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from invisible_playwright.async_api import InvisiblePlaywright
 
@@ -50,6 +51,7 @@ WEBRTC_LOCAL_IP_SUPPRESSION_PREFS = {
 PUBLIC_VERSION_RE = re.compile(r"^\d+(?:\.\d+){0,5}$")
 PUBLIC_FIREFOX_BUILD_ID_RE = re.compile(r"^\d{8,20}$")
 PUBLIC_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2,8}|\d{3})){0,2}$")
+PUBLIC_TIMEZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+){0,3}$")
 STEALTH_PREF_CATEGORY_ALIASES = {
     "fpp": "fingerprint",
     "hw_concurrency": "hardware",
@@ -333,6 +335,19 @@ def _public_locale(value: str | None) -> str:
     return "-".join(canonical)
 
 
+def _public_timezone(value: str | None) -> str:
+    if not isinstance(value, str):
+        return ""
+    timezone = value.strip()
+    if not timezone or not PUBLIC_TIMEZONE_RE.fullmatch(timezone):
+        return ""
+    try:
+        ZoneInfo(timezone)
+    except ZoneInfoNotFoundError:
+        return ""
+    return timezone
+
+
 def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     """Build kwargs for InvisiblePlaywright from a Manager profile."""
     extra_prefs = {
@@ -347,7 +362,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         "extra_args": _filter_firefox_launch_args(profile.get("launch_args") or []),
         "humanize": bool(profile.get("humanize", False)),
         "locale": _public_locale(profile.get("locale")),
-        "timezone": profile.get("timezone") or "",
+        "timezone": _public_timezone(profile.get("timezone")),
         "extra_prefs": extra_prefs,
         "profile_dir": str(profile["user_data_dir"]),
     }

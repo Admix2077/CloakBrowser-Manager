@@ -1125,3 +1125,34 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、timezone、proxy 或 patched Firefox 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 browser timezone public-value guardrail
+
+背景：
+
+- Pixelscan/IPhey gate 仍未完成，但 timezone 是外站 release smoke 的关键检查面。
+- profile timezone 会进入 invisible launch kwargs，必须避免非 IANA 时区文本影响浏览器身份面或污染调试证据。
+
+已覆盖：
+
+- `_build_invisible_kwargs()` 只把 zoneinfo 可解析的公开 timezone 传给 invisible browser。
+- 非公开/header/token/path 风格 timezone 字符串降为空字符串，沿用未指定 timezone 的启动语义。
+- 合法 timezone 如 `America/New_York`、`America/Los_Angeles` 在相邻 tests 中保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_timezone_text -q
+# RED then GREEN; final focused test passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_timezone_text backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 56 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、proxy、GeoIP 填充或 profile 存储行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

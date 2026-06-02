@@ -1199,3 +1199,35 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、timezone、proxy 或 patched Firefox 行为。
 - 不记录或公开 raw locale input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
+
+## 2026-06-03 browser timezone public-value guardrail
+
+背景：
+
+- profile `timezone` 会进入 `invisible_playwright` launch kwargs，并影响页面端 timezone 指纹。
+- 该字段来自 profile/API/CSV 导入等自由文本路径；如果传入 header fragment、token、URL 或路径风格文本，旧逻辑会把它直接传播到浏览器启动参数。
+
+已覆盖：
+
+- 新增公开 timezone normalizer，只允许低敏 IANA/zoneinfo 可解析时区名。
+- 非公开格式、空值或 zoneinfo 不存在的值统一降为空字符串，保持既有“未指定 timezone”语义。
+- `_build_invisible_kwargs()` 在生成浏览器启动参数时使用该 normalizer。
+- 回归测试覆盖污染 timezone 不进入 launch kwargs；相邻 launch tests 覆盖合法 timezone 仍保留。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_timezone_text -q
+# RED: polluted timezone reached launch kwargs
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_timezone_text backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 56 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、locale、proxy、GeoIP 填充或 profile 存储行为。
+- 不记录或公开 raw timezone input、headers、profile dir、proxy、cookies、local storage、viewer token、runtime service token、automation payload 或页面内容。
