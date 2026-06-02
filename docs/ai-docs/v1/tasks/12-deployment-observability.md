@@ -703,6 +703,55 @@ git diff --check
 # no output
 ```
 
+## 2026-06-03 automation task status aggregate redaction
+
+背景：
+
+- `/api/status` 和 `/api/diagnostics` 都通过 `automation_task_counts` 暴露 automation task status 聚合。
+- 旧实现直接把 DB 中的 `automation_tasks.status` 作为 response key；如果历史或损坏 row 含有非白名单 status，token/path/secret 风格文本可能成为可见状态名。
+- 该问题与 runtime session status diagnostics redaction 属同类低敏聚合边界。
+
+已覆盖：
+
+- `count_automation_tasks_by_status()` 只保留低敏公开状态：
+  - `queued`
+  - `running`
+  - `cancel_requested`
+  - `cancelled`
+  - `failed`
+  - `succeeded`
+- 其他 status 统一归并到 `unknown`。
+- `/api/status` 和 `/api/diagnostics` 测试均覆盖 corrupted automation task status 不出现在响应序列化文本中，且 `unknown` 计数正确累加。
+
+边界：
+
+- 不改变 automation task 表结构、创建/claim/renew/finish/cancel/retry/run 行为。
+- 不改变 task detail/list 的 step/result payload 脱敏策略。
+- 不返回 automation task steps、URL query、selector、form value、lease owner、lease timestamp、profile/proxy/runtime session 详情。
+- 这不是 Pixelscan fingerprint masking 修复；只加固 release diagnostics/status 的低敏聚合面。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_status backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED: automation_task_counts did not include unknown for corrupted status
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_status backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_status backend/tests/test_api.py::test_system_status_uses_count_queries_without_loading_sensitive_rows backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+```
+
 ## 2026-06-03 diagnostics stealth pref surface observability
 
 背景：

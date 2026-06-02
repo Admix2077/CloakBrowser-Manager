@@ -831,6 +831,43 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 automation task status aggregate redaction
+
+背景：
+
+- `automation_task_counts` 是 release smoke 和 diagnostics 中判断 automation queue/running/failed backlog 的低敏聚合信号。
+- 为防御历史/损坏 DB row，status counts 不能把非白名单 automation task status 原样展示成可见 `/api/status` 或 `/api/diagnostics` key。
+
+已覆盖：
+
+- Automation task status counts 只公开 `queued`、`running`、`cancel_requested`、`cancelled`、`failed`、`succeeded` 和 `unknown`。
+- 非白名单 status 归并到 `unknown`，测试覆盖敏感 status 文本不会出现在 API 响应序列化中。
+- 相邻 status/diagnostics count-query 测试和完整后端/前端门禁重新验证。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_status backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot -q
+# RED then GREEN; final 2 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_status backend/tests/test_api.py::test_system_status_uses_count_queries_without_loading_sensitive_rows backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 4 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 514 passed
+
+npm --prefix frontend test
+# 16 files / 221 tests passed
+
+npm --prefix frontend run build
+# built successfully
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA 或 patched Firefox 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 runtime session status diagnostics redaction
 
 背景：

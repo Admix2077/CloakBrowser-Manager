@@ -17,6 +17,14 @@ from .proxies import normalize_proxy_asset_url, redact_proxy_asset_url
 DATA_DIR = Path("/data")
 DB_PATH = DATA_DIR / "profiles.db"
 _PUBLIC_RUNTIME_SESSION_STATUSES = frozenset({"active", "terminated"})
+_PUBLIC_AUTOMATION_TASK_STATUSES = frozenset({
+    "cancel_requested",
+    "cancelled",
+    "failed",
+    "queued",
+    "running",
+    "succeeded",
+})
 
 
 @contextmanager
@@ -725,7 +733,12 @@ def count_automation_tasks_by_status() -> dict[str, int]:
         rows = conn.execute(
             "SELECT status, COUNT(*) AS count FROM automation_tasks GROUP BY status",
         ).fetchall()
-    return {str(row["status"] or "unknown"): int(row["count"]) for row in rows}
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = str(row["status"] or "unknown")
+        public_status = status if status in _PUBLIC_AUTOMATION_TASK_STATUSES else "unknown"
+        counts[public_status] = counts.get(public_status, 0) + int(row["count"])
+    return counts
 
 
 def update_automation_task(

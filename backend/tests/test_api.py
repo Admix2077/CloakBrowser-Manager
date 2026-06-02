@@ -810,6 +810,11 @@ def test_system_status(app_client: TestClient):
         status="failed",
         steps=[{"type": "evaluate", "expression": "window.localStorage.secret"}],
     )
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        status="queued-token-super-secret",
+        steps=[{"type": "open_url", "url": "https://status.example/?token=queued-token-super-secret"}],
+    )
 
     resp = app_client.get("/api/status")
     assert resp.status_code == 200
@@ -824,6 +829,7 @@ def test_system_status(app_client: TestClient):
     assert data["automation_task_counts"]["queued"] >= 1
     assert data["automation_task_counts"]["running"] >= 1
     assert data["automation_task_counts"]["failed"] >= 1
+    assert data["automation_task_counts"]["unknown"] >= 1
 
     serialized = json.dumps(data)
     assert "secret-password" not in serialized
@@ -831,6 +837,7 @@ def test_system_status(app_client: TestClient):
     assert "secret-token" not in serialized
     assert "secret-value" not in serialized
     assert "window.localStorage.secret" not in serialized
+    assert "queued-token-super-secret" not in serialized
     assert "steps" not in serialized
 
 
@@ -879,6 +886,11 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
         profile_id=profile["id"],
         status="failed",
         steps=[{"type": "fill", "selector": "#password", "value": "secret-value"}],
+    )
+    main.db.create_automation_task(
+        profile_id=profile["id"],
+        status="queued-token-super-secret",
+        steps=[{"type": "open_url", "url": "https://diagnostics.example/?token=queued-token-super-secret"}],
     )
     active_runtime_session = main.db.create_runtime_session(
         profile_id=profile["id"],
@@ -949,6 +961,7 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["counts"]["profiles_total"] >= 1
     assert data["counts"]["queued_tasks"] >= 1
     assert data["counts"]["failed_tasks"] >= 1
+    assert data["counts"]["automation_task_counts"]["unknown"] >= 1
     assert data["runtime_sessions"]["status_counts"]["active"] == 1
     assert data["runtime_sessions"]["status_counts"]["terminated"] == 1
     assert data["runtime_sessions"]["status_counts"]["unknown"] == 1
@@ -989,6 +1002,7 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert "secret note" not in serialized
     assert "secret-token" not in serialized
     assert "secret-value" not in serialized
+    assert "queued-token-super-secret" not in serialized
     assert active_runtime_session["id"] not in serialized
     assert terminated_runtime_session["id"] not in serialized
     assert corrupted_runtime_session["id"] not in serialized
