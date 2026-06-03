@@ -6145,3 +6145,43 @@ npm --prefix frontend run build
 - 这是 Proxy Manager proxy asset UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 proxy asset API schema、proxy CRUD/check backend、proxy URL credential redaction、provider/country filters、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Assignment profile name public text/search guardrail
+
+背景：
+
+- Proxy Manager 的 assign-to-profiles 弹窗会把 profile `name` 显示到候选行、title 和 checkbox aria-label，并把它加入本地搜索索引。
+- 前一轮已覆盖 profile runtime status 和 proxy asset name，但 assignment dialog 的 profile name 仍可能原样进入 UI/search release evidence。
+- 历史/手工污染 profile row 如果把 Authorization/Bearer、`token=`、本地路径或 IP 字面量塞入 `name`，会进入发布证据；这是 Manager 可控 UI 边界，不是底层 fingerprint 检测问题。
+
+已覆盖：
+
+- Assignment profile row 的 visible name、title 和 checkbox aria-label 现在走 `publicErrorText()`，空结果回退为 `unknown`。
+- Assignment profile 本地搜索索引使用公开展示名；secret marker 不再能作为搜索词匹配该候选 profile，正常低敏名称仍可搜索。
+- 正常 proxy assignment、profile selection、runtime status badge、proxy URL credential redaction 和 no-match 状态保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts assignment profile names"
+# RED: 旧实现把污染 profile name 原样写入文本、title、aria-label 和搜索索引；GREEN: 1 passed, 26 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 27 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 42.35s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 245 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.10s
+```
+
+边界：
+
+- 这是 Proxy Manager assignment profile UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 profile API schema、profile persistence、proxy assignment backend、random assignment、proxy URL credential redaction、provider/country filters、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

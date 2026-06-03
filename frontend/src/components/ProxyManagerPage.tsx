@@ -1981,6 +1981,7 @@ function AssignmentProfileRow({
   checked: boolean;
   onToggle: () => void;
 }) {
+  const safeName = publicAssignmentProfileLabel(profile.name);
   const safeProxy = profile.proxy ? redactUrlCredentials(profile.proxy) : "No proxy";
   const runtimeStatus = publicRuntimeStatus(profile.status);
 
@@ -1991,12 +1992,12 @@ function AssignmentProfileRow({
         className="choice-checkbox m-0"
         checked={checked}
         onChange={onToggle}
-        aria-label={`Assign ${profile.name}`}
+        aria-label={`Assign ${safeName}`}
       />
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-slate-900" title={profile.name}>
-            {profile.name}
+          <span className="truncate text-sm font-semibold text-slate-900" title={safeName}>
+            {safeName}
           </span>
           <span className={`rounded-[999px] border px-1.5 py-0.5 text-[10px] font-medium ${
             runtimeStatus === "running"
@@ -2246,6 +2247,10 @@ function publicProviderPresetLabel(value: string): string {
 }
 
 function publicProxyAssetLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
+function publicAssignmentProfileLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 
@@ -2529,7 +2534,7 @@ function getProxySearchText(proxy: ProxyAsset): string {
 function getAssignmentProfileSearchText(profile: Profile): string {
   return [
     profile.id,
-    profile.name,
+    publicAssignmentProfileLabel(profile.name),
     publicRuntimeStatus(profile.status),
     profile.proxy ? redactUrlCredentials(profile.proxy) : "no proxy",
   ]

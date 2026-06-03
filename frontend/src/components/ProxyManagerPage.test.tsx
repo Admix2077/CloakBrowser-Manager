@@ -705,6 +705,61 @@ describe("ProxyManagerPage", () => {
     expect(within(dialog).getByText("Polluted Status")).toBeTruthy();
   });
 
+  it("redacts assignment profile names from rendered and search evidence", async () => {
+    const leakMarker = "assignment-profile-name-secret";
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "Credential Pool" }),
+    ]);
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({
+          id: "polluted-name",
+          name:
+            "Alpha Authorization=Bearer " +
+            `${leakMarker} token=${leakMarker} /data/profile-name-secret 203.0.113.88`,
+        }),
+      ]}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    const safeName = "Alpha [redacted] [redacted] [redacted-path] [redacted-ip]";
+    expect(within(dialog).getByText(safeName)).toBeTruthy();
+    expect(within(dialog).getByLabelText(`Assign ${safeName}`)).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: leakMarker },
+    });
+    expect(within(dialog).queryByText(safeName)).toBeNull();
+    expect(within(dialog).getByRole("status", { name: "No assignment profiles match search" })).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: "alpha" },
+    });
+    expect(within(dialog).getByText(safeName)).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-name-secret",
+      "203.0.113.88",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("does not turn a successful assignment into an assign failure when refresh fails", async () => {
     const onProfilesAssigned = vi.fn().mockRejectedValue(new Error("refresh failed"));
     mockListProxies.mockResolvedValue([
