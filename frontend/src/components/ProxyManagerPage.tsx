@@ -1996,7 +1996,7 @@ function AssignmentProfileRow({
 }) {
   const safeName = publicAssignmentProfileLabel(profile.name);
   const safeProfileId = publicAssignmentProfileIdLabel(profile.id);
-  const safeProxy = profile.proxy ? redactUrlCredentials(profile.proxy) : "No proxy";
+  const safeProxy = publicAssignmentProfileProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
 
   return (
@@ -2292,6 +2292,10 @@ function publicAssignmentProfileLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 
+function publicAssignmentProfileProxyLabel(value: string | null | undefined): string {
+  return value ? publicErrorText(value) || "unknown" : "No proxy";
+}
+
 function publicAssignmentProfileIdLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || !PUBLIC_ASSIGNMENT_PROFILE_ID_RE.test(trimmed)) return "unknown";
@@ -2581,7 +2585,7 @@ function getAssignmentProfileSearchText(profile: Profile): string {
     publicAssignmentProfileIdLabel(profile.id),
     publicAssignmentProfileLabel(profile.name),
     publicRuntimeStatus(profile.status),
-    profile.proxy ? redactUrlCredentials(profile.proxy) : "no proxy",
+    publicAssignmentProfileProxyLabel(profile.proxy),
   ]
     .map(normalizeFilterValue)
     .filter(Boolean)

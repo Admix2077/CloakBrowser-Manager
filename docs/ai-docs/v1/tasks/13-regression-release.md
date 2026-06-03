@@ -6495,3 +6495,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t 
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、proxy/provider preset persistence、filter values、filter matching、random assignment payload、proxy assignment、GeoIP lookup、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager random assignment filter summary release-evidence 边界。
+
+## 2026-06-04 Proxy Manager assignment profile current proxy release-evidence guardrail
+
+背景：
+
+- Proxy Manager assign-to-profiles 和 random assign dialogs 的 profile rows 会展示当前 proxy，并支持按当前 proxy 搜索 profile。
+- 正常 endpoint host/port 仍需要展示和搜索；但污染 profile.proxy 不应进入 visible text、title、aria 或 searchable evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Assignment profile row 当前 proxy 使用 public error-text boundary。
+- URL credentials、Authorization/Bearer、`token=`、path 和 IP-style 当前 proxy 片段不会进入 dialog text/title/aria evidence。
+- Search corpus 使用 public current-proxy label；敏感 marker 不命中，普通 endpoint host 仍可命中。
+- Raw profile id、selected profile set、assign/random-assign request payloads、profile persistence 和 backend assignment contract 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts assignment profile current proxy"
+# RED then GREEN；旧实现把污染 profile.proxy 写入 assignment dialog summary/search evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/lib/errorDisplay.test.ts
+# 2 files passed, 38 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、profile persistence、profile proxy raw value、proxy persistence、proxy assignment/random assignment payload、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager assignment profile current proxy release-evidence 边界。

@@ -763,6 +763,71 @@ describe("ProxyManagerPage", () => {
     expect(`${dialog.textContent} ${titleText}`).not.toContain("legacy-user");
   });
 
+  it("redacts assignment profile current proxy from rendered and search evidence", async () => {
+    const leakMarker = "assignment-profile-proxy-secret";
+    const rawCurrentProxy =
+      "http://old-user:oldpass@old.proxy.example:8080 " +
+      `Authorization=Bearer ${leakMarker} token=${leakMarker} /data/profile-current-proxy 203.0.113.124`;
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "Credential Pool" }),
+    ]);
+    mockAssignProxyToProfiles.mockResolvedValue({
+      proxy_id: "proxy-1",
+      proxy: proxy({ id: "proxy-1", name: "Credential Pool" }),
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [{ profile_id: "alpha", ok: true, error: null }],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({ id: "alpha", name: "Alpha Good", proxy: rawCurrentProxy }),
+      ]}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    expect(within(dialog).getByText("http://old.proxy.example:8080 [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "old-user",
+      "oldpass",
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-current-proxy",
+      "203.0.113.124",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: leakMarker },
+    });
+    expect(within(dialog).getByRole("status", { name: "No assignment profiles match search" })).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: "old.proxy.example" },
+    });
+    expect(within(dialog).getByText("Alpha Good")).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign proxy" }));
+
+    await waitFor(() => expect(mockAssignProxyToProfiles).toHaveBeenCalledWith("proxy-1", ["alpha"]));
+  });
+
   it("folds non-public assignment profile runtime statuses before rendering", async () => {
     const leakMarker = "assignment-status-secret";
     mockListProxies.mockResolvedValue([

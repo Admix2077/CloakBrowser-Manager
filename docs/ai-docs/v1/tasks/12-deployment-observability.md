@@ -6812,3 +6812,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t 
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、proxy/provider preset persistence、filter values、filter matching、random assignment payload、proxy assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy Manager assignment profile current proxy evidence guardrail
+
+背景：
+
+- Proxy Manager assign-to-profiles 和 random assign dialogs 共用 assignment profile row，会显示 profile 当前 proxy，并把该字段纳入本地搜索。
+- 正常当前 proxy endpoint 仍需要可见，便于判断覆盖前状态；但异常 response、历史/手工污染 profile proxy 或测试桩可能把 Authorization/Bearer、`token=`、本地路径或 IP 字面量混入当前 proxy。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Assignment profile row 当前 proxy text/title 使用 public error-text boundary，继续保留普通 endpoint host/port。
+- Authorization/Bearer/`token=`/path/IP-style 当前 proxy 片段显示为 `[redacted]`、`[redacted-path]` 或 `[redacted-ip]`，不进入 rendered text/title/aria evidence。
+- Assignment profile local search 使用同一 public current-proxy label，因此敏感 marker 不能命中；普通 host 仍可搜索。
+- Raw profile id、checkbox selection、assign/random-assign payload、profile persistence 和 proxy assignment backend contract 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts assignment profile current proxy"
+# RED: 旧实现把污染 profile.proxy 写入 assignment dialog text/title/search evidence；GREEN: 1 passed, 34 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/lib/errorDisplay.test.ts
+# 2 files passed, 38 tests passed
+```
+
+边界：
+
+- 这是 Proxy Manager assignment profile current proxy UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、profile persistence、profile proxy raw value、proxy persistence、proxy assignment/random assignment payload、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
