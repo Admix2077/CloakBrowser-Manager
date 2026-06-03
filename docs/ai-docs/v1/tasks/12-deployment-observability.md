@@ -2136,3 +2136,47 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy storage URL semantics、CSV supported columns、profile schema 或 audit event schema。
 - 不在 CSV row errors 中公开 proxy URL/host/username/password/query token、Authorization/Bearer、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Automation pages summary redaction guardrail
+
+背景：
+
+- Automation console/network summary 已对 URL、query、fragment、token assignments 和 Bearer token 做低敏化。
+- `/api/profiles/{profile_id}/automation/pages` 仍直接返回 `page.url` 与 `page.title()`，如果页面 URL 或标题包含 query token、URL userinfo、Authorization/Bearer 或 token-like 文本，会在管理台 runtime page summary 中回显。
+
+已覆盖：
+
+- Automation pages summary URL 现在使用现有 `_automation_safe_url()` 输出：保留 scheme/host/port/path，移除 userinfo、params、query 和 fragment。
+- `about:*` 页面 URL 保持原样，避免把正常 `about:blank` 页显示成空字符串。
+- Page title 现在复用 `_automation_redact_text()`，会 redacts URL query/fragment、`token=...` assignments 和 Bearer tokens。
+- Automation page id、index、page ref lookup、goto/click/fill/evaluate/screenshot/console/network 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_sensitive_url_and_title -q
+# RED: 1 failed；pages response 原样返回 `https://user:pass@...?...#frag`
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_sensitive_url_and_title -q
+# 1 passed in 1.47s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_pages or automation_console_logs or automation_network_summary or automation_goto"
+# 11 passed, 206 deselected in 2.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 567 passed in 32.77s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.12s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation page actions、navigation target URL、console/network capture internals 或 audit event schema。
+- 不在 Automation pages summary 中公开 page URL userinfo/query/fragment token、Authorization/Bearer、token assignments、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

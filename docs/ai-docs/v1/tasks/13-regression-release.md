@@ -1975,3 +1975,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy storage URL semantics、CSV supported columns、profile schema 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation pages summary redaction guardrail
+
+背景：
+
+- Release automation/VNC smoke 会读取 `/api/profiles/{profile_id}/automation/pages` 来展示可操作页面。
+- Console/network summary 已使用 safe URL/text redaction；pages summary 仍直接回显 raw `page.url` 和 title，一旦页面 URL 或标题带 query token、userinfo、Authorization/Bearer 或 token-like 文本，会进入 runtime response/UI。
+
+已覆盖：
+
+- Automation pages summary URL 现在保留 scheme/host/port/path，移除 userinfo、params、query 和 fragment。
+- Page title 复用 automation text redaction，隐藏 token assignments、Bearer token 和 URL query/fragment。
+- `about:*` pages、page ids、page index、goto 和其他 automation page action behavior 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_sensitive_url_and_title -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 1.47s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_pages or automation_console_logs or automation_network_summary or automation_goto"
+# 11 passed, 206 deselected in 2.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 567 passed in 32.77s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.12s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation page actions、navigation target URL、console/network capture internals 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

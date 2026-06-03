@@ -2690,6 +2690,42 @@ def test_automation_pages_lists_existing_pages(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_pages_redacts_sensitive_url_and_title(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationPagesRedaction"})
+    pid = create.json()["id"]
+    secret_url = "https://user:pass@app.example.com/dashboard?token=page-secret#frag"
+    secret_title = (
+        "Dashboard token=title-secret Authorization: Bearer bearer-secret "
+        "https://title.example/path?secret=title-url-secret#frag"
+    )
+    _automation_running_profile(pid, [_automation_page(secret_url, secret_title)])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    page = resp.json()["pages"][0]
+    assert page["url"] == "https://app.example.com/dashboard"
+    assert page["title"] == (
+        "Dashboard token=[redacted] Authorization: Bearer [redacted] "
+        "https://title.example/path"
+    )
+    serialized = resp.text
+    for leaked in (
+        "user:pass",
+        "page-secret",
+        "title-secret",
+        "bearer-secret",
+        "title-url-secret",
+        "?token",
+        "?secret",
+        "#frag",
+        secret_url,
+        secret_title,
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_page_title_failure_logs_error_type_without_raw_exception(
     app_client: TestClient,
     caplog: pytest.LogCaptureFixture,

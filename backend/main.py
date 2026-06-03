@@ -4182,6 +4182,13 @@ def _automation_page_url(page) -> str:
     return str(getattr(page, "url", "") or "")
 
 
+def _automation_public_page_url(page) -> str:
+    url = _automation_page_url(page)
+    if url.startswith("about:"):
+        return url
+    return _automation_safe_url(url)
+
+
 def _automation_is_internal_page(page) -> bool:
     return _automation_page_url(page) in {"about:home", "about:newtab", "about:welcome"}
 
@@ -4324,8 +4331,8 @@ async def _automation_page_summary(running, index: int, page) -> AutomationPageR
     return AutomationPageResponse(
         page_id=_automation_page_id(running, page),
         index=index,
-        url=_automation_page_url(page),
-        title=title,
+        url=_automation_public_page_url(page),
+        title=_automation_redact_text(title),
     )
 
 
