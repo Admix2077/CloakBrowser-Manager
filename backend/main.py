@@ -2383,6 +2383,7 @@ async def export_profile_bundle(profile_id: str, request: Request):
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
+    public_profile_id = _public_profile_identifier(profile_id)
     if req.include_sensitive_proxy and req.confirm_sensitive_proxy_export is not True:
         raise HTTPException(
             status_code=422,
@@ -2401,7 +2402,7 @@ async def export_profile_bundle(profile_id: str, request: Request):
             cookies = await running.context.cookies()
             cookie_document = build_cookie_json_export(
                 cookies,
-                profile_id=profile_id,
+                profile_id=public_profile_id,
                 exported_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             )
         except Exception:
@@ -2438,8 +2439,10 @@ async def export_profile_bundle(profile_id: str, request: Request):
             raise HTTPException(status_code=400, detail="Profile bundle local storage export failed") from exc
 
     exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    bundle_profile = dict(profile)
+    bundle_profile["id"] = public_profile_id
     bundle = build_profile_config_bundle(
-        profile,
+        bundle_profile,
         exported_at=exported_at,
         include_sensitive_proxy=req.include_sensitive_proxy,
     )
@@ -2448,7 +2451,7 @@ async def export_profile_bundle(profile_id: str, request: Request):
         db.create_audit_event(
             event_type="profile_bundle.cookie_exported",
             actor_type="local_admin",
-            profile_id=profile_id,
+            profile_id=_public_uuid_identifier(profile_id),
             metadata=_cookie_export_audit_metadata(cookie_json_audit_summary(cookie_document)),
         )
     if local_storage_origin is not None and local_storage_entries is not None:
@@ -2460,7 +2463,7 @@ async def export_profile_bundle(profile_id: str, request: Request):
         db.create_audit_event(
             event_type="profile_bundle.local_storage_exported",
             actor_type="local_admin",
-            profile_id=profile_id,
+            profile_id=_public_uuid_identifier(profile_id),
             metadata=local_storage_audit_metadata(local_storage_origin, local_storage_entries),
         )
     bundle_payload = bundle.model_dump(mode="json", by_alias=True)
@@ -2477,7 +2480,7 @@ async def export_profile_bundle(profile_id: str, request: Request):
     if bundle_payload.get("local_storage", {}).get("entry_count") is None:
         bundle_payload["local_storage"].pop("entry_count", None)
     return ProfileBundleExportResponse(
-        profile_id=profile_id,
+        profile_id=public_profile_id,
         bundle=bundle_payload,
     )
 

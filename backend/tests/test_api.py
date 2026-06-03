@@ -2995,6 +2995,74 @@ def test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_r
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_export_profile_bundle_sanitizes_persisted_profile_id_response_and_audit(
+    app_client: TestClient,
+):
+    leak_marker = "bundle-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "BundlePollutedProfileId"}).json()["id"]
+    polluted_profile_id = (
+        f"bundle-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    page = _automation_page(url="https://app.example.com/dashboard?token=hidden#frag")
+    page.evaluate.return_value = [{"key": "theme", "value": "dark"}]
+    running = _automation_running_profile(polluted_profile_id, pages=[page])
+    running.context.cookies.return_value = [
+        {
+            "name": "sid",
+            "value": "bundle-cookie-value",
+            "domain": "example.com",
+            "path": "/",
+        }
+    ]
+
+    resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/bundle/export",
+        json={
+            "include_cookies": True,
+            "confirm_cookie_export": True,
+            "include_local_storage": True,
+            "confirm_local_storage_export": True,
+        },
+    )
+
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+    assert resp.status_code == 200
+    data = resp.json()
+    bundle = data["bundle"]
+    assert data["profile_id"] == "unknown"
+    assert bundle["metadata"]["source_profile_id"] == "unknown"
+    assert bundle["cookies"]["document"]["profile_id"] == "unknown"
+
+    cookie_events = _audit_events_of_type("profile_bundle.cookie_exported")
+    local_storage_events = _audit_events_of_type("profile_bundle.local_storage_exported")
+    assert [event["event_type"] for event in cookie_events] == ["profile_bundle.cookie_exported"]
+    assert [event["event_type"] for event in local_storage_events] == [
+        "profile_bundle.local_storage_exported"
+    ]
+    assert cookie_events[0]["profile_id"] is None
+    assert local_storage_events[0]["profile_id"] is None
+
+    serialized = json.dumps(
+        {
+            "response": data,
+            "cookie_events": cookie_events,
+            "local_storage_events": local_storage_events,
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app_client: TestClient):
     source = app_client.post(
         "/api/profiles",

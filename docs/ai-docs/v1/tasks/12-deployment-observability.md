@@ -3334,3 +3334,46 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 cookie import/export profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Profile bundle export profile id guardrail
+
+背景：
+
+- Profile bundle export 会组合 profile config、cookie document、local storage entries 和 bundle audit events。
+- 继续复查发现 bundle response 顶层 `profile_id`、bundle metadata `source_profile_id`、embedded cookie document `profile_id`、以及 `profile_bundle.cookie_exported` / `profile_bundle.local_storage_exported` audit 顶层 `profile_id` 仍直接使用 route/profile id。
+- 历史/手工非 UUID profile id 不应进入 bundle API response、bundle metadata、embedded cookie metadata 或 release smoke audit evidence。
+
+已覆盖：
+
+- ProfileBundleExportResponse 的 `profile_id` 现在只保留 canonical UUID；非 UUID 折叠为 `unknown`。
+- Bundle metadata `source_profile_id` 使用同一 public profile id。
+- Bundle cookie document metadata `profile_id` 使用 public profile id。
+- Bundle cookie/local-storage export audit 顶层 `profile_id` 现在只保留 canonical UUID；非 UUID 省略。
+- 正常 UUID bundle config/cookie/local-storage export 和 bundle import behavior 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_sanitizes_persisted_profile_id_response_and_audit -q
+# RED: 1 failed；bundle export response 顶层 profile_id 直接保留非 UUID profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_sanitizes_persisted_profile_id_response_and_audit -q
+# 1 passed in 0.80s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile_bundle"
+# 20 passed, 214 deselected in 2.05s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 605 passed in 35.56s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.17s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 profile bundle export profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
