@@ -708,6 +708,11 @@ async def auth_logout(request: Request, response: Response):
 
 _PROXY_CHECK_ERROR_DETAIL = "Proxy check failed"
 _PUBLIC_PROXY_CHECK_STATUSES = {"good", "error"}
+_PUBLIC_PROXY_PROVIDER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
+_SENSITIVE_PROXY_PROVIDER_RE = re.compile(
+    r"https?://|socks[45]://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
+    re.IGNORECASE,
+)
 
 
 def _public_proxy_check_status(value: object) -> str | None:
@@ -724,6 +729,19 @@ def _public_proxy_check_error(value: object) -> str | None:
     if isinstance(value, str) and value == _PROXY_CHECK_ERROR_DETAIL:
         return _PROXY_CHECK_ERROR_DETAIL
     return _PROXY_CHECK_ERROR_DETAIL
+
+
+def _public_proxy_provider(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    provider = value.strip()
+    if not provider:
+        return None
+    if not _PUBLIC_PROXY_PROVIDER_RE.fullmatch(provider):
+        return None
+    if _SENSITIVE_PROXY_PROVIDER_RE.search(provider):
+        return None
+    return provider
 
 
 def _tag_responses(tags: object) -> list[TagResponse]:
@@ -744,6 +762,8 @@ def _tag_responses(tags: object) -> list[TagResponse]:
 def _proxy_response(proxy: dict) -> ProxyResponse:
     safe = dict(proxy)
     safe["url"] = redact_proxy_asset_url(str(safe["url"]))
+    safe["provider"] = _public_proxy_provider(safe.get("provider"))
+    safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
     safe["last_check_status"] = _public_proxy_check_status(safe.get("last_check_status"))
     safe["last_check_ip"] = public_geoip_ip(safe.get("last_check_ip"))
     safe["last_check_country_code"] = public_geoip_country_code(safe.get("last_check_country_code"))
@@ -770,8 +790,8 @@ def _proxy_audit_metadata(proxy: dict, *, updated_fields: list[str] | None = Non
     metadata = {
         "proxy_id": str(proxy["id"]),
         "name": proxy.get("name"),
-        "provider": proxy.get("provider"),
-        "country_code": proxy.get("country_code"),
+        "provider": _public_proxy_provider(proxy.get("provider")),
+        "country_code": public_geoip_country_code(proxy.get("country_code")),
         "tag_count": len(proxy.get("tags") or []),
     }
     if updated_fields is not None:
@@ -878,6 +898,8 @@ def _audit_health_check(
 
 def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
     safe = dict(preset)
+    safe["provider"] = _public_proxy_provider(safe.get("provider"))
+    safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
     safe["tags"] = _tag_responses(safe.get("tags"))
     return ProxyProviderPresetResponse(**safe)
 
@@ -924,8 +946,7 @@ def _normalize_filter_value(value: str | None) -> str | None:
 
 
 def _normalize_country_code(value: str | None) -> str | None:
-    normalized = _normalize_filter_value(value)
-    return normalized.upper() if normalized else None
+    return public_geoip_country_code(value)
 
 
 def _normalize_tag(value: str | None) -> str | None:
@@ -957,9 +978,9 @@ def _proxy_matches_selection(
     country_code: str | None,
     tags: list[str],
 ) -> bool:
-    if provider and _normalize_filter_value(proxy.get("provider")) != provider:
+    if provider and _public_proxy_provider(proxy.get("provider")) != provider:
         return False
-    if country_code and _normalize_country_code(proxy.get("country_code")) != country_code:
+    if country_code and public_geoip_country_code(proxy.get("country_code")) != country_code:
         return False
     if tags:
         proxy_tags = {
@@ -1503,7 +1524,7 @@ async def assign_random_proxy_to_profiles(request: Request):
         if not preset:
             raise HTTPException(status_code=404, detail="Proxy provider preset not found")
 
-    provider = _normalize_filter_value(req.provider) or _normalize_filter_value(
+    provider = _public_proxy_provider(req.provider) or _public_proxy_provider(
         preset.get("provider") if preset else None
     )
     country_code = _normalize_country_code(req.country_code) or _normalize_country_code(
@@ -1566,18 +1587,19 @@ async def assign_random_proxy_to_profiles(request: Request):
         results=results,
     )
     if succeeded:
+        audit_metadata = {
+            "provider_preset_id": req.provider_preset_id,
+            "provider": provider,
+            "country_code": country_code,
+            "tag_count": len(tags),
+            "candidate_count": len(candidates),
+            "profile_count": len(req.profile_ids),
+            "assigned_count": succeeded,
+            "missing_profile_count": len(req.profile_ids) - succeeded,
+        }
         _audit_bulk_event(
             "proxy.random_assigned",
-            {
-                "provider_preset_id": req.provider_preset_id,
-                "provider": provider,
-                "country_code": country_code,
-                "tag_count": len(tags),
-                "candidate_count": len(candidates),
-                "profile_count": len(req.profile_ids),
-                "assigned_count": succeeded,
-                "missing_profile_count": len(req.profile_ids) - succeeded,
-            },
+            {key: value for key, value in audit_metadata.items() if value is not None},
         )
     return response
 

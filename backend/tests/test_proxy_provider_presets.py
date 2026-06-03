@@ -167,6 +167,39 @@ def test_proxy_provider_preset_api_sanitizes_persisted_malformed_tags(
     assert listed.json()[0]["tags"] == get.json()["tags"]
 
 
+def test_proxy_provider_preset_api_redacts_persisted_sensitive_selection_fields(
+    app_client: TestClient,
+):
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Sensitive selection fields",
+            "provider": "ProxyCo",
+            "country_code": "JP",
+        },
+    ).json()
+    leak_marker = "preset-selection-secret"
+
+    updated = db.update_proxy_provider_preset(
+        preset["id"],
+        provider=f"Authorization=Bearer {leak_marker}",
+        country_code=f"JP?token={leak_marker}",
+    )
+    assert updated is not None
+
+    get = app_client.get(f"/api/proxy-provider-presets/{preset['id']}")
+    listed = app_client.get("/api/proxy-provider-presets")
+
+    assert get.status_code == 200
+    assert listed.status_code == 200
+    for data in (get.json(), listed.json()[0]):
+        assert data["provider"] is None
+        assert data["country_code"] is None
+        serialized = json.dumps(data, sort_keys=True)
+        for leaked in (leak_marker, "Authorization", "Bearer", "token="):
+            assert leaked not in serialized
+
+
 def test_proxy_provider_preset_crud_writes_low_sensitive_audit_events(
     app_client: TestClient,
 ):

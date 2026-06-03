@@ -224,6 +224,40 @@ def test_proxy_api_responses_redact_persisted_sensitive_last_check_fields(app_cl
             assert leaked not in json.dumps(data, sort_keys=True)
 
 
+def test_proxy_api_responses_redact_persisted_sensitive_selection_fields(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Historical selection fields",
+            "url": "http://user:hiddenpass@selection-fields.example:8080",
+            "provider": "ProxyCo",
+            "country_code": "JP",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+    leak_marker = "proxy-selection-secret"
+
+    updated = db.update_proxy(
+        proxy_id,
+        provider=f"Authorization=Bearer {leak_marker}",
+        country_code=f"JP?token={leak_marker}",
+    )
+    assert updated is not None
+
+    detail = app_client.get(f"/api/proxies/{proxy_id}")
+    listed = app_client.get("/api/proxies")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["provider"] is None
+        assert data["country_code"] is None
+        serialized = json.dumps(data, sort_keys=True)
+        for leaked in (leak_marker, "Authorization", "Bearer", "token="):
+            assert leaked not in serialized
+
+
 def test_delete_proxy_requires_explicit_confirmation_without_side_effects(
     app_client: TestClient,
 ):
@@ -1165,6 +1199,69 @@ def test_random_proxy_assignment_writes_redacted_audit_event(app_client: TestCli
     assert "hiddenpass" not in serialized_event
     assert "jp-audit-mobile.example" not in serialized_event
     assert "mobile" not in serialized_event
+
+
+def test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_metadata(
+    app_client: TestClient,
+):
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Polluted preset",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    ).json()
+    leak_marker = "random-selection-secret"
+    updated = db.update_proxy_provider_preset(
+        preset["id"],
+        provider=f"Authorization=Bearer {leak_marker}",
+        country_code=f"JP?token={leak_marker}",
+    )
+    assert updated is not None
+    matching = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Tagged mobile proxy",
+            "url": "http://user:hiddenpass@tagged-mobile.example:8080",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    ).json()
+    profile = app_client.post("/api/profiles", json={"name": "Redacted Random"}).json()
+
+    resp = app_client.post(
+        "/api/proxies/assign/random",
+        json={
+            "profile_ids": [profile["id"]],
+            "provider_preset_id": preset["id"],
+            "confirm_assign": True,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["provider"] is None
+    assert data["country_code"] is None
+    assert data["tags"] == ["mobile"]
+    assert data["candidate_count"] == 1
+    assert data["results"][0]["proxy_id"] == matching["id"]
+
+    events = _proxy_bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["proxy.random_assigned"]
+    assert events[0]["metadata"] == {
+        "provider_preset_id": preset["id"],
+        "tag_count": 1,
+        "candidate_count": 1,
+        "profile_count": 1,
+        "assigned_count": 1,
+        "missing_profile_count": 0,
+    }
+    serialized = json.dumps({"response": data, "events": events}, sort_keys=True)
+    for leaked in (leak_marker, "Authorization", "Bearer", "token=", "hiddenpass"):
+        assert leaked not in serialized
 
 
 def test_random_proxy_assignment_requires_explicit_confirmation_without_side_effects(

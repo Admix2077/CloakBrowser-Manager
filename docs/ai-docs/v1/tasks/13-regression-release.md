@@ -2573,3 +2573,41 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Proxy selection metadata guardrail
+
+背景：
+
+- Random proxy assignment、proxy-country smoke 和 Proxy Manager UI 都依赖 proxy asset 与 provider preset 的 `provider`/`country_code`。
+- 历史/手工 DB 污染值此前可直接进入 proxy/preset list/detail response；provider preset 污染值还会进入 random assignment selection、response 和 audit metadata。
+
+已覆盖：
+
+- Proxy asset 与 provider preset response 现在过滤 persisted provider/country selection fields。
+- Random assignment 对 request/preset provider 与 candidate proxy provider 使用同一 public provider filter；country selection 使用 public country normalizer。
+- Random assignment audit metadata 不再写入 `None` provider/country，也不写入污染 provider/country 文本。
+- 正常 `ProxyJP`/`MobileProxy`/`ProxyCo` 和 `JP`/`US` selection、proxy CRUD、provider preset CRUD、assign/random assign 流程保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_api_responses_redact_persisted_sensitive_selection_fields backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_api_redacts_persisted_sensitive_selection_fields backend/tests/test_proxies.py::test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_metadata -q
+# RED then GREEN；初始 3 failed，最终 3 passed in 1.00s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_proxy_provider_presets.py -q
+# 47 passed in 4.40s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 585 passed in 33.87s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.14s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

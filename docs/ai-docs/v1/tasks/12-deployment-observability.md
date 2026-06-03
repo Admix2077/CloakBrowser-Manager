@@ -2776,3 +2776,45 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - 不在 response tag normalizer 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates 或 audit metadata。
+
+## 2026-06-03 Proxy selection metadata public-value guardrail
+
+背景：
+
+- Proxy asset 与 proxy provider preset 的 `provider`/`country_code` 会影响 random assignment 选择、release proxy-country smoke 过滤、API/UI 响应和 bulk audit metadata。
+- 历史/手工 DB row 可以绕过输入路径，把 URL/query token、Authorization/Bearer、cookie 或非公开 country/provider 文本写入这些 selection metadata 字段。
+- 此前 `_proxy_response` 只过滤 proxy URL、last_check 和 tags，provider preset response 只过滤 tags，random assignment 会直接把污染 preset metadata 用作候选过滤并写回 response/audit。
+
+已覆盖：
+
+- 新增 proxy provider public-value filter：保留短公共 provider 标签，丢弃 URL、proxy scheme、userinfo、query/fragment、Authorization/Bearer、token/secret/password/cookie/auth 以及控制/路径式文本。
+- Proxy asset response、proxy provider preset response、proxy CRUD audit metadata、random assignment provider selection、proxy candidate matching 和 random assignment audit metadata 均复用 public provider/country 过滤。
+- `country_code` 统一复用已有 2 字母 public GeoIP country normalizer；污染 country 值折叠为 `null`，正常 `JP`/`US` 等保持大写。
+- 当 provider preset 的 provider/country 历史值污染但 tag 仍有效时，random assignment 会继续按有效 tag 选择候选，不再泄露或用污染 metadata 造成 400。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_api_responses_redact_persisted_sensitive_selection_fields backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_api_redacts_persisted_sensitive_selection_fields backend/tests/test_proxies.py::test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_metadata -q
+# RED: 3 failed；proxy/preset 响应直接回显敏感 provider，random assignment 使用污染 preset selection metadata 后返回 400
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_api_responses_redact_persisted_sensitive_selection_fields backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_api_redacts_persisted_sensitive_selection_fields backend/tests/test_proxies.py::test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_metadata -q
+# 3 passed in 1.00s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_proxy_provider_presets.py -q
+# 47 passed in 4.40s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 585 passed in 33.87s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.14s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 external proxy checking。
+- 不在 provider/country guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw audit payloads。
