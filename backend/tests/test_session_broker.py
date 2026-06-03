@@ -1796,12 +1796,14 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "message": (
                 "proxy http://user:message-pass@example.test:8080 failed "
                 "token=message-secret Authorization=Bearer bearer-secret "
-                "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret"
+                "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret "
+                r"C:\Users\Jeff\AppData\Local\CloakBrowser\profile-secret"
             ),
             "path_list": [
                 "kept",
                 "/data/runtime/profile-secret/state.json",
                 {"path_message": "failed at /tmp/runtime-profile-secret/socket"},
+                {"windows_path": "D:/profiles/profile-secret/state.json"},
             ],
             f"Authorization: Bearer {leak_marker}": "header-key",
             f"token={leak_marker}": "token-key",
@@ -1821,12 +1823,14 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
         "message": (
             "proxy http://example.test:8080 failed "
             "token=[redacted] Authorization=[redacted] "
-            "[redacted-path] [redacted-path] [redacted-path]"
+            "[redacted-path] [redacted-path] [redacted-path] "
+            "[redacted-path]"
         ),
         "path_list": [
             "kept",
             "[redacted-path]",
             {"path_message": "failed at [redacted-path]"},
+            {"windows_path": "[redacted-path]"},
         ],
         "nested": {"safe_nested": "also-kept"},
     }
@@ -1848,6 +1852,8 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "/tmp/xvnc-secret.log" not in serialized_events
     assert "/tmp/runtime-profile-secret" not in serialized_events
     assert "/home/jeff" not in serialized_events
+    assert "C:\\Users\\Jeff" not in serialized_events
+    assert "D:/profiles" not in serialized_events
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events

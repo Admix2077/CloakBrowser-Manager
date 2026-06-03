@@ -5257,3 +5257,48 @@ git diff --check
 - 这是 audit metadata value release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Audit metadata Windows path value redaction guardrail
+
+背景：
+
+- Audit metadata value 是 release smoke/evidence 的底层出口。
+- 上一轮已经把 `/data`、`/tmp`、`/home` 风格路径替换为 `[redacted-path]`。
+- 但历史/手工污染 metadata value 仍可能包含 Windows drive 绝对路径，如 `C:\Users\...\AppData\...` 或 `D:/profiles/...`。
+
+已覆盖：
+
+- `backend.database._sanitize_audit_metadata()` 的本地路径 redaction 现在同时覆盖 Windows drive 绝对路径。
+- 嵌套 dict/list metadata value 继续走同一递归边界。
+- 低敏 proxy URL redaction 后的 `http://host:port` 形态保持，不会被误判为 Windows drive path。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED: 旧实现保留 C:\Users\... 和 D:/profiles/... metadata value
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 37.11s
+
+npm --prefix frontend test -- --run
+# Test Files 19 passed；Tests 232 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.04s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 audit metadata Windows path release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、fingerprint seed、WebGL、WebRTC、UA、locale/timezone 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

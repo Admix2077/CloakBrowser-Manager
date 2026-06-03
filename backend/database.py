@@ -964,7 +964,10 @@ _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
-_AUDIT_LOCAL_PATH_RE = re.compile(r"/(?:data|tmp|home)/[^\s\"'<>),;]+", re.IGNORECASE)
+_AUDIT_LOCAL_PATH_RE = re.compile(
+    r"(?:/(?:data|tmp|home)/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s\"'<>),;]+",
+    re.IGNORECASE,
+)
 _AUDIT_SENSITIVE_KEY_RE = re.compile(
     r"https?://|socks[45]://|[/\\?&#@]|"
     r"\b(?:authorization|bearer)\b|"
