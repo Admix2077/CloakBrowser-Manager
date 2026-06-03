@@ -5353,3 +5353,41 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task id UI release-evidence 边界。
+
+## 2026-06-04 Automation step/result summary UI release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 Automation task table 和详情抽屉里的 step/result summary。
+- 前端此前对 summary label 只做字符清洗，污染值可能被拼成可见 token/header 词根。
+- 后端已有 step/result 输出边界，但 release UI 不应信任异常响应或历史/手工污染 row。
+
+已覆盖：
+
+- Automation Task Log Viewer 现在对 step/result summary label 使用公开 label allowlist。
+- 正常低敏摘要保持可读，例如 `open_url`、`page 0`、`wait_until load`、`0 open_url succeeded`。
+- 非公开 `type`、`page_ref`、`wait_until`、`state`、result `type`、result `status` 显示为 `unknown`。
+- Table 和 detail drawer 使用同一边界。
+- Status、error、task/profile id、readonly 行为和任务导航不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED then GREEN；旧实现没有 unknown，污染 summary label 仍被显示
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.14s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 237 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.23s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation step/result summary UI release-evidence 边界。

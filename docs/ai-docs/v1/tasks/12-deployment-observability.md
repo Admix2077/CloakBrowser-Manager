@@ -5669,3 +5669,41 @@ npm --prefix frontend run build
 - 这是 Automation task UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、run/cancel/retry、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation step/result summary UI public-value guardrail
+
+背景：
+
+- Automation task backend response 已有 step/result 输出边界。
+- 但 frontend Task Log Viewer 的 step/result summary 此前仍对 `type`、`page_ref`、`wait_until`、`state` 和 result `status` 使用字符清洗后继续显示。
+- 历史/手工污染数据或异常 response 可能把 `token=`、Authorization/Bearer、URL 或 secret 文本清洗成可见词根，进入 Automation UI release evidence。
+
+已覆盖：
+
+- `frontend/src/components/AutomationTaskLogViewer.tsx` 现在对 step/result summary label 使用公开 label 边界。
+- 普通低敏 label 继续保留，例如 `open_url`、`wait_until load`、`0 open_url succeeded`。
+- 非公开 label，例如 token/header/path/IP/URL 风格值，统一折叠为 `unknown`。
+- Table 和 detail drawer 的 step list/result list 共用同一边界。
+- 不改变 step/result 数据结构、任务执行、run/cancel/retry、filter/search 或 readonly 行为。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED: 旧实现没有 unknown，污染 summary label 仍被显示；GREEN: 10 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.14s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 237 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.23s
+```
+
+边界：
+
+- 这是 Automation task UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

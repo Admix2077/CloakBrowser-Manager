@@ -25,7 +25,7 @@ const PUBLIC_TASK_STATUSES = new Set([
   "succeeded",
 ]);
 const PUBLIC_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,79}$/;
-const SENSITIVE_ID_TEXT_RE = /\b(?:authorization|bearer|auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\b/i;
+const SENSITIVE_PUBLIC_TEXT_RE = /authorization|bearer|auth[_-]?token|viewer[_-]?token|token|password|passwd|secret|cookie|set-cookie/i;
 const IPV4_LITERAL_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
 export function AutomationTaskLogViewer() {
@@ -362,7 +362,7 @@ function StepList({ steps, maxItems = 4 }: { steps: AutomationTaskStep[]; maxIte
       {visibleSteps.map((step, index) => (
         <div key={`${step.type}-${index}`} className="flex flex-wrap items-center gap-1.5">
           <span className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-700">
-            {safeLabel(step.type)}
+            {publicSummaryLabel(step.type)}
           </span>
           {stepSummary(step).map((item) => (
             <span key={item} className="rounded-[5px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">
@@ -388,7 +388,7 @@ function ResultList({ steps, maxItems = 4 }: { steps: AutomationTaskResultStep[]
     <div className="flex max-w-[260px] flex-col gap-1">
       {visibleSteps.map((step) => (
         <span key={`${step.index}-${step.type}-${step.status}`} className="font-mono text-[11px] text-slate-700">
-          {formatResultIndex(step.index)} {safeLabel(step.type)} {safeLabel(step.status)}
+          {formatResultIndex(step.index)} {publicSummaryLabel(step.type)} {publicSummaryLabel(step.status)}
         </span>
       ))}
       {hiddenCount > 0 && (
@@ -487,9 +487,13 @@ function taskErrorText(error: string | null): string | null {
 }
 
 function publicIdLabel(value: string): string {
+  return publicSummaryLabel(value);
+}
+
+function publicSummaryLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || !PUBLIC_ID_RE.test(trimmed)) return "unknown";
-  if (SENSITIVE_ID_TEXT_RE.test(trimmed)) return "unknown";
+  if (SENSITIVE_PUBLIC_TEXT_RE.test(trimmed)) return "unknown";
   if (isPublicIpv4Literal(trimmed)) return "unknown";
   if (isPublicIpv6Literal(trimmed)) return "unknown";
   return trimmed;
@@ -501,10 +505,10 @@ function publicTaskStatus(status: string): string {
 
 function stepSummary(step: AutomationTaskStep): string[] {
   const parts: string[] = [];
-  if (typeof step.page_ref === "string") parts.push(`page ${safeLabel(step.page_ref)}`);
+  if (typeof step.page_ref === "string") parts.push(`page ${publicSummaryLabel(step.page_ref)}`);
   if (typeof step.ms === "number") parts.push(`${step.ms}ms`);
-  if (typeof step.wait_until === "string") parts.push(`wait_until ${safeLabel(step.wait_until)}`);
-  if (typeof step.state === "string") parts.push(`state ${safeLabel(step.state)}`);
+  if (typeof step.wait_until === "string") parts.push(`wait_until ${publicSummaryLabel(step.wait_until)}`);
+  if (typeof step.state === "string") parts.push(`state ${publicSummaryLabel(step.state)}`);
   if (typeof step.timeout_ms === "number") parts.push(`timeout ${step.timeout_ms}ms`);
   if (typeof step.delay_ms === "number") parts.push(`delay ${step.delay_ms}ms`);
   if (typeof step.delta_x === "number" || typeof step.delta_y === "number") {
@@ -535,10 +539,6 @@ function isPublicIpv6Literal(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function safeLabel(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 40) || "-";
 }
 
 function formatResultIndex(value: number | null): string {

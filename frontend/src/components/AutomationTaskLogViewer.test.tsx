@@ -283,6 +283,63 @@ describe("AutomationTaskLogViewer", () => {
     expect(await screen.findByRole("status", { name: "No automation tasks match the selected filter" })).toBeTruthy();
   });
 
+  it("folds non-public step and result summary labels to unknown before rendering", async () => {
+    const leakMarker = "task-step-token-secret";
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({
+          id: "task-step-summary-123456",
+          profile_id: "profile-step-summary-123456",
+          status: "failed",
+          steps: [
+            {
+              type: `open_url Authorization=Bearer ${leakMarker}`,
+              page_ref: `https://example.test/private?token=${leakMarker}`,
+              wait_until: `load token=${leakMarker}`,
+              state: `visible Authorization=Bearer ${leakMarker}`,
+              timeout_ms: 30000,
+            },
+          ] as AutomationTask["steps"],
+          result: {
+            steps: [
+              {
+                index: 0,
+                type: `evaluate token=${leakMarker}`,
+                status: `failed Authorization=Bearer ${leakMarker}`,
+              },
+            ] as AutomationTask["result"]["steps"],
+          },
+        }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getByText("unknown")).toBeTruthy();
+    expect(within(page).getByText("page unknown")).toBeTruthy();
+    expect(within(page).getByText("wait_until unknown")).toBeTruthy();
+    expect(within(page).getByText("state unknown")).toBeTruthy();
+    expect(within(page).getByText("0 unknown unknown")).toBeTruthy();
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token");
+    expect(page.textContent).not.toContain("https://example.test");
+
+    fireEvent.click(within(page).getByRole("button", { name: "View task details for task-step-summary-123456" }));
+    const drawer = await screen.findByRole("dialog", { name: "Automation task details" });
+    expect(within(drawer).getByText("page unknown")).toBeTruthy();
+    expect(within(drawer).getByText("wait_until unknown")).toBeTruthy();
+    expect(within(drawer).getByText("state unknown")).toBeTruthy();
+    expect(within(drawer).getByText("0 unknown unknown")).toBeTruthy();
+    expect(drawer.textContent).not.toContain(leakMarker);
+    expect(drawer.textContent).not.toContain("Authorization");
+    expect(drawer.textContent).not.toContain("Bearer");
+    expect(drawer.textContent).not.toContain("token");
+    expect(drawer.textContent).not.toContain("https://example.test");
+  });
+
   it("filters the local read-only task list by task or profile id", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [
