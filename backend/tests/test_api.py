@@ -736,6 +736,57 @@ def test_profile_crud_audit_sanitizes_persisted_profile_id_and_platform(
         assert leaked not in serialized
 
 
+def test_health_check_audit_metadata_sanitizes_runtime_lookup_and_geoip_labels():
+    leak_marker = "health-audit-secret"
+    health = main.ProfileHealthResponse(
+        profile_id="profile-audit-health",
+        status="good",
+        geoip={
+            "country_code": f"US?token={leak_marker}",
+            "source": f"ipapi.co?token={leak_marker}",
+        },
+        manual_overrides={"timezone": False, "locale": False},
+        runtime={
+            "status": (
+                f"running Authorization=Bearer {leak_marker} "
+                f"token={leak_marker}"
+            )
+        },
+        warnings=[],
+        checked_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+
+    success_metadata = main._health_check_audit_metadata(
+        health,
+        lookup_attempted=True,
+        lookup_result="success",
+    )
+    polluted_lookup_metadata = main._health_check_audit_metadata(
+        health,
+        lookup_attempted=True,
+        lookup_result=f"success Authorization=Bearer {leak_marker} token={leak_marker}",
+    )
+
+    assert success_metadata["lookup_result"] == "success"
+    assert success_metadata["runtime_status"] == "unknown"
+    assert success_metadata["geoip_source"] == "unknown"
+    assert "geoip_country_code" not in success_metadata
+    assert polluted_lookup_metadata["lookup_result"] == "unknown"
+
+    serialized = json.dumps(
+        [success_metadata, polluted_lookup_metadata],
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+        "ipapi.co",
+    ):
+        assert leaked not in serialized
+
+
 def test_delete_profile_stops_running(app_client: TestClient):
     """Deleting a running profile should stop it first."""
     create = app_client.post("/api/profiles", json={"name": "Running"})

@@ -5508,3 +5508,43 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、runtime session/viewer token schema、VNC websocket path、noVNC connection、profile lifecycle、Automation API backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileViewer handle title/visible release-evidence 边界。
+
+## 2026-06-04 Health check audit metadata release-evidence guardrail
+
+背景：
+
+- Release regression 会读取 `profile.health_checked` audit metadata 作为健康检查、GeoIP/proxy lookup 和运行态证据。
+- 旧 metadata 生成层直接使用 `lookup_result`、`health.runtime.status`、`health.geoip.source` 和 `health.geoip.country_code`。
+- 如果异常 health 对象或未来集成把 URL/query/token/header/provider 文本塞进这些字段，release evidence 可能出现非公开内容。
+
+已覆盖：
+
+- Health audit lookup result 增加固定公开值边界：`skipped_invalid_proxy`、`failed`、`success`、`empty`，其他值显示为 `unknown`。
+- Runtime status 增加固定公开值边界：只保留 `running` / `stopped`，其他值显示为 `unknown`。
+- GeoIP source/country code 在写 metadata 前复用 GeoIP public-value filters；污染 provider/source 文本不会进入 audit evidence。
+- 正常 health response、profile health check route、GeoIP 持久化和 lookup success/failure/empty/invalid-proxy 行为不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -k "health_check_audit_metadata" -q
+# RED then GREEN；旧实现把污染 runtime status 写入 health audit metadata
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 25 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 648 passed in 39.45s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.18s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 不改变 backend API response schemas、health warning catalog、GeoIP lookup provider 行为、profile lifecycle、VNC/runtime viewer、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health-check audit metadata release-evidence 边界。

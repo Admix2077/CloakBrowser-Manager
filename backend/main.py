@@ -725,6 +725,8 @@ _SENSITIVE_AUDIT_NAME_RE = re.compile(
     r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
     re.IGNORECASE,
 )
+_PUBLIC_PROFILE_RUNTIME_STATUSES = {"running", "stopped"}
+_PUBLIC_HEALTH_LOOKUP_RESULTS = {"skipped_invalid_proxy", "failed", "success", "empty"}
 
 
 def _public_proxy_check_status(value: object) -> str | None:
@@ -767,6 +769,18 @@ def _public_audit_name(value: object) -> str | None:
     if _SENSITIVE_AUDIT_NAME_RE.search(name):
         return None
     return name
+
+
+def _public_profile_runtime_status(value: object) -> str:
+    if isinstance(value, str) and value in _PUBLIC_PROFILE_RUNTIME_STATUSES:
+        return value
+    return "unknown"
+
+
+def _public_health_lookup_result(value: object) -> str:
+    if isinstance(value, str) and value in _PUBLIC_HEALTH_LOOKUP_RESULTS:
+        return value
+    return "unknown"
 
 
 def _public_required_timestamp(value: object) -> str:
@@ -919,21 +933,24 @@ def _health_check_audit_metadata(
     lookup_attempted: bool,
     lookup_result: str,
 ) -> dict:
+    public_lookup_result = _public_health_lookup_result(lookup_result)
     metadata = {
         "status": health.status,
         "warning_codes": [warning.code for warning in health.warnings],
         "warning_count": len(health.warnings),
         "lookup_attempted": lookup_attempted,
-        "lookup_result": lookup_result,
+        "lookup_result": public_lookup_result,
         "manual_timezone_override": health.manual_overrides.get("timezone", False),
         "manual_locale_override": health.manual_overrides.get("locale", False),
-        "runtime_status": health.runtime.get("status"),
+        "runtime_status": _public_profile_runtime_status(health.runtime.get("status")),
     }
-    if health.geoip and lookup_result == "success":
-        if health.geoip.source:
-            metadata["geoip_source"] = health.geoip.source
-        if health.geoip.country_code:
-            metadata["geoip_country_code"] = health.geoip.country_code
+    if health.geoip and public_lookup_result == "success":
+        geoip_source = public_geoip_source(health.geoip.source)
+        if geoip_source:
+            metadata["geoip_source"] = geoip_source
+        geoip_country_code = public_geoip_country_code(health.geoip.country_code)
+        if geoip_country_code:
+            metadata["geoip_country_code"] = geoip_country_code
     return {key: value for key, value in metadata.items() if value is not None}
 
 

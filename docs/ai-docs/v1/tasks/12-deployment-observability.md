@@ -5826,3 +5826,43 @@ npm --prefix frontend run build
 - 这是 ProfileViewer frontend observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 backend runtime session schema、viewer token 签发/校验、VNC websocket path、noVNC connection、profile lifecycle、Automation API、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Health check audit metadata public-value guardrail
+
+背景：
+
+- `profile.health_checked` audit metadata 是 release smoke 和部署观测排查会读取的低敏证据。
+- 健康检查正常只写固定 `lookup_result`、`running` / `stopped` runtime status，以及公开 GeoIP source/country code。
+- 异常测试桩、手工污染对象或未来 provider 错误可能把 `Authorization`、`Bearer`、`token=`、provider URL/path/query 这类文本带入 metadata 生成层。
+
+已覆盖：
+
+- `lookup_result` 只允许 `skipped_invalid_proxy`、`failed`、`success`、`empty`，其他值统一折叠为 `unknown`。
+- `runtime_status` 只允许 `running` / `stopped`，其他值统一折叠为 `unknown`。
+- `geoip_source` / `geoip_country_code` 在写入 health audit metadata 前复用 GeoIP public-value 边界；污染 source 变为 `unknown`，污染 country code 不写入。
+- GeoIP 字段只在公开 lookup result 为 `success` 时进入 metadata，避免污染 lookup label 间接打开 success-only 字段。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -k "health_check_audit_metadata" -q
+# RED: 旧实现把污染 runtime_status 写入 metadata；GREEN: 1 passed, 256 deselected
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 25 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 648 passed in 39.45s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.18s
+```
+
+边界：
+
+- 这是 health-check audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 health response schema、GeoIP lookup provider 选择、profile health 业务判断、profile lifecycle、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
