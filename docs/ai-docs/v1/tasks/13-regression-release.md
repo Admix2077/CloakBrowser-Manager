@@ -4427,3 +4427,48 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - 不改变 normal automation execution、worker lease、task retry/cancel/run、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation wait-step ms release-evidence guardrail
+
+背景：
+
+- Release automation smoke 会读取 task get/list/cancel responses。
+- Wait step execution 已要求 `ms` 是 `1..300000` 范围内的非 bool 整数；response evidence 应使用同一边界。
+- 历史/手工 DB row 中的负数、bool 或超大 `ms` 不应出现在低敏 release evidence 中。
+
+已覆盖：
+
+- `_automation_task_redacted_steps()` 现在只输出 public `wait.ms`。
+- 正常 `ms=1` 保留；invalid persisted wait ms 从 response step 中移除。
+- Task get/list/cancel 仍返回 stable step shape，run invalid wait ms 仍保持原有失败语义。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_response_filters_persisted_wait_ms_boundary -q
+# RED then GREEN；旧实现回显 invalid wait ms，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_response_filters_persisted_wait_ms_boundary backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms -q
+# 3 passed in 2.13s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 57 passed, 195 deselected in 10.19s
+
+.venv/bin/python -m pytest backend/tests -q
+# 643 passed in 39.59s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.53s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- 不改变 normal automation wait execution、worker lease、task retry/cancel/run、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

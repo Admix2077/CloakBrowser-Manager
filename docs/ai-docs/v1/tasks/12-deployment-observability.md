@@ -4736,3 +4736,48 @@ git diff --check
 - 这是 automation task response/audit stability and release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 normal automation task create/run/cancel/retry semantics、worker lease、runner selection、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。
+
+## 2026-06-03 Automation wait-step ms response guardrail
+
+背景：
+
+- Automation wait step execution 已要求 `ms` 是非 bool 整数且范围为 `1..300000`。
+- Response redaction 旧实现只检查 `ms` 是非 bool 整数，历史/手工 DB row 中的负数或超大值会进入 task get/list/cancel release evidence。
+- Release evidence 应和执行边界一致，只保留 public wait duration。
+
+已覆盖：
+
+- `_automation_task_redacted_steps()` 的 `wait.ms` 输出边界现在和执行边界一致。
+- 正常 `ms=1` 保留；负数、bool、超大值不再出现在 response evidence 中。
+- Task get/list/cancel 继续返回低敏 step shape；audit step_count/step_types 保持既有语义。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_response_filters_persisted_wait_ms_boundary -q
+# RED: 旧实现回显 invalid wait ms；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_response_filters_persisted_wait_ms_boundary backend/tests/test_api.py::test_automation_task_responses_redact_open_url_steps backend/tests/test_api.py::test_run_automation_task_marks_failed_for_invalid_wait_ms -q
+# 3 passed in 2.13s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 57 passed, 195 deselected in 10.19s
+
+.venv/bin/python -m pytest backend/tests -q
+# 643 passed in 39.59s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.53s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 automation task response/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 normal automation wait execution、worker lease、runner selection、task retry/cancel/run、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。

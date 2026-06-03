@@ -4922,6 +4922,64 @@ def test_automation_task_responses_redact_open_url_steps(app_client: TestClient)
     assert "super-secret" not in str(cancel_resp.json())
 
 
+def test_automation_task_response_filters_persisted_wait_ms_boundary(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskWaitMsBoundaryProfile"})
+    pid = create.json()["id"]
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    polluted_steps = [
+        {"type": "wait", "ms": 1},
+        {"type": "wait", "ms": -1},
+        {"type": "wait", "ms": True},
+        {"type": "wait", "ms": 999_999_999},
+    ]
+    with main.db.get_db() as conn:
+        conn.execute(
+            "UPDATE automation_tasks SET steps = ? WHERE id = ?",
+            (json.dumps(polluted_steps), task["id"]),
+        )
+        conn.commit()
+
+    get_resp = app_client.get(f"/api/tasks/{task['id']}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
+    events = _automation_task_audit_events()
+
+    expected_steps = [
+        {"type": "wait", "ms": 1},
+        {"type": "wait"},
+        {"type": "wait"},
+        {"type": "wait"},
+    ]
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == expected_steps
+    listed_task = next(item for item in list_resp.json()["tasks"] if item["id"] == task["id"])
+    assert listed_task["steps"] == expected_steps
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == expected_steps
+    assert events[-1]["metadata"]["step_count"] == 4
+    assert events[-1]["metadata"]["step_types"] == ["wait", "wait", "wait", "wait"]
+
+    serialized = json.dumps(
+        {
+            "get": get_resp.json(),
+            "list": list_resp.json(),
+            "cancel": cancel_resp.json(),
+            "events": events,
+        },
+        sort_keys=True,
+    )
+    assert '"ms": -1' not in serialized
+    assert '"ms": 999999999' not in serialized
+
+
 def test_automation_task_responses_redact_wait_for_selector_steps(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskWaitForSelectorRedactProfile"})
     pid = create.json()["id"]

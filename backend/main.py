@@ -3083,7 +3083,12 @@ def _automation_task_redacted_steps(steps: object) -> list[dict]:
     for step in _automation_task_public_steps(steps):
         step_type = _automation_task_public_step_type(step.get("type"))
         redacted = {"type": step_type}
-        if step_type == "wait" and isinstance(step.get("ms"), int) and not isinstance(step.get("ms"), bool):
+        if (
+            step_type == "wait"
+            and isinstance(step.get("ms"), int)
+            and not isinstance(step.get("ms"), bool)
+            and 1 <= step["ms"] <= 300_000
+        ):
             redacted["ms"] = step["ms"]
         if step_type == "open_url":
             page_ref = _automation_task_public_page_ref(step)
