@@ -6583,3 +6583,37 @@ npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile template matching、profile tag persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile table GeoIP evidence guardrail
+
+背景：
+
+- Profile operations table/card 会显示 health/profile response 中的 IP、country、timezone 和 locale，是 release smoke 常看的可见 evidence 面。
+- 普通 GeoIP 值需要继续展示给本地管理台用户；但异常 response、历史/手工污染 row 或测试桩如果把 Authorization/Bearer、`token=`、本地路径或 credential URL 混入这些字段，前端不应原样写入正文或 `title`。
+- 这继续收 Manager 可控 UI evidence 边界，不处理 Pixelscan 底层 fingerprint masking。
+
+已覆盖：
+
+- 新增 public profile GeoIP label helper：普通 IP/country/timezone/locale 保持原样；带敏感痕迹的值使用共享 public error text boundary。
+- Profile table 和 mobile cards 的 IP、country、timezone、locale visible text/title 使用该 helper。
+- 正常 ProfileTable 行为、普通 IP 展示、CountryBadge、profile name/tag redaction 和 profile operations actions 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts persisted profile geoip labels"
+# RED: 旧实现把污染 GeoIP 字段写入 table text/title；GREEN: 1 passed, 41 skipped
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 3 passed
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
+# 42 passed
+```
+
+边界：
+
+- 这是 Profile table/card GeoIP UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

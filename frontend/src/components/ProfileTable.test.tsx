@@ -291,6 +291,63 @@ describe("ProfileTable", () => {
     }
   });
 
+  it("redacts persisted profile geoip labels from table rendered evidence", () => {
+    const leakMarker = "profile-geoip-secret";
+    const pollutedHealth = health("polluted-geoip", {
+      geoip: {
+        ip:
+          "23.144.4.92 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/profile-geoip-ip 203.0.113.100`,
+        country_code:
+          "US Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/profile-geoip-country 203.0.113.101`,
+        timezone:
+          "America/Los_Angeles Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/profile-geoip-timezone 203.0.113.102`,
+        locale:
+          "en-US Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/profile-geoip-locale 203.0.113.103`,
+        source: "qa",
+        resolved_at: "2026-05-25T00:00:00Z",
+      },
+    });
+
+    render(
+      <ProfileTable
+        profiles={[profile({ id: "polluted-geoip", name: "GeoIP Profile" })]}
+        healthByProfileId={{ "polluted-geoip": pollutedHealth }}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("[redacted-ip] [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("US [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("America/Los_Angeles [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("en-US [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-geoip-ip",
+      "/data/profile-geoip-country",
+      "/data/profile-geoip-timezone",
+      "/data/profile-geoip-locale",
+      "203.0.113.100",
+      "203.0.113.101",
+      "203.0.113.102",
+      "203.0.113.103",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("keeps the desktop header offset below the sticky bulk action bar", () => {
     render(
       <ProfileTable

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicErrorText } from "./errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel } from "./errorDisplay";
 
 describe("publicErrorText", () => {
   it("redacts Windows drive paths without redacting public URL host and port", () => {
@@ -34,5 +34,18 @@ describe("publicErrorText", () => {
     expect(text).not.toContain("198.51.100.20");
     expect(text).not.toContain("2001:db8::45");
     expect(text).not.toContain("2001:db8::46");
+  });
+});
+
+describe("publicProfileGeoipLabel", () => {
+  it("keeps normal geoip values while redacting polluted evidence", () => {
+    expect(publicProfileGeoipLabel("23.144.4.92")).toBe("23.144.4.92");
+    expect(publicProfileGeoipLabel("US")).toBe("US");
+    expect(publicProfileGeoipLabel("America/Los_Angeles")).toBe("America/Los_Angeles");
+    expect(publicProfileGeoipLabel("en-US")).toBe("en-US");
+
+    expect(publicProfileGeoipLabel(
+      "US Authorization=Bearer geoip-secret token=geoip-secret /data/geoip 203.0.113.104",
+    )).toBe("US [redacted] [redacted] [redacted-path] [redacted-ip]");
   });
 });

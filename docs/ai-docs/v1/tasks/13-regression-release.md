@@ -6265,3 +6265,37 @@ npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile template matching、profile tag persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV preview row metadata release-evidence 边界。
+
+## 2026-06-04 Profile table GeoIP release-evidence guardrail
+
+背景：
+
+- Profile operations table/card 会显示 IP、country、timezone、locale，是 Manager release regression 的常用 evidence 面。
+- 普通 GeoIP 值仍需要展示；但异常 response 或历史/手工污染 row 可能把 Authorization/Bearer、`token=`、本地路径或 credential URL 混入这些字段。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Profile table/card 的 IP、country、timezone、locale text/title 使用 public profile GeoIP label。
+- 普通 standalone IP、country、timezone、locale 保持原样；污染值降到 public error text boundary。
+- ProfileTable 普通 operations、GeoIP column/card layout、profile name/tag redaction 和 selection/open/preview 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts persisted profile geoip labels"
+# RED then GREEN；旧实现把污染 GeoIP 字段写入 table/card text/title evidence
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 3 passed
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
+# 42 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile table/card GeoIP release-evidence 边界。

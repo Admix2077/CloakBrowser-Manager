@@ -2,7 +2,7 @@ import { ArrowRight, Check, FilterX, HeartPulse, Minus, PlusCircle } from "lucid
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { publicProfileName } from "../lib/errorDisplay";
+import { publicProfileGeoipLabel, publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { Badge, CountryBadge, TagBadge } from "./Badge";
 import { BulkActionBar } from "./BulkActionBar";
@@ -679,6 +679,10 @@ function ProfileCard({
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
   const safeName = publicProfileName(profile.name);
+  const safeIp = ip ? publicProfileGeoipLabel(ip) : "-";
+  const safeCountry = country ? publicProfileGeoipLabel(country) : null;
+  const safeTimezone = timezone ? publicProfileGeoipLabel(timezone) : "-";
+  const safeLocale = locale ? publicProfileGeoipLabel(locale) : "-";
 
   return (
     <article
@@ -738,15 +742,15 @@ function ProfileCard({
 
       <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
         <CardField label="Proxy" value={proxyLabel} mono />
-        <CardField label="IP" value={ip ?? "-"} mono />
+        <CardField label="IP" value={safeIp} mono />
         <CardField
           label="Country"
-          value={country ? <CountryBadge country={country} /> : "-"}
-          title={country ?? "-"}
+          value={safeCountry ? <CountryBadge country={safeCountry} /> : "-"}
+          title={safeCountry ?? "-"}
         />
         <CardField label="Last checked" value={formatTimestamp(lastChecked)} />
-        <CardField label="Timezone" value={timezone ?? "-"} />
-        <CardField label="Locale" value={locale ?? "-"} />
+        <CardField label="Timezone" value={safeTimezone} />
+        <CardField label="Locale" value={safeLocale} />
       </div>
 
       <div className="mt-3 flex min-w-0 items-center gap-1 overflow-hidden">
@@ -805,6 +809,10 @@ function ProfileTableRow({
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
   const safeName = publicProfileName(profile.name);
+  const safeIp = ip ? publicProfileGeoipLabel(ip) : "-";
+  const safeCountry = country ? publicProfileGeoipLabel(country) : null;
+  const safeTimezone = timezone ? publicProfileGeoipLabel(timezone) : "-";
+  const safeLocale = locale ? publicProfileGeoipLabel(locale) : "-";
 
   return (
     <tr
@@ -858,12 +866,12 @@ function ProfileTableRow({
           {proxyLabel}
         </span>
       </td>
-      <td className="truncate border-b border-slate-100 px-2 py-2 font-mono text-[11px] text-slate-600" title={ip ?? undefined}>{ip ?? "-"}</td>
-      <td className="truncate border-b border-slate-100 px-2 py-2 font-medium text-slate-600" title={country ?? undefined}>
-        {country ? <CountryBadge country={country} /> : "-"}
+      <td className="truncate border-b border-slate-100 px-2 py-2 font-mono text-[11px] text-slate-600" title={safeIp}>{safeIp}</td>
+      <td className="truncate border-b border-slate-100 px-2 py-2 font-medium text-slate-600" title={safeCountry ?? undefined}>
+        {safeCountry ? <CountryBadge country={safeCountry} /> : "-"}
       </td>
-      <td className="truncate border-b border-slate-100 px-2 py-2 text-slate-600" title={timezone ?? undefined}>{timezone ?? "-"}</td>
-      <td className="truncate border-b border-slate-100 px-2 py-2 text-slate-600" title={locale ?? undefined}>{locale ?? "-"}</td>
+      <td className="truncate border-b border-slate-100 px-2 py-2 text-slate-600" title={safeTimezone}>{safeTimezone}</td>
+      <td className="truncate border-b border-slate-100 px-2 py-2 text-slate-600" title={safeLocale}>{safeLocale}</td>
       <td className="border-b border-slate-100 px-2 py-2">
         <div className="flex max-h-10 max-w-[150px] flex-wrap gap-1 overflow-hidden">
           {profile.tags.length > 0 ? profile.tags.map((tag) => (
