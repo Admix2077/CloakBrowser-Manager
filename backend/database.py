@@ -964,6 +964,7 @@ _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
+_AUDIT_LOCAL_PATH_RE = re.compile(r"/(?:data|tmp|home)/[^\s\"'<>),;]+", re.IGNORECASE)
 _AUDIT_SENSITIVE_KEY_RE = re.compile(
     r"https?://|socks[45]://|[/\\?&#@]|"
     r"\b(?:authorization|bearer)\b|"
@@ -1013,7 +1014,8 @@ def _sanitize_audit_metadata(value: Any) -> Any:
             lambda match: f"{match.group(1)}=[redacted]",
             sanitized,
         )
-        return _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
+        sanitized = _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
+        return _AUDIT_LOCAL_PATH_RE.sub("[redacted-path]", sanitized)
     return value
 
 

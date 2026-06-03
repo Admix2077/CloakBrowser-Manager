@@ -5211,3 +5211,49 @@ git diff --check
 - 这是 audit metadata release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Audit metadata local-path value redaction guardrail
+
+背景：
+
+- Audit metadata value 是 release smoke/evidence 的底层出口。
+- 现有 sanitizer 会清理 URL credentials、Authorization/Bearer、token/password/secret/cookie assignments。
+- 但普通本地路径如 `/data/profiles/...`、`/tmp/xvnc-...`、`/home/...` 仍可能作为 metadata value 进入 audit evidence。
+
+已覆盖：
+
+- `backend.database._sanitize_audit_metadata()` 对字符串 value 增加本地路径 redaction。
+- `/data`、`/tmp`、`/home` 开头的路径会替换为 `[redacted-path]`。
+- 递归 sanitizer 覆盖 dict/list 内的嵌套字符串。
+- 普通低敏上下文保留，便于 release triage。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED: 旧实现保留 /data/profiles、/tmp/xvnc、/home/jeff 风格 metadata value；GREEN: passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.82s
+
+npm --prefix frontend test -- --run
+# Test Files 19 passed；Tests 232 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.72s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 audit metadata value release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

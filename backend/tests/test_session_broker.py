@@ -1795,8 +1795,14 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "proxy_url": "http://user:proxy-pass@example.test:8080",
             "message": (
                 "proxy http://user:message-pass@example.test:8080 failed "
-                "token=message-secret Authorization=Bearer bearer-secret"
+                "token=message-secret Authorization=Bearer bearer-secret "
+                "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret"
             ),
+            "path_list": [
+                "kept",
+                "/data/runtime/profile-secret/state.json",
+                {"path_message": "failed at /tmp/runtime-profile-secret/socket"},
+            ],
             f"Authorization: Bearer {leak_marker}": "header-key",
             f"token={leak_marker}": "token-key",
             f"/data/audit/{leak_marker}": "path-key",
@@ -1814,8 +1820,14 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
         "safe": "kept",
         "message": (
             "proxy http://example.test:8080 failed "
-            "token=[redacted] Authorization=[redacted]"
+            "token=[redacted] Authorization=[redacted] "
+            "[redacted-path] [redacted-path] [redacted-path]"
         ),
+        "path_list": [
+            "kept",
+            "[redacted-path]",
+            {"path_message": "failed at [redacted-path]"},
+        ],
         "nested": {"safe_nested": "also-kept"},
     }
     serialized_events = json.dumps(events, sort_keys=True)
@@ -1831,6 +1843,11 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "nested-header-key" not in serialized_events
     assert "Authorization: Bearer" not in serialized_events
     assert "/data/audit" not in serialized_events
+    assert "/data/profiles" not in serialized_events
+    assert "/data/runtime" not in serialized_events
+    assert "/tmp/xvnc-secret.log" not in serialized_events
+    assert "/tmp/runtime-profile-secret" not in serialized_events
+    assert "/home/jeff" not in serialized_events
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events

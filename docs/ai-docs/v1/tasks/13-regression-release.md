@@ -4901,3 +4901,47 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata key release-evidence 边界。
+
+## 2026-06-03 Audit metadata local-path value release-evidence guardrail
+
+背景：
+
+- Release evidence 会读取 audit events。
+- Audit metadata value 之前会清理 token/header/URL credentials，但仍可能保留 `/data`、`/tmp`、`/home` 本地路径。
+
+已覆盖：
+
+- 数据库 audit sanitizer 现在会把本地路径 value 替换为 `[redacted-path]`。
+- 嵌套 dict/list metadata 也走同一递归边界。
+- 普通低敏上下文仍保留，便于 release triage。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED then GREEN；旧实现保留 /data/profiles、/tmp/xvnc、/home/jeff 风格 metadata value
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.82s
+
+npm --prefix frontend test -- --run
+# Test Files 19 passed；Tests 232 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.72s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata local-path value release-evidence 边界。
