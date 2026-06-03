@@ -2358,3 +2358,48 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request method/resource type、console capture internals 或 audit event schema。
 - 不在 Automation network summary 中公开 URL userinfo/query/fragment token、method/header-like token、resource_type token、Authorization/Bearer credential、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Automation cached summary output redaction guardrail
+
+背景：
+
+- Automation console/network capture helper 已在写入时做 URL/text/method/resource redaction。
+- 继续复查发现 endpoints 仍直接返回 `page.automation_console_logs` 与 `page.automation_network_events` 当前列表。若 running page 已存在历史版本写入的 raw entries，或内存条目被污染，输出端会绕过捕获时 guardrail；network summary 还可能因 raw non-integer `status` 触发 Pydantic validation error。
+
+已覆盖：
+
+- `/api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs` 现在在响应前逐项归一化 existing entries。
+- Console log `type` 只保留公开 console type whitelist，其他值折叠为 `unknown`；`text` 复用 automation text redaction；`location.url` 使用 safe URL；line/column 字段只保留非负整数。
+- `/api/profiles/{profile_id}/automation/pages/{page_ref}/network-summary` 现在在响应前逐项归一化 existing entries。
+- Network `event`、`method`、`resource_type`、`status` 和 `failure` 都按低敏 public rules 输出，URL 继续使用 safe URL。
+- 正常捕获路径继续复用同一套输出 helper，ring buffer、page action behavior 和 audit schema 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_existing_in_memory_entries backend/tests/test_api.py::test_automation_network_summary_redacts_existing_in_memory_events -q
+# RED: 2 failed；console response 原样包含 cached secrets，network response 因 raw status-token-secret 触发 ValidationError
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_existing_in_memory_entries backend/tests/test_api.py::test_automation_network_summary_redacts_existing_in_memory_events -q
+# 2 passed in 0.79s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages or automation_console_logs or automation_network_summary or automation_page_id'
+# 12 passed, 209 deselected in 1.62s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 571 passed in 34.10s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.33s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request/console behavior、browser-side capture event subscription 或 audit event schema。
+- 不在 Automation cached console/network summary responses 中公开 URL userinfo/query/fragment token、console text token、console type token、location token、method/header-like token、resource/status/failure token、Authorization/Bearer credential、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

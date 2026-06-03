@@ -3050,6 +3050,55 @@ def test_automation_console_logs_returns_in_memory_page_logs(app_client: TestCli
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_console_logs_redacts_existing_in_memory_entries(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleCachedRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.automation_console_logs = [
+        {
+            "type": "log token=type-secret",
+            "text": (
+                "failed token=cached-secret Authorization: Bearer cached-bearer "
+                "https://user:pass@example.com/app?secret=url-secret#frag"
+            ),
+            "location": {
+                "url": "https://user:pass@example.com/app.js?token=location-secret#frag",
+                "lineNumber": "line-token-secret",
+                "columnNumber": 3,
+            },
+        }
+    ]
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "logs": [
+            {
+                "type": "unknown",
+                "text": "failed token=[redacted] Authorization=[redacted] https://example.com/app",
+                "location": {"url": "https://example.com/app.js", "columnNumber": 3},
+            }
+        ],
+    }
+    serialized = resp.text
+    for leaked in (
+        "type-secret",
+        "cached-secret",
+        "cached-bearer",
+        "url-secret",
+        "location-secret",
+        "line-token-secret",
+        "user:pass",
+        "?token",
+        "?secret",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_console_logs_captures_recent_console_messages(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationConsoleCapture"})
     pid = create.json()["id"]
@@ -3248,6 +3297,54 @@ def test_automation_network_summary_keeps_recent_redacted_events(app_client: Tes
     assert events[-1]["url"] == "https://example.com/items/204"
     assert all("token" not in event["url"] for event in events)
     assert all("user:pass" not in event["url"] for event in events)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_network_summary_redacts_existing_in_memory_events(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationNetworkCachedRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.automation_network_events = [
+        {
+            "event": "request token=event-secret",
+            "method": "POST token=method-secret Authorization=Bearer method-bearer",
+            "url": "https://user:pass@example.com/api?token=url-secret#frag",
+            "resource_type": "script?token=resource-secret",
+            "status": "status-token-secret",
+            "failure": "failure-token-secret",
+        }
+    ]
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "events": [
+            {
+                "event": "unknown",
+                "method": "UNKNOWN",
+                "url": "https://example.com/api",
+                "resource_type": "unknown",
+                "status": None,
+                "failure": "unknown",
+            }
+        ],
+    }
+    serialized = resp.text
+    for leaked in (
+        "event-secret",
+        "method-secret",
+        "method-bearer",
+        "url-secret",
+        "resource-secret",
+        "status-token-secret",
+        "failure-token-secret",
+        "user:pass",
+        "?token",
+        "#frag",
+    ):
+        assert leaked not in serialized
     main.browser_mgr.running.pop(pid, None)
 
 

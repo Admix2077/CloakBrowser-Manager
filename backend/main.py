@@ -4230,25 +4230,81 @@ def _automation_pages(running) -> list:
     return [page for page in pages if not _automation_is_internal_page(page)]
 
 
+_AUTOMATION_CONSOLE_TYPES = {
+    "assert",
+    "clear",
+    "count",
+    "debug",
+    "dir",
+    "dirxml",
+    "endgroup",
+    "error",
+    "info",
+    "log",
+    "profile",
+    "profileend",
+    "startgroup",
+    "startgroupcollapsed",
+    "table",
+    "timeend",
+    "trace",
+    "warning",
+}
+
+
+def _automation_public_console_type(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    console_type = value.strip().lower()
+    return console_type if console_type in _AUTOMATION_CONSOLE_TYPES else "unknown"
+
+
+def _automation_public_location_int(value: object) -> int | None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    if value < 0 or value > 10_000_000:
+        return None
+    return value
+
+
+def _automation_public_console_location(value: object) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    safe_location: dict[str, int | str] = {}
+    raw_url = value.get("url")
+    if raw_url is not None:
+        safe_url = _automation_safe_url(str(raw_url))
+        if safe_url:
+            safe_location["url"] = safe_url
+    for key in ("lineNumber", "columnNumber", "line", "column"):
+        safe_value = _automation_public_location_int(value.get(key))
+        if safe_value is not None:
+            safe_location[key] = safe_value
+    return safe_location
+
+
+def _automation_console_log_response_entry(entry: object) -> dict:
+    if not isinstance(entry, dict):
+        return {"type": "unknown", "text": "", "location": {}}
+    return {
+        "type": _automation_public_console_type(entry.get("type")),
+        "text": _automation_redact_text(str(entry.get("text", ""))),
+        "location": _automation_public_console_location(entry.get("location")),
+    }
+
+
 def _automation_console_log_entry(message) -> dict:
     try:
         location = message.location
     except Exception:
         location = {}
-    if not isinstance(location, dict):
-        location = {}
-    safe_location = {
-        key: value
-        for key, value in location.items()
-        if key in {"url", "lineNumber", "columnNumber", "line", "column"}
-    }
-    if "url" in safe_location:
-        safe_location["url"] = _automation_safe_url(str(safe_location["url"]))
-    return {
-        "type": str(getattr(message, "type", "")),
-        "text": _automation_redact_text(str(getattr(message, "text", ""))),
-        "location": safe_location,
-    }
+    return _automation_console_log_response_entry(
+        {
+            "type": getattr(message, "type", ""),
+            "text": getattr(message, "text", ""),
+            "location": location,
+        }
+    )
 
 
 def _automation_ensure_console_capture(page) -> None:
@@ -4324,6 +4380,15 @@ _AUTOMATION_NETWORK_RESOURCE_TYPES = {
     "websocket",
     "xhr",
 }
+_AUTOMATION_NETWORK_EVENTS = {"request", "requestfailed", "response"}
+_AUTOMATION_NETWORK_FAILURES = {"request_failed"}
+
+
+def _automation_public_network_event_type(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    event = value.strip().lower()
+    return event if event in _AUTOMATION_NETWORK_EVENTS else "unknown"
 
 
 def _automation_public_network_method(value: object) -> str | None:
@@ -4344,21 +4409,54 @@ def _automation_public_resource_type(value: object) -> str | None:
     return resource_type if resource_type in _AUTOMATION_NETWORK_RESOURCE_TYPES else "unknown"
 
 
+def _automation_public_network_status(value: object) -> int | None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    if value < 100 or value > 999:
+        return None
+    return value
+
+
+def _automation_public_network_failure(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return "unknown"
+    failure = value.strip().lower()
+    return failure if failure in _AUTOMATION_NETWORK_FAILURES else "unknown"
+
+
+def _automation_network_response_event(entry: object) -> dict:
+    if not isinstance(entry, dict):
+        return {
+            "event": "unknown",
+            "method": None,
+            "url": "",
+            "resource_type": None,
+            "status": None,
+            "failure": None,
+        }
+    return {
+        "event": _automation_public_network_event_type(entry.get("event")),
+        "method": _automation_public_network_method(entry.get("method")),
+        "url": _automation_safe_url(str(entry.get("url", ""))),
+        "resource_type": _automation_public_resource_type(entry.get("resource_type")),
+        "status": _automation_public_network_status(entry.get("status")),
+        "failure": _automation_public_network_failure(entry.get("failure")),
+    }
+
+
 def _automation_network_event(event: str, request=None, response=None, failure: str | None = None) -> dict:
     request_obj = request or getattr(response, "request", None)
     raw_url = getattr(request_obj, "url", "") if request_obj is not None else ""
-    return {
+    return _automation_network_response_event({
         "event": event,
-        "method": _automation_public_network_method(
-            getattr(request_obj, "method", None) if request_obj is not None else None
-        ),
-        "url": _automation_safe_url(raw_url),
-        "resource_type": _automation_public_resource_type(
-            getattr(request_obj, "resource_type", None) if request_obj is not None else None
-        ),
+        "method": getattr(request_obj, "method", None) if request_obj is not None else None,
+        "url": raw_url,
+        "resource_type": getattr(request_obj, "resource_type", None) if request_obj is not None else None,
         "status": getattr(response, "status", None) if response is not None else None,
         "failure": failure,
-    }
+    })
 
 
 def _automation_append_network_event(page, entry: dict) -> None:
@@ -4503,7 +4601,11 @@ async def automation_pages(profile_id: str):
 async def automation_console_logs(profile_id: str, page_ref: str):
     _, page, _ = _automation_get_page(profile_id, page_ref)
     _automation_ensure_console_capture(page)
-    return AutomationConsoleLogsResponse(logs=list(getattr(page, "automation_console_logs", []) or []))
+    logs = [
+        _automation_console_log_response_entry(entry)
+        for entry in list(getattr(page, "automation_console_logs", []) or [])
+    ]
+    return AutomationConsoleLogsResponse(logs=logs)
 
 
 @app.get(
@@ -4513,7 +4615,11 @@ async def automation_console_logs(profile_id: str, page_ref: str):
 async def automation_network_summary(profile_id: str, page_ref: str):
     _, page, _ = _automation_get_page(profile_id, page_ref)
     _automation_ensure_network_capture(page)
-    return AutomationNetworkSummaryResponse(events=list(getattr(page, "automation_network_events", []) or []))
+    events = [
+        _automation_network_response_event(entry)
+        for entry in list(getattr(page, "automation_network_events", []) or [])
+    ]
+    return AutomationNetworkSummaryResponse(events=events)
 
 
 @app.post(

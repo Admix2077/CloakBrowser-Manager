@@ -2180,3 +2180,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request method/resource type、console capture internals 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation cached summary output redaction guardrail
+
+背景：
+
+- Automation console/network summary endpoints 是 release smoke 常用观察面。
+- Capture helper 已做低敏化，但 endpoints 仍直接返回当前 in-memory lists；历史 raw entries 或污染 entries 可能绕过捕获时 redaction，network summary 还可能因为 raw status text 触发 response validation error。
+
+已覆盖：
+
+- Console logs endpoint 现在输出前归一化 existing entries：console type whitelist、text redaction、safe location URL、numeric-only line/column。
+- Network summary endpoint 现在输出前归一化 existing entries：event/method/resource/failure whitelists、safe status、safe URL。
+- 正常 capture path 继续复用同一套 helper；ring buffer、page actions、actual browser behavior 和 audit schema 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_existing_in_memory_entries backend/tests/test_api.py::test_automation_network_summary_redacts_existing_in_memory_events -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.79s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages or automation_console_logs or automation_network_summary or automation_page_id'
+# 12 passed, 209 deselected in 1.62s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 571 passed in 34.10s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.33s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request/console behavior、browser-side capture event subscription 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
