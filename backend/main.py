@@ -922,6 +922,7 @@ def _audit_health_check(
 
 def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
     safe = dict(preset)
+    safe["id"] = _public_proxy_provider_preset_identifier(safe.get("id"))
     safe["provider"] = _public_proxy_provider(safe.get("provider"))
     safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
     safe["tags"] = _tag_responses(safe.get("tags"))
@@ -934,12 +935,12 @@ def _proxy_provider_preset_audit_metadata(
     updated_fields: list[str] | None = None,
 ) -> dict:
     metadata = {
-        "preset_id": str(preset["id"]),
+        "preset_id": _public_uuid_identifier(preset.get("id")),
         "tag_count": len(preset.get("tags") or []),
     }
     if updated_fields is not None:
         metadata["updated_fields"] = sorted(updated_fields)
-    return metadata
+    return {key: value for key, value in metadata.items() if value is not None}
 
 
 def _audit_proxy_provider_preset_event(
@@ -1079,6 +1080,10 @@ def _public_proxy_result_identifier(value: object, *, exists: bool) -> str:
     if exists:
         return _public_proxy_identifier(value)
     return _public_uuid_identifier(value) or _public_runtime_external_session_id(value) or "unknown"
+
+
+def _public_proxy_provider_preset_identifier(value: object) -> str:
+    return _public_uuid_identifier(value) or "unknown"
 
 
 def _public_profile_platform(value: object) -> str | None:
@@ -1688,7 +1693,11 @@ async def assign_random_proxy_to_profiles(request: Request):
     succeeded = sum(1 for result in results if result.ok)
     response = ProxyRandomAssignResponse(
         strategy="random",
-        provider_preset_id=req.provider_preset_id,
+        provider_preset_id=(
+            _public_proxy_provider_preset_identifier(preset.get("id"))
+            if preset
+            else None
+        ),
         provider=provider,
         country_code=country_code,
         tags=tags,
@@ -1700,7 +1709,9 @@ async def assign_random_proxy_to_profiles(request: Request):
     )
     if succeeded:
         audit_metadata = {
-            "provider_preset_id": req.provider_preset_id,
+            "provider_preset_id": (
+                _public_uuid_identifier(preset.get("id")) if preset else None
+            ),
             "provider": provider,
             "country_code": country_code,
             "tag_count": len(tags),

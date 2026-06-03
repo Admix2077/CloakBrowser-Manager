@@ -3556,3 +3556,46 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 proxy asset id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Proxy provider preset id guardrail
+
+背景：
+
+- Provider preset 是 random proxy assignment 和 proxy-country release preparation 的输入边界。
+- 继续复查发现 provider preset list/detail/update response、provider preset audit metadata、random assignment response 和 random assignment audit metadata 仍直接使用 provider preset id。
+- 如果历史/手工 DB row 含有非 UUID provider preset id，这些 API/audit 边界会把 URL/header/token 风格 id 文本带入低敏 evidence。
+
+已覆盖：
+
+- Provider preset list/detail/update response 的 `id` 现在只保留 canonical UUID；非 UUID 历史/手工 id 折叠为 `unknown`。
+- Provider preset CRUD audit metadata 的 `preset_id` 现在只保留 canonical UUID；非 UUID id 会省略。
+- Random proxy assignment response 的 `provider_preset_id` 现在来自命中 preset row 的 public id；非 UUID preset id 折叠为 `unknown`。
+- Random assignment audit metadata 的 `provider_preset_id` 现在只保留 canonical UUID；非 UUID id 会省略。
+- 正常 UUID provider preset flow、random assignment selection、provider/country/tag filtering、proxy credential redaction 和 frontend gates 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_provider_preset_responses_and_audits_sanitize_persisted_preset_id -q
+# RED: 1 failed；provider preset detail response id 直接保留非 UUID preset id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_provider_preset_responses_and_audits_sanitize_persisted_preset_id -q
+# 1 passed in 0.88s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "provider_preset or random_proxy_assignment or provider_preset_id"
+# 6 passed, 33 deselected in 1.43s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 611 passed in 39.19s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.32s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 proxy provider preset id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

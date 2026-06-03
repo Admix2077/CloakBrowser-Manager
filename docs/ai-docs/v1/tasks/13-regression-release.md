@@ -2612,6 +2612,46 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Proxy provider preset id guardrail
+
+背景：
+
+- Release regression 的 random proxy assignment 会使用 provider preset，并记录 response 与 audit metadata。
+- 继续复查发现 provider preset response/audit 和 random assignment response/audit 会保留历史/手工污染的非 UUID provider preset id。
+- 普通 DB 生成的 UUID preset id 不受影响，但污染 id 会污染低敏 release evidence。
+
+已覆盖：
+
+- Provider preset list/detail/update response id 改为 UUID-only；非 UUID 命中值返回 `unknown`。
+- Provider preset audit metadata `preset_id` 改为 UUID-only；非 UUID 值省略。
+- Random assignment response `provider_preset_id` 改为命中 preset row 的 public id。
+- Random assignment audit metadata `provider_preset_id` 改为 UUID-only；非 UUID 值省略。
+- 正常 provider preset flow、random assignment、proxy selection filtering 和 frontend gates 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_provider_preset_responses_and_audits_sanitize_persisted_preset_id -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.88s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "provider_preset or random_proxy_assignment or provider_preset_id"
+# 6 passed, 33 deselected in 1.43s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 611 passed in 39.19s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.32s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Proxy asset id guardrail
 
 背景：

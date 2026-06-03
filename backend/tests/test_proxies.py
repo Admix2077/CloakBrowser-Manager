@@ -1352,6 +1352,114 @@ def test_random_proxy_assignment_writes_redacted_audit_event(app_client: TestCli
     assert "mobile" not in serialized_event
 
 
+def test_provider_preset_responses_and_audits_sanitize_persisted_preset_id(
+    app_client: TestClient,
+):
+    leak_marker = "provider-preset-id-secret"
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Polluted preset id",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    ).json()
+    polluted_preset_id = (
+        f"provider-preset-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute(
+            "UPDATE proxy_provider_presets SET id = ? WHERE id = ?",
+            (polluted_preset_id, preset["id"]),
+        )
+        conn.commit()
+
+    app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Preset id random candidate",
+            "url": "http://user:hiddenpass@preset-id-random.example:8080",
+            "provider": "ProxyJP",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile", "color": "#0ea5e9"}],
+        },
+    )
+    profile = app_client.post("/api/profiles", json={"name": "Preset id random"}).json()
+
+    detail = app_client.get(f"/api/proxy-provider-presets/{quote(polluted_preset_id, safe='')}")
+    listed = app_client.get("/api/proxy-provider-presets")
+    updated = app_client.put(
+        f"/api/proxy-provider-presets/{quote(polluted_preset_id, safe='')}",
+        json={"name": "Polluted preset id updated"},
+    )
+    random_assigned = app_client.post(
+        "/api/proxies/assign/random",
+        json={
+            "profile_ids": [profile["id"]],
+            "provider_preset_id": polluted_preset_id,
+            "confirm_assign": True,
+        },
+    )
+    deleted = app_client.request(
+        "DELETE",
+        f"/api/proxy-provider-presets/{quote(polluted_preset_id, safe='')}",
+        json={"confirm_delete": True},
+    )
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    assert updated.status_code == 200
+    assert random_assigned.status_code == 200
+    assert deleted.status_code == 200
+
+    assert detail.json()["id"] == "unknown"
+    assert listed.json()[0]["id"] == "unknown"
+    assert updated.json()["id"] == "unknown"
+    assert random_assigned.json()["provider_preset_id"] == "unknown"
+
+    events = [
+        event
+        for event in db.list_audit_events()
+        if event["event_type"]
+        in {
+            "proxy.provider_preset.updated",
+            "proxy.provider_preset.deleted",
+            "proxy.random_assigned",
+        }
+    ]
+    assert [event["event_type"] for event in events] == [
+        "proxy.provider_preset.updated",
+        "proxy.random_assigned",
+        "proxy.provider_preset.deleted",
+    ]
+    assert all(
+        "preset_id" not in event["metadata"]
+        and "provider_preset_id" not in event["metadata"]
+        for event in events
+    )
+
+    serialized = json.dumps(
+        {
+            "detail": detail.json(),
+            "list": listed.json(),
+            "updated": updated.json(),
+            "random_assigned": random_assigned.json(),
+            "events": events,
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+        "hiddenpass",
+    ):
+        assert leaked not in serialized
+
+
 def test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_metadata(
     app_client: TestClient,
 ):
