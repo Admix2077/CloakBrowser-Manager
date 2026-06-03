@@ -4472,3 +4472,49 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - 不改变 normal automation wait execution、worker lease、task retry/cancel/run、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation retry persisted-step shape release-evidence guardrail
+
+背景：
+
+- Release automation smoke 会覆盖 failed task retry。
+- Retry 应复制原 task 的 public step definitions；历史/手工污染的 non-dict step item 不应让 retry 500，也不应进入新 task response 或 audit evidence。
+- 该边界应和 task get/list/cancel response step boundary 一致。
+
+已覆盖：
+
+- `_automation_task_persisted_steps()` 现在只处理 public dict step items。
+- Non-dict persisted step 在 retry 时跳过；污染 dict step type 折叠为 `unknown`。
+- Retry response 和 `automation.task.retried` audit 使用低敏 step shape。
+- 正常 failed-task retry 和 open_url retry redaction 保持通过。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_retry_automation_task_skips_non_dict_persisted_steps -q
+# RED then GREEN；旧实现对 string step 调用 .get() 并 500，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_retry_automation_task_skips_non_dict_persisted_steps backend/tests/test_api.py::test_retry_automation_task_keeps_steps_redacted backend/tests/test_api.py::test_retry_failed_automation_task_creates_new_queued_task_without_running_script -q
+# 3 passed in 1.08s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 58 passed, 195 deselected in 7.17s
+
+.venv/bin/python -m pytest backend/tests -q
+# 644 passed in 38.43s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.31s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- 不改变 normal retry semantics、automation execution、worker lease、task run/cancel、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

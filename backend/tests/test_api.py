@@ -5932,6 +5932,52 @@ def test_retry_automation_task_keeps_steps_redacted(app_client: TestClient):
     assert "super-secret" not in str(resp.json())
 
 
+def test_retry_automation_task_skips_non_dict_persisted_steps(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskRetryNonDictStepProfile"})
+    pid = create.json()["id"]
+    original = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    leak_marker = "retry-non-dict-step-secret"
+    polluted_steps = [
+        f"https://retry.example/path?token={leak_marker} Authorization=Bearer {leak_marker}",
+        {
+            "type": f"https://retry-step.example/action?token={leak_marker}",
+            "payload": {"token": leak_marker},
+        },
+    ]
+    with main.db.get_db() as conn:
+        conn.execute(
+            "UPDATE automation_tasks SET status = ?, steps = ? WHERE id = ?",
+            ("failed", json.dumps(polluted_steps), original["id"]),
+        )
+        conn.commit()
+
+    resp = app_client.post(f"/api/tasks/{original['id']}/retry")
+    events = _automation_task_audit_events()
+
+    assert resp.status_code == 201
+    assert resp.json()["steps"] == [{"type": "unknown"}]
+    assert resp.json()["result"] is None
+    assert [event["event_type"] for event in events][-1:] == ["automation.task.retried"]
+    assert events[-1]["metadata"]["step_count"] == 1
+    assert events[-1]["metadata"]["step_types"] == ["unknown"]
+
+    serialized = json.dumps({"response": resp.json(), "events": events}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "retry.example",
+        "retry-step.example",
+        "token=",
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized
+
+
 def test_run_wait_automation_task_marks_succeeded(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunWaitProfile"})
     pid = create.json()["id"]

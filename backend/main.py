@@ -3319,7 +3319,7 @@ def _automation_task_public_page_ref(step: dict) -> str | None:
     return _automation_task_safe_page_ref(step.get("page_ref")) or _AUTOMATION_INVALID_PAGE_REF
 
 
-def _automation_task_persisted_steps(steps: list[dict]) -> list[dict]:
+def _automation_task_persisted_steps(steps: object) -> list[dict]:
     persisted_steps = []
     allowed_keys_by_type = {
         "click": {"type", "selector", "page_ref", "timeout_ms"},
@@ -3332,7 +3332,7 @@ def _automation_task_persisted_steps(steps: list[dict]) -> list[dict]:
         "wait": {"type", "ms"},
         "wait_for_selector": {"type", "selector", "page_ref", "state", "timeout_ms"},
     }
-    for step in steps:
+    for step in _automation_task_public_steps(steps):
         step_type = _automation_task_public_step_type(step.get("type"))
         allowed_keys = allowed_keys_by_type.get(step_type, {"type"})
         persisted_step = {key: value for key, value in step.items() if key in allowed_keys}

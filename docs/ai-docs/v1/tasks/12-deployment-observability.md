@@ -4781,3 +4781,49 @@ git diff --check
 - 这是 automation task response/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 normal automation wait execution、worker lease、runner selection、task retry/cancel/run、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。
+
+## 2026-06-03 Automation retry persisted-step shape guardrail
+
+背景：
+
+- Automation retry 会基于原 task 的 persisted `steps` 创建新 queued task。
+- Response/audit 已经过滤非 dict persisted step item，但 retry builder 仍直接对每个 item 调用 `.get()`。
+- 历史/手工 DB row 如果包含 URL/query token/header 风格 string step，retry 会 500，也可能阻断 release automation smoke。
+
+已覆盖：
+
+- `_automation_task_persisted_steps()` 现在复用 `_automation_task_public_steps()`。
+- 非 dict persisted step 在 retry 时被跳过；污染 dict step type 仍折叠为 `unknown`。
+- Retry response 和 retried audit 不再回显 polluted step host、`token=`、Authorization 或 Bearer 文本。
+- 正常 failed-task retry 和 retry redaction 行为保持通过。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_retry_automation_task_skips_non_dict_persisted_steps -q
+# RED: 旧实现对 string step 调用 .get() 并 500；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_retry_automation_task_skips_non_dict_persisted_steps backend/tests/test_api.py::test_retry_automation_task_keeps_steps_redacted backend/tests/test_api.py::test_retry_failed_automation_task_creates_new_queued_task_without_running_script -q
+# 3 passed in 1.08s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 58 passed, 195 deselected in 7.17s
+
+.venv/bin/python -m pytest backend/tests -q
+# 644 passed in 38.43s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.31s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 automation retry stability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 normal retry semantics、worker lease、runner selection、task run/cancel、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。
