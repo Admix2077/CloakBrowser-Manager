@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import threading
+from urllib.parse import quote
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -928,6 +929,43 @@ def test_launch_failure_500(app_client: TestClient):
         resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
     assert resp.status_code == 500
     assert resp.json()["detail"] == "Failed to launch browser"
+
+
+def test_launch_failure_log_omits_sensitive_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "launch-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "Crash"}).json()["id"]
+    polluted_profile_id = (
+        f"launch-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+
+    with caplog.at_level("ERROR", logger="invisible_browser.manager"):
+        with patch.object(
+            main.browser_mgr,
+            "launch",
+            new=AsyncMock(side_effect=RuntimeError(f"launch failure {leak_marker}")),
+        ):
+            resp = app_client.post(
+                f"/api/profiles/{quote(polluted_profile_id, safe='')}/launch",
+                json={"confirm_launch": True},
+            )
+
+    assert resp.status_code == 500
+    assert resp.json()["detail"] == "Failed to launch browser"
+    assert "Failed to launch profile unknown error_type=RuntimeError" in caplog.text
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in caplog.text
 
 
 def test_launch_success_response_exposes_automation_url(app_client: TestClient):

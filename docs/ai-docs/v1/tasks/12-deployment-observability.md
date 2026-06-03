@@ -3122,3 +3122,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 runtime template identity field guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Launch failure profile id log guardrail
+
+背景：
+
+- Profile launch 和 runtime session launch 的 generic failure 日志已只记录固定 `error_type`，不记录 raw exception text。
+- 继续复查发现这两个 endpoint 的 failure log 仍直接写 `profile_id`。
+- 如果旧版本、手工修复或损坏 DB row 让 profile id 变成 URL/query token/header-like 字符串，launch failure 日志会保留该文本。
+
+已覆盖：
+
+- 普通 `POST /api/profiles/{profile_id}/launch` generic failure log 中的 profile id 只保留 canonical UUID；非 UUID 折叠为 `unknown`。
+- Runtime `POST /api/runtime/sessions` profile launch generic failure log 使用同一 UUID-only public identifier。
+- 既有 HTTP 500 response、fixed `error_type`、ValueError proxy detail redaction、resource-limit handling、diagnostics launch failure summary 和正常 UUID profile id 语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_failure_log_omits_sensitive_profile_id backend/tests/test_session_broker.py::test_runtime_session_create_launch_failure_log_omits_sensitive_profile_id -q
+# RED: 2 failed；普通 launch 和 runtime session launch failure log 直接保留非 UUID URL/header/token-like profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_failure_log_omits_sensitive_profile_id backend/tests/test_session_broker.py::test_runtime_session_create_launch_failure_log_omits_sensitive_profile_id -q
+# 2 passed in 0.85s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_failure_500 backend/tests/test_api.py::test_launch_failure_log_omits_sensitive_profile_id backend/tests/test_api.py::test_system_diagnostics_reports_low_sensitive_launch_failure_summary backend/tests/test_session_broker.py::test_runtime_session_create_launch_failure_log_omits_sensitive_profile_id backend/tests/test_session_broker.py::test_runtime_session_create_redacts_sensitive_launch_value_error_detail -q
+# 5 passed in 1.02s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py -q -k "runtime_session_create or launch_failure or launch_invalid_proxy or max_running_profiles"
+# 16 passed, 253 deselected in 1.84s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 599 passed in 34.47s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.13s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 launch failure profile id log guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

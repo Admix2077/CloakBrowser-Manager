@@ -1838,7 +1838,7 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         except Exception as exc:
             logger.error(
                 "Failed to launch runtime session profile %s error_type=%s",
-                profile_id,
+                _public_uuid_identifier(profile_id) or "unknown",
                 type(exc).__name__,
             )
             raise HTTPException(status_code=500, detail="Failed to launch browser") from exc
@@ -2658,7 +2658,7 @@ async def launch_profile(profile_id: str, request: Request):
     except Exception as exc:
         logger.error(
             "Failed to launch profile %s error_type=%s",
-            profile_id,
+            _public_uuid_identifier(profile_id) or "unknown",
             type(exc).__name__,
         )
         raise HTTPException(status_code=500, detail="Failed to launch browser") from exc

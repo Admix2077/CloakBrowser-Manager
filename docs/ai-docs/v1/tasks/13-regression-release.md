@@ -2612,6 +2612,46 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Launch failure profile id log guardrail
+
+背景：
+
+- Release smoke 和生产 triage 会读取 profile launch/runtime launch failure logs。
+- 旧日志已隐藏 raw exception text，但仍直接写 profile id；历史/污染 profile id 可把 URL/query token/header 文本写入日志。
+
+已覆盖：
+
+- 普通 profile launch failure 和 runtime session profile launch failure 日志现在只保留 canonical UUID profile id。
+- 非 UUID profile id 折叠为 `unknown`；fixed `error_type` 和 HTTP response 语义保持不变。
+- proxy validation detail redaction、resource limit、diagnostics launch failure summary 和 runtime response/audit guardrails 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_failure_log_omits_sensitive_profile_id backend/tests/test_session_broker.py::test_runtime_session_create_launch_failure_log_omits_sensitive_profile_id -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.85s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_failure_500 backend/tests/test_api.py::test_launch_failure_log_omits_sensitive_profile_id backend/tests/test_api.py::test_system_diagnostics_reports_low_sensitive_launch_failure_summary backend/tests/test_session_broker.py::test_runtime_session_create_launch_failure_log_omits_sensitive_profile_id backend/tests/test_session_broker.py::test_runtime_session_create_redacts_sensitive_launch_value_error_detail -q
+# 5 passed in 1.02s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py -q -k "runtime_session_create or launch_failure or launch_invalid_proxy or max_running_profiles"
+# 16 passed, 253 deselected in 1.84s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 599 passed in 34.47s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.13s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile/proxy audit name guardrail
 
 背景：

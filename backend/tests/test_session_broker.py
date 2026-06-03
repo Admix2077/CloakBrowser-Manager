@@ -553,6 +553,50 @@ def test_runtime_session_create_redacts_sensitive_launch_value_error_detail(
     assert "runtime.session.created" not in _audit_event_types()
 
 
+def test_runtime_session_create_launch_failure_log_omits_sensitive_profile_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "runtime-launch-profile-id-secret"
+    profile_id = _create_profile(app_client)
+    polluted_profile_id = (
+        f"runtime-launch-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+
+    with caplog.at_level("ERROR", logger="invisible_browser.manager"):
+        with patch.object(
+            main.browser_mgr,
+            "launch",
+            new=AsyncMock(side_effect=RuntimeError(f"runtime launch failure {leak_marker}")),
+        ):
+            resp = app_client.post(
+                "/api/runtime/sessions",
+                headers=runtime_headers,
+                json={
+                    "external_session_id": "pm-session-sensitive-launch-log",
+                    "profile_id": polluted_profile_id,
+                    "lease_seconds": 900,
+                },
+            )
+
+    assert resp.status_code == 500
+    assert resp.json() == {"detail": "Failed to launch browser"}
+    assert "Failed to launch runtime session profile unknown error_type=RuntimeError" in caplog.text
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in caplog.text
+    assert "runtime.session.created" not in _audit_event_types()
+
+
 def test_runtime_session_create_from_template_creates_profile_then_launches(
     app_client: TestClient,
     runtime_headers: dict[str, str],
