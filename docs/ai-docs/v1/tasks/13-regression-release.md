@@ -6203,3 +6203,34 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx src/com
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile tag persistence、profile edit form raw values、filter option values、filter matching、bulk tag payload、CSV import payload、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile tag label UI/filter release-evidence 边界。
+
+## 2026-06-04 Profile CSV preview textarea release-evidence guardrail
+
+背景：
+
+- Profile CSV import preview 是 profile import release evidence 面。
+- 旧 preview flow 只把 pasted CSV 中的 URL credentials 脱敏后回填 textarea；Authorization/Bearer、`token=`、本地路径和 IP 字面量仍可能出现在可见 evidence。
+- Import payload 必须继续使用 preview 前保存的 raw CSV，避免 UI-only 脱敏改变导入语义。
+
+已覆盖：
+
+- Preview CSV 成功后，textarea 可见 CSV 按行应用 public error text boundary。
+- `Create valid profiles` 仍提交原始 pasted CSV，保留 profile import payload semantics。
+- Preview/import errors、row validation errors 和 URL credential redaction 既有行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx -t "redacts preview textarea evidence"
+# RED then GREEN；旧实现把污染 CSV metadata 留在 textarea evidence
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx
+# 4 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile tag persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV preview textarea release-evidence 边界。

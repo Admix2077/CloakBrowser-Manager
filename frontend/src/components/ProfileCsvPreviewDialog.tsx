@@ -43,7 +43,7 @@ export function ProfileCsvPreviewDialog({ onClose, onImported }: ProfileCsvPrevi
       const nextPreview = await api.previewProfileImport(csvText);
       setPreview(nextPreview);
       setLastPreviewCsvText(rawCsvText);
-      setCsvText(redactUrlCredentials(rawCsvText));
+      setCsvText(publicProfileCsvVisibleText(rawCsvText));
     } catch (err) {
       setError(publicErrorMessage(err, "Unable to preview profile CSV"));
     } finally {
@@ -334,6 +334,13 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
       </td>
     </tr>
   );
+}
+
+function publicProfileCsvVisibleText(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line) => publicErrorText(line))
+    .join("\n");
 }
 
 function HeaderCell({ children, className = "" }: { children: ReactNode; className?: string }) {

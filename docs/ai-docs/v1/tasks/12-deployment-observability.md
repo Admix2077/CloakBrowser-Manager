@@ -6521,3 +6521,34 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx src/com
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 profile tag persistence、profile edit form raw values、filter option values、filter matching、bulk tag payload、CSV import payload、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile CSV preview textarea evidence guardrail
+
+背景：
+
+- Profile CSV import dialog 在 Preview 成功后会把 pasted CSV 留在 textarea 中，属于 profile import 回归路径上的可见 release evidence。
+- 旧实现只隐藏 URL credentials；CSV 中的 Authorization/Bearer、`token=`、本地路径或 IP 字面量仍会留在可见 textarea 里。
+- Raw CSV 仍必须保存用于 Create valid profiles，避免 preview-only 脱敏改变真实导入 payload。
+
+已覆盖：
+
+- Preview 成功后 textarea 可见文本按行使用共享 public error text boundary，隐藏 Authorization/Bearer、`token=`、本地路径、IP 字面量和 URL credentials。
+- `lastPreviewCsvText` 仍保存原始 pasted CSV；Create valid profiles 继续提交 raw CSV 给 import API。
+- Preview response table、row validation error redaction 和 existing import error redaction 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx -t "redacts preview textarea evidence"
+# RED: 旧实现把污染 CSV metadata 留在 textarea；GREEN: 1 passed, 3 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx
+# 4 passed
+```
+
+边界：
+
+- 这是 Profile CSV preview textarea release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile tag persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
