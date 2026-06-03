@@ -1801,7 +1801,11 @@ def test_get_clipboard_page_failure_logs_error_type_without_raw_exception(
     mock_proc.communicate = AsyncMock(return_value=(b"", b""))
     caplog.set_level("DEBUG", logger="invisible_browser.manager")
 
-    with patch("backend.main.asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_proc):
+    with patch(
+        "backend.main.asyncio.create_subprocess_exec",
+        new_callable=AsyncMock,
+        return_value=mock_proc,
+    ):
         resp = app_client.get(f"/api/profiles/{pid}/clipboard")
 
     assert resp.status_code == 200
@@ -1813,6 +1817,50 @@ def test_get_clipboard_page_failure_logs_error_type_without_raw_exception(
     assert "clipboard-token-super-secret" not in caplog.text
     assert "https://secret.example" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
+
+
+def test_get_clipboard_page_failure_logs_public_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "clipboard-profile-secret"
+    polluted_profile_id = (
+        f"polluted-profile Authorization=Bearer {leak_marker} token={leak_marker}"
+    )
+
+    mock_page = AsyncMock()
+    mock_page.evaluate = AsyncMock(side_effect=RuntimeError("clipboard failed"))
+
+    mock_context = MagicMock()
+    mock_context.pages = [mock_page]
+
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = 100
+    mock_running.engine = "invisible_playwright"
+    mock_running.context = mock_context
+    main.browser_mgr.running[polluted_profile_id] = mock_running
+
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    caplog.set_level("DEBUG", logger="invisible_browser.manager")
+
+    with patch("backend.main.asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_proc):
+        resp = app_client.get(
+            f"/api/profiles/{quote(polluted_profile_id, safe='')}/clipboard"
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"text": ""}
+    assert (
+        "action=profile.clipboard_page_read_failed profile_id=unknown "
+        "error_type=RuntimeError"
+    ) in caplog.text
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+    main.browser_mgr.running.pop(polluted_profile_id, None)
 
 
 def test_get_clipboard_context_failure_logs_error_type_without_raw_exception(
@@ -7237,3 +7285,47 @@ def test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception(
     assert "backend-vnc-token-super-secret" not in caplog.text
     assert "127.0.0.1:6100" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
+
+
+def test_vnc_proxy_connect_failure_logs_public_profile_id(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "vnc-profile-secret"
+    polluted_profile_id = (
+        f"polluted-vnc Authorization=Bearer {leak_marker} token={leak_marker}"
+    )
+    _mock_running_profile(polluted_profile_id)
+
+    class FailingConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            raise OSError("backend unavailable")
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FailingConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+    caplog.set_level("ERROR", logger="invisible_browser.manager")
+
+    with app_client.websocket_connect(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/vnc",
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    assert (
+        "action=vnc.proxy_connect_failed profile_id=unknown error_type=OSError"
+        in caplog.text
+    )
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+    main.browser_mgr.running.pop(polluted_profile_id, None)

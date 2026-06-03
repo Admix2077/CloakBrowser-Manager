@@ -3954,3 +3954,41 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 BrowserManager lifecycle profile-id log guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 VNC/clipboard profile-id log guardrail
+
+背景：
+
+- VNC proxy 和 clipboard relay 是 release smoke、runtime viewer、远程工作台排障时最常看的日志入口。
+- BrowserManager lifecycle 日志已经过滤 profile id，但 `backend/main.py` 的 VNC/clipboard route 日志仍直接使用 path profile id。
+- 如果历史/手工 DB 或调用路径里出现 URL/query/header/token 风格 profile id，排障日志会保留该文本。
+
+已覆盖：
+
+- clipboard page/context read failure 日志现在只记录公开 profile id；非 UUID profile id 折叠为 `unknown`。
+- VNC proxy connect、client/backend stream failure、Xvnc log available、websocket close failure，以及 connected/finished lifecycle 日志现在使用同一公开 profile id。
+- 内部 running profile lookup、WebSocket path、clipboard 行为和 runtime viewer audit 回调不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_get_clipboard_page_failure_logs_public_profile_id backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_public_profile_id -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.80s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "vnc or clipboard"
+# 16 passed, 226 deselected in 1.68s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 624 passed in 39.45s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.23s
+```
+
+边界：
+
+- 这是 VNC/clipboard 运行日志和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw audit metadata。

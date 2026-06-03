@@ -2612,6 +2612,43 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 VNC/clipboard profile-id release-evidence guardrail
+
+背景：
+
+- Release smoke 和 runtime viewer 排障会读取 VNC proxy、Xvnc availability 和 clipboard relay 日志。
+- 这些日志此前仍信任 path profile id；如果 profile id 被历史/手工数据污染成 URL/query/header/token 风格文本，release evidence 会保留该文本。
+
+已覆盖：
+
+- clipboard page/context failure、VNC connect failure、client/backend stream failure、Xvnc log available、websocket close failure、VNC connected/finished 日志均改为公开 profile id。
+- 正常 UUID profile id 保持可追踪；非 UUID 或 token/header 风格 profile id 统一记录为 `unknown`。
+- 不改变 VNC WebSocket proxy、clipboard sync、runtime viewer audit 或 running profile lookup 语义。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_get_clipboard_page_failure_logs_public_profile_id backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_public_profile_id -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.80s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "vnc or clipboard"
+# 16 passed, 226 deselected in 1.68s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 624 passed in 39.45s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.23s
+```
+
+边界：
+
+- 这是 VNC/clipboard release evidence hardening，不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 BrowserManager lifecycle profile-id log guardrail
 
 背景：

@@ -4208,6 +4208,7 @@ async def get_clipboard(profile_id: str):
     running = browser_mgr.running.get(profile_id)
     if not running:
         raise HTTPException(status_code=404, detail="Profile not running")
+    public_profile_id = _public_profile_identifier(profile_id)
 
     # The init script captures copy events when they fire. Some browser copy
     # paths under KasmVNC never reach X11 clipboard, so check all pages first.
@@ -4221,14 +4222,14 @@ async def get_clipboard(profile_id: str):
             except Exception as exc:
                 logger.debug(
                     "action=profile.clipboard_page_read_failed profile_id=%s error_type=%s",
-                    profile_id,
+                    public_profile_id,
                     type(exc).__name__,
                 )
                 continue
     except Exception as exc:
         logger.debug(
             "action=profile.clipboard_context_read_failed profile_id=%s error_type=%s",
-            profile_id,
+            public_profile_id,
             type(exc).__name__,
         )
 
@@ -4338,6 +4339,7 @@ async def _proxy_running_vnc(
     on_disconnected=None,
     on_connect_failed=None,
 ):
+    public_profile_id = _public_profile_identifier(profile_id)
     # Accept with client's requested subprotocol (if any) — RFC 6455 requires
     # the server must not respond with a subprotocol the client didn't request.
     requested = websocket.scope.get("subprotocols", [])
@@ -4362,7 +4364,7 @@ async def _proxy_running_vnc(
         ) as vnc_ws:
             logger.info(
                 "VNC proxy: connected to KasmVNC for %s (subprotocol=%s)",
-                profile_id, vnc_ws.subprotocol,
+                public_profile_id, vnc_ws.subprotocol,
             )
             if on_connected:
                 on_connected({"subprotocol": subprotocol})
@@ -4429,7 +4431,7 @@ async def _proxy_running_vnc(
                 except Exception as exc:
                     logger.warning(
                         "action=vnc.client_to_backend_failed profile_id=%s error_type=%s messages=%d",
-                        profile_id,
+                        public_profile_id,
                         type(exc).__name__,
                         count,
                     )
@@ -4464,7 +4466,7 @@ async def _proxy_running_vnc(
                 except Exception as exc:
                     logger.warning(
                         "action=vnc.backend_to_client_failed profile_id=%s error_type=%s messages=%d",
-                        profile_id,
+                        public_profile_id,
                         type(exc).__name__,
                         count,
                     )
@@ -4484,7 +4486,7 @@ async def _proxy_running_vnc(
             xvnc_alive = vnc_instance and vnc_instance.process and vnc_instance.process.poll() is None
             logger.info(
                 "VNC proxy: finished=%s pending=%s xvnc_alive=%s display=:%d for %s",
-                finished, still_running, xvnc_alive, running.display, profile_id,
+                finished, still_running, xvnc_alive, running.display, public_profile_id,
             )
 
             # Xvnc logs can include backend URLs, profile paths, or token-like
@@ -4494,7 +4496,7 @@ async def _proxy_running_vnc(
             if os.path.exists(xvnc_log):
                 logger.info(
                     "action=vnc.xvnc_log_available profile_id=%s display=:%d",
-                    profile_id,
+                    public_profile_id,
                     running.display,
                 )
 
@@ -4504,7 +4506,7 @@ async def _proxy_running_vnc(
     except Exception as exc:
         logger.error(
             "action=vnc.proxy_connect_failed profile_id=%s error_type=%s",
-            profile_id,
+            public_profile_id,
             type(exc).__name__,
         )
         if on_connect_failed and not audit_connected:
@@ -4517,7 +4519,7 @@ async def _proxy_running_vnc(
         except Exception as exc:
             logger.debug(
                 "action=vnc.websocket_close_failed profile_id=%s error_type=%s",
-                profile_id,
+                public_profile_id,
                 type(exc).__name__,
             )
 
