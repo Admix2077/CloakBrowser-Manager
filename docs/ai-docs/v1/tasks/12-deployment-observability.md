@@ -5116,3 +5116,52 @@ git diff --check
 - 这是 frontend auth/task-load UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 auth token submit flow、login success callback、automation task list request shape、task filtering、task detail redaction、Proxy Manager、VNC viewer、Automation API backend、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Frontend import/proxy/health error guardrail
+
+背景：
+
+- Proxy Manager、Profile CSV import dialog 和 health warning summary 都会进入 UI/release smoke evidence。
+- 这些路径原先有多处只做 URL credential redaction，不能拦住 `Authorization`、`Bearer`、`token=` 或本地 `/data` path 风格 raw error/warning 文本。
+
+已覆盖：
+
+- 新增共享 `publicErrorText`/`publicErrorMessage` 前端 helper。
+- `useProfiles` 迁移到共享 helper，保持已有 profile error 行为和测试覆盖。
+- `ProxyManagerPage` 的 proxy list load、bulk check、assign/refresh、random assign/refresh、provider preset save/delete、CSV row create failure 统一使用 public error boundary。
+- `ProfileCsvPreviewDialog` 的 preview/import alert 和 row validation errors 统一使用 public error boundary。
+- `HealthBadge` warning summary 通过 shared helper 过滤 header/token/path 风格文本。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# RED: 旧实现 bulk/load/import failure 会渲染 token/header/path；GREEN: 23 passed
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx
+# RED: 旧实现 preview/import/row validation error 会渲染 token/header/path；GREEN: 3 passed
+
+npm --prefix frontend test -- --run src/components/HealthBadge.test.tsx
+# RED: 旧实现 warning summary 会渲染 token/header/path；GREEN: 6 passed
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx src/components/HealthBadge.test.tsx src/hooks/useProfiles.test.ts
+# Test Files 4 passed；Tests 60 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.85s
+
+npm --prefix frontend test -- --run
+# Test Files 19 passed；Tests 232 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.53s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend import/proxy/health UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 proxy CRUD/API request payload、provider preset validation rules、CSV parser semantics、profile import backend contract、health status ranking、profile launch backend、VNC viewer、Automation API、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

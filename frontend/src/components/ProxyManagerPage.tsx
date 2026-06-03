@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, Pencil, RefreshCw, Search, Settings2, Shuffle, Trash2, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyProviderPresetCreateData, type ProxyRandomAssignRequestData } from "../lib/api";
+import { publicErrorMessage } from "../lib/errorDisplay";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
@@ -93,7 +94,7 @@ export function ProxyManagerPage({
         return new Set([...current].filter((id) => nextIds.has(id)));
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load proxy assets");
+      setError(publicErrorMessage(err, "Unable to load proxy assets"));
     } finally {
       setLoading(false);
     }
@@ -236,8 +237,7 @@ export function ProxyManagerPage({
       setProxies((current) => current.map((proxy) => updatedById.get(proxy.id) ?? proxy));
       setBulkCheckNotice(`Bulk check complete: ${response.succeeded} succeeded, ${response.failed} failed`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to check selected proxies";
-      setBulkCheckError(`Bulk check failed: ${redactUrlCredentials(message)}`);
+      setBulkCheckError(`Bulk check failed: ${publicErrorMessage(err, "Unable to check selected proxies")}`);
     } finally {
       setBulkChecking(false);
     }
@@ -328,12 +328,10 @@ export function ProxyManagerPage({
       try {
         await onProfilesAssigned?.();
       } catch (refreshErr) {
-        const message = refreshErr instanceof Error ? refreshErr.message : "Unable to refresh profile data";
-        setAssignNotice(`${notice}. Refresh failed: ${redactUrlCredentials(message)}`);
+        setAssignNotice(`${notice}. Refresh failed: ${publicErrorMessage(refreshErr, "Unable to refresh profile data")}`);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to assign proxy";
-      setAssignError(`Assign failed: ${redactUrlCredentials(message)}`);
+      setAssignError(`Assign failed: ${publicErrorMessage(err, "Unable to assign proxy")}`);
     } finally {
       setAssigning(false);
     }
@@ -422,12 +420,10 @@ export function ProxyManagerPage({
       try {
         await onProfilesAssigned?.();
       } catch (refreshErr) {
-        const message = refreshErr instanceof Error ? refreshErr.message : "Unable to refresh profile data";
-        setRandomAssignNotice(`${notice}. Refresh failed: ${redactUrlCredentials(message)}`);
+        setRandomAssignNotice(`${notice}. Refresh failed: ${publicErrorMessage(refreshErr, "Unable to refresh profile data")}`);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to assign random proxy";
-      setRandomAssignError(`Random assign failed: ${redactUrlCredentials(message)}`);
+      setRandomAssignError(`Random assign failed: ${publicErrorMessage(err, "Unable to assign random proxy")}`);
     } finally {
       setRandomAssigning(false);
     }
@@ -495,8 +491,7 @@ export function ProxyManagerPage({
       setEditingProviderPresetId(savedPreset.id);
       setProviderPresetForm(providerPresetToForm(savedPreset));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to save provider preset";
-      setProviderPresetError(`Save failed: ${redactUrlCredentials(message)}`);
+      setProviderPresetError(`Save failed: ${publicErrorMessage(err, "Unable to save provider preset")}`);
     } finally {
       setProviderPresetSaving(false);
     }
@@ -519,8 +514,7 @@ export function ProxyManagerPage({
       }
       setProviderPresetNotice(`Deleted provider preset ${preset.name}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to delete provider preset";
-      setProviderPresetError(`Delete failed: ${redactUrlCredentials(message)}`);
+      setProviderPresetError(`Delete failed: ${publicErrorMessage(err, "Unable to delete provider preset")}`);
     } finally {
       setProviderPresetDeletingId(null);
     }
@@ -579,10 +573,9 @@ export function ProxyManagerPage({
         createdCount += 1;
         createdIds.push(createdProxy.id);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unable to create proxy asset";
         failures.push({
           rowNumber: row.rowNumber,
-          message: redactUrlCredentials(message),
+          message: publicErrorMessage(err, "Unable to create proxy asset"),
         });
       }
     }

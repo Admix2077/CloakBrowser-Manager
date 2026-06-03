@@ -454,6 +454,7 @@ describe("ProxyManagerPage", () => {
   });
 
   it("shows a redacted error when bulk proxy checking fails", async () => {
+    const leakMarker = "bulk-check-token-super-secret";
     mockListProxies.mockResolvedValue([
       proxy({
         id: "proxy-1",
@@ -462,7 +463,9 @@ describe("ProxyManagerPage", () => {
       }),
     ]);
     mockBulkCheckProxies.mockRejectedValueOnce(
-      new Error("cannot check http://user:hiddenpass@proxy.example:8080"),
+      new Error(
+        `cannot check http://user:hiddenpass@proxy.example:8080 Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxies.db`,
+      ),
     );
 
     render(<ProxyManagerPage />);
@@ -475,6 +478,11 @@ describe("ProxyManagerPage", () => {
       "Bulk check failed: cannot check http://proxy.example:8080",
     );
     expect(page.textContent).not.toContain("hiddenpass");
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/proxies.db");
     expect(mockBulkCheckProxies).toHaveBeenCalledTimes(1);
     expect(mockListProxies).toHaveBeenCalledTimes(1);
   });
@@ -1033,6 +1041,7 @@ describe("ProxyManagerPage", () => {
   });
 
   it("keeps CSV import failures visible and redacted after partial success", async () => {
+    const leakMarker = "proxy-import-token-super-secret";
     const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
     const importedProxy = proxy({ id: "proxy-imported", name: "Imported Good" });
     mockListProxies
@@ -1040,7 +1049,11 @@ describe("ProxyManagerPage", () => {
       .mockResolvedValueOnce([existingProxy, importedProxy]);
     mockCreateProxy
       .mockResolvedValueOnce(importedProxy)
-      .mockRejectedValueOnce(new Error("cannot save http://user:hiddenpass@bad.proxy.example:8080"));
+      .mockRejectedValueOnce(
+        new Error(
+          `cannot save http://user:hiddenpass@bad.proxy.example:8080 Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxies.db`,
+        ),
+      );
 
     render(<ProxyManagerPage />);
 
@@ -1061,14 +1074,20 @@ describe("ProxyManagerPage", () => {
 
     await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledTimes(2));
     expect(await within(dialog).findByText("Imported 1 proxy asset(s), 1 failed")).toBeTruthy();
-    expect(within(dialog).getByText("Row 3: cannot save http://bad.proxy.example:8080")).toBeTruthy();
+    const importFailureAlert = within(dialog).getByRole("alert");
+    expect(importFailureAlert.textContent).toContain("Row 3: cannot save http://bad.proxy.example:8080");
     const renderedEvidence = [
       within(dialog).getByRole("table", { name: "Proxy CSV preview" }).textContent,
-      within(dialog).getByRole("alert").textContent,
+      importFailureAlert.textContent,
       ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
     ].join(" ");
     expect(renderedEvidence).not.toContain("hiddenpass");
     expect(renderedEvidence).not.toContain("user:");
+    expect(renderedEvidence).not.toContain(leakMarker);
+    expect(renderedEvidence).not.toContain("Authorization");
+    expect(renderedEvidence).not.toContain("Bearer");
+    expect(renderedEvidence).not.toContain("token=");
+    expect(renderedEvidence).not.toContain("/data/proxies.db");
     expect(await within(within(page).getByRole("table", { name: "Proxy assets" })).findByText("Imported Good")).toBeTruthy();
   });
 
@@ -1084,5 +1103,26 @@ describe("ProxyManagerPage", () => {
 
     await waitFor(() => expect(mockListProxies).toHaveBeenCalledTimes(2));
     expect(await screen.findByText("Recovered Pool")).toBeTruthy();
+  });
+
+  it("redacts sensitive proxy load errors before rendering retry state", async () => {
+    const leakMarker = "proxy-load-token-super-secret";
+    mockListProxies.mockRejectedValueOnce(
+      new Error(
+        `Proxy API failed Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxies.db`,
+      ),
+    );
+
+    render(<ProxyManagerPage />);
+
+    const alert = await screen.findByRole("alert");
+    const text = alert.textContent ?? "";
+    expect(text).toContain("Proxy API failed");
+    expect(text).not.toContain(leakMarker);
+    expect(text).not.toContain("Authorization");
+    expect(text).not.toContain("Bearer");
+    expect(text).not.toContain("token=");
+    expect(text).not.toContain("/data/proxies.db");
+    expect(screen.getByRole("button", { name: "Retry loading proxy assets" })).toBeTruthy();
   });
 });

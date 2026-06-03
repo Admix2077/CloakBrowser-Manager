@@ -8,6 +8,7 @@ import {
   type ProfileImportPreviewResponse,
   type ProfileImportPreviewRow,
 } from "../lib/api";
+import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
 import { redactUrlCredentials } from "../lib/profileDisplay";
 import { TagBadge } from "./Badge";
 
@@ -44,8 +45,7 @@ export function ProfileCsvPreviewDialog({ onClose, onImported }: ProfileCsvPrevi
       setLastPreviewCsvText(rawCsvText);
       setCsvText(redactUrlCredentials(rawCsvText));
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to preview profile CSV";
-      setError(redactUrlCredentials(message));
+      setError(publicErrorMessage(err, "Unable to preview profile CSV"));
     } finally {
       setPreviewing(false);
     }
@@ -62,8 +62,7 @@ export function ProfileCsvPreviewDialog({ onClose, onImported }: ProfileCsvPrevi
       setImportNotice(`Imported ${result.succeeded} profile(s), ${result.failed} failed`);
       await onImported?.();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unable to import profile CSV";
-      setError(redactUrlCredentials(message));
+      setError(publicErrorMessage(err, "Unable to import profile CSV"));
     } finally {
       setImporting(false);
     }
@@ -327,7 +326,7 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
                 className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
               >
                 <AlertCircle className="h-3 w-3" />
-                {redactUrlCredentials(error)}
+                {publicErrorText(error)}
               </span>
             ))}
           </div>

@@ -4808,3 +4808,52 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 auth token submit flow、login success callback、automation task list request shape、task filtering、task detail redaction、VNC viewer、Automation API backend、Proxy Manager、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend auth/task-load error release-evidence 边界。
+
+## 2026-06-03 Frontend import/proxy/health error release-evidence guardrail
+
+背景：
+
+- Release smoke 可能截图 Proxy Manager、Profile CSV import dialog、profile table/list health warning summary。
+- 旧实现多处仅隐藏 URL userinfo，仍可显示 raw `Authorization`、`Bearer`、`token=` 和 `/data` path 风格错误文本。
+
+已覆盖：
+
+- 新增共享 frontend public error helper，并迁移 `useProfiles` 复用该边界。
+- Proxy Manager 的 load/bulk check/assign/random assign/provider preset/CSV create failure 可见错误统一过滤。
+- Profile CSV preview/import alert 和 row validation error 统一过滤。
+- Health warning summary 统一过滤。
+- 普通低敏错误摘要仍保留，便于 release triage。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# RED then GREEN；旧实现 bulk/load/import failure 显示 token/header/path，最终 23 passed
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx
+# RED then GREEN；旧实现 preview/import/row validation error 显示 token/header/path，最终 3 passed
+
+npm --prefix frontend test -- --run src/components/HealthBadge.test.tsx
+# RED then GREEN；旧实现 health warning summary 显示 token/header/path，最终 6 passed
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx src/components/HealthBadge.test.tsx src/hooks/useProfiles.test.ts
+# Test Files 4 passed；Tests 60 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.85s
+
+npm --prefix frontend test -- --run
+# Test Files 19 passed；Tests 232 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.53s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 proxy CRUD/API request payload、provider preset validation rules、CSV parser semantics、profile import backend contract、health status ranking、VNC viewer、Automation API backend、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend import/proxy/health error release-evidence 边界。

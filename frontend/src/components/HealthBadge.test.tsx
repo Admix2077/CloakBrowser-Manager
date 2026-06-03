@@ -43,6 +43,30 @@ describe("HealthBadge", () => {
     expect(screen.getByLabelText(/存在需关注项/)).toBeTruthy();
   });
 
+  it("redacts sensitive warning summary text", () => {
+    const leakMarker = "health-warning-token-super-secret";
+    render(
+      <HealthBadge
+        health={health("warning", [
+          {
+            code: "proxy_check_failed",
+            message: `proxy warning Authorization=Bearer ${leakMarker} token=${leakMarker} /data/profiles/profile-1`,
+            severity: "warning",
+            action: "检查代理。",
+          },
+        ])}
+      />,
+    );
+
+    const rendered = document.body.textContent ?? "";
+    expect(rendered).toContain("proxy warning");
+    expect(rendered).not.toContain(leakMarker);
+    expect(rendered).not.toContain("Authorization");
+    expect(rendered).not.toContain("Bearer");
+    expect(rendered).not.toContain("token=");
+    expect(rendered).not.toContain("/data/profiles/profile-1");
+  });
+
   it("renders error status as unavailable", () => {
     render(<HealthBadge health={health("error")} />);
 
