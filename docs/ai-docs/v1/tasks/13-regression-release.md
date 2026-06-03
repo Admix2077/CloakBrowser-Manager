@@ -5277,3 +5277,41 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task error UI release-evidence 边界。
+
+## 2026-06-04 Automation task status UI release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 Automation task table、状态统计、状态筛选和 task detail drawer。
+- 后端 status 聚合已经有公开状态边界，但前端此前仍直接使用 `task.status`。
+- 历史/手工污染 task row 或异常 response 可能把 Authorization/Bearer、token= 这类文本带到 UI 状态位。
+
+已覆盖：
+
+- Automation Task Log Viewer 现在只渲染公开 task statuses：`queued`、`running`、`cancel_requested`、`cancelled`、`failed`、`succeeded`。
+- 非公开状态统一显示为 `unknown`。
+- 状态统计、table status pill、detail status 和本地状态 filter 使用同一公开状态边界。
+- 污染状态不会进入 Failed filter 的结果集。
+- Automation task error、step/result summary、task/profile id 搜索和 readonly 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED then GREEN；旧实现没有 unknown，且会保留 raw polluted status
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.49s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 235 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.23s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task status UI release-evidence 边界。

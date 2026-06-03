@@ -5593,3 +5593,41 @@ git diff --check
 - 这是 Automation task UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation task status UI public-value guardrail
+
+背景：
+
+- Automation task backend response 已有 status 聚合脱敏边界。
+- 但 frontend Task Log Viewer 的 table、stats、filter 和详情抽屉仍信任 `task.status`。
+- 历史/手工污染数据或异常 response 如果把 Authorization/Bearer、token assignment 等文本放进 status，可能进入 Automation UI release evidence。
+
+已覆盖：
+
+- `frontend/src/components/AutomationTaskLogViewer.tsx` 新增公开状态 allowlist。
+- 只允许 `queued`、`running`、`cancel_requested`、`cancelled`、`failed`、`succeeded` 作为可见状态。
+- 非公开或污染状态在 table、stats、filter 和 detail drawer 中统一折叠为 `unknown`。
+- 污染 status 不会被 `Failed` filter 当成真实 failed task 展示。
+- 不改变 backend API response schema、task persistence、worker execution、task lifecycle、run/cancel/retry 行为或 Automation API 后端逻辑。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED: 旧实现没有 unknown，且会保留 raw status；GREEN: 8 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.49s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 235 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.23s
+```
+
+边界：
+
+- 这是 Automation task UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

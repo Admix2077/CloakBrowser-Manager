@@ -209,6 +209,39 @@ describe("AutomationTaskLogViewer", () => {
     expect(mockListAutomationTasks).toHaveBeenCalledTimes(1);
   });
 
+  it("folds non-public task statuses to unknown before rendering", async () => {
+    const leakMarker = "task-status-token-secret";
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({
+          id: "task-status-123456",
+          profile_id: "profile-status-123456",
+          status: `failed Authorization=Bearer ${leakMarker} token=${leakMarker}`,
+        }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getByText("unknown")).toBeTruthy();
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+
+    fireEvent.click(within(page).getByRole("button", { name: "View task details for task-status-123456" }));
+    const drawer = await screen.findByRole("dialog", { name: "Automation task details" });
+    expect(within(drawer).getByText("unknown")).toBeTruthy();
+    expect(drawer.textContent).not.toContain(leakMarker);
+    expect(drawer.textContent).not.toContain("Authorization");
+    expect(drawer.textContent).not.toContain("Bearer");
+    expect(drawer.textContent).not.toContain("token=");
+
+    fireEvent.click(within(page).getByRole("button", { name: "Show failed automation tasks" }));
+    expect(await screen.findByRole("status", { name: "No automation tasks match the selected filter" })).toBeTruthy();
+  });
+
   it("filters the local read-only task list by task or profile id", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [

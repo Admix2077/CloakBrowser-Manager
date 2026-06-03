@@ -14,7 +14,16 @@ const STATUS_STYLES: Record<string, string> = {
   succeeded: "border-emerald-200 bg-emerald-50 text-emerald-700",
   failed: "border-red-200 bg-red-50 text-red-700",
   cancelled: "border-amber-200 bg-amber-50 text-amber-700",
+  unknown: "border-slate-200 bg-slate-50 text-slate-600",
 };
+const PUBLIC_TASK_STATUSES = new Set([
+  "cancel_requested",
+  "cancelled",
+  "failed",
+  "queued",
+  "running",
+  "succeeded",
+]);
 
 export function AutomationTaskLogViewer() {
   const [tasks, setTasks] = useState<AutomationTask[]>([]);
@@ -52,9 +61,9 @@ export function AutomationTaskLogViewer() {
   }, [loadTasks]);
 
   const stats = useMemo(() => {
-    const running = tasks.filter((task) => task.status === "running" || task.status === "cancel_requested").length;
-    const failed = tasks.filter((task) => task.status === "failed").length;
-    const finished = tasks.filter((task) => task.status === "succeeded" || task.status === "cancelled").length;
+    const running = tasks.filter((task) => publicTaskStatus(task.status) === "running" || publicTaskStatus(task.status) === "cancel_requested").length;
+    const failed = tasks.filter((task) => publicTaskStatus(task.status) === "failed").length;
+    const finished = tasks.filter((task) => publicTaskStatus(task.status) === "succeeded" || publicTaskStatus(task.status) === "cancelled").length;
     return { total: tasks.length, running, failed, finished };
   }, [tasks]);
   const selectedTask = useMemo(
@@ -220,7 +229,7 @@ export function AutomationTaskLogViewer() {
                     <span className="font-mono text-[11px] text-slate-600">{shortId(task.profile_id)}</span>
                   </BodyCell>
                   <BodyCell>
-                    <StatusPill status={task.status} />
+                    <StatusPill status={publicTaskStatus(task.status)} />
                   </BodyCell>
                   <BodyCell>
                     <StepList steps={task.steps} />
@@ -412,7 +421,7 @@ function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: ()
           <div className="grid gap-2 sm:grid-cols-2">
             <DetailField label="Task" value={shortId(task.id)} monospace />
             <DetailField label="Profile" value={shortId(task.profile_id)} monospace />
-            <DetailField label="Status" value={task.status} />
+            <DetailField label="Status" value={publicTaskStatus(task.status)} />
             <DetailField label="Created" value={formatTimestamp(task.created_at)} />
             <DetailField label="Started" value={formatTimestamp(task.started_at)} />
             <DetailField label="Finished" value={formatTimestamp(task.finished_at)} />
@@ -468,6 +477,10 @@ function taskErrorText(error: string | null): string | null {
   return publicErrorText(error) || "Task failed";
 }
 
+function publicTaskStatus(status: string): string {
+  return PUBLIC_TASK_STATUSES.has(status) ? status : "unknown";
+}
+
 function stepSummary(step: AutomationTaskStep): string[] {
   const parts: string[] = [];
   if (typeof step.page_ref === "string") parts.push(`page ${safeLabel(step.page_ref)}`);
@@ -497,10 +510,11 @@ function formatResultIndex(value: number | null): string {
 }
 
 function taskMatchesStatusFilter(status: string, filter: TaskStatusFilter): boolean {
+  const publicStatus = publicTaskStatus(status);
   if (filter === "all") return true;
-  if (filter === "running") return status === "running" || status === "cancel_requested";
-  if (filter === "failed") return status === "failed";
-  return status === "succeeded" || status === "cancelled";
+  if (filter === "running") return publicStatus === "running" || publicStatus === "cancel_requested";
+  if (filter === "failed") return publicStatus === "failed";
+  return publicStatus === "succeeded" || publicStatus === "cancelled";
 }
 
 function taskMatchesQuery(task: AutomationTask, query: string): boolean {
