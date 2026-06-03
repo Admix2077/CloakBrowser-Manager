@@ -4988,3 +4988,48 @@ git diff --check
 - 这是 frontend VNC viewer clipboard console/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 VNC websocket URL 选择、noVNC RFB connect、backend clipboard API、VNC frame forwarding、runtime viewer token validation、Automation API、profile launch、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw clipboard payloads、raw errors 或外站页面原文。
+
+## 2026-06-03 Frontend raw console/error boundary guardrail
+
+背景：
+
+- 前端 release triage 可能查看浏览器 console 和页面错误状态。
+- `LaunchButton` 原先会把 launch/stop action 的原始 `Error.message` 渲染到页面，并把原始异常对象写入 `console.error`。
+- `App` 初始 auth status failure 原先会把原始异常对象写入 `console.warn`。
+
+已覆盖：
+
+- `LaunchButton` action failure 现在只显示固定低敏文案 `Action failed`，不再记录原始异常对象。
+- `App` 初始 auth status failure 与 retry failure 保持一致，只进入低敏 error state，不记录原始异常对象。
+- `frontend/src` 现在没有 `console.log` / `console.warn` / `console.debug` / `console.error` 调用。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/LaunchButton.test.tsx
+# RED: 旧实现把 launch-token-super-secret/token=/data/profile-secret 渲染到页面；GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/App.test.tsx
+# RED: 旧实现 console.warn 包含 auth-token-super-secret/token=/data/auth-secret；GREEN: 30 passed
+
+rg -n "console\\.(log|warn|debug|error)\\(" frontend/src
+# no matches
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 43.73s
+
+npm --prefix frontend test -- --run
+# Test Files 17 passed；Tests 224 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.67s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend UI/console release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 auth state machine、login flow、profile launch/stop API calls、VNC viewer、Automation API、Proxy Manager、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

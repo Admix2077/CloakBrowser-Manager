@@ -276,6 +276,33 @@ describe("App operations console", () => {
     expect(screen.getAllByLabelText("Loading skeleton row").length).toBeGreaterThanOrEqual(3);
   });
 
+  it("does not log raw auth status failure details", async () => {
+    const leakMarker = "auth-token-super-secret";
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    mockApi.authStatus.mockRejectedValueOnce(
+      new Error(`auth failed token=${leakMarker} /data/auth-secret`),
+    );
+
+    try {
+      render(<App />);
+
+      expect(await screen.findByText("Unable to reach the server")).toBeTruthy();
+      expect(document.body.textContent).not.toContain(leakMarker);
+      expect(document.body.textContent).not.toContain("token=");
+      expect(document.body.textContent).not.toContain("/data/auth-secret");
+
+      const consoleCalls = consoleWarn.mock.calls
+        .flat()
+        .map((value) => value instanceof Error ? value.message : String(value))
+        .join(" ");
+      expect(consoleCalls).not.toContain(leakMarker);
+      expect(consoleCalls).not.toContain("token=");
+      expect(consoleCalls).not.toContain("/data/auth-secret");
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
   it("renders a structured loading skeleton while profiles are loading", async () => {
     mockUseProfiles.mockReturnValue({
       profiles: [],

@@ -21,9 +21,7 @@ export function LaunchButton({ status, onLaunch, onStop }: LaunchButtonProps) {
         await onLaunch();
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Action failed";
-      setError(msg);
-      console.error("Action failed:", err);
+      setError("Action failed");
     } finally {
       setLoading(false);
     }

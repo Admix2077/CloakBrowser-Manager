@@ -112,8 +112,7 @@ export default function App() {
           setAuthState("required");
         }
       })
-      .catch((err) => {
-        console.warn("[auth] status check failed:", err);
+      .catch(() => {
         setAuthState("error");
       });
 

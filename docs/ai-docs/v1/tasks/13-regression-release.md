@@ -4682,3 +4682,48 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 VNC websocket URL 选择、noVNC RFB connect、backend clipboard API、VNC frame forwarding、runtime viewer token validation、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend VNC clipboard console release-evidence 边界。
+
+## 2026-06-03 Frontend raw console/error release-evidence guardrail
+
+背景：
+
+- Release smoke/triage 可能查看浏览器 console 和页面错误状态。
+- `LaunchButton` 原先会把 raw launch/stop action error message 渲染到页面，并把 raw exception 写入 `console.error`。
+- `App` 初始 auth status failure 原先会把 raw exception 写入 `console.warn`。
+
+已覆盖：
+
+- Profile launch/stop action failure 现在只显示固定低敏 `Action failed`。
+- Auth status initial failure 不再写 raw exception 到 browser console，仍显示现有 `Unable to reach the server` error state。
+- `frontend/src` 已无 `console.log` / `console.warn` / `console.debug` / `console.error` 调用。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/LaunchButton.test.tsx
+# RED then GREEN；旧实现把 launch-token-super-secret/token=/data/profile-secret 渲染到页面并写入 console，最终 1 passed
+
+npm --prefix frontend test -- --run src/App.test.tsx
+# RED then GREEN；旧实现 console.warn 包含 auth-token-super-secret/token=/data/auth-secret，最终 30 passed
+
+rg -n "console\\.(log|warn|debug|error)\\(" frontend/src
+# no matches
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 43.73s
+
+npm --prefix frontend test -- --run
+# Test Files 17 passed；Tests 224 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.67s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 auth state machine、login flow、profile launch/stop API calls、VNC viewer、Automation API、Proxy Manager、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend UI/console raw-error release-evidence 边界。
