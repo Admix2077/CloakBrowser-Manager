@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { api } from "../lib/api";
 import { ProfileViewer } from "./ProfileViewer";
 
 const { MockRFB, rfbInstances } = vi.hoisted(() => {
@@ -54,6 +55,10 @@ vi.mock("../lib/api", () => ({
 beforeEach(() => {
   MockRFB.mockClear();
   rfbInstances.length = 0;
+  vi.mocked(api.getClipboard).mockReset();
+  vi.mocked(api.getClipboard).mockResolvedValue({ text: "" });
+  vi.mocked(api.setClipboard).mockReset();
+  vi.mocked(api.setClipboard).mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: {
@@ -470,5 +475,68 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(
       screen.getByRole("button", { name: "Automation API endpoint copied" }).getAttribute("title"),
     ).toBe("Automation API endpoint copied");
+  });
+});
+
+describe("ProfileViewer clipboard sync", () => {
+  it("does not write clipboard payloads to browser console", async () => {
+    const leakMarker = "clipboard-token-super-secret";
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const consoleDebug = vi.spyOn(console, "debug").mockImplementation(() => undefined);
+    const writeText = vi.mocked(navigator.clipboard.writeText);
+    vi.mocked(navigator.clipboard.readText).mockResolvedValue(
+      `host paste token=${leakMarker}`,
+    );
+
+    try {
+      render(
+        <ProfileViewer
+          profileId="profile-clipboard-redaction"
+          automationUrl={null}
+          clipboardSync={true}
+          onDisconnect={vi.fn()}
+        />,
+      );
+
+      await waitFor(() => expect(rfbInstances[0]?.listeners.connect).toBeTruthy());
+
+      act(() => {
+        rfbInstances[0].listeners.connect();
+      });
+
+      await screen.findByRole("button", { name: "Disable clipboard sync" });
+      const vncContainer = MockRFB.mock.calls[0][0] as HTMLElement;
+      fireEvent.keyDown(vncContainer, { key: "v", ctrlKey: true });
+
+      await waitFor(() => {
+        expect(api.setClipboard).toHaveBeenCalledWith(
+          "profile-clipboard-redaction",
+          `host paste token=${leakMarker}`,
+        );
+      });
+
+      act(() => {
+        rfbInstances[0].listeners.clipboard({
+          detail: { text: `vnc copy token=${leakMarker}` },
+        });
+      });
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith(`vnc copy token=${leakMarker}`);
+      });
+
+      const consoleCalls = JSON.stringify([
+        consoleLog.mock.calls,
+        consoleWarn.mock.calls,
+        consoleDebug.mock.calls,
+      ]);
+      expect(consoleCalls).not.toContain(leakMarker);
+      expect(consoleCalls).not.toContain("token=");
+    } finally {
+      consoleLog.mockRestore();
+      consoleWarn.mockRestore();
+      consoleDebug.mockRestore();
+    }
   });
 });

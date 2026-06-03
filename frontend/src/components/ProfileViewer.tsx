@@ -107,8 +107,8 @@ export function ProfileViewer({
       if (rfb) {
         try {
           rfb.disconnect();
-        } catch (err) {
-          console.debug("[vnc] disconnect cleanup failed:", err);
+        } catch {
+          // Disconnect cleanup is best-effort; avoid logging viewer/runtime details.
         }
       }
       rfbRef.current = null;
@@ -122,13 +122,9 @@ export function ProfileViewer({
     if (!container || !clipboardSync || !connected) return;
 
     const handleKeyDown = async (e: KeyboardEvent) => {
-      console.log("[clipboard] keydown:", e.key, "ctrl:", e.ctrlKey, "meta:", e.metaKey, "clipboardSync:", true);
-
       const isPaste =
         e.key === "v" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
       if (!isPaste) return;
-
-      console.log("[clipboard] intercepted Ctrl+V");
 
       // Block noVNC from sending the keystroke before clipboard is updated
       e.stopPropagation();
@@ -136,27 +132,21 @@ export function ProfileViewer({
 
       const rfb = rfbRef.current;
       if (!rfb) {
-        console.log("[clipboard] no rfb ref, aborting");
         return;
       }
 
       try {
         const text = await navigator.clipboard.readText();
-        console.log("[clipboard] host clipboard text:", text?.substring(0, 50), "len:", text?.length);
         if (text) {
-          console.log("[clipboard] calling setClipboard API...");
           await api.setClipboard(profileId, text);
-          console.log("[clipboard] setClipboard API success");
         }
-      } catch (err) {
-        console.warn("[clipboard] error:", err);
+      } catch {
         setClipboardSync(false);
         return;
       }
 
       // Send full Ctrl+V sequence to VNC. We can't rely on Ctrl still being
       // held because the user may have released it during the async API call.
-      console.log("[clipboard] sending Ctrl+V to VNC");
       rfb.sendKey(0xffe3, "ControlLeft", true);   // Ctrl press
       rfb.sendKey(XK_v, "KeyV", true);             // V press
       rfb.sendKey(XK_v, "KeyV", false);            // V release
@@ -172,25 +162,17 @@ export function ProfileViewer({
   // KasmVNC BinaryClipboard type 180 → standard ServerCutText type 3)
   useEffect(() => {
     const rfb = rfbRef.current;
-    console.log("[clipboard] VNC→Host effect: rfb=", !!rfb, "sync=", clipboardSync, "connected=", connected);
     if (!rfb || !clipboardSync || !connected) return;
 
     const handleClipboard = (e: any) => {
       const text = e.detail?.text;
-      console.log("[clipboard] VNC→Host event fired, text:", text?.substring(0, 50), "len:", text?.length);
       if (text) {
-        navigator.clipboard.writeText(text).then(() => {
-          console.log("[clipboard] writeText success");
-        }).catch((err) => {
-          console.warn("[clipboard] writeText failed:", err);
-        });
+        void navigator.clipboard.writeText(text).catch(() => undefined);
       }
     };
 
-    console.log("[clipboard] registering clipboard event listener on rfb");
     rfb.addEventListener("clipboard", handleClipboard);
     return () => {
-      console.log("[clipboard] removing clipboard event listener");
       rfb.removeEventListener("clipboard", handleClipboard);
     };
   }, [clipboardSync, connected]);
@@ -209,13 +191,9 @@ export function ProfileViewer({
         const { text } = await api.getClipboard(profileId);
         if (text && text !== lastText) {
           lastText = text;
-          console.log("[clipboard] poll: new VNC clipboard:", text.substring(0, 50), "len:", text.length);
-          await navigator.clipboard.writeText(text).catch((err) =>
-            console.warn("[clipboard] poll writeText failed:", err)
-          );
+          await navigator.clipboard.writeText(text).catch(() => undefined);
         }
-      } catch (err) {
-        console.warn("[clipboard] poll error, stopping:", err);
+      } catch {
         cancelled = true;
         return;
       }
@@ -336,7 +314,7 @@ export function ProfileViewer({
                 navigator.clipboard?.writeText(base).then(() => {
                   setAutomationCopied(true);
                   setTimeout(() => setAutomationCopied(false), 2000);
-                }).catch((err) => console.warn("[automation] copy failed:", err));
+                }).catch(() => undefined);
               }
             }}
             className={`inline-flex h-8 w-8 items-center justify-center rounded-[7px] border transition-[background-color,border-color,color,box-shadow,transform] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
@@ -361,7 +339,7 @@ export function ProfileViewer({
             <Code2 className="h-3.5 w-3.5" />
           </button>
           <button
-            onClick={() => { console.log("[clipboard] toggle:", !clipboardSync); setClipboardSync(!clipboardSync); }}
+            onClick={() => setClipboardSync(!clipboardSync)}
             className={`inline-flex h-8 w-8 items-center justify-center rounded-[7px] border transition-[background-color,border-color,color,box-shadow,transform] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
               clipboardSync
                 ? "border-blue-200 bg-blue-50 text-blue-700"

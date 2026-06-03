@@ -4639,3 +4639,46 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 VNC proxy forwarding、RFB filtering、clipboard handling、viewer token validation、runtime session state machine、profile launch、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC connected log release-evidence 边界。
+
+## 2026-06-03 Frontend VNC clipboard console release-evidence guardrail
+
+背景：
+
+- Release smoke/triage 可能查看浏览器 console 来定位 VNC viewer 和 clipboard sync 行为。
+- `ProfileViewer` 的 Host→VNC paste、VNC→Host clipboard event 和 backend clipboard polling 都可能经过真实 clipboard 内容。
+- 旧实现保留了调试 console 输出，会记录 clipboard 文本前缀、异常对象和内部状态。
+
+已覆盖：
+
+- `ProfileViewer` 内不再调用 `console.log` / `console.warn` / `console.debug` / `console.error`。
+- Host→VNC paste 仍读取 host clipboard、调用 `api.setClipboard()`，并发送 Ctrl+V key sequence。
+- VNC→Host clipboard event 和 polling bridge 仍写入 host clipboard；失败时低噪声静默降级。
+- Automation endpoint copy 失败不再把原始异常对象写入 console。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# RED then GREEN；旧实现 console calls 包含 clipboard-token-super-secret/token=，最终 16 passed
+
+rg -n "console\\.(log|warn|debug|error)\\(" frontend/src/components/ProfileViewer.tsx
+# no matches
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.21s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 222 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.72s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 VNC websocket URL 选择、noVNC RFB connect、backend clipboard API、VNC frame forwarding、runtime viewer token validation、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend VNC clipboard console release-evidence 边界。

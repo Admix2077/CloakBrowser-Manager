@@ -4945,3 +4945,46 @@ npm --prefix frontend run build
 - 这是 VNC proxy connected log/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone、proxy、profile launch、VNC frame forwarding 或 Docker runtime 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Frontend VNC clipboard console guardrail
+
+背景：
+
+- `ProfileViewer` 的剪贴板同步路径仍保留调试 `console.log` / `console.warn` / `console.debug`。
+- Host→VNC paste、VNC→Host clipboard event 和 polling bridge 可能处理真实剪贴板内容。
+- 旧实现会把 clipboard 文本前缀或异常对象写入浏览器 console；这些 console 输出可能进入 release triage 或本机调试证据。
+
+已覆盖：
+
+- `ProfileViewer` 剪贴板同步不再把 clipboard payload、viewer URL、runtime token、异常对象或 profile/runtime 细节写入浏览器 console。
+- Host→VNC paste 仍调用 `api.setClipboard()`，并继续发送 Ctrl+V key sequence。
+- VNC→Host clipboard event 和 polling bridge 仍写入 host clipboard，但失败时静默降级。
+- Automation endpoint copy 失败也不再输出原始异常对象。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# RED: 旧实现 console calls 包含 clipboard-token-super-secret/token=；GREEN: 16 passed
+
+rg -n "console\\.(log|warn|debug|error)\\(" frontend/src/components/ProfileViewer.tsx
+# no matches
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.21s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 222 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.72s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend VNC viewer clipboard console/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 VNC websocket URL 选择、noVNC RFB connect、backend clipboard API、VNC frame forwarding、runtime viewer token validation、Automation API、profile launch、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw clipboard payloads、raw errors 或外站页面原文。
