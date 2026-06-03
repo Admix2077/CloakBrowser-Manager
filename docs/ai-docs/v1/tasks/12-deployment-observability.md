@@ -2497,3 +2497,48 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup、profile launch behavior、VNC/runtime viewer 或 audit event schema。
 - 不在 profile responses 中公开历史/污染 GeoIP IP URL、country token、timezone token、locale token、source query token、Authorization/Bearer credential、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Proxy last-check response redaction guardrail
+
+背景：
+
+- Proxy check success/failure 写入路径已经使用 `public_geoip_*` 和固定错误文本。
+- 继续复查历史数据防御时发现 `_proxy_response()` 仅清洗 proxy URL 和 tags；如果旧版本、手工修复或损坏 row 写入非公开 `last_check_*` 字段，`GET /api/proxies` 与 `GET /api/proxies/{proxy_id}` 会直接回显这些历史值。
+
+已覆盖：
+
+- Proxy response `last_check_status` 只保留 `good`、`error`；其他非空值折叠为 `unknown`。
+- `last_check_ip`、`last_check_country_code`、`last_check_timezone`、`last_check_locale` 和 `last_check_source` 输出前复用 `public_geoip_*` 规则。
+- 非公开 source 折叠为 `unknown`，非公开 IP/country/timezone/locale 折叠为 `null`。
+- `last_check_error` 只保留固定低敏错误 `Proxy check failed`；其他非空历史错误折叠为同一固定文本。
+- 正常 proxy check persistence、bulk check result、proxy URL redaction、tags 和 audit metadata 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_api_responses_redact_persisted_sensitive_last_check_fields -q
+# RED: 1 failed；last_check_status 原样返回人工 leak marker
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_api_responses_redact_persisted_sensitive_last_check_fields -q
+# 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "proxy_crud or proxy_check or bulk_check or persisted_sensitive_last_check"
+# 13 passed, 20 deselected in 1.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 574 passed in 34.34s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.00s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup behavior、proxy check resolver、profile launch behavior、VNC/runtime viewer 或 audit event schema。
+- 不在 proxy responses 中公开历史/污染 last-check URL/path marker、country marker、timezone marker、locale marker、source marker、Bearer-like credential text、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

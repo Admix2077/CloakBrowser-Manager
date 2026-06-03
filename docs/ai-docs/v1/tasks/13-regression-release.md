@@ -2308,3 +2308,47 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup behavior、profile launch behavior、VNC/runtime viewer 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Proxy last-check response redaction guardrail
+
+背景：
+
+- Release smoke 和 Proxy Manager UI 会反复读取 proxy list/detail 来确认 check、bulk check 和分配状态。
+- Proxy check success/failure 新写入路径已经低敏化，但 proxy response 仍会信任 DB 中的历史 `last_check_*` 字段。
+- 旧版本、手工修复或损坏 row 中的 URL/path marker、Bearer-like 文本或非公开 GeoIP 字段可能进入 `/api/proxies` 与 `/api/proxies/{proxy_id}`。
+
+已覆盖：
+
+- Proxy API 输出新增 last-check 响应层归一化。
+- `last_check_status` 只保留 `good`、`error`；其他非空值折叠为 `unknown`。
+- `last_check_ip`、`last_check_country_code`、`last_check_timezone`、`last_check_locale`、`last_check_source` 输出前走 `public_geoip_*` 规则。
+- 非公开 source 折叠为 `unknown`，非公开 IP/country/timezone/locale 折叠为 `null`。
+- `last_check_error` 只保留固定低敏错误 `Proxy check failed`，其他非空历史错误折叠为同一固定文本。
+- 正常 proxy check、bulk check、URL redaction、tags 和 audit metadata 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_api_responses_redact_persisted_sensitive_last_check_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -q -k "proxy_crud or proxy_check or bulk_check or persisted_sensitive_last_check"
+# 13 passed, 20 deselected in 1.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 574 passed in 34.34s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.00s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup behavior、proxy check resolver、profile launch behavior、VNC/runtime viewer 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

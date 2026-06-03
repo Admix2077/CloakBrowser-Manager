@@ -149,6 +149,50 @@ def test_proxy_crud_api(app_client: TestClient):
     assert app_client.get(f"/api/proxies/{data['id']}").status_code == 404
 
 
+def test_proxy_api_responses_redact_persisted_sensitive_last_check_fields(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Historical check fields",
+            "url": "http://user:hiddenpass@historical-check.example:8080",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+    leak_marker = "manual-proxy-leak-marker"
+
+    updated = db.update_proxy(
+        proxy_id,
+        last_check_status=f"good {leak_marker}",
+        last_check_ip=f"https://ip.invalid/{leak_marker}",
+        last_check_country_code=f"JP-{leak_marker}",
+        last_check_timezone=f"Asia/Tokyo/{leak_marker}",
+        last_check_locale=f"ja-JP-{leak_marker}",
+        last_check_source=f"https://geo.invalid/{leak_marker}",
+        last_check_error=f"provider failure https://geo.invalid/{leak_marker} Bearer {leak_marker}",
+        last_check_at="2026-06-03T00:00:00Z",
+    )
+    assert updated is not None
+
+    detail = app_client.get(f"/api/proxies/{proxy_id}")
+    listed = app_client.get("/api/proxies")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    detail_data = detail.json()
+    list_data = listed.json()[0]
+    for data in (detail_data, list_data):
+        assert data["last_check_status"] == "unknown"
+        assert data["last_check_ip"] is None
+        assert data["last_check_country_code"] is None
+        assert data["last_check_timezone"] is None
+        assert data["last_check_locale"] is None
+        assert data["last_check_source"] == "unknown"
+        assert data["last_check_error"] == "Proxy check failed"
+        for leaked in (leak_marker, "geo.invalid", "ip.invalid", "Bearer"):
+            assert leaked not in json.dumps(data, sort_keys=True)
+
+
 def test_delete_proxy_requires_explicit_confirmation_without_side_effects(
     app_client: TestClient,
 ):

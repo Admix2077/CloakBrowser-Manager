@@ -704,10 +704,36 @@ async def auth_logout(request: Request, response: Response):
 
 # ── Profile CRUD ──────────────────────────────────────────────────────────────
 
+_PROXY_CHECK_ERROR_DETAIL = "Proxy check failed"
+_PUBLIC_PROXY_CHECK_STATUSES = {"good", "error"}
+
+
+def _public_proxy_check_status(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and value in _PUBLIC_PROXY_CHECK_STATUSES:
+        return value
+    return "unknown"
+
+
+def _public_proxy_check_error(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and value == _PROXY_CHECK_ERROR_DETAIL:
+        return _PROXY_CHECK_ERROR_DETAIL
+    return _PROXY_CHECK_ERROR_DETAIL
+
 
 def _proxy_response(proxy: dict) -> ProxyResponse:
     safe = dict(proxy)
     safe["url"] = redact_proxy_asset_url(str(safe["url"]))
+    safe["last_check_status"] = _public_proxy_check_status(safe.get("last_check_status"))
+    safe["last_check_ip"] = public_geoip_ip(safe.get("last_check_ip"))
+    safe["last_check_country_code"] = public_geoip_country_code(safe.get("last_check_country_code"))
+    safe["last_check_timezone"] = public_geoip_timezone(safe.get("last_check_timezone"))
+    safe["last_check_locale"] = public_geoip_locale(safe.get("last_check_locale"))
+    safe["last_check_source"] = public_geoip_source(safe.get("last_check_source"))
+    safe["last_check_error"] = _public_proxy_check_error(safe.get("last_check_error"))
     safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
     return ProxyResponse(**safe)
 
@@ -1161,9 +1187,6 @@ def _runtime_viewer_token_failure_reason(session: dict, viewer_token: str | None
 
 def _runtime_viewer_token_is_valid(session: dict, viewer_token: str | None) -> bool:
     return _runtime_viewer_token_failure_reason(session, viewer_token) is None
-
-
-_PROXY_CHECK_ERROR_DETAIL = "Proxy check failed"
 
 
 def _safe_proxy_check_error(_exc: Exception, _raw_url: str) -> str:
