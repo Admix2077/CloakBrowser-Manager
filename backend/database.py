@@ -997,6 +997,7 @@ def _is_sensitive_audit_key(key: str) -> bool:
         or normalized.endswith("_token")
         or normalized.endswith("_token_hash")
         or _AUDIT_SENSITIVE_KEY_RE.search(key) is not None
+        or _redact_audit_ip_literals(key) != key
         or any(
             part in normalized for part in _AUDIT_SENSITIVE_KEY_PARTS
         )

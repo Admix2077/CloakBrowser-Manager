@@ -5115,3 +5115,45 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata IPv6 value release-evidence 边界。
+
+## 2026-06-04 Audit metadata IP key release-evidence guardrail
+
+背景：
+
+- Release evidence 会读取 audit events。
+- Audit metadata value 已经清理 IPv4/IPv6 literal，但 key 名本身仍可能携带 IP literal。
+- 历史/手工污染 metadata key 如果包含 `203.0.113.99`、`client_2001:db8::99` 或 `[2001:db8::98]`，此前会原样进入 release evidence。
+
+已覆盖：
+
+- 数据库 audit sanitizer 现在会丢弃 IPv4/IPv6 literal 风格 metadata key。
+- 嵌套 dict metadata key 也走同一递归边界。
+- 普通低敏 key/value 保持可见。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED then GREEN；旧实现保留 IPv4/IPv6 metadata key 及其 value
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.21s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 233 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.15s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata IP key release-evidence 边界。

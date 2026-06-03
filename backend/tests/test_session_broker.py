@@ -1814,10 +1814,15 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             f"Authorization: Bearer {leak_marker}": "header-key",
             f"token={leak_marker}": "token-key",
             f"/data/audit/{leak_marker}": "path-key",
+            "203.0.113.99": "ipv4-key",
+            "client_2001:db8::99": "ipv6-key",
+            "[2001:db8::98]": "bracketed-ipv6-key",
             "nested": {
                 "cookie": "session-cookie",
                 "safe_nested": "also-kept",
                 f"Bearer {leak_marker}": "nested-header-key",
+                "peer_198.51.100.99": "nested-ipv4-key",
+                "peer_2001:db8::97": "nested-ipv6-key",
             },
         },
     )
@@ -1857,6 +1862,11 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "token-key" not in serialized_events
     assert "path-key" not in serialized_events
     assert "nested-header-key" not in serialized_events
+    assert "ipv4-key" not in serialized_events
+    assert "ipv6-key" not in serialized_events
+    assert "bracketed-ipv6-key" not in serialized_events
+    assert "nested-ipv4-key" not in serialized_events
+    assert "nested-ipv6-key" not in serialized_events
     assert "Authorization: Bearer" not in serialized_events
     assert "/data/audit" not in serialized_events
     assert "/data/profiles" not in serialized_events
@@ -1872,6 +1882,11 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "2001:db8::45" not in serialized_events
     assert "2001:db8::46" not in serialized_events
     assert "2001:db8::44" not in serialized_events
+    assert "203.0.113.99" not in serialized_events
+    assert "198.51.100.99" not in serialized_events
+    assert "2001:db8::99" not in serialized_events
+    assert "2001:db8::98" not in serialized_events
+    assert "2001:db8::97" not in serialized_events
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events

@@ -5430,3 +5430,46 @@ git diff --check
 - 这是 audit metadata IPv6 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Audit metadata IP key redaction guardrail
+
+背景：
+
+- Audit metadata key 名本身也会进入 release smoke/evidence。
+- 前几轮已处理 token/header/path 风格 key，以及 IPv4/IPv6 metadata value。
+- 但历史/手工污染 metadata key 仍可能包含 IPv4 或 IPv6 literal，例如 `203.0.113.99`、`client_2001:db8::99` 或 `[2001:db8::98]`。
+
+已覆盖：
+
+- `backend.database._is_sensitive_audit_key()` 现在复用 audit IP literal redaction boundary。
+- 如果 metadata key 清洗后会发生变化，说明 key 含 IP literal，整项 metadata 会被丢弃。
+- 递归 sanitizer 覆盖嵌套 dict metadata key。
+- 普通低敏 key/value 仍保留，便于 triage。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED: 旧实现保留 IPv4/IPv6 metadata key 及其 value；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.21s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 233 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.15s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 audit metadata IP key release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
