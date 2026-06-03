@@ -2612,6 +2612,51 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Launch args runtime input guardrail
+
+背景：
+
+- Release profile/runtime smoke 会从 persisted profile 构造 `InvisiblePlaywright(extra_args=...)`。
+- 旧 launch arg filter 只屏蔽 remote-debugging、user-agent、profile、window-size 等冲突 flags；其它 URL/query token/header 风格参数仍可进入 runtime 启动输入。
+- 为避免损坏 DB row、CSV/config import 或内部 profile dict 把敏感文本送入 Firefox 启动参数和 release evidence，需要在 runtime boundary 固定拒绝。
+
+已覆盖：
+
+- `BrowserManager` 新增 launch arg public boundary，拒绝非字符串、空值、控制字符、URL/query/token/password/secret/cookie/Authorization/Bearer 风格文本。
+- `_filter_firefox_launch_args()` 先做 public filtering，再应用既有冲突 flag filtering。
+- 非 list `launch_args` 退化为空，普通 `--private-window`、`--lang=en-US` 参数继续保留。
+- `_build_invisible_kwargs()` 的 `extra_args` 不再携带污染 launch arg 文本。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_launch_args -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_launch_args backend/tests/test_browser_manager.py::test_build_invisible_kwargs_filters_chromium_only_launch_args -q
+# 2 passed in 0.19s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 74 passed in 0.96s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 634 passed in 38.92s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.43s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile directory launch guardrail
 
 背景：

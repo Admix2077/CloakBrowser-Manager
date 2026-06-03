@@ -4331,3 +4331,48 @@ git diff --check
 
 - 这是 profile lifecycle launch input 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Launch args runtime input guardrail
+
+背景：
+
+- Profile `launch_args` 是用户/历史 DB 可控的 Firefox 启动输入，最终会进入 `InvisiblePlaywright(extra_args=...)`。
+- 既有 `_filter_firefox_launch_args()` 已屏蔽 remote-debugging、user-agent、profile、window-size 等冲突 flag，但仍保留其它非冲突字符串。
+- 如果历史/手工 row 或内部 runtime profile dict 把 URL/query token/header 风格文本放进 launch args，这些文本可能进入底层 runtime 启动参数或失败证据。
+
+已覆盖：
+
+- 新增 launch arg public boundary，只保留字符串、非空、无控制字符、无 URL/query/token/password/secret/cookie/Authorization/Bearer 风格文本的参数。
+- `_filter_firefox_launch_args()` 现在先做 public boundary，再复用既有冲突 flag 过滤。
+- 非 list `launch_args` 退化为空；list 内非字符串项会被丢弃。
+- 正常 `--private-window`、`--lang=en-US` 等普通低敏 Firefox 参数继续保留。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_launch_args -q
+# RED: 敏感 launch args 仍进入 extra_args；GREEN: 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_launch_args backend/tests/test_browser_manager.py::test_build_invisible_kwargs_filters_chromium_only_launch_args -q
+# 2 passed in 0.19s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 74 passed in 0.96s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 634 passed in 38.92s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.43s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 profile lifecycle launch input 和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

@@ -354,16 +354,31 @@ _BLOCKED_FIREFOX_ARGS_WITH_VALUE = (
 )
 
 
-def _filter_firefox_launch_args(raw_args: list[str] | None) -> list[str]:
+def _public_firefox_launch_arg(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    arg = value.strip()
+    if not arg or SENSITIVE_TEXT_RE.search(arg):
+        return ""
+    if any(ord(char) < 32 for char in arg):
+        return ""
+    return arg
+
+
+def _filter_firefox_launch_args(raw_args: object) -> list[str]:
     """Drop launch flags that conflict with managed invisible_playwright Firefox."""
-    if not raw_args:
+    if not isinstance(raw_args, list):
         return []
 
     filtered: list[str] = []
     skip_next = False
-    for arg in raw_args:
+    for raw_arg in raw_args:
         if skip_next:
             skip_next = False
+            continue
+
+        arg = _public_firefox_launch_arg(raw_arg)
+        if not arg:
             continue
 
         if arg in _BLOCKED_FIREFOX_ARG_EXACT:

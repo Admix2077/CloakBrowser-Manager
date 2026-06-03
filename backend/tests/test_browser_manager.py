@@ -772,6 +772,38 @@ def test_build_invisible_kwargs_filters_chromium_only_launch_args(tmp_path: Path
     assert kwargs["extra_args"] == ["--private-window"]
 
 
+def test_build_invisible_kwargs_drops_non_public_launch_args(tmp_path: Path):
+    leak_marker = "launch-arg-super-secret"
+
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "launch_args": [
+            "--private-window",
+            "--lang=en-US",
+            f"--proxy-server=https://proxy.example/?token={leak_marker}",
+            f"--custom-header=Authorization: Bearer {leak_marker}",
+            f"--note=password={leak_marker}",
+            "--safe-mode\nCookie: launch-arg-super-secret",
+            123,
+        ],
+    })
+
+    assert kwargs["extra_args"] == ["--private-window", "--lang=en-US"]
+    assert leak_marker not in repr(kwargs)
+    assert "proxy.example" not in repr(kwargs)
+    assert "Authorization" not in repr(kwargs)
+    assert "Cookie" not in repr(kwargs)
+
+    polluted_scalar = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile-scalar"),
+        "launch_args": f"https://args.example/?token={leak_marker}",
+    })
+    assert polluted_scalar["extra_args"] == []
+    assert leak_marker not in repr(polluted_scalar)
+
+
 @pytest.mark.asyncio
 async def test_stop_without_runner_closes_context_and_releases_vnc():
     mgr = BrowserManager()
