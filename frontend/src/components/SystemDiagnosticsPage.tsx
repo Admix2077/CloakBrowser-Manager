@@ -2,6 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, type SystemDiagnostics } from "../lib/api";
 
+const PUBLIC_DIAGNOSTIC_LABEL_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,79}$/;
+const SENSITIVE_DIAGNOSTIC_TEXT_RE = /authorization|bearer|auth[_-]?token|viewer[_-]?token|token|password|passwd|secret|cookie|set-cookie/i;
+const IPV4_LITERAL_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+
 export function SystemDiagnosticsPage() {
   const [diagnostics, setDiagnostics] = useState<SystemDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -142,15 +146,7 @@ export function SystemDiagnosticsPage() {
             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
               <h3 className="text-sm font-semibold text-slate-950">Task status counts</h3>
               <div className="mt-3 space-y-2">
-                {Object.entries(diagnostics.counts.automation_task_counts).length === 0 ? (
-                  <InfoRow label="Tasks" value="none" />
-                ) : (
-                  Object.entries(diagnostics.counts.automation_task_counts)
-                    .sort(([left], [right]) => left.localeCompare(right))
-                    .map(([status, count]) => (
-                      <InfoRow key={status} label={status.replaceAll("_", " ")} value={count} />
-                    ))
-                )}
+                <CountRows values={diagnostics.counts.automation_task_counts} emptyLabel="Tasks" />
               </div>
             </section>
           </aside>
@@ -204,6 +200,16 @@ function InfoRow({ label, value }: { label: string; value: number | string }) {
   );
 }
 
+function CountRows({ values, emptyLabel }: { values: Record<string, number>; emptyLabel: string }) {
+  const entries = publicCountEntries(values);
+  if (entries.length === 0) {
+    return <InfoRow label={emptyLabel} value="none" />;
+  }
+  return entries.map(([label, count]) => (
+    <InfoRow key={label} label={label.replaceAll("_", " ")} value={count} />
+  ));
+}
+
 function formatNumbers(values: number[]): string {
   return values.length > 0 ? values.join(", ") : "none";
 }
@@ -227,7 +233,8 @@ function formatMajorVersionMatch(value: boolean | null): string {
 }
 
 function formatStringList(values: string[]): string {
-  return values.length > 0 ? values.join(", ") : "none";
+  const labels = Array.from(new Set(values.map(publicDiagnosticLabel)));
+  return labels.length > 0 ? labels.join(", ") : "none";
 }
 
 function formatStageCounts(values: Record<string, number>): string {
@@ -235,10 +242,45 @@ function formatStageCounts(values: Record<string, number>): string {
 }
 
 function formatCountMap(values: Record<string, number>): string {
-  const entries = Object.entries(values)
-    .filter(([, count]) => count > 0)
-    .sort(([left], [right]) => left.localeCompare(right));
+  const entries = publicCountEntries(values);
   return entries.length > 0
     ? entries.map(([stage, count]) => `${stage} (${count})`).join(", ")
     : "none";
+}
+
+function publicCountEntries(values: Record<string, number>): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const [rawLabel, count] of Object.entries(values)) {
+    if (count <= 0) continue;
+    const label = publicDiagnosticLabel(rawLabel);
+    counts.set(label, (counts.get(label) ?? 0) + count);
+  }
+  return Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function publicDiagnosticLabel(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !PUBLIC_DIAGNOSTIC_LABEL_RE.test(trimmed)) return "unknown";
+  if (SENSITIVE_DIAGNOSTIC_TEXT_RE.test(trimmed)) return "unknown";
+  if (isPublicIpv4Literal(trimmed)) return "unknown";
+  if (isPublicIpv6Literal(trimmed)) return "unknown";
+  return trimmed;
+}
+
+function isPublicIpv4Literal(value: string): boolean {
+  if (!IPV4_LITERAL_RE.test(value)) return false;
+  return value.split(".").every((part) => {
+    const number = Number(part);
+    return number >= 0 && number <= 255;
+  });
+}
+
+function isPublicIpv6Literal(value: string): boolean {
+  if (!value.includes(":")) return false;
+  try {
+    new URL(`http://[${value}]`);
+    return true;
+  } catch {
+    return false;
+  }
 }

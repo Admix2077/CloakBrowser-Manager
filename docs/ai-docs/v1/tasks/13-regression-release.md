@@ -5391,3 +5391,40 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation step/result summary UI release-evidence 边界。
+
+## 2026-06-04 System diagnostics map/list label release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 System diagnostics 页面和 accessible snapshot。
+- 前端此前直接渲染 diagnostics map key/list value；异常 response 或测试桩可能把 `token=`、Authorization/Bearer、URL 或 IP literal 带到 launch failure stages、runtime session statuses、task status counts 或 stealth categories。
+- 后端 diagnostics 已有低敏聚合边界，但 release UI 不应信任异常字段名。
+
+已覆盖：
+
+- System diagnostics 现在对 count map key 和 category list value 使用公开 diagnostics label 边界。
+- 非公开 label 统一折叠为 `unknown`，并且 count map 会把多个污染 key 聚合到同一个 unknown 计数。
+- 普通低敏 label 继续可读，例如 `allocate_vnc`、`active`、`queued`、`canvas`。
+- Runtime overview、storage、worker 设置、版本字段和 refresh/error 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# RED then GREEN；旧实现把 Authorization/Bearer、token=、URL 和 IP literal 原样显示在 diagnostics label
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.55s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 238 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.03s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、diagnostics count-query backend、automation task persistence/worker execution、runtime session behavior、viewer behavior、profile launch backend、proxy、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics map/list label release-evidence 边界。

@@ -5707,3 +5707,41 @@ npm --prefix frontend run build
 - 这是 Automation task UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 System diagnostics map/list label public-value guardrail
+
+背景：
+
+- `/api/diagnostics` 后端已经返回低敏聚合，但前端 System diagnostics 页面仍直接渲染部分 map key 和 list value。
+- 如果异常 response、测试桩或历史兼容字段携带 `token=`、Authorization/Bearer、URL 或 IP literal，这些值可能进入 diagnostics UI 和 accessible snapshot。
+- 涉及的 evidence 面包括 launch failure stage counts、runtime session status counts、automation task status counts 和 stealth pref categories。
+
+已覆盖：
+
+- `frontend/src/components/SystemDiagnosticsPage.tsx` 新增公开 diagnostics label 边界。
+- Count map key 会先折叠到公开 label，再按 label 聚合计数；非公开 key 统一聚合到 `unknown`。
+- Stealth category list 会先公开化并去重；非公开 category 显示为 `unknown`。
+- 普通低敏 label 保持可读，例如 `allocate_vnc`、`active`、`queued`、`canvas`。
+- 不改变 `/api/diagnostics` response schema、后端 count query、runtime/session/worker 行为或 diagnostics API 权限边界。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# RED: 旧实现把 Authorization/Bearer、token=、URL 和 IP literal 原样显示在 diagnostics label；GREEN: 4 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.55s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 238 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.03s
+```
+
+边界：
+
+- 这是 System diagnostics UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、Automation API backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

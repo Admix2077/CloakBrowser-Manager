@@ -139,6 +139,55 @@ describe("SystemDiagnosticsPage", () => {
     expect(within(page).getByRole("group", { name: "Running: 3" })).toBeTruthy();
   });
 
+  it("folds non-public diagnostics map and list labels before rendering", async () => {
+    const leakMarker = "diagnostics-token-secret";
+    const base = diagnostics();
+    mockGetDiagnostics.mockResolvedValueOnce(diagnostics({
+      counts: {
+        ...base.counts,
+        automation_task_counts: {
+          queued: 5,
+          [`failed token=${leakMarker}`]: 2,
+        },
+      },
+      runtime: {
+        ...base.runtime,
+        launch_failure_stage_counts: {
+          allocate_vnc: 1,
+          [`configure_context Authorization=Bearer ${leakMarker}`]: 2,
+          [`https://diagnostics.example/private?token=${leakMarker}`]: 1,
+        },
+        stealth_pref_categories: [
+          "canvas",
+          `token=${leakMarker}`,
+          "203.0.113.88",
+        ],
+      },
+      runtime_sessions: {
+        ...base.runtime_sessions,
+        status_counts: {
+          active: 1,
+          [`terminated Authorization=Bearer ${leakMarker}`]: 2,
+        },
+      },
+    }));
+
+    render(<SystemDiagnosticsPage />);
+
+    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    expect(within(page).getByRole("group", { name: "Launch failure stages: allocate_vnc (1), unknown (3)" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Stealth categories: canvas, unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Runtime session statuses: active (1), unknown (2)" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "unknown: 2" })).toBeTruthy();
+
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("https://diagnostics.example");
+    expect(page.textContent).not.toContain("203.0.113.88");
+  });
+
   it("uses a fixed error message without rendering backend details", async () => {
     mockGetDiagnostics.mockRejectedValueOnce(new Error("secret token at /data/profiles/profile-1"));
 
