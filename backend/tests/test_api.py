@@ -144,6 +144,43 @@ def test_profile_responses_redact_persisted_sensitive_geoip_fields(app_client: T
         assert leaked not in serialized
 
 
+def test_profile_response_sanitizes_persisted_malformed_tags(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Malformed profile tags",
+            "tags": [{"tag": "valid", "color": "#0ea5e9"}],
+        },
+    )
+    pid = create.json()["id"]
+    with main.db.get_db() as conn:
+        conn.execute("DELETE FROM profile_tags WHERE profile_id = ?", (pid,))
+        conn.execute(
+            "INSERT INTO profile_tags (profile_id, tag, color) VALUES (?, ?, ?)",
+            (pid, "kept", b"\xff"),
+        )
+        conn.execute(
+            "INSERT INTO profile_tags (profile_id, tag, color) VALUES (?, ?, ?)",
+            (pid, "colored", "#0ea5e9"),
+        )
+        conn.commit()
+
+    get_resp = app_client.get(f"/api/profiles/{pid}")
+    list_resp = app_client.get("/api/profiles")
+
+    assert get_resp.status_code == 200
+    expected_tags = [
+        {"tag": "kept", "color": None},
+        {"tag": "colored", "color": "#0ea5e9"},
+    ]
+    expected_tags.sort(key=lambda tag: tag["tag"])
+    actual_tags = sorted(get_resp.json()["tags"], key=lambda tag: tag["tag"])
+    assert actual_tags == expected_tags
+    assert list_resp.status_code == 200
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
+    assert sorted(listed_profile["tags"], key=lambda tag: tag["tag"]) == actual_tags
+
+
 def test_get_profile_not_found(app_client: TestClient):
     resp = app_client.get("/api/profiles/nonexistent")
     assert resp.status_code == 404

@@ -2434,6 +2434,52 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Malformed tag response stability guardrail
+
+背景：
+
+- Release smoke 会反复读取 profile list/detail、proxy manager list/detail、proxy provider presets，并在 random proxy assignment 中返回 proxy summaries。
+- 历史/手工 DB row 可能包含 malformed tags；此前 profile/proxy/preset response 直接构造 `TagResponse(**tag)`，缺少 `tag` 或非字符串 `color` 会导致响应 500。
+
+已覆盖：
+
+- Profile response、proxy response、proxy provider preset response 和 profile config export 现在共享 tag response normalizer。
+- malformed tag item 会被低风险处理：无字符串 `tag` 的 item 丢弃，非字符串/不可解码 `color` 变为 `null`。
+- 正常 profile/proxy/provider preset CRUD、proxy random assignment 和 config export 行为保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_response_sanitizes_persisted_malformed_tags backend/tests/test_proxies.py::test_proxy_response_sanitizes_persisted_malformed_tags backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_api_sanitizes_persisted_malformed_tags -q
+# RED then GREEN；初始 3 failed，最终 3 passed in 1.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "profile_response or create_profile_with_all_fields or tags or export_profiles" -q
+# 11 passed, 214 deselected in 1.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -k "proxy_crud_api or malformed_tags or random_proxy_assignment or assign_proxy" -q
+# 7 passed, 27 deselected in 1.69s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py -q
+# 10 passed in 1.50s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 582 passed in 32.13s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.44s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile config export and bundle export identity guardrail
 
 背景：

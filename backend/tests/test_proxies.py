@@ -149,6 +149,37 @@ def test_proxy_crud_api(app_client: TestClient):
     assert app_client.get(f"/api/proxies/{data['id']}").status_code == 404
 
 
+def test_proxy_response_sanitizes_persisted_malformed_tags(app_client: TestClient):
+    proxy = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Malformed proxy tags",
+            "url": "http://proxy.example:8080",
+            "tags": [{"tag": "valid", "color": "#0ea5e9"}],
+        },
+    ).json()
+    db.update_proxy(
+        proxy["id"],
+        tags=[
+            {"color": "#ef4444"},
+            {"tag": 123, "color": "#22c55e"},
+            {"tag": "kept", "color": 123},
+            {"tag": "colored", "color": "#0ea5e9"},
+        ],
+    )
+
+    get = app_client.get(f"/api/proxies/{proxy['id']}")
+    listed = app_client.get("/api/proxies")
+
+    assert get.status_code == 200
+    assert get.json()["tags"] == [
+        {"tag": "kept", "color": None},
+        {"tag": "colored", "color": "#0ea5e9"},
+    ]
+    assert listed.status_code == 200
+    assert listed.json()[0]["tags"] == get.json()["tags"]
+
+
 def test_proxy_api_responses_redact_persisted_sensitive_last_check_fields(app_client: TestClient):
     create = app_client.post(
         "/api/proxies",

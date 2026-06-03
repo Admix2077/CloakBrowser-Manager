@@ -134,6 +134,39 @@ def test_proxy_provider_preset_crud_api(app_client: TestClient):
     assert app_client.get(f"/api/proxy-provider-presets/{data['id']}").status_code == 404
 
 
+def test_proxy_provider_preset_api_sanitizes_persisted_malformed_tags(
+    app_client: TestClient,
+):
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Malformed tags",
+            "provider": "ProxyCo",
+            "tags": [{"tag": "valid", "color": "#0ea5e9"}],
+        },
+    ).json()
+    db.update_proxy_provider_preset(
+        preset["id"],
+        tags=[
+            {"color": "#ef4444"},
+            {"tag": 123, "color": "#22c55e"},
+            {"tag": "kept", "color": 123},
+            {"tag": "colored", "color": "#0ea5e9"},
+        ],
+    )
+
+    get = app_client.get(f"/api/proxy-provider-presets/{preset['id']}")
+    listed = app_client.get("/api/proxy-provider-presets")
+
+    assert get.status_code == 200
+    assert get.json()["tags"] == [
+        {"tag": "kept", "color": None},
+        {"tag": "colored", "color": "#0ea5e9"},
+    ]
+    assert listed.status_code == 200
+    assert listed.json()[0]["tags"] == get.json()["tags"]
+
+
 def test_proxy_provider_preset_crud_writes_low_sensitive_audit_events(
     app_client: TestClient,
 ):

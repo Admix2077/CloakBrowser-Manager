@@ -2727,3 +2727,52 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - 不在 profile config export 或 bundle manifest 中公开历史/污染 identity marker、Authorization/Bearer-like text、URL/query token、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Malformed tag response stability guardrail
+
+背景：
+
+- DB tag decode 只保证 JSON tag item 是 dict，历史/手工 DB row 仍可能缺少 `tag`，或包含非字符串 `tag`/`color`。
+- Profile、proxy asset 和 proxy provider preset 响应此前直接执行 `TagResponse(**tag)`；这会让 list/detail、proxy random assignment result、profile config export 等 release-smoke 路径在响应构造时抛 validation error。
+
+已覆盖：
+
+- 新增共享 tag response normalizer，用于 profile response、proxy response、proxy provider preset response 和 profile config export。
+- 非 dict tag item、缺少字符串 `tag` 的 item 会被丢弃；非字符串或不可解码的 `color` 会变为 `null`。
+- 正常 profile/proxy/provider preset tag 行为、proxy random assignment 和 config export 语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_response_sanitizes_persisted_malformed_tags backend/tests/test_proxies.py::test_proxy_response_sanitizes_persisted_malformed_tags backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_api_sanitizes_persisted_malformed_tags -q
+# RED: 3 failed；profile/proxy/preset responses 分别在 TagResponse 构造处失败
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_response_sanitizes_persisted_malformed_tags backend/tests/test_proxies.py::test_proxy_response_sanitizes_persisted_malformed_tags backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_api_sanitizes_persisted_malformed_tags -q
+# 3 passed in 1.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "profile_response or create_profile_with_all_fields or tags or export_profiles" -q
+# 11 passed, 214 deselected in 1.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -k "proxy_crud_api or malformed_tags or random_proxy_assignment or assign_proxy" -q
+# 7 passed, 27 deselected in 1.69s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py -q
+# 10 passed in 1.50s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 582 passed in 32.13s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.44s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- 不在 response tag normalizer 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates 或 audit metadata。

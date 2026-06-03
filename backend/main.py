@@ -726,6 +726,21 @@ def _public_proxy_check_error(value: object) -> str | None:
     return _PROXY_CHECK_ERROR_DETAIL
 
 
+def _tag_responses(tags: object) -> list[TagResponse]:
+    if not isinstance(tags, list):
+        return []
+    responses: list[TagResponse] = []
+    for tag in tags:
+        if not isinstance(tag, dict):
+            continue
+        name = tag.get("tag")
+        if not isinstance(name, str):
+            continue
+        color = tag.get("color")
+        responses.append(TagResponse(tag=name, color=color if isinstance(color, str) else None))
+    return responses
+
+
 def _proxy_response(proxy: dict) -> ProxyResponse:
     safe = dict(proxy)
     safe["url"] = redact_proxy_asset_url(str(safe["url"]))
@@ -736,7 +751,7 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     safe["last_check_locale"] = public_geoip_locale(safe.get("last_check_locale"))
     safe["last_check_source"] = public_geoip_source(safe.get("last_check_source"))
     safe["last_check_error"] = _public_proxy_check_error(safe.get("last_check_error"))
-    safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
+    safe["tags"] = _tag_responses(safe.get("tags"))
     return ProxyResponse(**safe)
 
 
@@ -747,7 +762,7 @@ def _profile_response(profile: dict) -> ProfileResponse:
     safe["last_geoip_timezone"] = public_geoip_timezone(safe.get("last_geoip_timezone"))
     safe["last_geoip_locale"] = public_geoip_locale(safe.get("last_geoip_locale"))
     safe["last_geoip_source"] = public_geoip_source(safe.get("last_geoip_source"))
-    safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
+    safe["tags"] = _tag_responses(safe.get("tags"))
     return ProfileResponse(**safe)
 
 
@@ -863,7 +878,7 @@ def _audit_health_check(
 
 def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse:
     safe = dict(preset)
-    safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
+    safe["tags"] = _tag_responses(safe.get("tags"))
     return ProxyProviderPresetResponse(**safe)
 
 
@@ -2005,7 +2020,7 @@ async def export_profiles(req: ProfileExportRequest):
             profile,
             include_sensitive_proxy=req.include_sensitive,
         )
-        profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
+        profile["tags"] = _tag_responses(profile.get("tags"))
         results.append(
             ProfileExportResult(
                 profile_id=profile_id,
