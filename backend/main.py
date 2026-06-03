@@ -796,6 +796,10 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
 
 def _profile_response(profile: dict) -> ProfileResponse:
     safe = sanitize_profile_response_data(profile)
+    public_profile_id = _public_uuid_identifier(safe.get("id")) or "unknown"
+    safe["id"] = public_profile_id
+    if safe.get("automation_url") is not None:
+        safe["automation_url"] = f"/api/profiles/{public_profile_id}/automation"
     safe["last_geoip_ip"] = public_geoip_ip(safe.get("last_geoip_ip"))
     safe["last_geoip_country_code"] = public_geoip_country_code(safe.get("last_geoip_country_code"))
     safe["last_geoip_timezone"] = public_geoip_timezone(safe.get("last_geoip_timezone"))

@@ -233,6 +233,49 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
         assert leaked not in serialized
 
 
+def test_profile_response_sanitizes_persisted_profile_id_and_automation_url(
+    app_client: TestClient,
+):
+    leak_marker = "profile-id-response-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "Polluted ID"}).json()["id"]
+    polluted_profile_id = (
+        f"profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    main.browser_mgr.running[polluted_profile_id] = RunningProfile(
+        profile_id=polluted_profile_id,
+        context=MagicMock(),
+        display=102,
+        ws_port=6102,
+        engine="invisible_playwright",
+    )
+
+    get_resp = app_client.get(f"/api/profiles/{quote(polluted_profile_id, safe='')}")
+    list_resp = app_client.get("/api/profiles")
+
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    get_profile = get_resp.json()
+    [listed_profile] = list_resp.json()
+    for profile in (get_profile, listed_profile):
+        assert profile["id"] == "unknown"
+        assert profile["status"] == "running"
+        assert profile["automation_url"] == "/api/profiles/unknown/automation"
+
+    serialized = json.dumps({"get": get_profile, "list": listed_profile}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_profile_response_sanitizes_persisted_malformed_tags(app_client: TestClient):
     create = app_client.post(
         "/api/profiles",
