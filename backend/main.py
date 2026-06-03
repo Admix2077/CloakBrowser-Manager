@@ -2134,7 +2134,7 @@ async def export_profiles(req: ProfileExportRequest):
         if not profile:
             results.append(
                 ProfileExportResult(
-                    profile_id=profile_id,
+                    profile_id=_public_profile_result_identifier(profile_id, exists=False),
                     ok=False,
                     error="Profile not found",
                     config=None,
@@ -2149,7 +2149,7 @@ async def export_profiles(req: ProfileExportRequest):
         profile["tags"] = _tag_responses(profile.get("tags"))
         results.append(
             ProfileExportResult(
-                profile_id=profile_id,
+                profile_id=_public_profile_result_identifier(profile_id, exists=True),
                 ok=True,
                 error=None,
                 config=ProfileConfigExport(**profile),

@@ -632,6 +632,46 @@ def test_export_profiles_redacts_proxy_credentials_by_default(app_client: TestCl
     assert "user:super-secret-proxy-password" not in response_text
 
 
+def test_export_profiles_sanitizes_persisted_profile_id_response(
+    app_client: TestClient,
+):
+    leak_marker = "profile-export-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "ExportPollutedId"}).json()["id"]
+    polluted_profile_id = (
+        f"profile-export-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+
+    resp = app_client.post(
+        "/api/profiles/export",
+        json={"profile_ids": [polluted_profile_id, "missing"]},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    exported_result, missing_result = data["results"]
+    assert exported_result["profile_id"] == "unknown"
+    assert exported_result["ok"] is True
+    assert exported_result["config"]["name"] == "ExportPollutedId"
+    assert missing_result == {
+        "profile_id": "missing",
+        "ok": False,
+        "error": "Profile not found",
+        "config": None,
+    }
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_export_profiles_sensitive_proxy_requires_independent_confirmation(
     app_client: TestClient,
 ):

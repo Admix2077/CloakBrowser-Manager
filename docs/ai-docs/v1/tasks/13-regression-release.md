@@ -2612,6 +2612,44 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Profile config export profile id guardrail
+
+背景：
+
+- Release artifact smoke 会使用 `/api/profiles/export` 导出 profile config，并检查 response 不保留敏感 proxy/profile evidence。
+- 旧实现已清洗 profile config payload，但 per-result `profile_id` 仍直接回显 request/profile id。
+- 历史/手工污染的非 UUID profile id 不应进入 profile config export response。
+
+已覆盖：
+
+- 成功 profile config export result 的 `profile_id` 现在只保留 canonical UUID；非 UUID 返回 `unknown`。
+- Missing profile 的普通低敏 id 继续返回，保持既有 API 语义；敏感/非公开 missing id 折叠为 `unknown`。
+- 正常 UUID export、ordinary missing profile result、sensitive proxy confirmation、bulk export audit behavior 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_sanitizes_persisted_profile_id_response -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.80s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py backend/tests/test_bulk.py -q -k "export_profiles or profiles/export or profile_config_export"
+# 6 passed, 250 deselected in 1.11s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 607 passed in 35.15s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.26s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Proxy assignment profile id guardrail
 
 背景：

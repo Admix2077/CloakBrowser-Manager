@@ -3419,3 +3419,44 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 proxy assignment profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Profile config export profile id guardrail
+
+背景：
+
+- Profile config export 是 release artifact flow 的基础接口，常用于 bundle import/export 前后校验 profile config。
+- 继续复查发现 `/api/profiles/export` 每个 result 的 `profile_id` 直接使用 request/profile id。
+- 如果历史/手工 DB row 含有非 UUID profile id，成功 export result 会把该文本带入 API response 和 release smoke evidence。
+
+已覆盖：
+
+- 成功 export result 的 `profile_id` 现在只保留 canonical UUID；命中的非 UUID profile id 折叠为 `unknown`。
+- Missing profile 的普通低敏 id 仍按既有 API 语义返回；missing 的敏感/非公开 id 会折叠为 `unknown`。
+- Profile config payload 继续复用既有 sanitizer；正常 UUID export、missing profile result、sensitive proxy confirmation 和 bulk audit behavior 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_sanitizes_persisted_profile_id_response -q
+# RED: 1 failed；profile export success result 直接保留非 UUID profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profiles_sanitizes_persisted_profile_id_response -q
+# 1 passed in 0.80s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py backend/tests/test_bulk.py -q -k "export_profiles or profiles/export or profile_config_export"
+# 6 passed, 250 deselected in 1.11s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 607 passed in 35.15s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.26s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 profile config export profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
