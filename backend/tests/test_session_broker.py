@@ -1780,6 +1780,7 @@ def test_runtime_audit_ignores_unauthenticated_runtime_requests(
 
 
 def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
+    leak_marker = "audit-key-marker"
     db.create_audit_event(
         event_type="runtime.test",
         actor_type="runtime_service",
@@ -1796,9 +1797,13 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
                 "proxy http://user:message-pass@example.test:8080 failed "
                 "token=message-secret Authorization=Bearer bearer-secret"
             ),
+            f"Authorization: Bearer {leak_marker}": "header-key",
+            f"token={leak_marker}": "token-key",
+            f"/data/audit/{leak_marker}": "path-key",
             "nested": {
                 "cookie": "session-cookie",
                 "safe_nested": "also-kept",
+                f"Bearer {leak_marker}": "nested-header-key",
             },
         },
     )
@@ -1819,6 +1824,13 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "runtime-secret" not in serialized_events
     assert "message-secret" not in serialized_events
     assert "bearer-secret" not in serialized_events
+    assert leak_marker not in serialized_events
+    assert "header-key" not in serialized_events
+    assert "token-key" not in serialized_events
+    assert "path-key" not in serialized_events
+    assert "nested-header-key" not in serialized_events
+    assert "Authorization: Bearer" not in serialized_events
+    assert "/data/audit" not in serialized_events
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events

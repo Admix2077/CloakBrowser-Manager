@@ -964,6 +964,12 @@ _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
+_AUDIT_SENSITIVE_KEY_RE = re.compile(
+    r"https?://|socks[45]://|[/\\?&#@]|"
+    r"\b(?:authorization|bearer)\b|"
+    r"\b(?:auth_token|cookie|password|passwd|runtime_service_token|secret|service_token|token|viewer_token)\s*[:=]",
+    re.IGNORECASE,
+)
 _PUBLIC_AUDIT_EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){0,8}$")
 _PUBLIC_AUDIT_ACTOR_TYPES = frozenset({"local_admin", "runtime_service", "runtime_viewer"})
 _PUBLIC_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
@@ -980,6 +986,7 @@ def _is_sensitive_audit_key(key: str) -> bool:
         normalized in _AUDIT_SENSITIVE_KEYS
         or normalized.endswith("_token")
         or normalized.endswith("_token_hash")
+        or _AUDIT_SENSITIVE_KEY_RE.search(key) is not None
         or any(
             part in normalized for part in _AUDIT_SENSITIVE_KEY_PARTS
         )

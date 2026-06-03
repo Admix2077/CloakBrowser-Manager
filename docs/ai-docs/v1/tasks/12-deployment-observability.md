@@ -5165,3 +5165,49 @@ git diff --check
 - 这是 frontend import/proxy/health UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 proxy CRUD/API request payload、provider preset validation rules、CSV parser semantics、profile import backend contract、health status ranking、profile launch backend、VNC viewer、Automation API、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Audit metadata key redaction guardrail
+
+背景：
+
+- Audit metadata 是 release smoke/evidence 的底层出口。
+- 现有 sanitizer 会清理敏感 metadata value，也会丢弃常见敏感 key。
+- 历史/手工污染行仍可能把 `Authorization: Bearer ...`、`token=...` 或 `/data/...` 放进 metadata key 名；key 名本身不会经过 value redaction。
+
+已覆盖：
+
+- `backend.database._is_sensitive_audit_key()` 新增 key 级 public boundary。
+- URL、本地路径、`Authorization`、`Bearer`、`token=`、password/secret/cookie/runtime/viewer token 风格 metadata key 会被丢弃。
+- 递归 sanitizer 继续保留普通低敏 key/value，如 `safe`、`message`、`nested.safe_nested`。
+- 既覆盖新写入的 audit metadata，也覆盖 `list_audit_events()`/`get_audit_event()` 读取历史 metadata 时的二次清洗。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED: 旧实现保留 Authorization/Bearer/token=/data 风格 metadata key；GREEN: passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.48s
+
+npm --prefix frontend test -- --run
+# Test Files 19 passed；Tests 232 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 6.00s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 audit metadata release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
