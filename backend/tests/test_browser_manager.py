@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -846,6 +847,34 @@ async def test_launch_releases_vnc_when_startup_state_cleanup_fails(
         "launch_failure_count": 1,
         "launch_failure_stage_counts": {"cleanup_startup_state": 1},
     }
+
+
+def test_launch_failure_summary_sanitizes_existing_stage_counts():
+    mgr = BrowserManager()
+    leak_marker = "launch-stage-secret"
+    mgr._launch_failure_stage_counts = {
+        "allocate_vnc": 2,
+        f"https://stage.example/fail?token={leak_marker} Authorization=Bearer {leak_marker}": 3,
+        "bootstrap_page": 0,
+        "start_vnc": -1,
+        "fit_window": True,
+        "configure_context": "not-a-count",  # type: ignore[dict-item]
+    }
+
+    summary = mgr.launch_failure_summary()
+
+    assert summary == {
+        "launch_failure_count": 5,
+        "launch_failure_stage_counts": {
+            "allocate_vnc": 2,
+            "unknown": 3,
+        },
+    }
+    serialized = json.dumps(summary, sort_keys=True)
+    assert leak_marker not in serialized
+    assert "Authorization" not in serialized
+    assert "Bearer" not in serialized
+    assert "stage.example" not in serialized
 
 
 @pytest.mark.asyncio

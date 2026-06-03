@@ -881,11 +881,13 @@ class BrowserManager:
         )
 
     def launch_failure_summary(self) -> dict[str, Any]:
-        stage_counts = {
-            stage: self._launch_failure_stage_counts[stage]
-            for stage in sorted(self._launch_failure_stage_counts)
-            if self._launch_failure_stage_counts[stage] > 0
-        }
+        stage_counts: dict[str, int] = {}
+        for stage, count in self._launch_failure_stage_counts.items():
+            if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
+                continue
+            public_stage = stage if stage in LAUNCH_FAILURE_STAGES else "unknown"
+            stage_counts[public_stage] = stage_counts.get(public_stage, 0) + count
+        stage_counts = {stage: stage_counts[stage] for stage in sorted(stage_counts)}
         return {
             "launch_failure_count": sum(stage_counts.values()),
             "launch_failure_stage_counts": stage_counts,

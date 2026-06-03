@@ -2612,6 +2612,51 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Launch failure stage diagnostics guardrail
+
+背景：
+
+- Release smoke 使用 `/api/diagnostics` 中的 launch failure summary 判断 profile/VNC/runtime launch failure 是否集中在固定阶段。
+- `_record_launch_failure()` 已将正常失败阶段限制在白名单，但 summary 仍直接信任当前 in-memory dict。
+- 如果内部状态被污染为 URL/query token/header 风格 stage key 或非整数 count，release diagnostics evidence 可能泄露 raw stage text 或返回 500。
+
+已覆盖：
+
+- `BrowserManager.launch_failure_summary()` 现在只累计正整数 count；bool、非整数、0 和负数会被忽略。
+- stage key 只保留固定 `LAUNCH_FAILURE_STAGES`；非白名单 stage 归并为 `unknown`。
+- `/api/diagnostics.runtime.launch_failure_stage_counts` 因此只会拿到 public stage labels 和数字 counts。
+- 正常 launch failure recording、resource/VNC/startup cleanup diagnostics 和 System diagnostics 前端展示语义保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_failure_summary_sanitizes_existing_stage_counts -q
+# RED: 1 failed；polluted count caused TypeError and raw stage key was not normalized
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_failure_summary_sanitizes_existing_stage_counts -q
+# 1 passed in 0.15s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 69 passed in 0.90s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 621 passed in 38.84s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.30s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Management response timestamp guardrail
 
 背景：

@@ -3864,3 +3864,48 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 management response timestamp guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 Launch failure stage diagnostics guardrail
+
+背景：
+
+- `/api/diagnostics` 会展示 BrowserManager in-memory launch failure summary，帮助 release smoke triage profile/VNC/runtime launch failures。
+- `_record_launch_failure()` 已经把运行时 stage 规范到固定白名单，但 `launch_failure_summary()` 仍直接信任当前 `_launch_failure_stage_counts` dict。
+- 如果未来代码路径、测试注入或异常状态把 URL/header/token 风格 stage key 或非整数 count 写入该 dict，diagnostics 可能暴露 raw key 或抛出 TypeError。
+
+已覆盖：
+
+- `launch_failure_summary()` 现在只累计正整数计数；bool、非整数、0 和负数都会忽略。
+- stage key 只保留 `LAUNCH_FAILURE_STAGES` 白名单；非白名单 stage 统一归并到 `unknown`。
+- summary 输出继续按 stage 排序，`launch_failure_count` 来自过滤后的 public counts。
+- 正常 launch failure 记录、VNC allocation failure、startup cleanup failure 和 diagnostics 渲染语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_failure_summary_sanitizes_existing_stage_counts -q
+# RED: 1 failed；polluted count caused TypeError and raw stage key was not normalized
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_failure_summary_sanitizes_existing_stage_counts -q
+# 1 passed in 0.15s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 69 passed in 0.90s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 621 passed in 38.84s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.30s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager, runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 launch failure stage diagnostics guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
