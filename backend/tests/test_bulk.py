@@ -574,6 +574,7 @@ def test_bulk_export_profile_configs_sanitizes_persisted_identity_fields(app_cli
     ).json()
     db.update_profile(
         created["id"],
+        fingerprint_seed=f"https://seed.example/profile?token={leak_marker}",
         platform=f"linux?token={leak_marker}",
         screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
         screen_height=999999,
@@ -595,6 +596,7 @@ def test_bulk_export_profile_configs_sanitizes_persisted_identity_fields(app_cli
 
     assert resp.status_code == 200
     config = resp.json()["results"][0]["config"]
+    assert config["fingerprint_seed"] == 0
     assert config["platform"] == "windows"
     assert config["screen_width"] == 1920
     assert config["screen_height"] == 1080

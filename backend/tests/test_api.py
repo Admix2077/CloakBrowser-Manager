@@ -209,6 +209,7 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
     pid = create.json()["id"]
     main.db.update_profile(
         pid,
+        fingerprint_seed=f"https://seed.example/profile?token={leak_marker}",
         platform=f"linux?token={leak_marker}",
         screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
         screen_height=999999,
@@ -239,6 +240,7 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
     get_profile = get_resp.json()
     listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
     for profile in (get_profile, listed_profile):
+        assert profile["fingerprint_seed"] == 0
         assert profile["platform"] == "windows"
         assert profile["screen_width"] == 1920
         assert profile["screen_height"] == 1080

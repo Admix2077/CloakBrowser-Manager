@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from . import database as db
 from .browser_manager import (
     _filter_firefox_launch_args,
+    _public_fingerprint_seed,
     _public_gpu_text,
     _public_hardware_concurrency,
     _public_screen_dimension,
@@ -160,6 +161,7 @@ def sanitize_profile_template_response_data(template: dict[str, Any]) -> dict[st
 
 def sanitize_profile_response_data(profile: dict[str, Any]) -> dict[str, Any]:
     safe = dict(profile)
+    safe["fingerprint_seed"] = _safe_profile_fingerprint_seed(profile.get("fingerprint_seed"))
     for field in TEMPLATE_FIELDS:
         safe_value, should_copy = _safe_template_field(field, profile.get(field))
         safe[field] = safe_value if should_copy else TEMPLATE_RESPONSE_DEFAULTS[field]
@@ -178,6 +180,7 @@ def sanitize_profile_config_export_data(
     include_sensitive_proxy: bool = False,
 ) -> dict[str, Any]:
     safe = dict(profile)
+    safe["fingerprint_seed"] = _safe_profile_fingerprint_seed(profile.get("fingerprint_seed"))
     if not include_sensitive_proxy and safe.get("proxy"):
         safe["proxy"] = redact_proxy_asset_url(str(safe["proxy"]))
 
@@ -221,6 +224,11 @@ def _safe_template_field(field: str, value: Any) -> tuple[Any, bool]:
     if field == "launch_args":
         return _safe_template_launch_args(value), True
     return value, True
+
+
+def _safe_profile_fingerprint_seed(value: Any) -> int:
+    seed = _public_fingerprint_seed(value)
+    return seed if seed is not None else 0
 
 
 def _safe_profile_config_bool(value: Any, default: bool) -> bool:

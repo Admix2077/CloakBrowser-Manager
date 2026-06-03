@@ -2612,6 +2612,47 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Fingerprint seed response/export guardrail
+
+背景：
+
+- Release profile/config/bundle smoke 会读取 profile list/detail、`/api/profiles/export` 和 bundle config manifest。
+- 旧 response/export sanitizer 未过滤 historical/manual `fingerprint_seed`，如果 DB row 被污染为 URL/query token/header 风格文本，会让 `ProfileResponse` 或 `ProfileConfigExport` validation 失败。
+- runtime launch seed boundary 已覆盖 `InvisiblePlaywright(seed=...)`，但 release evidence 响应面仍需要同等防御。
+
+已覆盖：
+
+- Profile list/detail response 的污染 `fingerprint_seed` 折叠为固定低敏 `0`。
+- Profile config export 和 profile bundle config manifest 使用同一 seed boundary。
+- 正常整数 seed 继续保留；底层 launch seed、same-seed stability 和 different-seed variation 语义不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields backend/tests/test_profile_bundle.py::test_build_profile_config_bundle_sanitizes_non_public_fingerprint_seed -q
+# RED then GREEN；初始 3 failed，最终 3 passed in 0.95s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields backend/tests/test_api.py::test_profile_response_sanitizes_persisted_profile_id_and_automation_url backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields backend/tests/test_profile_bundle.py -q
+# 8 passed in 0.95s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 635 passed in 39.14s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.58s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Launch args runtime input guardrail
 
 背景：

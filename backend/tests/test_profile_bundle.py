@@ -126,6 +126,33 @@ def test_build_profile_config_bundle_defaults_to_safe_manifest_without_sensitive
     assert "audit_events" not in serialized
 
 
+def test_build_profile_config_bundle_sanitizes_non_public_fingerprint_seed():
+    leak_marker = "bundle-seed-super-secret"
+    profile = {
+        "id": "profile-123",
+        "name": "Bundle Source",
+        "fingerprint_seed": f"https://seed.example/profile?token={leak_marker}",
+        "proxy": None,
+        "timezone": "America/New_York",
+        "locale": "en-US",
+        "platform": "windows",
+        "screen_width": 1920,
+        "screen_height": 1080,
+        "launch_args": [],
+        "tags": [],
+    }
+
+    bundle = build_profile_config_bundle(
+        profile,
+        exported_at="2026-05-27T00:00:00+00:00",
+    )
+    dumped = bundle.model_dump(mode="json", by_alias=True)
+
+    assert dumped["profile"]["config"]["fingerprint_seed"] == 0
+    assert leak_marker not in str(dumped)
+    assert "seed.example" not in str(dumped)
+
+
 def test_build_profile_config_bundle_can_include_sensitive_proxy_only_when_explicit():
     profile = {
         "id": "profile-123",

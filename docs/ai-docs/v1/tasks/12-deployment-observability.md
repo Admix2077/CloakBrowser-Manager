@@ -4376,3 +4376,45 @@ git diff --check
 
 - 这是 profile lifecycle launch input 和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Fingerprint seed response/export guardrail
+
+背景：
+
+- `fingerprint_seed` 是 profile list/detail、profile config export 和 profile bundle config manifest 的必填整数。
+- runtime launch 已在 `_build_invisible_kwargs()` 中过滤非公开 seed，但 response/export sanitizer 仍直接信任历史/手工 DB row。
+- 如果 `fingerprint_seed` 被污染为 URL/query token/header 风格文本，profile response 或 export 会触发 Pydantic validation failure，并可能把污染文本带入测试/调试输出。
+
+已覆盖：
+
+- `sanitize_profile_response_data()` 现在复用 fingerprint seed public boundary，非公开 seed 折叠为固定低敏 `0`。
+- `sanitize_profile_config_export_data()` 使用同一边界，覆盖 `/api/profiles/export` 和 profile bundle config manifest。
+- 正常整数 seed 继续保留；runtime launch seed filtering 语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields backend/tests/test_profile_bundle.py::test_build_profile_config_bundle_sanitizes_non_public_fingerprint_seed -q
+# RED: 3 failed due ProfileResponse/ProfileConfigExport fingerprint_seed validation；GREEN: 3 passed in 0.95s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields backend/tests/test_api.py::test_profile_response_sanitizes_persisted_profile_id_and_automation_url backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields backend/tests/test_profile_bundle.py -q
+# 8 passed in 0.95s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 635 passed in 39.14s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.58s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 profile response/config export/bundle manifest 稳定性和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变底层 `invisible_playwright` seed generation、same-seed stability、different-seed variation、stealth prefs、WebGL、WebRTC、UA、locale/timezone、proxy 或 profile launch 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
