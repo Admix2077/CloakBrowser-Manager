@@ -1064,6 +1064,12 @@ def _public_profile_identifier(value: object) -> str:
     return _public_uuid_identifier(value) or "unknown"
 
 
+def _public_profile_result_identifier(value: object, *, exists: bool) -> str:
+    if exists:
+        return _public_profile_identifier(value)
+    return _public_uuid_identifier(value) or _public_runtime_external_session_id(value) or "unknown"
+
+
 def _profile_automation_url(public_profile_id: str) -> str:
     return f"/api/profiles/{public_profile_id}/automation"
 
@@ -1549,13 +1555,19 @@ async def assign_proxy_to_profiles(proxy_id: str, request: Request):
         if not profile:
             results.append(
                 ProxyAssignResult(
-                    profile_id=profile_id,
+                    profile_id=_public_profile_result_identifier(profile_id, exists=False),
                     ok=False,
                     error="Profile not found",
                 )
             )
             continue
-        results.append(ProxyAssignResult(profile_id=profile_id, ok=True, error=None))
+        results.append(
+            ProxyAssignResult(
+                profile_id=_public_profile_result_identifier(profile_id, exists=True),
+                ok=True,
+                error=None,
+            )
+        )
 
     succeeded = sum(1 for result in results if result.ok)
     response = ProxyAssignResponse(
@@ -1639,7 +1651,7 @@ async def assign_random_proxy_to_profiles(request: Request):
         if not profile:
             results.append(
                 ProxyRandomAssignResult(
-                    profile_id=profile_id,
+                    profile_id=_public_profile_result_identifier(profile_id, exists=False),
                     ok=False,
                     error="Profile not found",
                     proxy_id=None,
@@ -1649,7 +1661,7 @@ async def assign_random_proxy_to_profiles(request: Request):
             continue
         results.append(
             ProxyRandomAssignResult(
-                profile_id=profile_id,
+                profile_id=_public_profile_result_identifier(profile_id, exists=True),
                 ok=True,
                 error=None,
                 proxy_id=str(chosen["id"]),

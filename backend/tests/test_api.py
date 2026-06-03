@@ -313,6 +313,60 @@ def test_profile_response_sanitizes_persisted_malformed_tags(app_client: TestCli
     assert sorted(listed_profile["tags"], key=lambda tag: tag["tag"]) == actual_tags
 
 
+def test_proxy_assignment_responses_sanitize_persisted_profile_id(
+    app_client: TestClient,
+):
+    leak_marker = "proxy-assign-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "ProxyAssignPollutedId"}).json()["id"]
+    polluted_profile_id = (
+        f"proxy-assign-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    proxy_resp = app_client.post(
+        "/api/proxies",
+        json={"name": "Assign Proxy", "url": "http://proxy.example:8080", "provider": "ProxyCo"},
+    )
+    proxy_id = proxy_resp.json()["id"]
+
+    assign_resp = app_client.post(
+        f"/api/proxies/{proxy_id}/assign",
+        json={"profile_ids": [polluted_profile_id], "confirm_assign": True},
+    )
+    random_assign_resp = app_client.post(
+        "/api/proxies/assign/random",
+        json={"profile_ids": [polluted_profile_id], "provider": "ProxyCo", "confirm_assign": True},
+    )
+
+    assert proxy_resp.status_code == 201
+    assert assign_resp.status_code == 200
+    assert random_assign_resp.status_code == 200
+    assign_result = assign_resp.json()["results"][0]
+    random_result = random_assign_resp.json()["results"][0]
+    assert assign_result["profile_id"] == "unknown"
+    assert assign_result["ok"] is True
+    assert random_result["profile_id"] == "unknown"
+    assert random_result["ok"] is True
+
+    serialized = json.dumps(
+        {
+            "assign": assign_resp.json(),
+            "random": random_assign_resp.json(),
+            "events": _audit_events_except("profile.created", "proxy.created"),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_get_profile_not_found(app_client: TestClient):
     resp = app_client.get("/api/profiles/nonexistent")
     assert resp.status_code == 404
