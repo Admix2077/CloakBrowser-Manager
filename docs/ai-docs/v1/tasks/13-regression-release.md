@@ -5710,3 +5710,42 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
 - 不改变 backend API response schema、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 diagnostics active runtime display/port release-evidence 边界。
+
+## 2026-06-04 ProxyResponse city/asn release-evidence guardrail
+
+背景：
+
+- Proxy Manager release evidence 会读取 proxy list/detail，并把 `city` / `asn` 展示、tooltip 和本地搜索。
+- `provider`、`country_code`、`last_check_*` 已有公开值边界，但 `city` / `asn` 仍可能回显历史/手工污染文本。
+- 这类污染不是底层 fingerprint 检测问题，属于 Manager 可控的 API/UI evidence 边界。
+
+已覆盖：
+
+- proxy detail/list response 的 `city` 只保留短公开地名标签；URL/query/header/token 风格文本输出 `null`。
+- proxy detail/list response 的 `asn` 只保留 `AS` + digits，污染文本输出 `null`。
+- 正常 Proxy CRUD 响应仍保留 `Tokyo`、`AS64501`，并继续隐藏 proxy URL credentials。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -k "location_labels or proxy_crud_api" -q
+# RED then GREEN；旧实现把污染 city 原样写入 response
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 42 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 40.75s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.32s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 不改变 backend request schema、proxy URL credential redaction、provider/country filters、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProxyResponse `city` / `asn` release-evidence 边界。

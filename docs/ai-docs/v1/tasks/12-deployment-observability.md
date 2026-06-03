@@ -6027,3 +6027,43 @@ npm --prefix frontend run build
 - 这是 Profile health response observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 GeoIP lookup、profile health warning catalog、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 ProxyResponse location label public-value guardrail
+
+背景：
+
+- Proxy Manager 表格和搜索会使用 proxy `city` / `asn` 字段，release smoke 也会读取 proxy list/detail API evidence。
+- 之前 `provider`、`country_code` 和 `last_check_*` 已经过公开值边界，但 `city` / `asn` 仍直接从存储层进入 `ProxyResponse`。
+- 历史/手工污染 proxy row 如果把 URL、Authorization/Bearer 或 `token=` 文本塞进 `city` / `asn`，会进入 API/UI release evidence。
+
+已覆盖：
+
+- `ProxyResponse.city` 现在只保留短 ASCII 地名标签；URL、路径、query、header/token/password/secret/cookie 风格文本输出为 `null`。
+- `ProxyResponse.asn` 现在只保留公开 `AS` + digits 标签，并规范成大写 `AS...`；污染或非 ASN 文本输出为 `null`。
+- 正常 proxy CRUD 响应仍保留 `Tokyo`、`AS64501`、provider、country、tag 和 redacted proxy URL 行为。
+- Detail 和 list 响应共用 `_proxy_response()`，所以两处 evidence 面一起覆盖。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -k "location_labels or proxy_crud_api" -q
+# RED: 旧实现把 https://city.invalid/path?token=... 原样返回；GREEN: 3 passed, 39 deselected
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q
+# 42 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 40.75s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.32s
+```
+
+边界：
+
+- 这是 ProxyResponse/Proxy Manager release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 proxy CRUD request schema、proxy asset URL redaction、provider/country matching、bulk check、random assignment、GeoIP lookup、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

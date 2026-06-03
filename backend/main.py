@@ -720,6 +720,8 @@ _SENSITIVE_PROXY_PROVIDER_RE = re.compile(
     r"https?://|socks[45]://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
     re.IGNORECASE,
 )
+_PUBLIC_PROXY_CITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._(),-]{0,79}$")
+_PUBLIC_PROXY_ASN_RE = re.compile(r"^AS([0-9]{1,10})$", re.IGNORECASE)
 _PUBLIC_AUDIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()[\]-]{0,79}$")
 _SENSITIVE_AUDIT_NAME_RE = re.compile(
     r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
@@ -756,6 +758,31 @@ def _public_proxy_provider(value: object) -> str | None:
     if _SENSITIVE_PROXY_PROVIDER_RE.search(provider):
         return None
     return provider
+
+
+def _public_proxy_city(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    city = value.strip()
+    if not city:
+        return None
+    if not _PUBLIC_PROXY_CITY_RE.fullmatch(city):
+        return None
+    if _SENSITIVE_PROXY_PROVIDER_RE.search(city):
+        return None
+    return city
+
+
+def _public_proxy_asn(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    asn = value.strip()
+    if not asn:
+        return None
+    match = _PUBLIC_PROXY_ASN_RE.fullmatch(asn)
+    if not match:
+        return None
+    return f"AS{match.group(1)}"
 
 
 def _public_audit_name(value: object) -> str | None:
@@ -824,6 +851,8 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     safe["url"] = redact_proxy_asset_url(str(safe["url"]))
     safe["provider"] = _public_proxy_provider(safe.get("provider"))
     safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
+    safe["city"] = _public_proxy_city(safe.get("city"))
+    safe["asn"] = _public_proxy_asn(safe.get("asn"))
     safe["last_check_status"] = _public_proxy_check_status(safe.get("last_check_status"))
     safe["last_check_ip"] = public_geoip_ip(safe.get("last_check_ip"))
     safe["last_check_country_code"] = public_geoip_country_code(safe.get("last_check_country_code"))

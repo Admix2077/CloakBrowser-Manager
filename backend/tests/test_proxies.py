@@ -124,6 +124,8 @@ def test_proxy_crud_api(app_client: TestClient):
 
     get = app_client.get(f"/api/proxies/{data['id']}")
     assert get.status_code == 200
+    assert get.json()["city"] == "Tokyo"
+    assert get.json()["asn"] == "AS64501"
     assert get.json()["provider"] == "MobileProxy"
     assert get.json()["url"] == "socks5://jp.proxy.example:1080"
     assert "hiddenpass" not in str(get.json())
@@ -406,6 +408,48 @@ def test_proxy_api_responses_redact_persisted_sensitive_selection_fields(app_cli
         assert data["country_code"] is None
         serialized = json.dumps(data, sort_keys=True)
         for leaked in (leak_marker, "Authorization", "Bearer", "token="):
+            assert leaked not in serialized
+
+
+def test_proxy_api_responses_redact_persisted_sensitive_location_labels(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Historical location labels",
+            "url": "http://user:hiddenpass@location-labels.example:8080",
+            "country_code": "US",
+            "city": "New York",
+            "asn": "AS64500",
+            "provider": "ProxyCo",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+    leak_marker = "proxy-location-secret"
+
+    updated = db.update_proxy(
+        proxy_id,
+        city=f"https://city.invalid/path?token={leak_marker}",
+        asn=f"AS64500 Authorization=Bearer {leak_marker}",
+    )
+    assert updated is not None
+
+    detail = app_client.get(f"/api/proxies/{proxy_id}")
+    listed = app_client.get("/api/proxies")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["city"] is None
+        assert data["asn"] is None
+        serialized = json.dumps(data, sort_keys=True)
+        for leaked in (
+            leak_marker,
+            "Authorization",
+            "Bearer",
+            "token=",
+            "city.invalid",
+        ):
             assert leaked not in serialized
 
 
