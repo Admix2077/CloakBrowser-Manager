@@ -6466,3 +6466,32 @@ npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx 
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile operations id release-evidence 边界。
+
+## 2026-06-04 Proxy Manager random assignment filter summary release-evidence guardrail
+
+背景：
+
+- Proxy Manager random assign dialog 会显示当前 country/provider/tag filters 的 summary pills，是 release regression 截图/文本 evidence 面。
+- 正常 filter matching 和 random assignment API payload 仍需要原始 provider/tag；但污染 provider/tag 不应进入 visible text、title 或 aria evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Random assign dialog Provider/Tag summary 使用 public proxy metadata boundary。
+- Authorization/Bearer/`token=`/path/IP-style provider/tag 片段不会进入 dialog text/title/aria evidence。
+- Raw provider/tag 继续用于 filter option value、selected filter state、filter matching 和 `assignRandomProxyToProfiles` request payload。
+- Country filter、selected profile ids、candidate count、assignment result contract 和 backend persistence 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts random assignment filter summary"
+# RED then GREEN；旧实现把污染 provider/tag 写入 random assign dialog summary evidence
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、proxy/provider preset persistence、filter values、filter matching、random assignment payload、proxy assignment、GeoIP lookup、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager random assignment filter summary release-evidence 边界。

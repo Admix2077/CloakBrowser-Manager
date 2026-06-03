@@ -1094,6 +1094,81 @@ describe("ProxyManagerPage", () => {
     expect(renderedEvidence).not.toContain("user:");
   });
 
+  it("redacts random assignment filter summary without changing raw filter payloads", async () => {
+    const leakMarker = "random-filter-secret";
+    const rawProvider =
+      "ProxyJP Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/random-filter-provider 203.0.113.122`;
+    const rawTag =
+      "mobile Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/random-filter-tag 203.0.113.123`;
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-jp-1",
+        name: "JP Mobile A",
+        provider: rawProvider,
+        tags: [{ tag: rawTag, color: "#0ea5e9" }],
+      }),
+    ]);
+    mockAssignRandomProxyToProfiles.mockResolvedValue({
+      strategy: "random",
+      provider_preset_id: null,
+      provider: rawProvider,
+      country_code: null,
+      tags: [rawTag],
+      candidate_count: 1,
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [
+        { profile_id: "alpha", ok: true, error: null, proxy_id: "proxy-jp-1", proxy: null },
+      ],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({ id: "alpha", name: "Alpha Good" }),
+      ]}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.change(within(page).getByLabelText("Provider filter"), { target: { value: rawProvider } });
+    fireEvent.change(within(page).getByLabelText("Tag filter"), { target: { value: rawTag } });
+    fireEvent.click(within(page).getByRole("button", { name: "Random assign" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Random proxy assignment" });
+    expect(within(dialog).getByText("ProxyJP [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(dialog).getByText("mobile [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/random-filter-provider",
+      "/data/random-filter-tag",
+      "203.0.113.122",
+      "203.0.113.123",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign random proxy" }));
+
+    await waitFor(() => expect(mockAssignRandomProxyToProfiles).toHaveBeenCalledWith({
+      profile_ids: ["alpha"],
+      provider: rawProvider,
+      tags: [rawTag],
+    }));
+  });
+
   it("creates proxy provider presets from the manager dialog without sensitive provider fields", async () => {
     const createdPreset = {
       id: "preset-new",

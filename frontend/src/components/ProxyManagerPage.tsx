@@ -1658,9 +1658,11 @@ function ProxyRandomAssignDialog({
 }) {
   const selectedCount = selectedProfileIds.size;
   const filterPills = [
-    ["Country", selection.country_code ?? "All"],
-    ["Provider", selection.provider ?? "All"],
-    ["Tag", selection.tags && selection.tags.length > 0 ? selection.tags.join(", ") : "All"],
+    ["Country", publicRandomAssignFilterLabel(selection.country_code)],
+    ["Provider", publicRandomAssignFilterLabel(selection.provider)],
+    ["Tag", selection.tags && selection.tags.length > 0
+      ? selection.tags.map(publicRandomAssignFilterLabel).join(", ")
+      : "All"],
   ];
 
   return (
@@ -2280,6 +2282,10 @@ function publicProxyMetadataLabel(value: string): string {
 
 function publicProxyAssetLabel(value: string): string {
   return publicErrorText(value) || "unknown";
+}
+
+function publicRandomAssignFilterLabel(value: string | null | undefined): string {
+  return value ? publicProxyMetadataLabel(value) : "All";
 }
 
 function publicAssignmentProfileLabel(value: string): string {

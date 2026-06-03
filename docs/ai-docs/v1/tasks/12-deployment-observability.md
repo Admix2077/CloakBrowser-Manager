@@ -6783,3 +6783,32 @@ npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx 
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy Manager random assignment filter summary evidence guardrail
+
+背景：
+
+- Proxy Manager random assign dialog 会把当前 country/provider/tag filters 汇总成 summary pills，是随机分配 release smoke 常看的 UI evidence 面。
+- Filter option values 和 random assignment request payload 必须继续保留原始 provider/tag，避免改变筛选匹配和用户显式选择语义；但异常 response、历史/手工污染 proxy metadata 或测试桩可能把 Authorization/Bearer、`token=`、本地路径或 IP 字面量混入 provider/tag。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Random assign dialog 的 Provider/Tag filter summary text/title 使用 public proxy metadata label。
+- Authorization/Bearer/`token=`/path/IP-style provider/tag 片段显示为 `[redacted]`、`[redacted-path]` 或 `[redacted-ip]`，不进入 rendered text/title/aria evidence。
+- Country/Provider/Tag filter option values、filter matching、selected filters 和 `assignRandomProxyToProfiles` payload 继续使用原始 provider/tag。
+- Assignment profile selection、candidate count、proxy persistence、GeoIP lookup 和 random assignment backend contract 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts random assignment filter summary"
+# RED: 旧实现把污染 provider/tag 写入 random assign dialog summary text/title；GREEN: 1 passed, 33 skipped
+```
+
+边界：
+
+- 这是 Proxy Manager random assignment filter summary UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、proxy/provider preset persistence、filter values、filter matching、random assignment payload、proxy assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
