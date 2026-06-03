@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import json
 from types import SimpleNamespace
+from urllib.parse import quote
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -236,6 +237,100 @@ def test_runtime_session_response_sanitizes_persisted_profile_id(
         assert leaked not in serialized
 
 
+def test_runtime_session_response_sanitizes_persisted_session_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "runtime-session-id-secret"
+    profile_id = _create_profile(app_client)
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm-session-persisted-session-id",
+        lease_seconds=900,
+    )
+    polluted_session_id = (
+        f"runtime-session-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute(
+            "UPDATE runtime_sessions SET id = ? WHERE id = ?",
+            (polluted_session_id, session["id"]),
+        )
+        conn.commit()
+
+    resp = app_client.get(
+        f"/api/runtime/sessions/{quote(polluted_session_id, safe='')}",
+        headers=runtime_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == "unknown"
+    read_events = [
+        event
+        for event in _runtime_audit_events()
+        if event["event_type"] == "runtime.session.read"
+    ]
+    assert len(read_events) == 1
+    assert read_events[0]["runtime_session_id"] is None
+    serialized = json.dumps({"response": data, "audit": read_events}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
+def test_runtime_viewer_token_response_sanitizes_persisted_session_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "viewer-token-session-id-secret"
+    profile_id = _create_profile(app_client)
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm-session-viewer-token-session-id",
+        lease_seconds=900,
+    )
+    polluted_session_id = (
+        f"viewer-token-session-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute(
+            "UPDATE runtime_sessions SET id = ? WHERE id = ?",
+            (polluted_session_id, session["id"]),
+        )
+        conn.commit()
+
+    resp = app_client.post(
+        f"/api/runtime/sessions/{quote(polluted_session_id, safe='')}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["viewer_url"].startswith("/api/runtime/sessions/unknown/vnc?viewer_token=")
+    token_events = [
+        event
+        for event in _runtime_audit_events()
+        if event["event_type"] == "runtime.viewer_token.created"
+    ]
+    assert len(token_events) == 1
+    assert token_events[0]["runtime_session_id"] is None
+    serialized = json.dumps({"response": data, "audit": token_events}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_viewer_failure_audit_omits_sensitive_external_session_id(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -313,6 +408,43 @@ def test_runtime_viewer_failure_audit_omits_sensitive_profile_id(
         "Bearer",
         "token=",
         "wrong-token",
+    ):
+        assert leaked not in serialized
+
+
+def test_runtime_viewer_origin_failure_audit_omits_sensitive_session_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "viewer-session-id-secret"
+    polluted_session_id = (
+        f"viewer-session-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            f"/api/runtime/sessions/{quote(polluted_session_id, safe='')}/vnc"
+            f"?viewer_token={leak_marker}",
+            headers={"origin": "http://evil.com"},
+        ):
+            pass
+
+    assert rejected.value.code == 4403
+    failures = _viewer_failure_events()
+    assert len(failures) == 1
+    assert failures[0]["runtime_session_id"] is None
+    assert failures[0]["profile_id"] is None
+    assert failures[0]["external_session_id"] is None
+    assert failures[0]["metadata"] == {"reason_code": "origin_not_allowed"}
+    serialized = json.dumps(failures, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "evil.com",
+        "Authorization",
+        "Bearer",
+        "token=",
+        "viewer_token",
     ):
         assert leaked not in serialized
 

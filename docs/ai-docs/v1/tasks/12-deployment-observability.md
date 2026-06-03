@@ -2993,3 +2993,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 runtime profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Runtime session id public-value guardrail
+
+背景：
+
+- Runtime session `id` 是 RuntimeSessionResponse、runtime service audit、runtime viewer audit 和 viewer-token URL 的顶层关联字段。
+- 正常 runtime session id 应为 UUID；但旧版本、手工修复或损坏 DB row 可能写入非 UUID 字符串。
+- Runtime viewer origin rejection 在读取 session 前就会写 failure audit；此前会直接使用 URL path 中的 `session_id`。
+
+已覆盖：
+
+- RuntimeSessionResponse 中非 UUID `id` 折叠为 `unknown`。
+- Runtime service audit、runtime viewer connected/disconnected audit 和 runtime viewer failure audit 的顶层 `runtime_session_id` 复用 UUID-only filter；非公开值省略为 `null`。
+- Runtime viewer-token response 的 `viewer_url` session path 只使用 canonical UUID；非公开 session id 折叠为 `unknown`，避免历史/污染 id 进入 response URL。
+- DB 原始 row、runtime lookup、lease、viewer credential、runtime service token、external/profile id guardrails 和正常 UUID session id 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_session_id backend/tests/test_session_broker.py::test_runtime_viewer_token_response_sanitizes_persisted_session_id backend/tests/test_session_broker.py::test_runtime_viewer_origin_failure_audit_omits_sensitive_session_id -q
+# RED: 3 failed；response id、viewer_url 和 audit 顶层 runtime_session_id 直接保留非 UUID URL/header/token-like 文本
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_session_id backend/tests/test_session_broker.py::test_runtime_viewer_token_response_sanitizes_persisted_session_id backend/tests/test_session_broker.py::test_runtime_viewer_origin_failure_audit_omits_sensitive_session_id -q
+# 3 passed in 0.97s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 38 passed in 3.91s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 595 passed in 34.00s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.10s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 runtime session id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

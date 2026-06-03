@@ -2768,3 +2768,41 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Runtime session id guardrail
+
+背景：
+
+- Release runtime/VNC smoke 会创建 runtime session、读取 session、签发 viewer token，并检查 audit event。
+- `runtime_session_id` 是 runtime response/audit/viewer URL 的顶层关联字段；此前如果历史/手工 DB row 或 URL path 里存在非 UUID session id，response、viewer URL 和 audit 会直接回显该值。
+
+已覆盖：
+
+- RuntimeSessionResponse 对非 UUID session id 返回 `unknown`。
+- Runtime service 与 runtime viewer audit event 顶层 `runtime_session_id` 现在只保留 canonical UUID；URL/query token/header 风格值会省略。
+- Runtime viewer-token response 的 `viewer_url` session path 现在只使用 canonical UUID；非公开 session id 折叠为 `unknown`。
+- 正常 UUID session id、profile/external id guardrails、viewer token、runtime service token 和 VNC failure audit 流程保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_session_id backend/tests/test_session_broker.py::test_runtime_viewer_token_response_sanitizes_persisted_session_id backend/tests/test_session_broker.py::test_runtime_viewer_origin_failure_audit_omits_sensitive_session_id -q
+# RED then GREEN；初始 3 failed，最终 3 passed in 0.97s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 38 passed in 3.91s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 595 passed in 34.00s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.10s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

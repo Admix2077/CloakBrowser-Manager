@@ -1058,6 +1058,7 @@ def _public_uuid_identifier(value: object) -> str | None:
 
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     safe = dict(session)
+    safe["id"] = _public_uuid_identifier(safe.get("id")) or "unknown"
     safe["profile_id"] = _public_uuid_identifier(safe.get("profile_id")) or "unknown"
     safe["status"] = _public_runtime_session_status(safe.get("status"))
     safe["external_session_id"] = _public_runtime_external_session_id(
@@ -1070,7 +1071,7 @@ def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None =
     db.create_audit_event(
         event_type=event_type,
         actor_type="runtime_service",
-        runtime_session_id=str(session["id"]),
+        runtime_session_id=_public_uuid_identifier(session.get("id")),
         profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
         metadata=metadata,
@@ -1081,7 +1082,7 @@ def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict |
     db.create_audit_event(
         event_type=event_type,
         actor_type="runtime_viewer",
-        runtime_session_id=str(session["id"]),
+        runtime_session_id=_public_uuid_identifier(session.get("id")),
         profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
         metadata=metadata,
@@ -1098,7 +1099,11 @@ def _audit_runtime_viewer_failure(
         db.create_audit_event(
             event_type="runtime.viewer.failed",
             actor_type="runtime_viewer",
-            runtime_session_id=str(session["id"]) if session else session_id,
+            runtime_session_id=(
+                _public_uuid_identifier(session.get("id"))
+                if session
+                else _public_uuid_identifier(session_id)
+            ),
             profile_id=(
                 _public_uuid_identifier(session.get("profile_id"))
                 if session
@@ -1894,7 +1899,8 @@ async def create_runtime_viewer_token(
         },
     )
 
-    viewer_url = f"/api/runtime/sessions/{session_id}/vnc?viewer_token={viewer_token}"
+    public_session_id = _public_uuid_identifier(updated.get("id")) or "unknown"
+    viewer_url = f"/api/runtime/sessions/{public_session_id}/vnc?viewer_token={viewer_token}"
     return RuntimeViewerTokenResponse(
         viewer_url=viewer_url,
         viewer_token=viewer_token,
