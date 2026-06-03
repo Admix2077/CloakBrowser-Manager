@@ -3169,6 +3169,12 @@ def test_automation_network_summary_redacts_urls_and_returns_recent_events(app_c
     failed_request.failure = "net::ERR_FAILED"
     event_callbacks["requestfailed"](failed_request)
 
+    corrupted_request = MagicMock()
+    corrupted_request.method = "POST token=method-secret Authorization=Bearer method-bearer"
+    corrupted_request.url = "https://example.com/method?token=url-secret"
+    corrupted_request.resource_type = "script?token=resource-secret"
+    event_callbacks["request"](corrupted_request)
+
     resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
 
     assert resp.status_code == 200
@@ -3198,8 +3204,21 @@ def test_automation_network_summary_redacts_urls_and_returns_recent_events(app_c
                 "status": None,
                 "failure": "request_failed",
             },
+            {
+                "event": "request",
+                "method": "UNKNOWN",
+                "url": "https://example.com/method",
+                "resource_type": "unknown",
+                "status": None,
+                "failure": None,
+            },
         ],
     }
+    serialized = resp.text
+    assert "method-secret" not in serialized
+    assert "method-bearer" not in serialized
+    assert "resource-secret" not in serialized
+    assert "url-secret" not in serialized
     main.browser_mgr.running.pop(pid, None)
 
 

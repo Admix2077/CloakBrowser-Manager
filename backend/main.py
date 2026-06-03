@@ -4298,14 +4298,64 @@ def _automation_redact_text(text: str) -> str:
     return _AUTOMATION_BEARER_TOKEN_RE.sub("Bearer [redacted]", redacted)
 
 
+_AUTOMATION_NETWORK_METHODS = {
+    "CONNECT",
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+    "TRACE",
+}
+_AUTOMATION_NETWORK_RESOURCE_TYPES = {
+    "document",
+    "eventsource",
+    "fetch",
+    "font",
+    "image",
+    "manifest",
+    "media",
+    "other",
+    "script",
+    "stylesheet",
+    "texttrack",
+    "websocket",
+    "xhr",
+}
+
+
+def _automation_public_network_method(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return "UNKNOWN"
+    method = value.strip().upper()
+    return method if method in _AUTOMATION_NETWORK_METHODS else "UNKNOWN"
+
+
+def _automation_public_resource_type(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return "unknown"
+    resource_type = value.strip().lower()
+    return resource_type if resource_type in _AUTOMATION_NETWORK_RESOURCE_TYPES else "unknown"
+
+
 def _automation_network_event(event: str, request=None, response=None, failure: str | None = None) -> dict:
     request_obj = request or getattr(response, "request", None)
     raw_url = getattr(request_obj, "url", "") if request_obj is not None else ""
     return {
         "event": event,
-        "method": getattr(request_obj, "method", None) if request_obj is not None else None,
+        "method": _automation_public_network_method(
+            getattr(request_obj, "method", None) if request_obj is not None else None
+        ),
         "url": _automation_safe_url(raw_url),
-        "resource_type": getattr(request_obj, "resource_type", None) if request_obj is not None else None,
+        "resource_type": _automation_public_resource_type(
+            getattr(request_obj, "resource_type", None) if request_obj is not None else None
+        ),
         "status": getattr(response, "status", None) if response is not None else None,
         "failure": failure,
     }

@@ -2140,3 +2140,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering、proxy logic 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation network summary method/resource redaction guardrail
+
+背景：
+
+- Automation network summary 是 release automation/VNC smoke 的常用可观测面。
+- URL 已低敏化，但 `method` 与 `resource_type` 仍直接回显 request object 字段，异常或恶意值可能包含 token/header-like 文本。
+
+已覆盖：
+
+- Network summary `method` 只保留公开 HTTP method whitelist，其他值折叠为 `UNKNOWN`。
+- Network summary `resource_type` 只保留 Playwright 公开 resource type whitelist，其他值折叠为 `unknown`。
+- URL redaction、event type、status、failure reason、ring buffer、console capture 和 page action behavior 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_network_summary_redacts_urls_and_returns_recent_events -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.75s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages or automation_console_logs or automation_network_summary or automation_page_id'
+# 10 passed, 209 deselected in 1.43s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 569 passed in 33.36s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 6.38s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request method/resource type、console capture internals 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
