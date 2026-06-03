@@ -2818,3 +2818,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 external proxy checking。
 - 不在 provider/country guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw audit payloads。
+
+## 2026-06-03 Profile/proxy audit name public-value guardrail
+
+背景：
+
+- Profile 与 proxy CRUD audit metadata 仍会记录普通 `name`，用于本地审计时识别对象。
+- DB audit sanitizer 会清理 token assignment、Bearer 和 proxy URL userinfo，但如果 `name` 自身是 URL/header/token 风格文本，sanitizer 仍可能留下低敏性不足的 host/path 上下文，例如 `https://profile-audit-name.example`。
+- Provider preset audit 已经不记录 name；profile/proxy audit 需要在保留普通短名称的同时，避免把敏感 name 放入持久 audit metadata。
+
+已覆盖：
+
+- 新增 audit name public-value filter：普通短 ASCII 名称继续写入 audit；URL、proxy scheme、userinfo、query/fragment、Authorization/Bearer、token/secret/password/cookie/auth、path/header/control 风格名称会从 audit metadata 中省略。
+- Profile create/delete 与 proxy create/delete 的敏感 name 均不进入 audit metadata；API response 与 DB 中的用户可见 name 语义不变。
+- 既有 profile/proxy CRUD audit 测试继续证明普通名称、platform/provider/country/tag_count/updated_fields 行为保持。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_crud_audit_omits_sensitive_name_metadata backend/tests/test_api.py::test_profile_crud_audit_omits_sensitive_name_metadata -q
+# RED: 2 failed；audit metadata name 经 sanitizer 后仍包含 profile/proxy audit-name host
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_crud_audit_omits_sensitive_name_metadata backend/tests/test_api.py::test_profile_crud_audit_omits_sensitive_name_metadata -q
+# 2 passed in 1.00s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -k "audit or proxy_crud_api" -q
+# 6 passed, 31 deselected in 1.35s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "profile_crud_api_writes_redacted_audit_events or profile_crud_audit_omits_sensitive_name_metadata or delete_profile_stops_running" -q
+# 3 passed, 223 deselected in 0.97s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 587 passed in 33.60s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.02s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager、profile/proxy response shape 或 persisted user-facing name values。
+- 不在 audit name guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

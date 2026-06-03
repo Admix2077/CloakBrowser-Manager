@@ -2611,3 +2611,43 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile/proxy audit name guardrail
+
+背景：
+
+- Release smoke 与排障会读取 audit event 作为低敏证据。
+- Profile/proxy CRUD audit metadata 此前保留普通 `name`，但当 name 本身被用户或历史 DB 污染为 URL/query token/Authorization/Bearer 风格文本时，DB audit sanitizer 仍会留下 host 等上下文。
+
+已覆盖：
+
+- Profile/proxy create/delete audit metadata 现在只保留 public audit name。
+- 普通短名称继续保留，URL/header/token/path 风格名称会被省略。
+- API response 与持久 profile/proxy name 不变；仅收紧 audit metadata。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_crud_audit_omits_sensitive_name_metadata backend/tests/test_api.py::test_profile_crud_audit_omits_sensitive_name_metadata -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 1.00s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py -k "audit or proxy_crud_api" -q
+# 6 passed, 31 deselected in 1.35s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "profile_crud_api_writes_redacted_audit_events or profile_crud_audit_omits_sensitive_name_metadata or delete_profile_stops_running" -q
+# 3 passed, 223 deselected in 0.97s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 587 passed in 33.60s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.02s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

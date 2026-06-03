@@ -341,6 +341,45 @@ def test_profile_crud_api_writes_redacted_audit_events(app_client: TestClient):
     assert "viewer" not in serialized_metadata
 
 
+def test_profile_crud_audit_omits_sensitive_name_metadata(app_client: TestClient):
+    leak_marker = "profile-audit-name-secret"
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": (
+                f"Profile https://profile-audit-name.example/path?token={leak_marker} "
+                f"Authorization=Bearer {leak_marker}"
+            ),
+            "proxy": "http://user:hiddenpass@profile-audit-name-proxy.example:8080",
+        },
+    )
+    assert create.status_code == 201
+    profile_id = create.json()["id"]
+
+    delete = app_client.request(
+        "DELETE",
+        f"/api/profiles/{profile_id}",
+        json={"confirm_delete": True},
+    )
+    assert delete.status_code == 200
+
+    events = main.db.list_audit_events()
+    assert [event["event_type"] for event in events] == ["profile.created", "profile.deleted"]
+    assert "name" not in events[0]["metadata"]
+    assert "name" not in events[1]["metadata"]
+    serialized_events = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "profile-audit-name.example",
+        "profile-audit-name-proxy.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+        "hiddenpass",
+    ):
+        assert leaked not in serialized_events
+
+
 def test_delete_profile_stops_running(app_client: TestClient):
     """Deleting a running profile should stop it first."""
     create = app_client.post("/api/profiles", json={"name": "Running"})

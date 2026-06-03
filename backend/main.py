@@ -713,6 +713,11 @@ _SENSITIVE_PROXY_PROVIDER_RE = re.compile(
     r"https?://|socks[45]://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
     re.IGNORECASE,
 )
+_PUBLIC_AUDIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()[\]-]{0,79}$")
+_SENSITIVE_AUDIT_NAME_RE = re.compile(
+    r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
+    re.IGNORECASE,
+)
 
 
 def _public_proxy_check_status(value: object) -> str | None:
@@ -742,6 +747,19 @@ def _public_proxy_provider(value: object) -> str | None:
     if _SENSITIVE_PROXY_PROVIDER_RE.search(provider):
         return None
     return provider
+
+
+def _public_audit_name(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    if not name:
+        return None
+    if not _PUBLIC_AUDIT_NAME_RE.fullmatch(name):
+        return None
+    if _SENSITIVE_AUDIT_NAME_RE.search(name):
+        return None
+    return name
 
 
 def _tag_responses(tags: object) -> list[TagResponse]:
@@ -789,7 +807,7 @@ def _profile_response(profile: dict) -> ProfileResponse:
 def _proxy_audit_metadata(proxy: dict, *, updated_fields: list[str] | None = None) -> dict:
     metadata = {
         "proxy_id": str(proxy["id"]),
-        "name": proxy.get("name"),
+        "name": _public_audit_name(proxy.get("name")),
         "provider": _public_proxy_provider(proxy.get("provider")),
         "country_code": public_geoip_country_code(proxy.get("country_code")),
         "tag_count": len(proxy.get("tags") or []),
@@ -818,7 +836,7 @@ def _profile_audit_metadata(profile: dict, *, updated_fields: list[str] | None =
             "tag_count": len(profile.get("tags") or []),
         }
     metadata = {
-        "name": profile.get("name"),
+        "name": _public_audit_name(profile.get("name")),
         "platform": profile.get("platform"),
         "tag_count": len(profile.get("tags") or []),
     }

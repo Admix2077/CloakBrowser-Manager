@@ -346,6 +346,45 @@ def test_proxy_crud_api_writes_redacted_audit_events(app_client: TestClient):
     assert "audit-proxy.example" not in serialized_events
 
 
+def test_proxy_crud_audit_omits_sensitive_name_metadata(app_client: TestClient):
+    leak_marker = "proxy-audit-name-secret"
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": (
+                f"Proxy https://proxy-audit-name.example/path?token={leak_marker} "
+                f"Authorization=Bearer {leak_marker}"
+            ),
+            "url": "http://user:hiddenpass@audit-name-proxy.example:8080",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+
+    delete = app_client.request(
+        "DELETE",
+        f"/api/proxies/{proxy_id}",
+        json={"confirm_delete": True},
+    )
+    assert delete.status_code == 200
+
+    events = db.list_audit_events()
+    assert [event["event_type"] for event in events] == ["proxy.created", "proxy.deleted"]
+    assert "name" not in events[0]["metadata"]
+    assert "name" not in events[1]["metadata"]
+    serialized_events = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "proxy-audit-name.example",
+        "audit-name-proxy.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+        "hiddenpass",
+    ):
+        assert leaked not in serialized_events
+
+
 def test_proxy_api_rejects_invalid_url_without_leaking_credentials(app_client: TestClient):
     resp = app_client.post(
         "/api/proxies",
