@@ -242,6 +242,47 @@ describe("AutomationTaskLogViewer", () => {
     expect(await screen.findByRole("status", { name: "No automation tasks match the selected filter" })).toBeTruthy();
   });
 
+  it("folds non-public task and profile ids to unknown before rendering or searching", async () => {
+    const leakMarker = "task-id-token-secret";
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({
+          id: `token=${leakMarker} Authorization=Bearer ${leakMarker}`,
+          profile_id: `/data/profiles/${leakMarker}/203.0.113.88`,
+          status: "queued",
+        }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getAllByText("unknown").length).toBeGreaterThanOrEqual(2);
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/profiles");
+    expect(page.textContent).not.toContain("203.0.113.88");
+
+    const detailsButton = within(page).getByRole("button", { name: "View task details for unknown" });
+    expect(detailsButton.getAttribute("aria-label")).not.toContain(leakMarker);
+    fireEvent.click(detailsButton);
+
+    const drawer = await screen.findByRole("dialog", { name: "Automation task details" });
+    expect(within(drawer).getAllByText("unknown").length).toBeGreaterThanOrEqual(2);
+    expect(drawer.textContent).not.toContain(leakMarker);
+    expect(drawer.textContent).not.toContain("Authorization");
+    expect(drawer.textContent).not.toContain("Bearer");
+    expect(drawer.textContent).not.toContain("token=");
+    expect(drawer.textContent).not.toContain("/data/profiles");
+    expect(drawer.textContent).not.toContain("203.0.113.88");
+
+    const search = within(page).getByRole("searchbox", { name: "Filter automation tasks by task or profile id" });
+    fireEvent.change(search, { target: { value: leakMarker } });
+    expect(await screen.findByRole("status", { name: "No automation tasks match the selected filter" })).toBeTruthy();
+  });
+
   it("filters the local read-only task list by task or profile id", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [

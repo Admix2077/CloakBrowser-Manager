@@ -5631,3 +5631,41 @@ npm --prefix frontend run build
 - 这是 Automation task UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation task id UI public-value guardrail
+
+背景：
+
+- Automation task backend response 已有 task/profile id 输出边界。
+- 但 frontend Task Log Viewer 的 table、detail drawer、details button accessible name 和本地搜索仍直接使用 `task.id` / `task.profile_id`。
+- 历史/手工污染数据或异常 response 如果把 `token=`、Authorization/Bearer、本地路径或 IP literal 放进 id 字段，可能进入 Automation UI release evidence 或 accessible snapshot。
+
+已覆盖：
+
+- `frontend/src/components/AutomationTaskLogViewer.tsx` 新增公开 id label 边界。
+- UI 可见文本、detail drawer 字段、details button `aria-label` 和本地搜索 corpus 都使用公开 id label。
+- 普通短 task/profile 标签继续可读，例如 `task-alpha-123456`、`profile-alpha-123456`。
+- 非公开 id，例如 token/header/path/IP/URL 风格值，统一折叠为 `unknown`。
+- 原始 id 只保留给 React key 和内部选中态，不进入可见/可访问 evidence。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED: 旧实现找不到 unknown，说明 raw task/profile id 仍被使用；GREEN: 9 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.03s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 236 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.07s
+```
+
+边界：
+
+- 这是 Automation task UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、run/cancel/retry、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

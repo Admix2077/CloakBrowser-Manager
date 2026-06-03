@@ -5315,3 +5315,41 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task status UI release-evidence 边界。
+
+## 2026-06-04 Automation task id UI release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 Automation task table、详情抽屉、details button accessible name 和本地搜索行为。
+- 后端 task/profile id response 已有公开边界，但前端此前仍直接使用 `task.id` / `task.profile_id`。
+- 历史/手工污染 task row 或异常 response 可能把 `token=`、Authorization/Bearer、本地路径或 IP literal 带到 UI id 位置。
+
+已覆盖：
+
+- Automation Task Log Viewer 现在对 task/profile id 使用公开 label 边界。
+- 普通低敏 task/profile 标签保持可读；非公开 id 显示为 `unknown`。
+- Table、detail drawer、details button `aria-label` 和本地搜索 corpus 使用同一公开 id label。
+- 原始 id 仍保留给内部 selected task lookup，不改变 task row 打开详情行为。
+- Status、error、step/result summary 和 readonly 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED then GREEN；旧实现找不到 unknown，说明 raw task/profile id 仍被使用
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.03s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 236 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.07s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task id UI release-evidence 边界。

@@ -24,6 +24,9 @@ const PUBLIC_TASK_STATUSES = new Set([
   "running",
   "succeeded",
 ]);
+const PUBLIC_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,79}$/;
+const SENSITIVE_ID_TEXT_RE = /\b(?:authorization|bearer|auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\b/i;
+const IPV4_LITERAL_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
 export function AutomationTaskLogViewer() {
   const [tasks, setTasks] = useState<AutomationTask[]>([]);
@@ -206,48 +209,52 @@ export function AutomationTaskLogViewer() {
               </tr>
             </thead>
             <tbody>
-              {visibleTasks.map((task) => (
-                <tr
-                  key={task.id}
-                  className="group transition-[background-color,box-shadow] odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/60"
-                  style={{ height: 76 }}
-                >
-                  <BodyCell>
-                    <div className="flex flex-col gap-1">
-                      <span className="font-mono text-[11px] font-semibold text-slate-900">{shortId(task.id)}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTaskId(task.id)}
-                        className="w-fit text-[11px] font-semibold text-blue-700 underline-offset-2 hover:underline"
-                        aria-label={`View task details for ${task.id}`}
-                      >
-                        Details
-                      </button>
-                    </div>
-                  </BodyCell>
-                  <BodyCell>
-                    <span className="font-mono text-[11px] text-slate-600">{shortId(task.profile_id)}</span>
-                  </BodyCell>
-                  <BodyCell>
-                    <StatusPill status={publicTaskStatus(task.status)} />
-                  </BodyCell>
-                  <BodyCell>
-                    <StepList steps={task.steps} />
-                  </BodyCell>
-                  <BodyCell>
-                    <ResultList steps={task.result?.steps ?? []} />
-                  </BodyCell>
-                  <BodyCell>
-                    <span className="line-clamp-2 text-slate-600">{taskErrorText(task.error) ?? "-"}</span>
-                  </BodyCell>
-                  <BodyCell>
-                    <span className="text-slate-500">{formatTimestamp(task.created_at)}</span>
-                  </BodyCell>
-                  <BodyCell>
-                    <span className="text-slate-500">{formatTimestamp(task.finished_at)}</span>
-                  </BodyCell>
-                </tr>
-              ))}
+              {visibleTasks.map((task) => {
+                const taskLabel = publicIdLabel(task.id);
+                const profileLabel = publicIdLabel(task.profile_id);
+                return (
+                  <tr
+                    key={task.id}
+                    className="group transition-[background-color,box-shadow] odd:bg-white even:bg-slate-50/30 hover:bg-slate-100/60"
+                    style={{ height: 76 }}
+                  >
+                    <BodyCell>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-mono text-[11px] font-semibold text-slate-900">{shortId(taskLabel)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTaskId(task.id)}
+                          className="w-fit text-[11px] font-semibold text-blue-700 underline-offset-2 hover:underline"
+                          aria-label={`View task details for ${taskLabel}`}
+                        >
+                          Details
+                        </button>
+                      </div>
+                    </BodyCell>
+                    <BodyCell>
+                      <span className="font-mono text-[11px] text-slate-600">{shortId(profileLabel)}</span>
+                    </BodyCell>
+                    <BodyCell>
+                      <StatusPill status={publicTaskStatus(task.status)} />
+                    </BodyCell>
+                    <BodyCell>
+                      <StepList steps={task.steps} />
+                    </BodyCell>
+                    <BodyCell>
+                      <ResultList steps={task.result?.steps ?? []} />
+                    </BodyCell>
+                    <BodyCell>
+                      <span className="line-clamp-2 text-slate-600">{taskErrorText(task.error) ?? "-"}</span>
+                    </BodyCell>
+                    <BodyCell>
+                      <span className="text-slate-500">{formatTimestamp(task.created_at)}</span>
+                    </BodyCell>
+                    <BodyCell>
+                      <span className="text-slate-500">{formatTimestamp(task.finished_at)}</span>
+                    </BodyCell>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -393,6 +400,8 @@ function ResultList({ steps, maxItems = 4 }: { steps: AutomationTaskResultStep[]
 
 function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: () => void }) {
   const safeTaskError = taskErrorText(task.error);
+  const taskLabel = publicIdLabel(task.id);
+  const profileLabel = publicIdLabel(task.profile_id);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/20" role="presentation">
@@ -405,7 +414,7 @@ function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: ()
         <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Task detail</p>
-            <h3 className="mt-1 font-mono text-sm font-semibold text-slate-950">{shortId(task.id)}</h3>
+            <h3 className="mt-1 font-mono text-sm font-semibold text-slate-950">{shortId(taskLabel)}</h3>
           </div>
           <button
             type="button"
@@ -419,8 +428,8 @@ function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: ()
 
         <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
           <div className="grid gap-2 sm:grid-cols-2">
-            <DetailField label="Task" value={shortId(task.id)} monospace />
-            <DetailField label="Profile" value={shortId(task.profile_id)} monospace />
+            <DetailField label="Task" value={shortId(taskLabel)} monospace />
+            <DetailField label="Profile" value={shortId(profileLabel)} monospace />
             <DetailField label="Status" value={publicTaskStatus(task.status)} />
             <DetailField label="Created" value={formatTimestamp(task.created_at)} />
             <DetailField label="Started" value={formatTimestamp(task.started_at)} />
@@ -477,6 +486,15 @@ function taskErrorText(error: string | null): string | null {
   return publicErrorText(error) || "Task failed";
 }
 
+function publicIdLabel(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !PUBLIC_ID_RE.test(trimmed)) return "unknown";
+  if (SENSITIVE_ID_TEXT_RE.test(trimmed)) return "unknown";
+  if (isPublicIpv4Literal(trimmed)) return "unknown";
+  if (isPublicIpv6Literal(trimmed)) return "unknown";
+  return trimmed;
+}
+
 function publicTaskStatus(status: string): string {
   return PUBLIC_TASK_STATUSES.has(status) ? status : "unknown";
 }
@@ -501,6 +519,24 @@ function shortId(value: string): string {
   return value.length > 8 ? `${value.slice(0, 8)}...` : value;
 }
 
+function isPublicIpv4Literal(value: string): boolean {
+  if (!IPV4_LITERAL_RE.test(value)) return false;
+  return value.split(".").every((part) => {
+    const number = Number(part);
+    return number >= 0 && number <= 255;
+  });
+}
+
+function isPublicIpv6Literal(value: string): boolean {
+  if (!value.includes(":")) return false;
+  try {
+    new URL(`http://[${value}]`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function safeLabel(value: string): string {
   return value.replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 40) || "-";
 }
@@ -519,5 +555,5 @@ function taskMatchesStatusFilter(status: string, filter: TaskStatusFilter): bool
 
 function taskMatchesQuery(task: AutomationTask, query: string): boolean {
   if (!query) return true;
-  return task.id.toLowerCase().includes(query) || task.profile_id.toLowerCase().includes(query);
+  return publicIdLabel(task.id).toLowerCase().includes(query) || publicIdLabel(task.profile_id).toLowerCase().includes(query);
 }
