@@ -6368,3 +6368,34 @@ npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx 
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile edit raw input、profile persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile summary Device release-evidence 边界。
+
+## 2026-06-04 Profile summary runtime VNC port release-evidence guardrail
+
+背景：
+
+- Profile summary inspector 的 Runtime 区域显示 VNC port，是 release regression 中常见的 UI evidence。
+- 正常端口仍需要展示为 `:6100`；但异常 response 或历史/手工污染 row 可能把 Authorization/Bearer、`token=`、本地路径或 IP 字面量混入 `vnc_ws_port`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Profile summary Runtime VNC row 只展示合法 TCP port，非公开/污染值显示为 `-`。
+- 正常 `6100` 端口展示语义保持 `:6100`。
+- Automation availability、runtime status badge、VNC websocket path、profile launch backend 和 browser fingerprint 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "folds non-public VNC ports"
+# RED then GREEN；旧实现把污染 vnc_ws_port 写入 Summary text/title evidence
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx src/lib/profileDisplay.test.ts src/lib/errorDisplay.test.ts
+# 2 files passed, 10 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、VNC websocket path、profile launch backend、runtime session/viewer token schema、Automation API backend、profile persistence、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile summary Runtime VNC port release-evidence 边界。

@@ -6649,6 +6649,37 @@ npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx 
 - 不改变 backend request/response schema、profile edit raw input、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
 
+## 2026-06-04 Profile summary runtime VNC port evidence guardrail
+
+背景：
+
+- Profile summary inspector 的 Runtime 区域会显示 VNC port，是 release smoke 和本地排障常看的 evidence 面。
+- 后端已有 profile/status runtime port-display 边界；但前端不应信任异常 response、历史/手工污染 row 或测试桩中的 raw `vnc_ws_port`。
+- 污染端口如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，不能进入 Summary visible text 或 `title`。
+
+已覆盖：
+
+- Summary Runtime 的 VNC port 只展示合法 TCP port，格式保持 `:6100`。
+- 非数字、越界或混入敏感文本的 VNC port 显示为 `-`。
+- Automation availability 文案、runtime status badge、VNC websocket path、profile launch backend 和 runtime session behavior 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "folds non-public VNC ports"
+# RED: 旧实现把污染 vnc_ws_port 写入 Summary text/title；GREEN: 1 passed, 6 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx src/lib/profileDisplay.test.ts src/lib/errorDisplay.test.ts
+# 2 files passed, 10 tests passed
+```
+
+边界：
+
+- 这是 Profile summary Runtime VNC port UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、VNC websocket path、profile launch backend、runtime session behavior、viewer behavior、Automation API、profile persistence、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
 ## 2026-06-04 Profile summary/rail GeoIP evidence guardrail
 
 背景：

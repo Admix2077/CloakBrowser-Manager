@@ -155,6 +155,45 @@ describe("ProfileSummaryPanel", () => {
     expect(document.body.innerHTML).not.toContain(leakMarker);
   });
 
+  it("folds non-public VNC ports before rendering summary evidence", () => {
+    const leakMarker = "summary-vnc-port-secret";
+    const pollutedPort =
+      "6100 Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/summary-vnc-port 203.0.113.118`;
+
+    render(
+      <ProfileSummaryPanel
+        profile={profile({
+          vnc_ws_port: pollutedPort as unknown as number,
+          automation_url: "/api/profiles/profile-1/automation",
+        })}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    const runtime = within(screen.getByRole("complementary", { name: "Profile summary" }))
+      .getByRole("region", { name: "Runtime" });
+    expect(within(runtime).getByText("-")).toBeTruthy();
+    expect(within(runtime).getByText("available")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/summary-vnc-port",
+      "203.0.113.118",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts persisted profile names from summary rendered evidence", () => {
     const leakMarker = "summary-profile-name-secret";
     const rawName =

@@ -58,6 +58,7 @@ export function ProfileSummaryPanel({
   const localeOverride = Boolean(health?.manual_overrides.locale ?? profile.locale);
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
+  const safeVncPort = publicVncPortLabel(profile.vnc_ws_port);
   const safeName = publicProfileName(profile.name);
   const safePlatform = publicProfileDeviceLabel(profile.platform);
   const safeScreen = `${publicProfileDeviceLabel(profile.screen_width)} x ${publicProfileDeviceLabel(profile.screen_height)}`;
@@ -128,7 +129,7 @@ export function ProfileSummaryPanel({
                 {runtimeStatus}
               </Badge>
             </div>
-            <SummaryRow label="VNC" value={profile.vnc_ws_port ? `:${profile.vnc_ws_port}` : "-"} />
+            <SummaryRow label="VNC" value={safeVncPort} />
             <SummaryRow label="Automation" value={profile.automation_url ? "available" : "-"} />
           </SummarySection>
 
@@ -174,6 +175,16 @@ function publicProfileDeviceLabel(value: unknown): string {
   const text = String(value ?? "").trim();
   if (!text) return "-";
   return publicErrorText(text) || "unknown";
+}
+
+function publicVncPortLabel(value: unknown): string {
+  const port = typeof value === "number"
+    ? value
+    : typeof value === "string" && /^\d+$/.test(value.trim())
+      ? Number(value.trim())
+      : null;
+  if (port === null || !Number.isInteger(port) || port < 1 || port > 65535) return "-";
+  return `:${port}`;
 }
 
 function SummarySection({
