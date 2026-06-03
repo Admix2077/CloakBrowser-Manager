@@ -2234,6 +2234,43 @@ def test_import_cookie_json_add_cookies_failure_uses_fixed_error_without_leaking
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_import_cookie_json_failure_logs_public_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "cookie-log-profile-secret"
+    polluted_profile_id = (
+        f"cookie-log Authorization=Bearer {leak_marker} token={leak_marker}"
+    )
+    running = _automation_running_profile(polluted_profile_id)
+    running.context.add_cookies.side_effect = RuntimeError("cookie import failed")
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/cookies/import",
+        json={
+            "confirm_import": True,
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "cookie-value",
+                    "domain": "example.com",
+                }
+            ],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Cookie import failed"}
+    assert "Cookie import failed for unknown: RuntimeError" in caplog.text
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+
+
 def test_import_cookie_netscape_adds_cookies_to_running_profile_without_leaking_values(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "NetscapeCookieImportProfile"})
     pid = create.json()["id"]
@@ -3289,6 +3326,30 @@ def test_export_profile_bundle_sanitizes_persisted_profile_id_response_and_audit
         "token=",
     ):
         assert leaked not in serialized
+
+
+def test_export_profile_bundle_validation_logs_public_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "bundle-log-profile-secret"
+    polluted_profile_id = (
+        f"bundle-log Authorization=Bearer {leak_marker} token={leak_marker}"
+    )
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/bundle/export",
+        json={"include_cookies": "true"},
+    )
+
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Invalid profile bundle export request"}
+    assert "Profile bundle export validation failed for unknown: ValidationError" in caplog.text
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
 
 
 def test_import_profile_bundle_creates_new_profile_from_config_only_manifest(app_client: TestClient):

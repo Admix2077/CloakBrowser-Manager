@@ -4030,3 +4030,42 @@ npm --prefix frontend run build
 
 - 这是 Automation API failure log 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation expressions/results/payloads 或 raw audit metadata。
+
+## 2026-06-03 Cookie/profile bundle profile-id log guardrail
+
+背景：
+
+- Cookie import/export 和 profile bundle export 是 release smoke 中验证数据边界、备份/迁移边界和敏感材料不外泄的重要路径。
+- 这些 response/audit 已经做过 profile id 脱敏，但 cookie import failure、cookie document validation failure、profile bundle request validation failure、local storage export failure 的 warning logs 仍直接记录 path `profile_id`。
+- 如果历史/手工 running map 或调用路径里出现 URL/query/header/token 风格 profile id，cookie/bundle failure logs 会保留该文本。
+
+已覆盖：
+
+- Cookie JSON import validation failure 和 add_cookies failure logs 现在使用公开 profile id；非 UUID 折叠为 `unknown`。
+- Netscape cookie import validation failure 和 add_cookies failure logs 使用同一公开 profile id。
+- Profile bundle export request validation failure 和 local storage export failure logs 使用公开 profile id。
+- Cookie/bundle response、audit、running profile lookup、cookie 写入、bundle 构造和 local storage 读取语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_import_cookie_json_failure_logs_public_profile_id backend/tests/test_api.py::test_export_profile_bundle_validation_logs_public_profile_id -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.79s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "cookie or bundle"
+# 45 passed, 201 deselected in 3.88s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 628 passed in 38.03s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.29s
+```
+
+边界：
+
+- 这是 cookie/profile bundle failure log 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation expressions/results/payloads 或 raw audit metadata。

@@ -2342,14 +2342,18 @@ async def import_profile_cookies(profile_id: str, request: Request):
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise exc
-        logger.warning("Cookie JSON import validation failed for %s: %s", profile_id, type(exc).__name__)
+        logger.warning(
+            "Cookie JSON import validation failed for %s: %s",
+            public_profile_id,
+            type(exc).__name__,
+        )
         raise HTTPException(status_code=422, detail="Invalid cookie JSON document") from exc
 
     cookies = cookies_for_playwright(document)
     try:
         await running.context.add_cookies(cookies)
     except Exception as exc:
-        logger.warning("Cookie import failed for %s: %s", profile_id, type(exc).__name__)
+        logger.warning("Cookie import failed for %s: %s", public_profile_id, type(exc).__name__)
         raise HTTPException(status_code=400, detail="Cookie import failed") from exc
 
     return CookieImportResponse(
@@ -2370,14 +2374,18 @@ async def import_profile_cookies_netscape(profile_id: str, request: Request):
     except Exception as exc:
         if isinstance(exc, HTTPException):
             raise exc
-        logger.warning("Netscape cookie import validation failed for %s: %s", profile_id, type(exc).__name__)
+        logger.warning(
+            "Netscape cookie import validation failed for %s: %s",
+            public_profile_id,
+            type(exc).__name__,
+        )
         raise HTTPException(status_code=422, detail="Invalid Netscape cookie document") from exc
 
     cookies = cookies_for_playwright(document)
     try:
         await running.context.add_cookies(cookies)
     except Exception as exc:
-        logger.warning("Cookie import failed for %s: %s", profile_id, type(exc).__name__)
+        logger.warning("Cookie import failed for %s: %s", public_profile_id, type(exc).__name__)
         raise HTTPException(status_code=400, detail="Cookie import failed") from exc
 
     return CookieImportResponse(
@@ -2455,16 +2463,20 @@ async def export_profile_cookies_netscape(profile_id: str, req: CookieExportRequ
 
 @app.post("/api/profiles/{profile_id}/bundle/export", response_model=ProfileBundleExportResponse)
 async def export_profile_bundle(profile_id: str, request: Request):
+    public_profile_id = _public_profile_identifier(profile_id)
     try:
         req = ProfileBundleExportRequest.model_validate(await request.json())
     except Exception as exc:
-        logger.warning("Profile bundle export validation failed for %s: %s", profile_id, type(exc).__name__)
+        logger.warning(
+            "Profile bundle export validation failed for %s: %s",
+            public_profile_id,
+            type(exc).__name__,
+        )
         raise HTTPException(status_code=422, detail="Invalid profile bundle export request") from exc
 
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    public_profile_id = _public_profile_identifier(profile_id)
     if req.include_sensitive_proxy and req.confirm_sensitive_proxy_export is not True:
         raise HTTPException(
             status_code=422,
@@ -2516,7 +2528,11 @@ async def export_profile_bundle(profile_id: str, request: Request):
         except HTTPException:
             raise
         except Exception as exc:
-            logger.warning("Profile bundle local storage export failed for %s: %s", profile_id, type(exc).__name__)
+            logger.warning(
+                "Profile bundle local storage export failed for %s: %s",
+                public_profile_id,
+                type(exc).__name__,
+            )
             raise HTTPException(status_code=400, detail="Profile bundle local storage export failed") from exc
 
     exported_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
