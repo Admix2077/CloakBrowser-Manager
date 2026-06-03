@@ -2047,3 +2047,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy lookup order、provider URLs、profile schema 或 audit event schema。
 - 不记录或公开 raw GeoIP country/timezone/locale 中的 provider URL/host/path/query token、Authorization/Bearer、headers、cookies、local storage、proxy credentials、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 GeoIP success IP public-value guardrail
+
+背景：
+
+- GeoIP `ip` success field 会进入 `GeoIPResult.as_dict()`、proxy `last_check_ip`、profile `last_geoip_ip`、profile health response 和 profile launch 的 GeoIP 填充边界。
+- Real provider parser 已用 IP parser 处理 `query`/`ip`，但 `GeoIPResult` test double、future provider 或历史 DB 值仍可能把 URL、query token、Authorization/Bearer 或 provider host/path 文本放进 `ip`，成功路径原本会信任这些值。
+
+已覆盖：
+
+- 新增共享 `public_geoip_ip`，只保留 `ipaddress` 可解析的 IP 字符串。
+- `GeoIPResult.as_dict()`、provider parser、profile health new lookup、persisted health cache response 和 proxy check success write/read paths 都使用低敏 IP。
+- 非公开 `ip` 降为 `None`；country/timezone/locale/source 既有 public-value guardrails 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# RED: 4 failed；GeoIPResult.as_dict、health/check、health GET 和 proxy check success 原样暴露 sensitive ip
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# 71 passed in 4.60s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 564 passed in 32.38s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.16s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy lookup order、provider URLs、profile schema 或 audit event schema。
+- 不记录或公开 raw GeoIP IP field 中的 provider URL/host/path/query token、Authorization/Bearer、headers、cookies、local storage、proxy credentials、viewer token、runtime service token、automation payload、profile dir 或页面内容。

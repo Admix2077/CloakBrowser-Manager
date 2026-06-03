@@ -63,6 +63,19 @@ def public_geoip_country_code(value: object) -> str | None:
     return country_code.upper()
 
 
+def public_geoip_ip(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    ip = value.strip()
+    if not ip:
+        return None
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return None
+    return ip
+
+
 def public_geoip_locale(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -124,7 +137,7 @@ class GeoIPResult:
         return {
             "timezone": public_geoip_timezone(self.timezone),
             "locale": public_geoip_locale(self.locale),
-            "ip": self.ip,
+            "ip": public_geoip_ip(self.ip),
             "country_code": public_geoip_country_code(self.country_code),
             "source": public_geoip_source(self.source),
         }
@@ -191,13 +204,7 @@ def _cached_result(key: str) -> GeoIPResult | None:
 
 
 def _valid_ip(value: object) -> str | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        ipaddress.ip_address(value)
-    except ValueError:
-        return None
-    return value
+    return public_geoip_ip(value)
 
 
 def _parse_ip_api_response(data: object) -> GeoIPResult:

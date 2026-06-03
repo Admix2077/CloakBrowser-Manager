@@ -50,6 +50,7 @@ from .cookie_formats import (
 )
 from .geoip import (
     public_geoip_country_code,
+    public_geoip_ip,
     public_geoip_locale,
     public_geoip_source,
     public_geoip_timezone,
@@ -1163,7 +1164,7 @@ async def _run_proxy_check(proxy: dict) -> dict:
         updated = db.update_proxy(
             str(proxy["id"]),
             last_check_status="good",
-            last_check_ip=geo.ip,
+            last_check_ip=public_geoip_ip(geo.ip),
             last_check_country_code=public_geoip_country_code(geo.country_code),
             last_check_timezone=public_geoip_timezone(geo.timezone),
             last_check_locale=public_geoip_locale(geo.locale),

@@ -311,6 +311,7 @@ def test_health_check_redacts_sensitive_geoip_source(app_client: TestClient):
 def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Health Sensitive Geo Fields"})
     pid = create.json()["id"]
+    sensitive_ip = "https://ip.example/check?token=health-geoip-secret"
     sensitive_timezone = "https://timezone.example/check?token=health-geoip-secret"
     sensitive_locale = "Authorization=Bearer health-geoip-secret"
     sensitive_country = "JP?token=health-geoip-secret"
@@ -321,7 +322,7 @@ def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestCli
             return_value=GeoIPResult(
                 timezone=sensitive_timezone,
                 locale=sensitive_locale,
-                ip="203.0.113.20",
+                ip=sensitive_ip,
                 country_code=sensitive_country,
                 source="qa",
             )
@@ -331,7 +332,7 @@ def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestCli
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["geoip"]["ip"] == "203.0.113.20"
+    assert body["geoip"]["ip"] is None
     assert body["geoip"]["country_code"] is None
     assert body["geoip"]["timezone"] is None
     assert body["geoip"]["locale"] is None
@@ -341,6 +342,8 @@ def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestCli
         "health-geoip-secret",
         "Authorization",
         "Bearer",
+        "ip.example",
+        sensitive_ip,
         sensitive_timezone,
         sensitive_locale,
         sensitive_country,
@@ -349,7 +352,7 @@ def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestCli
 
     profile = db.get_profile(pid)
     assert profile is not None
-    assert profile["last_geoip_ip"] == "203.0.113.20"
+    assert profile["last_geoip_ip"] is None
     assert profile["last_geoip_country_code"] is None
     assert profile["last_geoip_timezone"] is None
     assert profile["last_geoip_locale"] is None
@@ -359,6 +362,8 @@ def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestCli
         "health-geoip-secret",
         "Authorization",
         "Bearer",
+        "ip.example",
+        sensitive_ip,
         sensitive_timezone,
         sensitive_locale,
         sensitive_country,
@@ -374,6 +379,8 @@ def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestCli
         "health-geoip-secret",
         "Authorization",
         "Bearer",
+        "ip.example",
+        sensitive_ip,
         sensitive_timezone,
         sensitive_locale,
         sensitive_country,
@@ -411,13 +418,14 @@ def test_health_get_redacts_persisted_sensitive_geoip_source(app_client: TestCli
 def test_health_get_redacts_persisted_sensitive_geoip_fields(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Health Existing Geo Fields"})
     pid = create.json()["id"]
+    sensitive_ip = "https://ip.example/check?token=stored-geoip-secret"
     sensitive_timezone = "https://timezone.example/check?token=stored-geoip-secret"
     sensitive_locale = "Authorization=Bearer stored-geoip-secret"
     sensitive_country = "JP?token=stored-geoip-secret"
     db.update_profile_geoip_result(
         pid,
         {
-            "ip": "203.0.113.20",
+            "ip": sensitive_ip,
             "country_code": sensitive_country,
             "timezone": sensitive_timezone,
             "locale": sensitive_locale,
@@ -429,7 +437,7 @@ def test_health_get_redacts_persisted_sensitive_geoip_fields(app_client: TestCli
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["geoip"]["ip"] == "203.0.113.20"
+    assert body["geoip"]["ip"] is None
     assert body["geoip"]["country_code"] is None
     assert body["geoip"]["timezone"] is None
     assert body["geoip"]["locale"] is None
@@ -439,6 +447,8 @@ def test_health_get_redacts_persisted_sensitive_geoip_fields(app_client: TestCli
         "stored-geoip-secret",
         "Authorization",
         "Bearer",
+        "ip.example",
+        sensitive_ip,
         sensitive_timezone,
         sensitive_locale,
         sensitive_country,

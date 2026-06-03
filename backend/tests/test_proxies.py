@@ -414,6 +414,7 @@ def test_proxy_check_redacts_sensitive_success_geoip_fields(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    sensitive_ip = "https://ip.example/check?token=proxy-geoip-secret"
     sensitive_timezone = "https://timezone.example/check?token=proxy-geoip-secret"
     sensitive_locale = "Authorization=Bearer proxy-geoip-secret"
     sensitive_country = "JP?token=proxy-geoip-secret"
@@ -422,7 +423,7 @@ def test_proxy_check_redacts_sensitive_success_geoip_fields(
         return GeoIPResult(
             timezone=sensitive_timezone,
             locale=sensitive_locale,
-            ip="203.0.113.8",
+            ip=sensitive_ip,
             country_code=sensitive_country,
             source="qa",
         )
@@ -442,7 +443,7 @@ def test_proxy_check_redacts_sensitive_success_geoip_fields(
     assert resp.status_code == 200
     data = resp.json()
     assert data["last_check_status"] == "good"
-    assert data["last_check_ip"] == "203.0.113.8"
+    assert data["last_check_ip"] is None
     assert data["last_check_country_code"] is None
     assert data["last_check_timezone"] is None
     assert data["last_check_locale"] is None
@@ -452,6 +453,8 @@ def test_proxy_check_redacts_sensitive_success_geoip_fields(
         "proxy-geoip-secret",
         "Authorization",
         "Bearer",
+        "ip.example",
+        sensitive_ip,
         sensitive_timezone,
         sensitive_locale,
         sensitive_country,
@@ -460,6 +463,7 @@ def test_proxy_check_redacts_sensitive_success_geoip_fields(
 
     stored = db.get_proxy(proxy_id)
     assert stored is not None
+    assert stored["last_check_ip"] is None
     assert stored["last_check_country_code"] is None
     assert stored["last_check_timezone"] is None
     assert stored["last_check_locale"] is None
@@ -468,6 +472,8 @@ def test_proxy_check_redacts_sensitive_success_geoip_fields(
         "proxy-geoip-secret",
         "Authorization",
         "Bearer",
+        "ip.example",
+        sensitive_ip,
         sensitive_timezone,
         sensitive_locale,
         sensitive_country,

@@ -11,6 +11,7 @@ from .browser_manager import _normalize_proxy, _validate_proxy
 from .geoip import (
     GeoIPResult,
     public_geoip_country_code,
+    public_geoip_ip,
     public_geoip_locale,
     public_geoip_source,
     public_geoip_timezone,
@@ -89,7 +90,7 @@ def _nonempty(value: object) -> str | None:
 
 
 def _profile_geoip(profile: dict[str, Any]) -> HealthGeoIP | None:
-    ip = _nonempty(profile.get("last_geoip_ip"))
+    ip = public_geoip_ip(profile.get("last_geoip_ip"))
     country_code = public_geoip_country_code(profile.get("last_geoip_country_code"))
     timezone = public_geoip_timezone(profile.get("last_geoip_timezone"))
     locale = public_geoip_locale(profile.get("last_geoip_locale"))
@@ -127,13 +128,14 @@ def _is_geoip_stale(resolved_at: str | None, checked_at: str) -> bool:
 
 
 def _geoip_from_result(result: GeoIPResult) -> HealthGeoIP | None:
+    ip = public_geoip_ip(result.ip)
     country_code = public_geoip_country_code(result.country_code)
     timezone = public_geoip_timezone(result.timezone)
     locale = public_geoip_locale(result.locale)
-    if not any((result.ip, country_code, timezone, locale)):
+    if not any((ip, country_code, timezone, locale)):
         return None
     return HealthGeoIP(
-        ip=result.ip,
+        ip=ip,
         country_code=country_code,
         timezone=timezone,
         locale=locale,

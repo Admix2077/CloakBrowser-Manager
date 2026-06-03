@@ -1899,3 +1899,40 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy lookup order、provider URLs、profile schema 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 GeoIP success IP public-value guardrail
+
+背景：
+
+- 上一轮收敛了 GeoIP `country_code`、`timezone`、`locale` success fields；复查发现 `ip` 仍在 `GeoIPResult.as_dict()`、proxy check success、profile health/cache 和 profile launch GeoIP 填充边界直接信任 `GeoIPResult` 或历史 DB 值。
+- 如果 future provider/test double/historical DB 把 URL、query token、Authorization/Bearer 或 provider host/path 文本写入 `ip`，release smoke / proxy-country triage / health response 会形成低敏边界缺口。
+
+已覆盖：
+
+- GeoIP `ip` 成功字段新增 public-value filter；只有 `ipaddress` 可解析的值会保留，非公开值降为 `None`。
+- 覆盖 `GeoIPResult.as_dict()`、provider parser、proxy check success write/read path、health check success write/read path、persisted health cache response 和 profile launch GeoIP fill boundary。
+- 既有 country/timezone/locale/source 过滤、proxy check failure 固定错误、health warning redaction、audit metadata string redaction 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# RED then GREEN；初始 4 failed，最终 71 passed in 4.60s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 564 passed in 32.38s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.16s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy lookup order、provider URLs、profile schema 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

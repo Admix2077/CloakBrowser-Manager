@@ -128,7 +128,7 @@ def test_geoip_result_as_dict_filters_sensitive_public_fields():
     result = geoip.GeoIPResult(
         timezone="https://timezone.example/check?token=geoip-secret",
         locale="Authorization=Bearer geoip-secret",
-        ip="203.0.113.20",
+        ip="https://ip.example/check?token=geoip-secret",
         country_code="JP?token=geoip-secret",
         source="qa",
     )
@@ -138,12 +138,12 @@ def test_geoip_result_as_dict_filters_sensitive_public_fields():
     assert data == {
         "timezone": None,
         "locale": None,
-        "ip": "203.0.113.20",
+        "ip": None,
         "country_code": None,
         "source": "qa",
     }
     serialized = json.dumps(data, sort_keys=True)
-    for leaked in ("timezone.example", "geoip-secret", "Authorization", "Bearer"):
+    for leaked in ("timezone.example", "ip.example", "geoip-secret", "Authorization", "Bearer"):
         assert leaked not in serialized
 
 
