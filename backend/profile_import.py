@@ -58,6 +58,13 @@ SUPPORTED_COLUMNS = {
 PLATFORMS = {"windows", "macos", "linux"}
 COLOR_SCHEMES = {"light", "dark", "no-preference"}
 HUMAN_PRESETS = {"default", "careful"}
+SAFE_PROXY_ERROR_DETAILS = (
+    ("Invalid proxy scheme", "Invalid proxy scheme"),
+    ("Invalid proxy URL", "Invalid proxy URL"),
+    ("Proxy URL missing hostname", "Proxy URL missing hostname"),
+    ("Proxy URL invalid port", "Proxy URL invalid port"),
+    ("Proxy URL missing port", "Proxy URL missing port"),
+)
 
 
 @dataclass(frozen=True)
@@ -189,7 +196,7 @@ def _parse_row(line_number: int, row: dict[str, str]) -> ParsedProfileImportRow:
             data["proxy"] = normalized_proxy
             explicit_fields.add("proxy")
         except ValueError as exc:
-            errors.append(str(exc))
+            errors.append(_safe_proxy_error_detail(str(exc)))
 
     platform = row.get("platform", "").strip().lower()
     if platform:
@@ -364,6 +371,13 @@ def _redacted_source(row: dict[str, str]) -> dict[str, str]:
     if unsupported_count:
         source["unsupported_column_count"] = str(unsupported_count)
     return source
+
+
+def _safe_proxy_error_detail(message: str) -> str:
+    for prefix, detail in SAFE_PROXY_ERROR_DETAILS:
+        if message.startswith(prefix):
+            return detail
+    return "Invalid proxy URL"
 
 
 def _redact_optional_proxy(proxy: object) -> str | None:

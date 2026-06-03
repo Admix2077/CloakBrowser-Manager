@@ -2087,3 +2087,52 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy lookup order、provider URLs、profile schema 或 audit event schema。
 - 不记录或公开 raw GeoIP IP field 中的 provider URL/host/path/query token、Authorization/Bearer、headers、cookies、local storage、proxy credentials、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 CSV import proxy error detail redaction guardrail
+
+背景：
+
+- CSV profile import preview/import 会解析用户上传的 `proxy` 列，并把 row-level errors 返回给管理台。
+- `normalize_proxy_asset_url()` 的底层 proxy validation 已隐藏 credentials，但 missing-port/invalid-port 等异常仍会把 redacted proxy host 拼进 message，例如 `Proxy URL missing port: http://csv-proxy.example`。
+- CSV `source.proxy` 保持既有 redacted proxy URL 行为；本次收敛的是 row `errors` 中不应包含 proxy host 或 raw URL detail。
+
+已覆盖：
+
+- CSV import proxy validation error 现在映射为固定低敏类别：
+  - `Invalid proxy scheme`
+  - `Invalid proxy URL`
+  - `Proxy URL missing hostname`
+  - `Proxy URL invalid port`
+  - `Proxy URL missing port`
+- `/api/profiles/import/preview` 与 `/api/profiles/import` invalid proxy rows 都使用该固定 detail。
+- CSV source field redaction、valid proxy normalization、template lookup、bulk audit 和 profile create behavior 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_preview_redacts_sensitive_proxy_error_detail backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_proxy_error_detail -q
+# RED: 2 failed；row errors 原样包含 `Proxy URL missing port: http://...example`
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_preview_redacts_sensitive_proxy_error_detail backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_proxy_error_detail -q
+# 2 passed in 0.64s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q
+# 19 passed in 1.70s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 566 passed in 31.98s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.14s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy storage URL semantics、CSV supported columns、profile schema 或 audit event schema。
+- 不在 CSV row errors 中公开 proxy URL/host/username/password/query token、Authorization/Bearer、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

@@ -196,6 +196,42 @@ def test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers(
     assert "authorization=Bearer-super-secret" not in serialized
 
 
+def test_profile_csv_import_preview_redacts_sensitive_proxy_error_detail(
+    app_client: TestClient,
+):
+    sensitive_proxy = (
+        "http://user:hiddenpass@csv-proxy-secret.example"
+        "?token=super-secret Authorization=Bearer super-secret"
+    )
+    resp = app_client.post(
+        "/api/profiles/import/preview",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,proxy,platform",
+                    f"Bad proxy,{sensitive_proxy},linux",
+                ]
+            ),
+        },
+    )
+
+    assert resp.status_code == 200
+    row = resp.json()["rows"][0]
+    assert row["ok"] is False
+    assert row["errors"] == ["Proxy URL missing port"]
+    assert row["source"]["proxy"] == "http://csv-proxy-secret.example"
+    serialized = resp.text
+    for leaked in (
+        "hiddenpass",
+        "token=super-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_proxy,
+    ):
+        assert leaked not in serialized
+    assert "Proxy URL missing port: http://csv-proxy-secret.example" not in serialized
+
+
 def test_profile_csv_import_preview_rejects_empty_or_headerless_csv(app_client: TestClient):
     empty = app_client.post("/api/profiles/import/preview", json={"csv_text": ""})
     assert empty.status_code == 422
@@ -346,6 +382,44 @@ def test_profile_csv_import_redacts_sensitive_source_fields_and_headers(
     assert "hiddenpass" not in serialized
     assert "unsupported-secret.example" not in serialized
     assert "authorization=Bearer-super-secret" not in serialized
+    assert db.list_profiles() == []
+
+
+def test_profile_csv_import_redacts_sensitive_proxy_error_detail(
+    app_client: TestClient,
+):
+    sensitive_proxy = (
+        "http://user:hiddenpass@csv-import-proxy-secret.example"
+        "?token=super-secret Authorization=Bearer super-secret"
+    )
+    resp = app_client.post(
+        "/api/profiles/import",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,proxy,platform",
+                    f"Bad proxy,{sensitive_proxy},linux",
+                ]
+            ),
+            "confirm_import": True,
+        },
+    )
+
+    assert resp.status_code == 200
+    result = resp.json()["results"][0]
+    assert result["ok"] is False
+    assert result["errors"] == ["Proxy URL missing port"]
+    assert result["source"]["proxy"] == "http://csv-import-proxy-secret.example"
+    serialized = resp.text
+    for leaked in (
+        "hiddenpass",
+        "token=super-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_proxy,
+    ):
+        assert leaked not in serialized
+    assert "Proxy URL missing port: http://csv-import-proxy-secret.example" not in serialized
     assert db.list_profiles() == []
 
 
