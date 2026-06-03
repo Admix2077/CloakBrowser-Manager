@@ -3186,7 +3186,14 @@ _AUTOMATION_TASK_STATUSES = {
 _AUTOMATION_UNKNOWN_STEP_TYPE = "unknown"
 _AUTOMATION_UNKNOWN_RESULT_STATUS = "unknown"
 _AUTOMATION_UNKNOWN_TASK_STATUS = "unknown"
+_AUTOMATION_UNKNOWN_TASK_AUDIT_VALUE = "unknown"
 _AUTOMATION_UNKNOWN_TASK_ERROR = "Automation task failed"
+_AUTOMATION_TASK_RUNNER_TYPES = {"api", "worker"}
+_AUTOMATION_TASK_REASON_CODES = {
+    "automation_step_failed",
+    "invalid_step",
+    "unsupported_step_type",
+}
 _AUTOMATION_TASK_PUBLIC_ERRORS = {
     "Automation step failed",
     "Click step failed",
@@ -3228,6 +3235,18 @@ def _automation_task_public_status(value: object) -> str:
     if not isinstance(value, str):
         return _AUTOMATION_UNKNOWN_TASK_STATUS
     return value if value in _AUTOMATION_TASK_STATUSES else _AUTOMATION_UNKNOWN_TASK_STATUS
+
+
+def _automation_task_public_runner_type(value: object) -> str:
+    if not isinstance(value, str):
+        return _AUTOMATION_UNKNOWN_TASK_AUDIT_VALUE
+    return value if value in _AUTOMATION_TASK_RUNNER_TYPES else _AUTOMATION_UNKNOWN_TASK_AUDIT_VALUE
+
+
+def _automation_task_public_reason_code(value: object) -> str:
+    if not isinstance(value, str):
+        return _AUTOMATION_UNKNOWN_TASK_AUDIT_VALUE
+    return value if value in _AUTOMATION_TASK_REASON_CODES else _AUTOMATION_UNKNOWN_TASK_AUDIT_VALUE
 
 
 def _automation_task_public_error(value: object) -> str | None:
@@ -3431,14 +3450,14 @@ def _automation_task_audit_metadata(
     if previous_status is not None:
         metadata["previous_status"] = _automation_task_public_status(previous_status)
     if runner_type is not None:
-        metadata["runner_type"] = runner_type
+        metadata["runner_type"] = _automation_task_public_runner_type(runner_type)
         metadata.update(_automation_task_result_counts(task))
     if source_task_id is not None:
         metadata["source_task_id"] = _public_uuid_identifier(source_task_id)
     if new_task_id is not None:
         metadata["new_task_id"] = _public_uuid_identifier(new_task_id)
     if reason_code is not None:
-        metadata["reason_code"] = reason_code
+        metadata["reason_code"] = _automation_task_public_reason_code(reason_code)
     return {key: value for key, value in metadata.items() if value is not None}
 
 

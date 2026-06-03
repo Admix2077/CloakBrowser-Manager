@@ -4762,6 +4762,58 @@ def test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_task_audit_sanitizes_runner_type_and_reason_code(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskAuditRunnerReasonProfile"})
+    pid = create.json()["id"]
+    task = main.db.create_automation_task(
+        profile_id=pid,
+        steps=[{"type": "wait", "ms": 1}],
+    )
+    failed = main.db.update_automation_task(
+        task["id"],
+        status="failed",
+        result={"steps": [{"index": 0, "type": "wait", "status": "failed"}]},
+        error="Automation step failed",
+    )
+    assert failed is not None
+    leak_marker = "automation-runner-reason-secret"
+
+    main._audit_automation_task_event(
+        "automation.task.failed",
+        failed,
+        runner_type=(
+            f"worker token={leak_marker} "
+            f"Authorization=Bearer {leak_marker}"
+        ),
+        reason_code=f"automation_step_failed token={leak_marker}",
+    )
+
+    events = _automation_task_audit_events()
+    assert [event["event_type"] for event in events] == ["automation.task.failed"]
+    assert events[0]["metadata"] == {
+        "task_id": task["id"],
+        "status": "failed",
+        "step_count": 1,
+        "step_types": ["wait"],
+        "runner_type": "unknown",
+        "succeeded_step_count": 0,
+        "failed_step_count": 1,
+        "cancelled_step_count": 0,
+        "reason_code": "unknown",
+    }
+
+    serialized_events = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "token=",
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized_events
+
+
 def test_automation_task_responses_do_not_expose_worker_lease_metadata(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskLeaseRedactProfile"})
     pid = create.json()["id"]

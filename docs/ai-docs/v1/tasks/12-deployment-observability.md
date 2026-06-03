@@ -4642,3 +4642,50 @@ git diff --check
 - 这是 runtime service audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 runtime service token 校验、viewer token 签发、lease/renew/terminate 业务行为、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、wallet/order/billing 数据或外站页面原文。
+
+## 2026-06-03 Automation task runner/reason audit guardrail
+
+背景：
+
+- Automation task terminal audit 是 API runner、background worker 和 release automation smoke 的证据面。
+- `runner_type` 语义上只应是 `api` 或 `worker`；`reason_code` 只应是固定失败分类。
+- 旧 helper 已经清理 task id、profile id、step type、result summary 等字段，但 `runner_type` 和 `reason_code` 仍直接信任调用方；如果未来边界传入 token/header 风格文本，通用 sanitizer 会留下 redacted 但非低敏的 metadata。
+
+已覆盖：
+
+- `_automation_task_audit_metadata()` 现在对 `runner_type` 和 `reason_code` 做 public enum boundary。
+- runner type 只保留 `api`/`worker`；其他值折叠为 `unknown`。
+- reason code 只保留 `automation_step_failed`、`invalid_step`、`unsupported_step_type`；其他值折叠为 `unknown`。
+- 正常 API runner、worker runner 和 unsupported step failure audit 保持原 shape。
+- 污染 runner/reason 不再把 secret、`token=`、Authorization 或 Bearer 文本写入 automation task audit evidence。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_audit_sanitizes_runner_type_and_reason_code -q
+# RED: 旧实现保存污染 runner_type/reason_code；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_audit_sanitizes_runner_type_and_reason_code backend/tests/test_api.py::test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events backend/tests/test_api.py::test_automation_worker_run_once_writes_redacted_terminal_audit_event -q
+# 3 passed in 1.18s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 55 passed, 195 deselected in 6.61s
+
+.venv/bin/python -m pytest backend/tests -q
+# 641 passed in 38.07s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.07s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 automation task audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 automation task execution、worker lease、runner selection、task retry/cancel/run、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。

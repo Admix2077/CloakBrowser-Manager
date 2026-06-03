@@ -4333,3 +4333,50 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - 不改变 runtime service token、viewer token、lease/renew/terminate、VNC/WebSocket 行为、runtime session 状态或 browser fingerprint 行为。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation task runner/reason release-evidence guardrail
+
+背景：
+
+- Release automation smoke 会读取 `automation.task.succeeded/failed/cancelled_by_runner` 等 terminal audit event。
+- `runner_type` 应只描述 API runner 或 background worker；`reason_code` 应只描述固定失败分类。
+- runner/reason 是 automation worker 和 Project Mileage 接入排障时会查看的字段，因此需要和 task id/status/step type 一样保持低敏枚举边界。
+
+已覆盖：
+
+- `_automation_task_audit_metadata()` 现在过滤 runner/reason metadata。
+- `runner_type` 只输出 `api`、`worker` 或 `unknown`。
+- `reason_code` 只输出 `automation_step_failed`、`invalid_step`、`unsupported_step_type` 或 `unknown`。
+- 正常 create/cancel/retry/run audit、API terminal audit 和 worker terminal audit 保持通过。
+- 污染 runner/reason 不再泄漏 secret marker、`token=`、Authorization 或 Bearer 文本。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_audit_sanitizes_runner_type_and_reason_code -q
+# RED then GREEN；旧实现保存污染 runner_type/reason_code，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_audit_sanitizes_runner_type_and_reason_code backend/tests/test_api.py::test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events backend/tests/test_api.py::test_automation_worker_run_once_writes_redacted_terminal_audit_event -q
+# 3 passed in 1.18s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 55 passed, 195 deselected in 6.61s
+
+.venv/bin/python -m pytest backend/tests -q
+# 641 passed in 38.07s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.07s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- 不改变 automation execution、worker lease、task retry/cancel/run、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
