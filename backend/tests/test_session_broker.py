@@ -644,6 +644,67 @@ def test_runtime_session_create_from_template_sanitizes_generated_profile_name(
         assert leaked not in serialized
 
 
+def test_runtime_session_create_from_template_sanitizes_template_identity_before_launch(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "runtime-template-identity-secret"
+    template = db.create_profile_template(
+        name="Historical polluted runtime template",
+        platform=f"linux-{leak_marker}",
+        screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
+        screen_height=f"1080?token={leak_marker}",
+        gpu_vendor=f"Google Inc. (NVIDIA)\nAuthorization: Bearer {leak_marker}",
+        gpu_renderer=f"ANGLE (NVIDIA) https://runtime-template.invalid/?token={leak_marker}",
+        hardware_concurrency=f"8 cookie={leak_marker}",
+        color_scheme=f"dark-{leak_marker}",
+        human_preset=f"careful-{leak_marker}",
+        launch_args=[
+            "--private-window",
+            f"--user-agent={leak_marker}",
+            f"Bearer {leak_marker}",
+        ],
+    )
+
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(return_value=_mock_running_profile()),
+    ) as launch:
+        resp = app_client.post(
+            "/api/runtime/sessions",
+            headers=runtime_headers,
+            json={
+                "external_session_id": "pm-session-template-sanitized",
+                "template_id": template["id"],
+                "lease_seconds": 600,
+            },
+        )
+
+    assert resp.status_code == 201
+    launch.assert_awaited_once()
+    launched_profile = launch.await_args.args[0]
+    assert launched_profile["platform"] == "windows"
+    assert launched_profile["screen_width"] == 1920
+    assert launched_profile["screen_height"] == 1080
+    assert launched_profile["gpu_vendor"] is None
+    assert launched_profile["gpu_renderer"] is None
+    assert launched_profile["hardware_concurrency"] is None
+    assert launched_profile["color_scheme"] is None
+    assert launched_profile["human_preset"] == "default"
+    assert launched_profile["launch_args"] == ["--private-window"]
+    serialized = json.dumps({"session": resp.json(), "profile": launched_profile}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "runtime-template.invalid",
+        "Authorization",
+        "Bearer",
+        "token=",
+        "cookie=",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_session_create_rejects_missing_or_ambiguous_profile_source(
     app_client: TestClient,
     runtime_headers: dict[str, str],

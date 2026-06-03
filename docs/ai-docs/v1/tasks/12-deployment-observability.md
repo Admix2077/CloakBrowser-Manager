@@ -3078,3 +3078,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 runtime template profile name guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Runtime template identity field guardrail
+
+背景：
+
+- Profile create/import template apply 和 template response 已复用 public-value sanitizer。
+- Runtime session `template_id` 创建 profile 的路径仍直接复制 template platform、screen、GPU、hardware、color、human preset 和 launch_args 字段，并把新 profile 传给 `browser_mgr.launch()`。
+- 历史/手工污染 template row 可绕过既有 template apply guardrail，把 URL/query token/header-like identity 字段写入 runtime-created profile 并进入 launch lifecycle。
+
+已覆盖：
+
+- Runtime template create path 现在先复用 `sanitize_profile_template_response_data()`。
+- 进入 `db.create_profile()` 和 `browser_mgr.launch()` 的 template identity fields 与 profile/template API sanitizer 保持一致：无效 platform/screen/hardware/color/human preset 回落到 defaults，非公开 GPU 文本删除，非公开 launch args 删除。
+- 正常 template field copy、runtime generated profile name、launch、runtime session persistence、existing profile_id flow 和 response/audit id guardrails 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_template_identity_before_launch -q
+# RED: 1 failed；runtime template path 直接把污染 platform/GPU/screen/launch_args 送入 launch profile
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_template_identity_before_launch -q
+# 1 passed in 0.72s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_creates_profile_then_launches backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_template_identity_before_launch backend/tests/test_templates.py::test_create_profile_from_template_sanitizes_persisted_identity_fields backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_identity_fields -q
+# 5 passed in 1.00s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_templates.py -q
+# 51 passed in 4.85s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 597 passed in 34.10s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.16s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 runtime template identity field guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

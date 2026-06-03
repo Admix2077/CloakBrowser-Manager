@@ -2652,6 +2652,46 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Runtime template identity field guardrail
+
+背景：
+
+- Release runtime smoke 可以通过 `template_id` 创建并启动临时 profile。
+- Profile create/import 已过滤历史污染 template identity fields，但 runtime create path 直接复制 template row 并传入 launch。
+
+已覆盖：
+
+- Runtime template-created profile 现在复用 template response sanitizer 后再创建 profile 和 launch。
+- 污染 platform、screen、GPU、hardware、color、human preset 和 launch_args 不再进入 runtime-created profile/launch lifecycle。
+- 正常 template copy、profile name fallback、runtime response/audit guardrails 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_template_identity_before_launch -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.72s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_creates_profile_then_launches backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_template_identity_before_launch backend/tests/test_templates.py::test_create_profile_from_template_sanitizes_persisted_identity_fields backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_identity_fields -q
+# 5 passed in 1.00s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_templates.py -q
+# 51 passed in 4.85s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 597 passed in 34.10s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.16s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile response identity guardrail
 
 背景：

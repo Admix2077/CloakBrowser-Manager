@@ -1805,6 +1805,7 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         template = db.get_profile_template(req.template_id or "")
         if not template:
             raise HTTPException(status_code=404, detail="Profile template not found")
+        safe_template = sanitize_profile_template_response_data(template)
         public_external_session_id = _public_runtime_external_session_id(req.external_session_id)
         runtime_profile_name = (
             f"Runtime {public_external_session_id}"
@@ -1813,17 +1814,17 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         )
         profile = db.create_profile(
             name=runtime_profile_name,
-            platform=template.get("platform", "windows"),
-            screen_width=template.get("screen_width", 1920),
-            screen_height=template.get("screen_height", 1080),
-            gpu_vendor=template.get("gpu_vendor"),
-            gpu_renderer=template.get("gpu_renderer"),
-            hardware_concurrency=template.get("hardware_concurrency"),
-            color_scheme=template.get("color_scheme"),
-            humanize=template.get("humanize", False),
-            human_preset=template.get("human_preset", "default"),
-            launch_args=template.get("launch_args") or [],
-            geoip=template.get("geoip", True),
+            platform=safe_template.get("platform", "windows"),
+            screen_width=safe_template.get("screen_width", 1920),
+            screen_height=safe_template.get("screen_height", 1080),
+            gpu_vendor=safe_template.get("gpu_vendor"),
+            gpu_renderer=safe_template.get("gpu_renderer"),
+            hardware_concurrency=safe_template.get("hardware_concurrency"),
+            color_scheme=safe_template.get("color_scheme"),
+            humanize=safe_template.get("humanize", False),
+            human_preset=safe_template.get("human_preset", "default"),
+            launch_args=safe_template.get("launch_args") or [],
+            geoip=safe_template.get("geoip", True),
         )
 
     profile_id = str(profile["id"])
