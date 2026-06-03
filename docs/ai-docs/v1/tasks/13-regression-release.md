@@ -4196,3 +4196,45 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Runtime viewer close-code release-evidence guardrail
+
+背景：
+
+- Release runtime/VNC smoke 会检查 `runtime.viewer.connected` 和 `runtime.viewer.disconnected` audit event。
+- `close_code` 是 WebSocket close code 语义，应只保留整数或 null；污染字符串不应以 `token=[redacted]` / `Authorization=[redacted]` 形态进入 evidence。
+- Runtime viewer audit 是 Project Mileage 远程工作台未来的关键交接面，因此需要在 audit helper 层固定边界。
+
+已覆盖：
+
+- `_audit_runtime_viewer_event()` 现在对 metadata 中的 `close_code` 做 public boundary。
+- 非 bool 整数 `0..65535` 保留；其他值折叠为 null。
+- 正常 runtime VNC success audit 仍记录 `close_code: 1000`。
+- 污染 close_code 不再泄漏 secret marker、`token=`、Authorization 或 Bearer 文本。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code -q
+# RED then GREEN；旧实现保存 token/header 风格 close_code，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 44 passed in 4.65s
+
+.venv/bin/python -m pytest backend/tests -q
+# 638 passed in 39.53s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.19s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

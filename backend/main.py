@@ -1172,6 +1172,21 @@ def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None =
     )
 
 
+def _public_ws_close_code(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and 0 <= value <= 65_535:
+        return value
+    return None
+
+
+def _runtime_viewer_audit_metadata(metadata: dict | None) -> dict:
+    safe = dict(metadata or {})
+    if "close_code" in safe:
+        safe["close_code"] = _public_ws_close_code(safe.get("close_code"))
+    return safe
+
+
 def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict | None = None) -> None:
     db.create_audit_event(
         event_type=event_type,
@@ -1179,7 +1194,7 @@ def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict |
         runtime_session_id=_public_uuid_identifier(session.get("id")),
         profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
-        metadata=metadata,
+        metadata=_runtime_viewer_audit_metadata(metadata),
     )
 
 

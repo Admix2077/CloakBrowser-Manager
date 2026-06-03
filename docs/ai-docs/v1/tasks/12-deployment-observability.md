@@ -4504,3 +4504,46 @@ git diff --check
 - 这是 profile response release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 DB 存储、profile launch/delete 内部路径、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Runtime viewer close-code audit guardrail
+
+背景：
+
+- Runtime VNC viewer connected/disconnected audit 是 Project Mileage remote workspace 和 release VNC smoke 的交接证据面。
+- `runtime.viewer.disconnected` metadata 中的 `close_code` 语义上只应是 WebSocket close code 数字或 null。
+- 如果测试 double、框架边界或未来调用方把 URL/query token/header 风格文本放进 close_code，通用 audit sanitizer 会留下 `token=[redacted]`、`Authorization=[redacted]` 这类非低敏语义。
+
+已覆盖：
+
+- Runtime viewer audit metadata 现在对 `close_code` 做 public boundary。
+- 非 bool 整数 `0..65535` 保留；其他值折叠为 null。
+- 既有成功 VNC audit 仍记录 `close_code=1000`。
+- 污染 close_code 不再把 secret、`token=`、Authorization 或 Bearer 文本写入 audit evidence。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code -q
+# RED: 旧实现保存 token/header 风格 close_code；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 44 passed in 4.65s
+
+.venv/bin/python -m pytest backend/tests -q
+# 638 passed in 39.53s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.19s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 runtime viewer audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 viewer token 签发、VNC proxy、WebSocket close 行为、runtime session 状态、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

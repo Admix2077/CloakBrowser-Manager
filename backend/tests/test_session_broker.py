@@ -1256,6 +1256,48 @@ def test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit(
     assert "origin" not in serialized_events.lower()
 
 
+def test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-vnc-close-code",
+    )
+    stored_session = db.get_runtime_session(session["id"])
+    assert stored_session is not None
+    leak_marker = "runtime-close-code-secret"
+
+    main._audit_runtime_viewer_event(
+        "runtime.viewer.disconnected",
+        stored_session,
+        {
+            "close_code": (
+                f"1000 token={leak_marker} "
+                f"Authorization=Bearer {leak_marker}"
+            ),
+        },
+    )
+
+    [event] = [
+        event
+        for event in db.list_audit_events(session["id"])
+        if event["event_type"] == "runtime.viewer.disconnected"
+    ]
+    assert event["metadata"] == {"close_code": None}
+    serialized = json.dumps(event, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "token=",
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit(
     app_client: TestClient,
     runtime_headers: dict[str, str],
