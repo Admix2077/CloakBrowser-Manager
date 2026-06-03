@@ -2862,3 +2862,50 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager、profile/proxy response shape 或 persisted user-facing name values。
 - 不在 audit name guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Profile response identity public-value guardrail
+
+背景：
+
+- Profile list/detail/create/update response 是 release smoke、profile lifecycle 和后续 launch/VNC/automation 操作的主要 API 面。
+- Template apply、template response、config export 和 bundle export 已经过滤历史/手工 DB identity 字段，但 `_profile_response` 此前只过滤 last_geoip 和 tags。
+- 历史 profile row 中的污染 `screen_width`、`hardware_concurrency`、boolean identity flags 等字段会在 `ProfileResponse` 构造时触发 validation error；GPU/timezone/locale/color/launch arg 污染值也可能进入 API/UI response。
+
+已覆盖：
+
+- 新增 profile response sanitizer，复用 profile template/export 的 public-value identity 规则，覆盖 platform、screen dimensions、GPU text、hardware concurrency、timezone、locale、humanize、human_preset、headless、geoip、clipboard_sync、auto_launch、color_scheme 和 launch_args。
+- Profile response 的 `launch_args` 只做低敏过滤，保留普通既有 API 参数如 `--profile`，但丢弃 URL、query/fragment、Authorization/Bearer、token/password/secret/cookie 风格参数。
+- Profile response 仍保留既有 name、proxy、notes、user_data_dir 等 API 语义；本轮不改变 profile storage、launch manager 或 config export 行为。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields -q
+# RED: 1 failed；ProfileResponse 构造在 screen_width/hardware_concurrency/boolean identity flags 上触发 validation errors
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields -q
+# 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 11 passed in 1.22s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "profile_responses or profile_response or create_profile_with_all_fields or get_profile or update_profile or profile_config or export_profiles" -q
+# 22 passed, 205 deselected in 2.47s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -k "export_profile_configs or config_import or round_trip or csv_import" -q
+# 20 passed in 2.25s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 588 passed in 33.33s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.14s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager、external smoke scripts 或 stored profile fields。
+- 不在 profile response sanitizer 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

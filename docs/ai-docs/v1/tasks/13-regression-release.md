@@ -2651,3 +2651,46 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile response identity guardrail
+
+背景：
+
+- Release smoke 会反复调用 profile list/detail/create/update，再进入 launch、VNC 和 automation。
+- 历史/手工 DB 污染的 profile identity 字段此前可让 profile detail/list response validation 失败，或把 URL/header/token 风格 identity text 暴露到 API/UI。
+
+已覆盖：
+
+- ProfileResponse 现在会过滤 persisted platform、screen dimensions、GPU text、hardware concurrency、timezone、locale、humanize、human_preset、headless、geoip、clipboard_sync、auto_launch、color_scheme 和 launch_args。
+- 普通 response launch args 保持 API 语义；仅丢弃 URL/token/header/cookie 风格参数。
+- Template、bulk config export/import、bundle/config 相关测试保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_identity_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 11 passed in 1.22s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "profile_responses or profile_response or create_profile_with_all_fields or get_profile or update_profile or profile_config or export_profiles" -q
+# 22 passed, 205 deselected in 2.47s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -k "export_profile_configs or config_import or round_trip or csv_import" -q
+# 20 passed in 2.25s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 588 passed in 33.33s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.14s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

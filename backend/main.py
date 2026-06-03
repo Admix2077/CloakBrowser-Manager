@@ -156,6 +156,7 @@ from .profile_import import (
     profile_create_data_for_import,
     preview_profile_csv_import,
     sanitize_profile_config_export_data,
+    sanitize_profile_response_data,
     sanitize_profile_template_response_data,
 )
 from .profile_bundle import (
@@ -794,7 +795,7 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
 
 
 def _profile_response(profile: dict) -> ProfileResponse:
-    safe = dict(profile)
+    safe = sanitize_profile_response_data(profile)
     safe["last_geoip_ip"] = public_geoip_ip(safe.get("last_geoip_ip"))
     safe["last_geoip_country_code"] = public_geoip_country_code(safe.get("last_geoip_country_code"))
     safe["last_geoip_timezone"] = public_geoip_timezone(safe.get("last_geoip_timezone"))

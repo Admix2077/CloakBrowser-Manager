@@ -139,6 +139,20 @@ def sanitize_profile_template_response_data(template: dict[str, Any]) -> dict[st
     return safe
 
 
+def sanitize_profile_response_data(profile: dict[str, Any]) -> dict[str, Any]:
+    safe = dict(profile)
+    for field in TEMPLATE_FIELDS:
+        safe_value, should_copy = _safe_template_field(field, profile.get(field))
+        safe[field] = safe_value if should_copy else TEMPLATE_RESPONSE_DEFAULTS[field]
+    safe["launch_args"] = _safe_profile_response_launch_args(profile.get("launch_args"))
+
+    safe["timezone"] = public_geoip_timezone(profile.get("timezone"))
+    safe["locale"] = public_geoip_locale(profile.get("locale"))
+    for field, default in PROFILE_CONFIG_EXPORT_BOOL_DEFAULTS.items():
+        safe[field] = _safe_profile_config_bool(profile.get(field), default)
+    return safe
+
+
 def sanitize_profile_config_export_data(
     profile: dict[str, Any],
     *,
@@ -210,6 +224,20 @@ def _safe_template_launch_args(value: Any) -> list[str]:
             continue
         candidates.append(text)
     return _filter_firefox_launch_args(candidates)
+
+
+def _safe_profile_response_launch_args(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    args = []
+    for arg in value:
+        if not isinstance(arg, str):
+            continue
+        text = arg.strip()
+        if not text or _SENSITIVE_TEMPLATE_ARG_RE.search(text):
+            continue
+        args.append(text)
+    return args
 
 
 def preview_profile_csv_import(csv_text: str) -> ProfileImportPreviewResponse:

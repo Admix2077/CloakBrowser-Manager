@@ -144,6 +144,94 @@ def test_profile_responses_redact_persisted_sensitive_geoip_fields(app_client: T
         assert leaked not in serialized
 
 
+def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestClient):
+    leak_marker = "profile-response-token-secret"
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Profile Response Sanitized",
+            "platform": "linux",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "gpu_vendor": "NVIDIA",
+            "gpu_renderer": "NVIDIA RTX",
+            "hardware_concurrency": 8,
+            "timezone": "America/Los_Angeles",
+            "locale": "en-US",
+            "humanize": True,
+            "human_preset": "careful",
+            "headless": True,
+            "geoip": False,
+            "clipboard_sync": False,
+            "auto_launch": True,
+            "color_scheme": "dark",
+            "launch_args": ["--private-window"],
+        },
+    )
+    assert create.status_code == 201
+    pid = create.json()["id"]
+    main.db.update_profile(
+        pid,
+        platform=f"linux?token={leak_marker}",
+        screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
+        screen_height=999999,
+        gpu_vendor=f"NVIDIA\nAuthorization: Bearer {leak_marker}",
+        gpu_renderer=f"ANGLE (NVIDIA) https://gpu.invalid/?token={leak_marker}",
+        hardware_concurrency=f"8 cookie={leak_marker}",
+        timezone=f"America/Los_Angeles?token={leak_marker}",
+        locale=f"en-US-token-{leak_marker}",
+        humanize=f"true token={leak_marker}",
+        human_preset=f"careful?token={leak_marker}",
+        headless=f"true token={leak_marker}",
+        geoip=f"false token={leak_marker}",
+        clipboard_sync=f"false token={leak_marker}",
+        auto_launch=f"true token={leak_marker}",
+        color_scheme=f"dark?token={leak_marker}",
+        launch_args=[
+            "--private-window",
+            f"--proxy-server=https://proxy.invalid/?token={leak_marker}",
+            f"--user-agent=Bearer {leak_marker}",
+        ],
+    )
+
+    get_resp = app_client.get(f"/api/profiles/{pid}")
+    list_resp = app_client.get("/api/profiles")
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    get_profile = get_resp.json()
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
+    for profile in (get_profile, listed_profile):
+        assert profile["platform"] == "windows"
+        assert profile["screen_width"] == 1920
+        assert profile["screen_height"] == 1080
+        assert profile["gpu_vendor"] is None
+        assert profile["gpu_renderer"] is None
+        assert profile["hardware_concurrency"] is None
+        assert profile["timezone"] is None
+        assert profile["locale"] is None
+        assert profile["humanize"] is False
+        assert profile["human_preset"] == "default"
+        assert profile["headless"] is False
+        assert profile["geoip"] is True
+        assert profile["clipboard_sync"] is True
+        assert profile["auto_launch"] is False
+        assert profile["color_scheme"] is None
+        assert profile["launch_args"] == ["--private-window"]
+
+    serialized = json.dumps({"get": get_profile, "list": listed_profile}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+        "cookie=",
+        "gpu.invalid",
+        "proxy.invalid",
+    ):
+        assert leaked not in serialized
+
+
 def test_profile_response_sanitizes_persisted_malformed_tags(app_client: TestClient):
     create = app_client.post(
         "/api/profiles",
