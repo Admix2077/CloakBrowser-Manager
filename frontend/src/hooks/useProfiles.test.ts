@@ -338,6 +338,28 @@ describe("useProfiles", () => {
     expect(result.current.error).toBe("Network error");
   });
 
+  it("redacts sensitive profile fetch failure details", async () => {
+    const leakMarker = "profile-fetch-token-secret";
+    mockApi.listProfiles.mockRejectedValue(
+      new Error(
+        `Fetch failed token=${leakMarker} Authorization=Bearer ${leakMarker} ` +
+        `http://user:${leakMarker}@proxy.example:8080/api?token=${leakMarker} ` +
+        `/data/profiles/${leakMarker}`,
+      ),
+    );
+
+    const { result } = renderHook(() => useProfiles());
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toContain("Fetch failed");
+    expect(result.current.error).not.toContain(leakMarker);
+    expect(result.current.error).not.toContain("Authorization");
+    expect(result.current.error).not.toContain("Bearer");
+    expect(result.current.error).not.toContain("token=");
+    expect(result.current.error).not.toContain("/data/profiles");
+    expect(result.current.error).not.toContain("user:");
+  });
+
   it("refreshes health after launching a profile", async () => {
     mockApi.launchProfile.mockResolvedValue({
       profile_id: "abc-123",

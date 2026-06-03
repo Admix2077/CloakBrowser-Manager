@@ -4727,3 +4727,42 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 auth state machine、login flow、profile launch/stop API calls、VNC viewer、Automation API、Proxy Manager、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend UI/console raw-error release-evidence 边界。
+
+## 2026-06-03 Frontend profile hook error release-evidence guardrail
+
+背景：
+
+- Release smoke 可能直接截图或记录 profile operations error state。
+- `useProfiles` 的 API/transport failure reason 会进入页面可见 error state。
+- 旧实现多个路径仍信任 raw `Error.message`，可显示 token/header/path 风格文本。
+
+已覆盖：
+
+- `useProfiles` 新增 public error sanitizer，统一过滤 URL credentials、Authorization/Bearer、token/password/secret/cookie assignment 和本地 `/data`/`/tmp`/`/home` path。
+- Profile fetch、export、create、update、delete、launch、stop 以及 bulk launch/stop/tag/delete failure reason 统一使用该边界。
+- 普通低敏错误摘要保持可见，便于 release triage。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/hooks/useProfiles.test.ts
+# RED then GREEN；旧实现 fetch error state 包含 profile-fetch-token-secret/token=/Authorization/Bearer//data/profiles，最终 28 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.87s
+
+npm --prefix frontend test -- --run
+# Test Files 17 passed；Tests 225 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.51s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 API request order、profile state mutations、bulk concurrency、health cache refresh、VNC viewer、Automation API、Proxy Manager、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend profile hook error release-evidence 边界。

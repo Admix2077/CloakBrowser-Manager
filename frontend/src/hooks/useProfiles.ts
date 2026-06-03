@@ -14,12 +14,33 @@ const BULK_TAG_CONCURRENCY = 4;
 const BULK_DELETE_CONCURRENCY = 2;
 const DEFAULT_BULK_LAUNCH_CONCURRENCY = 2;
 const MAX_BULK_LAUNCH_CONCURRENCY = 8;
+const ERROR_AUTH_HEADER_RE = /\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest)\s+)?[^\s;,]+/gi;
+const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
+const ERROR_SENSITIVE_ASSIGNMENT_RE =
+  /\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
+const ERROR_LOCAL_PATH_RE = /\/(?:data|tmp|home)\/[^\s"'<>)]*/gi;
 
 function configuredBulkLaunchConcurrency() {
   const raw = import.meta.env.VITE_BULK_LAUNCH_CONCURRENCY;
   const parsed = Number.parseInt(typeof raw === "string" ? raw : "", 10);
   if (!Number.isFinite(parsed)) return DEFAULT_BULK_LAUNCH_CONCURRENCY;
   return Math.max(1, Math.min(parsed, MAX_BULK_LAUNCH_CONCURRENCY));
+}
+
+function publicErrorText(value: string): string {
+  return redactUrlCredentials(value)
+    .replace(ERROR_AUTH_HEADER_RE, "[redacted]")
+    .replace(ERROR_BEARER_RE, "[redacted]")
+    .replace(ERROR_SENSITIVE_ASSIGNMENT_RE, "[redacted]")
+    .replace(ERROR_LOCAL_PATH_RE, "[redacted-path]")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function publicErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof Error)) return fallback;
+  const message = publicErrorText(err.message);
+  return message || fallback;
 }
 
 export interface BulkLaunchResult {
@@ -168,7 +189,7 @@ export function useProfiles() {
       setOperationError(null);
       return response;
     } catch (err) {
-      setOperationError(err instanceof Error ? redactUrlCredentials(err.message) : "Failed to export profile configs");
+      setOperationError(publicErrorMessage(err, "Failed to export profile configs"));
       return undefined;
     }
   }, []);
@@ -180,7 +201,7 @@ export function useProfiles() {
       setFetchError(null);
       return data;
     } catch (err) {
-      setFetchError(err instanceof Error ? err.message : "Failed to fetch profiles");
+      setFetchError(publicErrorMessage(err, "Failed to fetch profiles"));
     } finally {
       setLoading(false);
     }
@@ -208,7 +229,7 @@ export function useProfiles() {
         setOperationError(null);
         return profile;
       } catch (err) {
-        setOperationError(err instanceof Error ? err.message : "Failed to create profile");
+        setOperationError(publicErrorMessage(err, "Failed to create profile"));
       }
     },
     [refreshHealth],
@@ -223,7 +244,7 @@ export function useProfiles() {
         setOperationError(null);
         return profile;
       } catch (err) {
-        setOperationError(err instanceof Error ? err.message : "Failed to update profile");
+        setOperationError(publicErrorMessage(err, "Failed to update profile"));
       }
     },
     [refreshHealth],
@@ -241,7 +262,7 @@ export function useProfiles() {
         });
         setOperationError(null);
       } catch (err) {
-        setOperationError(err instanceof Error ? err.message : "Failed to delete profile");
+        setOperationError(publicErrorMessage(err, "Failed to delete profile"));
       }
     },
     [],
@@ -256,7 +277,7 @@ export function useProfiles() {
         setOperationError(null);
         return result;
       } catch (err) {
-        setOperationError(err instanceof Error ? err.message : "Failed to launch profile");
+        setOperationError(publicErrorMessage(err, "Failed to launch profile"));
       }
     },
     [refresh, refreshHealth],
@@ -298,7 +319,7 @@ export function useProfiles() {
               successfulIds.push(id);
             } catch (err) {
               failedCount += 1;
-              failureMessages.push(err instanceof Error ? err.message : "Failed to launch profile");
+              failureMessages.push(publicErrorMessage(err, "Failed to launch profile"));
             }
           }
         }),
@@ -313,7 +334,7 @@ export function useProfiles() {
       result.failedCount = failedCount;
 
       if (failedCount > 0) {
-        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const uniqueReasons = [...new Set(failureMessages.filter(Boolean))].slice(0, 2);
         const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
         setOperationError(`Failed to launch ${failedCount} profile(s)${reasonSummary}`);
       } else {
@@ -333,7 +354,7 @@ export function useProfiles() {
         await refreshHealth([id]);
         setOperationError(null);
       } catch (err) {
-        setOperationError(err instanceof Error ? err.message : "Failed to stop profile");
+        setOperationError(publicErrorMessage(err, "Failed to stop profile"));
       }
     },
     [refresh, refreshHealth],
@@ -375,7 +396,7 @@ export function useProfiles() {
               successfulIds.push(id);
             } catch (err) {
               failedCount += 1;
-              failureMessages.push(err instanceof Error ? err.message : "Failed to stop profile");
+              failureMessages.push(publicErrorMessage(err, "Failed to stop profile"));
             }
           }
         }),
@@ -390,7 +411,7 @@ export function useProfiles() {
       result.failedCount = failedCount;
 
       if (failedCount > 0) {
-        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const uniqueReasons = [...new Set(failureMessages.filter(Boolean))].slice(0, 2);
         const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
         setOperationError(`Failed to stop ${failedCount} profile(s)${reasonSummary}`);
       } else {
@@ -447,7 +468,7 @@ export function useProfiles() {
         result.skippedUnchangedCount = skippedUnchangedCount;
         result.failedCount = failedCount;
         if (failedCount > 0) {
-          const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+          const uniqueReasons = [...new Set(failureMessages.map(publicErrorText).filter(Boolean))].slice(0, 2);
           const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
           setOperationError(`Failed to tag ${failedCount} profile(s)${reasonSummary}`);
         } else {
@@ -468,7 +489,7 @@ export function useProfiles() {
               successfulIds.push(item.id);
             } catch (err) {
               failedCount += 1;
-              failureMessages.push(err instanceof Error ? err.message : "Failed to tag profile");
+              failureMessages.push(publicErrorMessage(err, "Failed to tag profile"));
             }
           }
         }),
@@ -484,7 +505,7 @@ export function useProfiles() {
       result.failedCount = failedCount;
 
       if (failedCount > 0) {
-        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const uniqueReasons = [...new Set(failureMessages.filter(Boolean))].slice(0, 2);
         const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
         setOperationError(`Failed to tag ${failedCount} profile(s)${reasonSummary}`);
       } else {
@@ -543,7 +564,7 @@ export function useProfiles() {
                 deletedIds.push(id);
               } catch (err) {
                 failedCount += 1;
-                failureMessages.push(err instanceof Error ? err.message : "Failed to delete profile");
+                failureMessages.push(publicErrorMessage(err, "Failed to delete profile"));
               }
             }
           }),
@@ -567,7 +588,7 @@ export function useProfiles() {
       result.deletedIds = deletedIds;
 
       if (failedCount > 0) {
-        const uniqueReasons = [...new Set(failureMessages.map(redactUrlCredentials).filter(Boolean))].slice(0, 2);
+        const uniqueReasons = [...new Set(failureMessages.map(publicErrorText).filter(Boolean))].slice(0, 2);
         const reasonSummary = uniqueReasons.length > 0 ? `: ${uniqueReasons.join("; ")}` : "";
         setOperationError(`Failed to delete ${failedCount} profile(s)${reasonSummary}`);
       } else {

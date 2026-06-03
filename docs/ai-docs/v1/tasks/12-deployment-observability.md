@@ -5033,3 +5033,43 @@ git diff --check
 - 这是 frontend UI/console release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 auth state machine、login flow、profile launch/stop API calls、VNC viewer、Automation API、Proxy Manager、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Frontend profile hook error redaction guardrail
+
+背景：
+
+- `useProfiles` 的 fetch/create/update/delete/launch/stop 和 bulk operation failure 会把 API/transport `Error.message` 写入 hook `error` state。
+- 该 state 会被前端页面显示，并可能进入 release smoke、截图或 triage 证据。
+- 旧实现只在少量 bulk URL credential 场景做 redaction；profile fetch failure 等路径仍会显示 `token=...`、Authorization/Bearer、本地 profile path 或 URL credential 文本。
+
+已覆盖：
+
+- 新增 `useProfiles` 内部 public error sanitizer。
+- 保留普通低敏错误文案，如 `Network error`、`Launch failed`、`Profile is not running`。
+- 过滤 URL credentials、Authorization/Bearer、token/password/secret/cookie assignment、本地 `/data`/`/tmp`/`/home` path。
+- fetch、export、create、update、delete、launch、stop、bulk launch/stop/tag/delete failure reasons 统一走 public error boundary。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/hooks/useProfiles.test.ts
+# RED: 旧实现 fetch error state 包含 profile-fetch-token-secret/token=/Authorization/Bearer//data/profiles；GREEN: 28 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.87s
+
+npm --prefix frontend test -- --run
+# Test Files 17 passed；Tests 225 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.51s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend profile hook UI/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 API request order、profile state mutations、bulk concurrency、health cache refresh、Proxy Manager、VNC viewer、Automation API、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
