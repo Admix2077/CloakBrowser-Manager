@@ -6618,6 +6618,37 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
 - 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
 
+## 2026-06-04 Profile summary device evidence guardrail
+
+背景：
+
+- Profile summary inspector 的 Device 区域会显示 platform、screen、hardware concurrency 和 GPU renderer/vendor，是本地管理台排障和 release smoke 常看的 evidence 面。
+- 这些字段通常是低敏 profile metadata；但异常 response、历史/手工污染 row 或测试桩如果把 Authorization/Bearer、`token=`、本地路径或 IP 字面量混入字段，前端不应原样写入正文或 `title`。
+- 这继续收 Manager 可控 UI evidence 边界，不处理 Pixelscan 底层 fingerprint masking。
+
+已覆盖：
+
+- Device 区域的 platform、screen width/height、hardware concurrency、GPU visible text/title 使用 shared public error text boundary。
+- 普通 `windows`、`1920 x 1080`、`8 cores`、`ANGLE NVIDIA` 等低敏值保持原样。
+- Profile edit raw input、backend response schema、profile persistence 和 browser fingerprint launch 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "redacts persisted device labels"
+# RED: 旧实现把污染 device metadata 写入 Summary text/title；GREEN: 1 passed, 5 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx src/lib/errorDisplay.test.ts
+# 2 files passed, 9 tests passed
+```
+
+边界：
+
+- 这是 Profile summary Device UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、profile edit raw input、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
 ## 2026-06-04 Profile summary/rail GeoIP evidence guardrail
 
 背景：

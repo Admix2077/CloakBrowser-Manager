@@ -1,7 +1,7 @@
 import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { publicProfileGeoipLabel, publicProfileName } from "../lib/errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel, publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
@@ -59,6 +59,13 @@ export function ProfileSummaryPanel({
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
   const safeName = publicProfileName(profile.name);
+  const safePlatform = publicProfileDeviceLabel(profile.platform);
+  const safeScreen = `${publicProfileDeviceLabel(profile.screen_width)} x ${publicProfileDeviceLabel(profile.screen_height)}`;
+  const safeHardwareConcurrency = profile.hardware_concurrency
+    ? `${publicProfileDeviceLabel(profile.hardware_concurrency)} cores`
+    : "-";
+  const gpuLabel = profile.gpu_renderer ?? profile.gpu_vendor;
+  const safeGpu = gpuLabel ? publicProfileDeviceLabel(gpuLabel) : "-";
 
   return (
     <aside
@@ -149,18 +156,24 @@ export function ProfileSummaryPanel({
           </SummarySection>
 
           <SummarySection icon={<Cpu className="h-3.5 w-3.5" />} title="Device" priority="secondary">
-            <SummaryRow label="Platform" value={profile.platform} />
-            <SummaryRow label="Screen" value={`${profile.screen_width} x ${profile.screen_height}`} />
+            <SummaryRow label="Platform" value={safePlatform} />
+            <SummaryRow label="Screen" value={safeScreen} />
             <SummaryRow
               label="Cores"
-              value={profile.hardware_concurrency ? `${profile.hardware_concurrency} cores` : "-"}
+              value={safeHardwareConcurrency}
             />
-            <SummaryRow label="GPU" value={profile.gpu_renderer ?? profile.gpu_vendor ?? "-"} title={profile.gpu_renderer ?? profile.gpu_vendor ?? undefined} />
+            <SummaryRow label="GPU" value={safeGpu} title={safeGpu === "-" ? undefined : safeGpu} />
           </SummarySection>
         </div>
       </div>
     </aside>
   );
+}
+
+function publicProfileDeviceLabel(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "-";
+  return publicErrorText(text) || "unknown";
 }
 
 function SummarySection({

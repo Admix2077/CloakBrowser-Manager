@@ -247,4 +247,64 @@ describe("ProfileSummaryPanel", () => {
       expect(renderedEvidence).not.toContain(leaked);
     }
   });
+
+  it("redacts persisted device labels from summary rendered evidence", () => {
+    const leakMarker = "summary-device-secret";
+    const pollutedProfile = profile({
+      platform:
+        "windows Authorization=Bearer " +
+        `${leakMarker} token=${leakMarker} /data/summary-device-platform 203.0.113.113`,
+      screen_width:
+        ("1920 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-device-screen-width 203.0.113.114`) as unknown as number,
+      screen_height:
+        ("1080 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-device-screen-height 203.0.113.115`) as unknown as number,
+      hardware_concurrency:
+        ("8 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-device-cores 203.0.113.116`) as unknown as number,
+      gpu_renderer:
+        "ANGLE NVIDIA Authorization=Bearer " +
+        `${leakMarker} token=${leakMarker} /data/summary-device-gpu 203.0.113.117`,
+    });
+
+    render(
+      <ProfileSummaryPanel
+        profile={pollutedProfile}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("windows [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText(
+      "1920 [redacted] [redacted] [redacted-path] [redacted-ip] x 1080 [redacted] [redacted] [redacted-path] [redacted-ip]",
+    )).toBeTruthy();
+    expect(screen.getByText("8 [redacted] [redacted] [redacted-path] [redacted-ip] cores")).toBeTruthy();
+    expect(screen.getByText("ANGLE NVIDIA [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/summary-device-platform",
+      "/data/summary-device-screen-width",
+      "/data/summary-device-screen-height",
+      "/data/summary-device-cores",
+      "/data/summary-device-gpu",
+      "203.0.113.113",
+      "203.0.113.114",
+      "203.0.113.115",
+      "203.0.113.116",
+      "203.0.113.117",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
 });
