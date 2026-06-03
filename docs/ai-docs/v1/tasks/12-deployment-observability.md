@@ -6748,3 +6748,38 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、profile persistence、proxy persistence、proxy assignment/random assignment payload、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile operations id evidence guardrail
+
+背景：
+
+- Profile table desktop row、mobile card 和 Profile summary inspector 都会显示 profile id 的短 handle，是 release smoke 和本地排障常见 UI evidence。
+- Backend response 已有 public id 防御；但前端仍不能信任异常 response、历史/手工污染 row 或测试桩中的 raw `profile.id`。
+- Profile id 仍是内部 selection/open/API key，不能改 raw id 流程；只收 visible text/title/aria evidence。
+
+已覆盖：
+
+- ProfileTable desktop row 和 mobile card 的短 id text 使用 public profile id label。
+- ProfileSummaryPanel header 的短 id text 使用同一 public profile id label。
+- Authorization/Bearer/`token=`/path/IP-style profile id 显示为 `unknown`，不进入 rendered text/title/aria evidence。
+- Selection checkbox、preview/open callbacks、health lookup、profile persistence 和 backend API payload 继续使用原始 profile id。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "redacts non-public profile ids"
+# RED: 旧实现显示污染 profile id 的前 8 个字符；GREEN: 1 passed, 7 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts non-public profile ids"
+# RED: 旧实现显示污染 profile id 的前 8 个字符；GREEN: 1 passed, 42 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileTable.test.tsx src/lib/errorDisplay.test.ts src/lib/filters.test.ts
+# 4 files passed, 60 tests passed
+```
+
+边界：
+
+- 这是 Profile operations id UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

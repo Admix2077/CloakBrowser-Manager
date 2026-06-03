@@ -230,6 +230,41 @@ describe("ProfileSummaryPanel", () => {
     }
   });
 
+  it("redacts non-public profile ids from summary rendered evidence", () => {
+    const leakMarker = "summary-profile-id-secret";
+    const rawProfileId =
+      "profile-id Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/summary-profile-id 203.0.113.120`;
+
+    render(
+      <ProfileSummaryPanel
+        profile={profile({ id: rawProfileId, name: "Polluted Id Summary" })}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("unknown")).toBeTruthy();
+    expect(screen.getByText("Polluted Id Summary")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/summary-profile-id",
+      "203.0.113.120",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts persisted geoip labels from summary rendered evidence", () => {
     const leakMarker = "summary-geoip-secret";
     const pollutedHealth = health({

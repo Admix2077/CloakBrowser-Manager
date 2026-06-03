@@ -1,7 +1,7 @@
 import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { publicErrorText, publicProfileGeoipLabel, publicProfileName } from "../lib/errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
@@ -60,6 +60,7 @@ export function ProfileSummaryPanel({
   const runtimeStatus = publicRuntimeStatus(profile.status);
   const safeVncPort = publicVncPortLabel(profile.vnc_ws_port);
   const safeName = publicProfileName(profile.name);
+  const safeProfileId = publicProfileIdLabel(profile.id);
   const safePlatform = publicProfileDeviceLabel(profile.platform);
   const safeScreen = `${publicProfileDeviceLabel(profile.screen_width)} x ${publicProfileDeviceLabel(profile.screen_height)}`;
   const safeHardwareConcurrency = profile.hardware_concurrency
@@ -93,7 +94,7 @@ export function ProfileSummaryPanel({
               <h2 className="truncate text-sm font-semibold text-slate-950" title={safeName}>
                 {safeName}
               </h2>
-              <p className="mt-1 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</p>
+              <p className="mt-1 font-mono text-[11px] text-slate-600">{safeProfileId}</p>
             </div>
             <HealthBadge health={health} compact />
           </div>

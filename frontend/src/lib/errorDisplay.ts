@@ -7,6 +7,9 @@ const ERROR_SENSITIVE_ASSIGNMENT_RE =
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 const PROFILE_GEOIP_SENSITIVE_RE =
   /\bAuthorization\b|\bBearer\b|\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
+const PUBLIC_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const SENSITIVE_PROFILE_ID_RE =
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
 const ERROR_IPV4_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
 const ERROR_BRACKETED_IPV6_RE = /\[([0-9a-fA-F:.]{2,})\]/g;
 const ERROR_BARE_IPV6_RE = /(?<![A-Za-z0-9_.:[\]-])(?:[0-9a-fA-F]{1,4}:){2,}[0-9a-fA-F:.]*(?![A-Za-z0-9_.:[\]-])/g;
@@ -55,6 +58,13 @@ export function publicErrorText(value: string): string {
 
 export function publicProfileName(value: string): string {
   return publicErrorText(value) || "unknown";
+}
+
+export function publicProfileIdLabel(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !PUBLIC_PROFILE_ID_RE.test(trimmed)) return "unknown";
+  if (SENSITIVE_PROFILE_ID_RE.test(trimmed)) return "unknown";
+  return trimmed.slice(0, 8);
 }
 
 export function publicProfileTagLabel(value: string): string {

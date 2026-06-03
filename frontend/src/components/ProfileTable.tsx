@@ -2,7 +2,7 @@ import { ArrowRight, Check, FilterX, HeartPulse, Minus, PlusCircle } from "lucid
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { publicProfileGeoipLabel, publicProfileName } from "../lib/errorDisplay";
+import { publicProfileGeoipLabel, publicProfileIdLabel, publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { Badge, CountryBadge, TagBadge } from "./Badge";
 import { BulkActionBar } from "./BulkActionBar";
@@ -679,6 +679,7 @@ function ProfileCard({
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
   const safeName = publicProfileName(profile.name);
+  const safeProfileId = publicProfileIdLabel(profile.id);
   const safeIp = ip ? publicProfileGeoipLabel(ip) : "-";
   const safeCountry = country ? publicProfileGeoipLabel(country) : null;
   const safeTimezone = timezone ? publicProfileGeoipLabel(timezone) : "-";
@@ -717,7 +718,7 @@ function ProfileCard({
           >
             {safeName}
           </button>
-          <div className="mt-0.5 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</div>
+          <div className="mt-0.5 font-mono text-[11px] text-slate-600">{safeProfileId}</div>
         </div>
         <button
           type="button"
@@ -809,6 +810,7 @@ function ProfileTableRow({
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
   const safeName = publicProfileName(profile.name);
+  const safeProfileId = publicProfileIdLabel(profile.id);
   const safeIp = ip ? publicProfileGeoipLabel(ip) : "-";
   const safeCountry = country ? publicProfileGeoipLabel(country) : null;
   const safeTimezone = timezone ? publicProfileGeoipLabel(timezone) : "-";
@@ -848,7 +850,7 @@ function ProfileTableRow({
         >
           {safeName}
         </button>
-        <div className="mt-0.5 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</div>
+        <div className="mt-0.5 font-mono text-[11px] text-slate-600">{safeProfileId}</div>
       </td>
       <td className="truncate border-b border-slate-100 px-2 py-2">
         <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">

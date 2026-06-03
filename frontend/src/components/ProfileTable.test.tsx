@@ -252,6 +252,78 @@ describe("ProfileTable", () => {
     }
   });
 
+  it("redacts non-public profile ids from table and card rendered evidence", () => {
+    const leakMarker = "profile-id-secret";
+    const rawProfileId =
+      "profile-id Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/profile-id-secret 203.0.113.121`;
+    const pollutedProfile = profile({
+      id: rawProfileId,
+      name: "Polluted Id Profile",
+    });
+
+    const { unmount } = render(
+      <ProfileTable
+        profiles={[pollutedProfile]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("unknown")).toBeTruthy();
+    expect(screen.getByText("Polluted Id Profile")).toBeTruthy();
+    let renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-id-secret",
+      "203.0.113.121",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    unmount();
+    setViewportWidth(500);
+
+    render(
+      <ProfileTable
+        profiles={[pollutedProfile]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("unknown")).toBeTruthy();
+    expect(screen.getByText("Polluted Id Profile")).toBeTruthy();
+    renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-id-secret",
+      "203.0.113.121",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts persisted profile tag labels from table rendered evidence", () => {
     const leakMarker = "profile-tag-secret";
     const rawTag =
