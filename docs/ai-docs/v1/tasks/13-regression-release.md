@@ -2015,3 +2015,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation page actions、navigation target URL、console/network capture internals 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation text header credential redaction guardrail
+
+背景：
+
+- 继续复查 release automation/VNC response surfaces 时，发现 automation page title 与 console log text 的共享脱敏 helper 对 header-style credentials 覆盖不足。
+- 现有 URL/token/Bearer redaction 不足以处理 `Authorization=Bearer ...`、`Authorization: Basic ...` 和 `Cookie: sid=...`，这些文本可来自页面 title 或 console message。
+
+已覆盖：
+
+- Automation text redaction 现在将 Authorization header-style credentials 固定为 `Authorization=[redacted]`。
+- Cookie 与 Set-Cookie header-style credentials 固定为 `Cookie=[redacted]` / `Set-Cookie=[redacted]`。
+- 既有 URL userinfo/query/fragment redaction、token assignment redaction、console location URL redaction、network summary 和 page action behavior 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages_redacts_sensitive_url_and_title or automation_console_logs_redacts_sensitive_text_and_location_urls'
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages or automation_console_logs or automation_network_summary or automation_goto or automation_page_id'
+# 12 passed, 205 deselected in 1.65s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 567 passed in 33.33s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.97s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation navigation target URL、console/network capture internals 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

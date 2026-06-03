@@ -181,6 +181,14 @@ _AUTOMATION_CONSOLE_LOG_LIMIT = 200
 _AUTOMATION_NETWORK_EVENT_LIMIT = 200
 _AUTOMATION_WORKER_LOST_LEASE_DETAIL = "Automation task lease no longer owned by worker"
 _AUTOMATION_TEXT_URL_RE = re.compile(r"https?://[^\s\"'<>]+")
+_AUTOMATION_AUTHORIZATION_HEADER_RE = re.compile(
+    r"\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest)\s+)?[A-Za-z0-9._~+/\-=]+",
+    re.IGNORECASE,
+)
+_AUTOMATION_COOKIE_HEADER_RE = re.compile(
+    r"\b(Cookie|Set-Cookie)\s*[:=]\s*[^\s;,]+",
+    re.IGNORECASE,
+)
 _AUTOMATION_SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\b(authorization|auth_token|cookie|password|runtime_service_token|secret|service_token|token|viewer_token)"
     r"\s*=\s*([^\s&#]+)",
@@ -4253,6 +4261,11 @@ def _automation_redact_text(text: str) -> str:
     redacted = _AUTOMATION_TEXT_URL_RE.sub(
         lambda match: _automation_safe_url(match.group(0)) or "[redacted-url]",
         text,
+    )
+    redacted = _AUTOMATION_AUTHORIZATION_HEADER_RE.sub("Authorization=[redacted]", redacted)
+    redacted = _AUTOMATION_COOKIE_HEADER_RE.sub(
+        lambda match: f"{match.group(1)}=[redacted]",
+        redacted,
     )
     redacted = _AUTOMATION_SENSITIVE_ASSIGNMENT_RE.sub(
         lambda match: f"{match.group(1)}=[redacted]",

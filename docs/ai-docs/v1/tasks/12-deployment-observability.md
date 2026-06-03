@@ -2180,3 +2180,46 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation page actions、navigation target URL、console/network capture internals 或 audit event schema。
 - 不在 Automation pages summary 中公开 page URL userinfo/query/fragment token、Authorization/Bearer、token assignments、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Automation text header credential redaction guardrail
+
+背景：
+
+- Automation pages summary 和 console logs 共享 `_automation_redact_text()` 来展示页面标题和浏览器 console 文本。
+- 该 helper 已覆盖 URL query/fragment、`token=...` assignments 和 standalone Bearer token，但 header-style credentials 仍有缺口：`Authorization=Bearer ...` 会留下尾随 token，`Authorization: Basic ...` 与 `Cookie: sid=...` 会原样显示。
+
+已覆盖：
+
+- `_automation_redact_text()` 现在先 redacts Authorization header-style values，再处理 Cookie/Set-Cookie header-style values，随后保留既有 generic assignment 与 Bearer token fallback。
+- `/api/profiles/{profile_id}/automation/pages` title 和 `/api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs` text 都复用该修复。
+- Page URL redaction、console location URL redaction、network summary、page action behavior、screenshot response 和 audit schema 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages_redacts_sensitive_url_and_title or automation_console_logs_redacts_sensitive_text_and_location_urls'
+# RED: 2 failed；响应文本仍包含 equals-secret/basic-secret/session-secret
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages_redacts_sensitive_url_and_title or automation_console_logs_redacts_sensitive_text_and_location_urls'
+# 2 passed, 215 deselected in 0.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'automation_pages or automation_console_logs or automation_network_summary or automation_goto or automation_page_id'
+# 12 passed, 205 deselected in 1.65s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 567 passed in 33.33s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.97s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation navigation target URL、console/network capture internals 或 audit event schema。
+- 不在 automation page titles 或 console log text 中公开 URL userinfo/query/fragment token、Authorization/Bearer/Basic credential、Cookie/Set-Cookie credential、token assignments、headers、local storage、viewer token、runtime service token、automation payload、profile dir 或截图内容。

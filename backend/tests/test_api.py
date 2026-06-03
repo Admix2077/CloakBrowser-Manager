@@ -2696,6 +2696,8 @@ def test_automation_pages_redacts_sensitive_url_and_title(app_client: TestClient
     secret_url = "https://user:pass@app.example.com/dashboard?token=page-secret#frag"
     secret_title = (
         "Dashboard token=title-secret Authorization: Bearer bearer-secret "
+        "Authorization=Bearer equals-secret Authorization: Basic basic-secret "
+        "Cookie: sid=session-secret "
         "https://title.example/path?secret=title-url-secret#frag"
     )
     _automation_running_profile(pid, [_automation_page(secret_url, secret_title)])
@@ -2706,7 +2708,9 @@ def test_automation_pages_redacts_sensitive_url_and_title(app_client: TestClient
     page = resp.json()["pages"][0]
     assert page["url"] == "https://app.example.com/dashboard"
     assert page["title"] == (
-        "Dashboard token=[redacted] Authorization: Bearer [redacted] "
+        "Dashboard token=[redacted] Authorization=[redacted] "
+        "Authorization=[redacted] Authorization=[redacted] "
+        "Cookie=[redacted] "
         "https://title.example/path"
     )
     serialized = resp.text
@@ -2715,6 +2719,9 @@ def test_automation_pages_redacts_sensitive_url_and_title(app_client: TestClient
         "page-secret",
         "title-secret",
         "bearer-secret",
+        "equals-secret",
+        "basic-secret",
+        "session-secret",
         "title-url-secret",
         "?token",
         "?secret",
@@ -3090,7 +3097,9 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
     message.type = "warning"
     message.text = (
         "loaded https://user:pass@example.com/app?token=super-secret#frag "
-        "token=standalone-secret Authorization: Bearer bearer-secret"
+        "token=standalone-secret Authorization: Bearer bearer-secret "
+        "Authorization=Bearer equals-secret Authorization: Basic basic-secret "
+        "Cookie: sid=session-secret"
     )
     message.location = {
         "url": "https://user:pass@example.com/static/app.js?authorization=super-secret#frag",
@@ -3106,7 +3115,10 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
     assert logs == [
         {
             "type": "warning",
-            "text": "loaded https://example.com/app token=[redacted] Authorization: Bearer [redacted]",
+            "text": (
+                "loaded https://example.com/app token=[redacted] Authorization=[redacted] "
+                "Authorization=[redacted] Authorization=[redacted] Cookie=[redacted]"
+            ),
             "location": {
                 "url": "https://example.com/static/app.js",
                 "lineNumber": 12,
@@ -3117,6 +3129,9 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
     assert "super-secret" not in str(resp.json())
     assert "standalone-secret" not in str(resp.json())
     assert "bearer-secret" not in str(resp.json())
+    assert "equals-secret" not in str(resp.json())
+    assert "basic-secret" not in str(resp.json())
+    assert "session-secret" not in str(resp.json())
     assert "user:pass" not in str(resp.json())
     assert "?token" not in str(resp.json())
     assert "#frag" not in str(resp.json())
