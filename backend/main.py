@@ -155,6 +155,7 @@ from .profile_import import (
     parse_profile_csv_import,
     profile_create_data_for_import,
     preview_profile_csv_import,
+    sanitize_profile_config_export_data,
     sanitize_profile_template_response_data,
 )
 from .profile_bundle import (
@@ -2000,8 +2001,10 @@ async def export_profiles(req: ProfileExportRequest):
             )
             continue
 
-        if not req.include_sensitive and profile.get("proxy"):
-            profile["proxy"] = redact_proxy_asset_url(str(profile["proxy"]))
+        profile = sanitize_profile_config_export_data(
+            profile,
+            include_sensitive_proxy=req.include_sensitive,
+        )
         profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
         results.append(
             ProfileExportResult(

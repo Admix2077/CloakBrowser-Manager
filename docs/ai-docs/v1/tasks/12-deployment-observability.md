@@ -2675,3 +2675,55 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - 不在 profile template responses 中公开历史/污染 identity marker、Authorization/Bearer-like text、URL/query token、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Profile config export and bundle export identity guardrail
+
+背景：
+
+- Profile response 与 template response/apply 边界已经过滤历史/污染 identity fields，但 profile config export 和 profile bundle export 仍直接用 DB profile row 构造 `ProfileConfigExport`。
+- 旧版本或手工写入的 profile row 中，如果 screen/hardware 字段包含非整数文本，会触发 response validation error；GPU/timezone/locale/enum/launch args 中的 token/header/URL-like 文本也可能进入导出的 config/bundle manifest。
+
+已覆盖：
+
+- 新增共享 profile config export sanitizer，并用于 `/api/profiles/export` 与 `/api/profiles/{profile_id}/bundle/export`。
+- 非公开 platform、screen_width、screen_height、gpu_vendor、gpu_renderer、hardware_concurrency、timezone、locale、color_scheme、human_preset 和 launch_args 会折叠为安全默认值、`null` 或过滤后的公开参数。
+- 保留显式导出的 profile name/notes/tags 语义；proxy credential redaction 与 sensitive proxy confirmation 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields -q
+# RED: 1 failed；profile config export 因污染 screen/hardware 字段触发 ProfileConfigExport ValidationError
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_sanitizes_persisted_identity_fields -q
+# RED: 1 failed；profile bundle export 因污染 screen/hardware 字段触发 ProfileConfigExport ValidationError
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields backend/tests/test_api.py::test_export_profile_bundle_sanitizes_persisted_identity_fields -q
+# 2 passed in 1.25s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -k "export_profile_configs or config_import or round_trip" -q
+# 6 passed, 14 deselected in 1.19s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "export_profiles or profile_bundle or config_import" -q
+# 23 passed, 201 deselected in 2.30s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py -q
+# 4 passed in 0.23s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 579 passed in 32.27s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.45s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- 不在 profile config export 或 bundle manifest 中公开历史/污染 identity marker、Authorization/Bearer-like text、URL/query token、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

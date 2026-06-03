@@ -2434,6 +2434,56 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Profile config export and bundle export identity guardrail
+
+背景：
+
+- Release smoke 会使用 profile config export/import 与 bundle export/import 做备份、迁移和回归验证。
+- Profile/template 响应边界已陆续加固，但 `/api/profiles/export` 与 `/api/profiles/{profile_id}/bundle/export` 仍直接信任 DB profile row 构造 `ProfileConfigExport`。
+- 历史/损坏 profile row 中的污染 screen/hardware 字段会导致 export 500；污染 GPU/timezone/locale/enum/launch args 可能进入配置导出或 bundle manifest。
+
+已覆盖：
+
+- Bulk profile config export 与 profile bundle export 现在共享 profile config export sanitizer。
+- 非公开 platform、screen_width、screen_height、gpu_vendor、gpu_renderer、hardware_concurrency、timezone、locale、color_scheme、human_preset 和 launch_args 会折叠为安全默认值、`null` 或过滤后的公开参数。
+- 正常 profile config export/import、sensitive proxy confirmation、bundle export/import 和 profile bundle helper 行为保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields -q
+# RED then GREEN；初始 1 failed，最终与 bundle RED/GREEN 组合 2 passed in 1.25s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_export_profile_bundle_sanitizes_persisted_identity_fields -q
+# RED then GREEN；初始 1 failed，最终与 bulk RED/GREEN 组合 2 passed in 1.25s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -k "export_profile_configs or config_import or round_trip" -q
+# 6 passed, 14 deselected in 1.19s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -k "export_profiles or profile_bundle or config_import" -q
+# 23 passed, 201 deselected in 2.30s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_profile_bundle.py -q
+# 4 passed in 0.23s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 579 passed in 32.27s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.45s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile template response redaction guardrail
 
 背景：

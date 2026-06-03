@@ -553,6 +553,62 @@ def test_bulk_export_profile_configs_returns_partial_results(app_client: TestCli
     assert second_result["config"]["name"] == "Export B"
 
 
+def test_bulk_export_profile_configs_sanitizes_persisted_identity_fields(app_client: TestClient):
+    leak_marker = "profile-export-token-secret"
+    created = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Export Sanitized",
+            "platform": "linux",
+            "screen_width": 1440,
+            "screen_height": 900,
+            "gpu_vendor": "NVIDIA",
+            "gpu_renderer": "NVIDIA RTX",
+            "hardware_concurrency": 8,
+            "timezone": "America/Los_Angeles",
+            "locale": "en-US",
+            "color_scheme": "dark",
+            "human_preset": "careful",
+            "launch_args": ["--private-window"],
+        },
+    ).json()
+    db.update_profile(
+        created["id"],
+        platform=f"linux?token={leak_marker}",
+        screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
+        screen_height=999999,
+        gpu_vendor=f"NVIDIA\nAuthorization: Bearer {leak_marker}",
+        gpu_renderer=f"ANGLE (NVIDIA) https://gpu.invalid/?token={leak_marker}",
+        hardware_concurrency=f"8 cookie={leak_marker}",
+        timezone=f"America/Los_Angeles?token={leak_marker}",
+        locale=f"en-US-token-{leak_marker}",
+        color_scheme=f"dark?token={leak_marker}",
+        human_preset=f"careful?token={leak_marker}",
+        launch_args=[
+            "--private-window",
+            f"--proxy-server=https://proxy.invalid/?token={leak_marker}",
+            f"--user-agent=Bearer {leak_marker}",
+        ],
+    )
+
+    resp = app_client.post("/api/profiles/export", json={"profile_ids": [created["id"]]})
+
+    assert resp.status_code == 200
+    config = resp.json()["results"][0]["config"]
+    assert config["platform"] == "windows"
+    assert config["screen_width"] == 1920
+    assert config["screen_height"] == 1080
+    assert config["gpu_vendor"] is None
+    assert config["gpu_renderer"] is None
+    assert config["hardware_concurrency"] is None
+    assert config["timezone"] is None
+    assert config["locale"] is None
+    assert config["color_scheme"] is None
+    assert config["human_preset"] == "default"
+    assert config["launch_args"] == ["--private-window"]
+    assert leak_marker not in resp.text
+
+
 def test_bulk_export_profile_configs_requires_at_least_one_profile_id(app_client: TestClient):
     resp = app_client.post("/api/profiles/export", json={"profile_ids": []})
 

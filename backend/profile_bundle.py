@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from .cookie_formats import COOKIE_JSON_FORMAT, CookieJsonDocument, cookie_json_audit_summary
 from .models import ProfileConfigExport
-from .proxies import redact_proxy_asset_url
+from .profile_import import sanitize_profile_config_export_data
 
 
 PROFILE_BUNDLE_FORMAT = "cloakbrowser.profile-bundle.v1"
@@ -107,9 +107,10 @@ def _profile_config_for_bundle(
     *,
     include_sensitive_proxy: bool,
 ) -> ProfileConfigExport:
-    config = dict(profile)
-    if not include_sensitive_proxy and config.get("proxy"):
-        config["proxy"] = redact_proxy_asset_url(str(config["proxy"]))
+    config = sanitize_profile_config_export_data(
+        profile,
+        include_sensitive_proxy=include_sensitive_proxy,
+    )
     return ProfileConfigExport(**config)
 
 
