@@ -99,4 +99,35 @@ describe("ProfileFilters", () => {
     expect(screen.getByLabelText("Tag filter").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("true");
     expect(screen.getByLabelText("Country filter").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("false");
   });
+
+  it("redacts tag option labels without changing submitted filter values", () => {
+    const leakMarker = "profile-filter-tag-secret";
+    const rawTag =
+      "warm Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/filter-tag-secret 203.0.113.90`;
+    const safeTag = "warm [redacted] [redacted] [redacted-path] [redacted-ip]";
+    const onChange = vi.fn();
+
+    render(
+      <ProfileFilters
+        value={value}
+        options={{ countries: [], tags: [rawTag] }}
+        onChange={onChange}
+      />,
+    );
+
+    const option = screen.getByRole("option", { name: safeTag }) as HTMLOptionElement;
+    expect(option.value).toBe(rawTag);
+    expect(document.body.textContent).not.toContain(leakMarker);
+    expect(document.body.textContent).not.toContain("Authorization");
+    expect(document.body.textContent).not.toContain("Bearer");
+    expect(document.body.textContent).not.toContain("token=");
+    expect(document.body.textContent).not.toContain("/data/filter-tag-secret");
+    expect(document.body.textContent).not.toContain("203.0.113.90");
+
+    fireEvent.change(screen.getByLabelText("Tag filter"), {
+      target: { value: rawTag },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ ...value, tag: rawTag });
+  });
 });

@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import type { ReactNode } from "react";
+import { publicProfileTagLabel } from "../lib/errorDisplay";
 import type { ProfileFilterOptions, ProfileFilterState } from "../lib/filters";
 
 interface ProfileFiltersProps {
@@ -115,7 +116,7 @@ export function ProfileFilters({
           onChange={(nextValue) => update("tag", nextValue)}
           options={[
             ["all", "All tags"],
-            ...options.tags.map((tag) => [tag, tag] as const),
+            ...options.tags.map((tag) => [tag, publicProfileTagLabel(tag)] as const),
           ]}
         />
         <FilterSelect

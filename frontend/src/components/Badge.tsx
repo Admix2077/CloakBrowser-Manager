@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { publicProfileTagLabel } from "../lib/errorDisplay";
 
 type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger" | "muted";
 type BadgeType = "health" | "runtime" | "proxy" | "country" | "tag";
@@ -85,15 +86,17 @@ export function BadgeDot({
 }
 
 export function TagBadge({ tag, color }: { tag: string; color?: string | null }) {
+  const safeTag = publicProfileTagLabel(tag);
+
   return (
     <Badge
       type="tag"
       tone="muted"
       className="max-w-full truncate"
       style={getAccessibleTagStyle(color)}
-      title={tag}
+      title={safeTag}
     >
-      {tag}
+      {safeTag}
     </Badge>
   );
 }

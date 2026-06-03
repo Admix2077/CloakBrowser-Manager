@@ -252,6 +252,45 @@ describe("ProfileTable", () => {
     }
   });
 
+  it("redacts persisted profile tag labels from table rendered evidence", () => {
+    const leakMarker = "profile-tag-secret";
+    const rawTag =
+      "warm Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/profile-tag-secret 203.0.113.89`;
+    const safeTag = "warm [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    render(
+      <ProfileTable
+        profiles={[profile({
+          id: "polluted-tag",
+          name: "Tagged Profile",
+          tags: [{ tag: rawTag, color: "#22c55e" }],
+        })]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(safeTag)).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-tag-secret",
+      "203.0.113.89",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("keeps the desktop header offset below the sticky bulk action bar", () => {
     render(
       <ProfileTable

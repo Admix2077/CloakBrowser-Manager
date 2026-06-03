@@ -55,6 +55,10 @@ export function publicProfileName(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 
+export function publicProfileTagLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
 export function publicErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) return fallback;
   const message = publicErrorText(err.message);

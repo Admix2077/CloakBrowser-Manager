@@ -6169,3 +6169,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、proxy/provider preset persistence、CSV parsing、CSV import payload、filter values、random assignment payload、proxy assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy asset metadata UI/search release-evidence 边界。
+
+## 2026-06-04 Profile tag label UI/filter release-evidence guardrail
+
+背景：
+
+- Profile table/list、CSV preview 和 filters 属于 profile operations release evidence 面。
+- 旧 tag badge 和 tag filter option 会直接显示 raw persisted tag；异常/历史 profile tag 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 UI text/title 或 filter option evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Profile tag badges 的可见文本和 tooltip 使用 public profile tag label boundary。
+- Profile tag filter option visible label 使用同一 public label；option value 保持 raw，筛选匹配和 `onChange` payload 语义不变。
+- Tag color tint、profile table/list/CSV preview 复用路径、正常低敏 tag 文案和 filter selection 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts persisted profile tag labels"
+# RED then GREEN；旧实现把污染 profile tag 写入 table text/title evidence
+
+npm --prefix frontend test -- --run src/components/ProfileFilters.test.tsx -t "redacts tag option labels"
+# RED then GREEN；旧实现把污染 profile tag 写入 filter option evidence
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx src/components/ProfileFilters.test.tsx src/components/Badge.test.tsx src/components/ProfileList.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx
+# 5 files passed, 63 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、profile tag persistence、profile edit form raw values、filter option values、filter matching、bulk tag payload、CSV import payload、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile tag label UI/filter release-evidence 边界。

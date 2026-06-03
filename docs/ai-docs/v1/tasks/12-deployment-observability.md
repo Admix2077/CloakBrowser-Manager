@@ -6487,3 +6487,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 proxy/provider preset API schema、proxy asset persistence、provider preset persistence、CSV parsing/import payload、filter values、random assignment payload、proxy assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile tag label UI/filter evidence guardrail
+
+背景：
+
+- Profile table/list、CSV preview 和 profile filters 会显示 persisted profile tag 文本，是 profile operations 回归路径上的可见 release evidence。
+- 后端 response 已有多处 public-value 边界，但前端仍不应信任异常 response、历史/手工污染 row 或测试桩中的 raw tag label。
+- 污染 tag 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 tag badge 文本、tooltip 或 filter option text。
+
+已覆盖：
+
+- `TagBadge` 现在对可见文本和 `title` 使用共享 public profile tag label boundary。
+- Profile tag filter option visible label 使用同一展示边界；option value 保持 raw，避免改变现有 filter matching 和 `onChange` 提交语义。
+- 正常低敏 tag 文本、tag color tint、profile table/list/CSV preview 复用路径和 filter selection 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts persisted profile tag labels"
+# RED: 旧实现把污染 profile tag 写入 table text/title；GREEN: 1 passed, 40 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileFilters.test.tsx -t "redacts tag option labels"
+# RED: 旧实现把污染 profile tag 写入 filter option text；GREEN: 1 passed, 3 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx src/components/ProfileFilters.test.tsx src/components/Badge.test.tsx src/components/ProfileList.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx
+# 5 files passed, 63 tests passed
+```
+
+边界：
+
+- 这是 Profile tag label UI/filter release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 profile tag persistence、profile edit form raw values、filter option values、filter matching、bulk tag payload、CSV import payload、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
