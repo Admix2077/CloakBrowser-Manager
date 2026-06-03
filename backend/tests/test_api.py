@@ -1759,6 +1759,49 @@ def test_system_diagnostics_reports_low_sensitive_launch_failure_summary(
     assert "secret-password" not in log_text
 
 
+def test_system_diagnostics_sanitizes_active_runtime_ports_and_displays(
+    app_client: TestClient,
+):
+    leak_marker = "diagnostics-runtime-secret"
+    clean_profile = app_client.post("/api/profiles", json={"name": "Diagnostics Clean Runtime"}).json()
+    polluted_profile = app_client.post("/api/profiles", json={"name": "Diagnostics Polluted Runtime"}).json()
+
+    clean_running = MagicMock(spec=RunningProfile)
+    clean_running.display = 100
+    clean_running.ws_port = 6100
+    clean_running.engine = "invisible_playwright"
+    clean_running.profile_id = clean_profile["id"]
+
+    polluted_running = MagicMock(spec=RunningProfile)
+    polluted_running.display = f"101 token={leak_marker}"
+    polluted_running.ws_port = f"6101 Authorization=Bearer {leak_marker}"
+    polluted_running.engine = "invisible_playwright"
+    polluted_running.profile_id = polluted_profile["id"]
+
+    main.browser_mgr.running[clean_profile["id"]] = clean_running
+    main.browser_mgr.running[polluted_profile["id"]] = polluted_running
+    try:
+        resp = app_client.get("/api/diagnostics")
+    finally:
+        main.browser_mgr.running.pop(clean_profile["id"], None)
+        main.browser_mgr.running.pop(polluted_profile["id"], None)
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["counts"]["running"] == 2
+    assert data["runtime"]["active_displays"] == [100]
+    assert data["runtime"]["active_vnc_ws_ports"] == [6100]
+
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

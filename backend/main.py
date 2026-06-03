@@ -1199,6 +1199,13 @@ def _public_profile_display(value: object) -> str | None:
     return None
 
 
+def _public_profile_display_number(value: object) -> int | None:
+    display = _public_profile_display(value)
+    if display is None:
+        return None
+    return int(display[1:])
+
+
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     safe = dict(session)
     safe["id"] = _public_uuid_identifier(safe.get("id")) or "unknown"
@@ -3112,8 +3119,16 @@ async def get_system_diagnostics():
             automation_task_counts=task_counts,
         ),
         runtime=DiagnosticsRuntimeResponse(
-            active_displays=sorted(running.display for running in running_profiles),
-            active_vnc_ws_ports=sorted(running.ws_port for running in running_profiles),
+            active_displays=sorted(
+                display
+                for running in running_profiles
+                if (display := _public_profile_display_number(running.display)) is not None
+            ),
+            active_vnc_ws_ports=sorted(
+                port
+                for running in running_profiles
+                if (port := _public_vnc_ws_port(running.ws_port)) is not None
+            ),
             max_running_profiles=get_max_running_profiles_limit(),
             launch_failure_count=launch_failure_summary["launch_failure_count"],
             launch_failure_stage_counts=launch_failure_summary["launch_failure_stage_counts"],
