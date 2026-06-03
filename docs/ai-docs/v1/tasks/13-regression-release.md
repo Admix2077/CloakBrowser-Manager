@@ -2612,6 +2612,47 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Firefox identity major-version diagnostics guardrail
+
+背景：
+
+- Pixelscan no-proxy gate 当前仍卡在 `PXLSCN-FINGERPRINT-MASKING`。
+- 已知低敏 identity summary 中，Manager managed UA version 与 bundled Firefox application.ini version 是排查重点之一。
+- Release evidence 需要直接显示 major version 是否一致，避免每次进入容器读取 application.ini 或保存 full UA/path 类敏感证据。
+
+已覆盖：
+
+- `/api/diagnostics` runtime 现在返回 `firefox_identity_major_version_match`。
+- System diagnostics 页面显示 `Firefox major match: match|mismatch|unknown`。
+- 该字段只来自公开数字 major version 比较，不暴露 full UA、binary path、profile path、package path 或外站页面内容。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 2 passed in 0.86s
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts
+# Test Files 2 passed；Tests 42 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 629 passed in 39.55s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.59s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 VNC/clipboard profile-id release-evidence guardrail
 
 背景：

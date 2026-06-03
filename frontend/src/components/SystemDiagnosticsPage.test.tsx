@@ -49,6 +49,7 @@ function diagnostics(overrides: Partial<SystemDiagnostics> = {}): SystemDiagnost
       invisible_playwright_version: "0.1.8",
       firefox_binary_version: "150.0.1",
       firefox_binary_build_id: "20260521160037",
+      firefox_identity_major_version_match: false,
       stealth_pref_count: 29,
       stealth_pref_categories: ["audio", "canvas", "fingerprint", "hardware", "screen", "webgl", "webrtc"],
     },
@@ -99,6 +100,7 @@ describe("SystemDiagnosticsPage", () => {
     expect(within(page).getByRole("group", { name: "Engine package: invisible_playwright 0.1.8" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox binary: 150.0.1" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Firefox BuildID: 20260521160037" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Firefox major match: mismatch" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Stealth prefs: 29 keys" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Stealth categories: audio, canvas, fingerprint, hardware, screen, webgl, webrtc" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Live sessions: 2" })).toBeTruthy();

@@ -97,6 +97,10 @@ export function SystemDiagnosticsPage() {
                 />
                 <InfoRow label="Firefox binary" value={diagnostics.runtime.firefox_binary_version ?? "unknown"} />
                 <InfoRow label="Firefox BuildID" value={diagnostics.runtime.firefox_binary_build_id ?? "unknown"} />
+                <InfoRow
+                  label="Firefox major match"
+                  value={formatMajorVersionMatch(diagnostics.runtime.firefox_identity_major_version_match)}
+                />
                 <InfoRow label="Stealth prefs" value={formatStealthPrefCount(diagnostics.runtime.stealth_pref_count)} />
                 <InfoRow label="Stealth categories" value={formatStringList(diagnostics.runtime.stealth_pref_categories)} />
               </div>
@@ -210,6 +214,16 @@ function formatDisplays(values: number[]): string {
 
 function formatStealthPrefCount(value: number | null): string {
   return value === null ? "unknown" : `${value} keys`;
+}
+
+function formatMajorVersionMatch(value: boolean | null): string {
+  if (value === true) {
+    return "match";
+  }
+  if (value === false) {
+    return "mismatch";
+  }
+  return "unknown";
 }
 
 function formatStringList(values: string[]): string {

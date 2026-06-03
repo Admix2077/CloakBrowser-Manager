@@ -1260,6 +1260,24 @@ def _normalize_local_storage_entries(raw_entries: object) -> list[dict[str, str]
     return entries
 
 
+def _major_version(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    major = value.strip().split(".", 1)[0]
+    return major if major.isdecimal() else None
+
+
+def _firefox_identity_major_version_match(
+    managed_user_agent_version: object,
+    firefox_binary_version: object,
+) -> bool | None:
+    managed_major = _major_version(managed_user_agent_version)
+    binary_major = _major_version(firefox_binary_version)
+    if managed_major is None or binary_major is None:
+        return None
+    return managed_major == binary_major
+
+
 _PROFILE_CONFIG_IMPORT_FIELDS = {
     "name",
     "fingerprint_seed",
@@ -2965,6 +2983,10 @@ async def get_system_diagnostics():
             invisible_playwright_version=firefox_identity["invisible_playwright_version"],
             firefox_binary_version=firefox_identity["firefox_binary_version"],
             firefox_binary_build_id=firefox_identity["firefox_binary_build_id"],
+            firefox_identity_major_version_match=_firefox_identity_major_version_match(
+                firefox_identity["managed_user_agent_version"],
+                firefox_identity["firefox_binary_version"],
+            ),
             stealth_pref_count=firefox_identity["stealth_pref_count"],
             stealth_pref_categories=firefox_identity["stealth_pref_categories"],
         ),

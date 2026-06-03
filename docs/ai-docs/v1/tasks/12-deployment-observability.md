@@ -4109,3 +4109,48 @@ npm --prefix frontend run build
 
 - 这是 VNC/RFB runtime log 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw VNC/RFB frames、automation payloads 或 raw audit metadata。
+
+## 2026-06-03 Firefox identity major-version diagnostics guardrail
+
+背景：
+
+- Pixelscan no-proxy diagnostic 已经显示底层 managed UA major 与 bundled Firefox binary major 存在版本差异风险。
+- 旧的 System diagnostics 分开展示 Managed UA、Firefox binary 和 Firefox BuildID，但没有直接给出 major 是否一致的低敏判断。
+- Release triage 需要一个无需进入容器、无需记录 full UA/path/profile data 的快速信号。
+
+已覆盖：
+
+- `GET /api/diagnostics` 的 runtime payload 新增 `firefox_identity_major_version_match`。
+- 该字段只比较 managed UA version 与 Firefox binary version 的 major number：
+  - 一致返回 `true`。
+  - 不一致返回 `false`。
+  - 任一侧不是公开数字版本时返回 `null`。
+- 前端 System diagnostics 新增 `Firefox major match` 行，显示 `match`、`mismatch` 或 `unknown`。
+- 现有 Managed UA、Firefox binary、Firefox BuildID、stealth prefs 等低敏诊断语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 2 passed in 0.86s
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx src/lib/api.test.ts
+# Test Files 2 passed；Tests 42 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 629 passed in 39.55s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.59s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 Firefox identity observability guardrail，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录 full UA、package path、Firefox binary path、screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

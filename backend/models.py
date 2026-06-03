@@ -561,6 +561,7 @@ class DiagnosticsRuntimeResponse(BaseModel):
     invisible_playwright_version: str | None = None
     firefox_binary_version: str | None = None
     firefox_binary_build_id: str | None = None
+    firefox_identity_major_version_match: bool | None = None
     stealth_pref_count: int | None = None
     stealth_pref_categories: list[str] = Field(default_factory=list)
 

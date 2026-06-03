@@ -1529,6 +1529,7 @@ def test_system_diagnostics_returns_low_sensitive_snapshot(
     assert data["runtime"]["invisible_playwright_version"]
     assert "firefox_binary_version" in data["runtime"]
     assert "firefox_binary_build_id" in data["runtime"]
+    assert data["runtime"]["firefox_identity_major_version_match"] is False
     assert data["runtime"]["stealth_pref_count"] >= 20
     assert {
         "audio",
