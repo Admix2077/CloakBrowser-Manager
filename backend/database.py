@@ -954,6 +954,16 @@ _AUDIT_SENSITIVE_KEYS = {
 
 _AUDIT_SENSITIVE_KEY_PARTS = ("cookie", "password", "secret")
 _AUDIT_PROXY_URL_RE = re.compile(r"\b(?:http|https|socks5)://[^\s\"'<>]+", re.IGNORECASE)
+_AUDIT_AUTHORIZATION_RE = re.compile(
+    r"\bAuthorization\s*[:=]\s*(?:Bearer\s+)?[A-Za-z0-9._~+/\-=]+",
+    re.IGNORECASE,
+)
+_AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"\b(auth_token|cookie|password|runtime_service_token|secret|service_token|token|viewer_token)"
+    r"\s*=\s*([^\s&#,;]+)",
+    re.IGNORECASE,
+)
+_AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
 
 
 def _is_sensitive_audit_key(key: str) -> bool:
@@ -979,10 +989,16 @@ def _sanitize_audit_metadata(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_audit_metadata(item) for item in value]
     if isinstance(value, str):
-        return _AUDIT_PROXY_URL_RE.sub(
+        sanitized = _AUDIT_PROXY_URL_RE.sub(
             lambda match: redact_proxy_asset_url(match.group(0)),
             value,
         )
+        sanitized = _AUDIT_AUTHORIZATION_RE.sub("Authorization=[redacted]", sanitized)
+        sanitized = _AUDIT_SENSITIVE_ASSIGNMENT_RE.sub(
+            lambda match: f"{match.group(1)}=[redacted]",
+            sanitized,
+        )
+        return _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
     return value
 
 

@@ -1786,3 +1786,39 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 profile timezone/locale 存储、GeoIP timezone/locale parsing、mismatch detection、health status/warning code、audit event shape、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Audit metadata string redaction guardrail
+
+背景：
+
+- Audit metadata 是 release smoke 后长期保留的可观测性数据。
+- 旧 sanitizer 会删除敏感 key 和清理 URL userinfo，但不会处理普通 string value 中的 standalone `token=...` 或 `Authorization=Bearer ...`。
+
+已覆盖：
+
+- 普通 audit metadata string value 中的 authorization/bearer/token/password/secret/cookie/service token assignments 会被 redacted。
+- Nested metadata、sensitive key removal、proxy URL redaction 和安全字符串保留行为保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py backend/tests/test_proxies.py backend/tests/test_bulk.py backend/tests/test_health.py -q
+# 316 passed in 25.76s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 559 passed in 32.99s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 audit event schema、event types、actor/profile/session ids、runtime viewer flow、automation task semantics、profile/proxy CRUD behavior、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

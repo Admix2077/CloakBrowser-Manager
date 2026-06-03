@@ -1914,3 +1914,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 profile timezone/locale 存储、GeoIP timezone/locale parsing、mismatch detection、health status/warning code、audit event shape、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
 - 不记录或公开 raw health mismatch warning values、URL/query token、Authorization/Bearer、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Audit metadata string redaction guardrail
+
+背景：
+
+- `db.create_audit_event()` 会持久化 runtime/profile/proxy/automation/viewer/health/bulk 等多类审计 metadata。
+- 旧通用 sanitizer 会删除敏感 key，并对 URL 中的 userinfo 做 proxy URL redaction，但普通 string value 里的 standalone `token=...` 或 `Authorization=Bearer ...` 不会被处理；这类文本可来自异常摘要、用户输入名称/provider、未来 audit helper 或历史调用方。
+
+已覆盖：
+
+- 通用 audit metadata string sanitizer 现在会 redacts:
+  - `Authorization=Bearer ...` / `Authorization: Bearer ...`
+  - standalone `Bearer ...`
+  - `token=...`、`auth_token=...`、`password=...`、`secret=...`、`cookie=...`、`runtime_service_token=...`、`service_token=...`、`viewer_token=...`
+- 保留现有 sensitive key 删除、nested metadata 递归、proxy URL userinfo redaction 和普通安全字符串行为。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED: 1 failed；message 中 token=message-secret 和 Authorization=Bearer bearer-secret 原样保留
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py backend/tests/test_api.py backend/tests/test_proxies.py backend/tests/test_bulk.py backend/tests/test_health.py -q
+# 316 passed in 25.76s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 559 passed in 32.99s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 audit event schema、event types、actor/profile/session ids、runtime viewer flow、automation task semantics、profile/proxy CRUD behavior、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- 不记录或公开 audit metadata string value 中的 token/password/secret/cookie/Authorization/Bearer 文本；proxy URL host redaction 行为保持既有低敏 URL bucket。

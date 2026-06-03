@@ -1102,7 +1102,10 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "viewer_token_hash": "hashed-viewer-token",
             "runtime_service_token": "runtime-secret",
             "proxy_url": "http://user:proxy-pass@example.test:8080",
-            "message": "proxy http://user:message-pass@example.test:8080 failed",
+            "message": (
+                "proxy http://user:message-pass@example.test:8080 failed "
+                "token=message-secret Authorization=Bearer bearer-secret"
+            ),
             "nested": {
                 "cookie": "session-cookie",
                 "safe_nested": "also-kept",
@@ -1114,13 +1117,18 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert len(events) == 1
     assert events[0]["metadata"] == {
         "safe": "kept",
-        "message": "proxy http://example.test:8080 failed",
+        "message": (
+            "proxy http://example.test:8080 failed "
+            "token=[redacted] Authorization=[redacted]"
+        ),
         "nested": {"safe_nested": "also-kept"},
     }
     serialized_events = json.dumps(events, sort_keys=True)
     assert "plain-viewer-token" not in serialized_events
     assert "hashed-viewer-token" not in serialized_events
     assert "runtime-secret" not in serialized_events
+    assert "message-secret" not in serialized_events
+    assert "bearer-secret" not in serialized_events
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events
