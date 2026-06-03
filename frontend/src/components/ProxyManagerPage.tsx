@@ -1422,7 +1422,7 @@ function ProxyCsvImportDialog({
                 <option value="">No preset</option>
                 {providerPresets.map((preset) => (
                   <option key={preset.id} value={preset.id}>
-                    {preset.name}
+                    {publicProviderPresetLabel(preset.name)}
                   </option>
                 ))}
               </select>
