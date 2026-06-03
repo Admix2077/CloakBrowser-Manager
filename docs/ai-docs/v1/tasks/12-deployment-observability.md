@@ -3641,3 +3641,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 automation task id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 Profile template id guardrail
+
+背景：
+
+- Profile template list/detail/update response 和 CSV import preview 是模板/批量创建 release smoke 的常用证据面。
+- 继续复查发现 template identity field 已经清洗，但模板 `id` 本身以及 CSV preview `profile.template_id` 仍信任历史/手工 DB id。
+- 如果历史/手工 DB row 含有非 UUID template id，这些 API/preview 边界会把 URL/header/token 风格 id 文本带入低敏 release evidence。
+
+已覆盖：
+
+- ProfileTemplateResponse `id` 现在只保留 canonical UUID；非 UUID 历史/手工 id 折叠为 `unknown`。
+- CSV import preview `profile.template_id` 现在只保留 canonical UUID；非 UUID 历史/手工 id 折叠为 `unknown`。
+- 内部 template lookup、template field application、profile create/import data 仍使用原始 template id，不改变既有模板匹配和创建语义。
+- 正常 UUID template CRUD、template field copy、CSV preview/import、template identity field redaction 和 bulk tests 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_profile_template_api_and_import_preview_sanitize_persisted_template_id -q
+# RED: 1 failed；template detail response id 直接保留非 UUID template id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_profile_template_api_and_import_preview_sanitize_persisted_template_id -q
+# 1 passed in 0.65s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py backend/tests/test_bulk.py -q
+# 32 passed in 2.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 613 passed in 39.91s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.98s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 profile template id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。

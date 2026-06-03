@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 from starlette.testclient import TestClient
 
@@ -190,6 +191,79 @@ def test_profile_template_api_sanitizes_persisted_identity_fields(app_client: Te
         assert data["human_preset"] == "default"
         assert data["launch_args"] == ["--private-window"]
         assert leak_marker not in json.dumps(data, sort_keys=True)
+
+
+def test_profile_template_api_and_import_preview_sanitize_persisted_template_id(
+    app_client: TestClient,
+):
+    leak_marker = "template-id-secret"
+    template = db.create_profile_template(
+        name="Historical polluted template id",
+        platform="linux",
+    )
+    polluted_template_id = (
+        f"template-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute(
+            "UPDATE profile_templates SET id = ? WHERE id = ?",
+            (polluted_template_id, template["id"]),
+        )
+        conn.commit()
+
+    encoded_template_id = quote(polluted_template_id, safe="")
+    detail = app_client.get(f"/api/profile-templates/{encoded_template_id}")
+    listed = app_client.get("/api/profile-templates")
+    update = app_client.put(
+        f"/api/profile-templates/{encoded_template_id}",
+        json={"screen_width": 1366},
+    )
+    preview = app_client.post(
+        "/api/profiles/import/preview",
+        json={
+            "csv_text": "\n".join(
+                [
+                    "name,template",
+                    "Imported from polluted template id,Historical polluted template id",
+                ]
+            ),
+        },
+    )
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    assert update.status_code == 200
+    assert preview.status_code == 200
+
+    listed_template = next(
+        template
+        for template in listed.json()
+        if template["name"] == "Historical polluted template id"
+    )
+    for response in (detail.json(), listed_template, update.json()):
+        assert response["id"] == "unknown"
+        assert response["platform"] == "linux"
+
+    preview_row = preview.json()["rows"][0]
+    assert preview_row["ok"] is True
+    assert preview_row["profile"]["template_id"] == "unknown"
+    assert preview_row["profile"]["platform"] == "linux"
+
+    serialized = json.dumps(
+        {
+            "template_responses": [detail.json(), listed_template, update.json()],
+            "preview": preview.json(),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
 
 
 def test_delete_profile_template_requires_explicit_confirmation_without_side_effects(

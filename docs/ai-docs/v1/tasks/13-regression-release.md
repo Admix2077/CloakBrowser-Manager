@@ -2612,6 +2612,43 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Profile template id guardrail
+
+背景：
+
+- Release smoke 会读取 profile template list/detail/update response，也会通过 CSV import preview 验证模板匹配后的 profile preview。
+- 旧实现已经清洗 template identity fields，但仍直接回显历史/手工 DB template id。
+
+已覆盖：
+
+- ProfileTemplateResponse `id` 只保留 canonical UUID；非 UUID template id 返回 `unknown`。
+- CSV import preview `profile.template_id` 只保留 canonical UUID；非 UUID template id 返回 `unknown`。
+- 内部模板 lookup 和 field application 语义不变，普通 UUID template CRUD、CSV preview/import 和 bulk paths 仍保持既有格式。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_profile_template_api_and_import_preview_sanitize_persisted_template_id -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.65s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py backend/tests/test_bulk.py -q
+# 32 passed in 2.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 613 passed in 39.91s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.98s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Automation task id guardrail
 
 背景：

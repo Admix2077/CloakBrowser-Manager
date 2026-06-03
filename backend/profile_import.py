@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import re
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -113,6 +114,23 @@ class ProfileTemplateNotFoundError(ValueError):
     """Raised when a template id used by profile creation is missing."""
 
 
+def _public_uuid_identifier(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = uuid.UUID(text)
+    except ValueError:
+        return None
+    return str(parsed)
+
+
+def _public_template_identifier(value: object) -> str:
+    return _public_uuid_identifier(value) or "unknown"
+
+
 def apply_profile_template_fields(data: dict[str, Any], explicit_fields: set[str]) -> dict[str, Any]:
     """Apply copied template fingerprint fields while preserving explicit profile fields."""
     template_id = data.get("template_id")
@@ -133,6 +151,7 @@ def apply_profile_template_fields(data: dict[str, Any], explicit_fields: set[str
 
 def sanitize_profile_template_response_data(template: dict[str, Any]) -> dict[str, Any]:
     safe = dict(template)
+    safe["id"] = _public_template_identifier(template.get("id"))
     for field in TEMPLATE_FIELDS:
         safe_value, should_copy = _safe_template_field(field, template.get(field))
         safe[field] = safe_value if should_copy else TEMPLATE_RESPONSE_DEFAULTS[field]
@@ -285,6 +304,8 @@ def _preview_from_parsed(row: ParsedProfileImportRow) -> ProfileImportPreviewRow
         )
 
     profile_data = dict(row.create_data)
+    if profile_data.get("template_id") is not None:
+        profile_data["template_id"] = _public_template_identifier(profile_data.get("template_id"))
     profile_data["proxy"] = _redact_optional_proxy(profile_data.get("proxy"))
     profile_data["tags"] = [TagResponse(**tag) for tag in profile_data.get("tags") or []]
     profile = ProfileImportPreviewProfile(**profile_data)
