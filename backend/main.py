@@ -1043,8 +1043,22 @@ def _public_runtime_external_session_id(value: object) -> str | None:
     return external_session_id
 
 
+def _public_uuid_identifier(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = uuid.UUID(text)
+    except ValueError:
+        return None
+    return str(parsed)
+
+
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     safe = dict(session)
+    safe["profile_id"] = _public_uuid_identifier(safe.get("profile_id")) or "unknown"
     safe["status"] = _public_runtime_session_status(safe.get("status"))
     safe["external_session_id"] = _public_runtime_external_session_id(
         safe.get("external_session_id")
@@ -1057,7 +1071,7 @@ def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None =
         event_type=event_type,
         actor_type="runtime_service",
         runtime_session_id=str(session["id"]),
-        profile_id=str(session["profile_id"]),
+        profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
         metadata=metadata,
     )
@@ -1068,7 +1082,7 @@ def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict |
         event_type=event_type,
         actor_type="runtime_viewer",
         runtime_session_id=str(session["id"]),
-        profile_id=str(session["profile_id"]),
+        profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
         metadata=metadata,
     )
@@ -1085,7 +1099,11 @@ def _audit_runtime_viewer_failure(
             event_type="runtime.viewer.failed",
             actor_type="runtime_viewer",
             runtime_session_id=str(session["id"]) if session else session_id,
-            profile_id=str(session["profile_id"]) if session else None,
+            profile_id=(
+                _public_uuid_identifier(session.get("profile_id"))
+                if session
+                else None
+            ),
             external_session_id=(
                 _public_runtime_external_session_id(session.get("external_session_id"))
                 if session

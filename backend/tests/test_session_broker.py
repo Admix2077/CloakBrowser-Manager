@@ -198,6 +198,44 @@ def test_runtime_session_response_sanitizes_persisted_external_session_id(
         assert leaked not in serialized
 
 
+def test_runtime_session_response_sanitizes_persisted_profile_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "runtime-profile-id-secret"
+    profile_id = _create_profile(app_client)
+    polluted_profile_id = (
+        f"https://runtime-profile.example/profile?token={leak_marker} "
+        f"Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    session = db.create_runtime_session(
+        profile_id=polluted_profile_id,
+        external_session_id="pm-session-persisted-profile-id",
+        lease_seconds=900,
+    )
+
+    resp = app_client.get(
+        f"/api/runtime/sessions/{session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["profile_id"] == "unknown"
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "runtime-profile.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_viewer_failure_audit_omits_sensitive_external_session_id(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -228,6 +266,49 @@ def test_runtime_viewer_failure_audit_omits_sensitive_external_session_id(
     for leaked in (
         leak_marker,
         "viewer.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+        "wrong-token",
+    ):
+        assert leaked not in serialized
+
+
+def test_runtime_viewer_failure_audit_omits_sensitive_profile_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "viewer-profile-id-secret"
+    profile_id = _create_profile(app_client)
+    polluted_profile_id = (
+        f"https://viewer-profile.example/profile?token={leak_marker} "
+        f"Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    session = db.create_runtime_session(
+        profile_id=polluted_profile_id,
+        external_session_id="pm-session-persisted-profile-id",
+        lease_seconds=900,
+    )
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            f"/api/runtime/sessions/{session['id']}/vnc?viewer_token=wrong-token",
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+
+    assert rejected.value.code == 4401
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["profile_id"] is None
+    assert failures[0]["external_session_id"] == "pm-session-persisted-profile-id"
+    serialized = json.dumps(failures, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "viewer-profile.example",
         "Authorization",
         "Bearer",
         "token=",

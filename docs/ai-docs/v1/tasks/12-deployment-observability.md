@@ -2951,3 +2951,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage, viewer token generation, VNC proxying, or external smoke scripts。
 - 不在 runtime external id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Runtime profile id public-value guardrail
+
+背景：
+
+- Runtime service API response 与 runtime service/viewer audit 顶层字段都会暴露 `profile_id`，用于关联 runtime session 与本地 profile。
+- 正常 profile id 应为 UUID；但旧版本、手工修复或损坏 DB row 可能让 runtime session 关联到非 UUID profile id。
+- DB audit metadata sanitizer 不处理顶层 `profile_id`，因此 URL/query token、Authorization/Bearer 或 header-like profile id 会进入 release smoke response/audit evidence。
+
+已覆盖：
+
+- 新增 UUID-only public identifier helper；只保留 canonical UUID 字符串。
+- RuntimeSessionResponse 中非 UUID `profile_id` 折叠为 `unknown`。
+- Runtime service audit、runtime viewer connected/disconnected audit 和 runtime viewer failure audit 的顶层 `profile_id` 复用 UUID-only filter；非公开值省略为 `null`。
+- DB 原始 row、runtime session lease、viewer credential、runtime service token、external session id guardrail 和正常 UUID profile id 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_profile_id backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_omits_sensitive_profile_id -q
+# RED: 2 failed；response 和 audit 顶层 profile_id 直接保留非 UUID URL/header/token-like 文本
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_profile_id backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_omits_sensitive_profile_id -q
+# 2 passed in 0.80s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 35 passed in 3.73s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 592 passed in 34.53s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.33s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 runtime profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
