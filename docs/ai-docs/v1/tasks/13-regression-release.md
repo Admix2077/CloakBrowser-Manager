@@ -5197,3 +5197,43 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 audit event schema、backend API response schemas、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend public error IP literal release-evidence 边界。
+
+## 2026-06-04 Proxy Manager persisted text release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 Proxy Manager 表格、tooltip 和搜索过滤结果。
+- Proxy Manager 操作失败提示已走公共错误边界，但 persisted `proxy.notes` 和 `proxy.last_check_error` 仍只清 URL credentials。
+- 历史/手工污染 proxy row 可能通过这些字段显示 Authorization/Bearer、token=、本地路径或 IP literal。
+
+已覆盖：
+
+- Proxy Manager 表格中的 `notes` 和 `last_check_error` 现在使用 `publicErrorText()`。
+- 本地搜索文本对这两个字段使用同一脱敏后的内容。
+- URL host/port 仍可读；credential/header/token/path/IP literal 不再进入可见 evidence。
+- 正常 `last_check_ip` 业务字段展示、proxy check backend 和 assignment flows 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# RED then GREEN；旧实现保留 Authorization/Bearer、token=、/data path、IPv4 和 IPv6
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.27s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 234 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.52s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、proxy CRUD/check backend、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager persisted text release-evidence 边界。

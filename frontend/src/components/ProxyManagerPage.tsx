@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, Pencil, RefreshCw, Search, Settings2, Shuffle, Trash2, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyProviderPresetCreateData, type ProxyRandomAssignRequestData } from "../lib/api";
-import { publicErrorMessage } from "../lib/errorDisplay";
+import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
 import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
@@ -2024,9 +2024,9 @@ function ProxyRow({
 }) {
   const safeUrl = redactUrlCredentials(proxy.url);
   const safeCheckError = proxy.last_check_error
-    ? redactUrlCredentials(proxy.last_check_error)
+    ? publicErrorText(proxy.last_check_error)
     : null;
-  const safeNotes = proxy.notes ? redactUrlCredentials(proxy.notes) : null;
+  const safeNotes = proxy.notes ? publicErrorText(proxy.notes) : null;
   const location = [proxy.country_code, proxy.city].filter(Boolean).join(" · ") || "-";
   const checkLocation = [
     proxy.last_check_ip,
@@ -2498,14 +2498,14 @@ function getProxySearchText(proxy: ProxyAsset): string {
     proxy.city,
     proxy.asn,
     proxy.provider,
-    proxy.notes ? redactUrlCredentials(proxy.notes) : null,
+    proxy.notes ? publicErrorText(proxy.notes) : null,
     proxy.last_check_status,
     proxy.last_check_ip,
     proxy.last_check_country_code,
     proxy.last_check_timezone,
     proxy.last_check_locale,
     proxy.last_check_source,
-    proxy.last_check_error ? redactUrlCredentials(proxy.last_check_error) : null,
+    proxy.last_check_error ? publicErrorText(proxy.last_check_error) : null,
     ...proxy.tags.map((tag) => tag.tag),
   ]
     .map(normalizeFilterValue)

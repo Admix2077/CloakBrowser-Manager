@@ -183,6 +183,7 @@ describe("ProxyManagerPage", () => {
   });
 
   it("filters proxy assets locally by search without leaking credentials", async () => {
+    const leakMarker = "proxy-last-check-token-super-secret";
     mockListProxies.mockResolvedValue([
       proxy({
         id: "proxy-1",
@@ -199,9 +200,13 @@ describe("ProxyManagerPage", () => {
         city: "Tokyo",
         provider: "ProxyJP",
         tags: [{ tag: "needs-review", color: "#ef4444" }],
-        notes: "Failed through socks5://note:topsecret@notes.proxy.example:1080",
+        notes:
+          "Failed through socks5://note:topsecret@notes.proxy.example:1080 " +
+          `Authorization=Bearer ${leakMarker} /data/proxy-secret`,
         last_check_status: "error",
-        last_check_error: "Failed socks5://secret:topsecret@jp.proxy.example:1080",
+        last_check_error:
+          "Failed socks5://secret:topsecret@jp.proxy.example:1080 " +
+          `token=${leakMarker} from 203.0.113.45 via [2001:db8::45]:443`,
       }),
       proxy({
         id: "proxy-3",
@@ -238,6 +243,13 @@ describe("ProxyManagerPage", () => {
     expect(page.textContent).not.toContain("topsecret");
     expect(page.textContent).not.toContain("user:");
     expect(page.textContent).not.toContain("secret:");
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/proxy-secret");
+    expect(page.textContent).not.toContain("203.0.113.45");
+    expect(page.textContent).not.toContain("2001:db8::45");
     const titleText = Array.from(page.querySelectorAll("[title]"))
       .map((element) => element.getAttribute("title") ?? "")
       .join(" ");
@@ -245,6 +257,13 @@ describe("ProxyManagerPage", () => {
     expect(titleText).not.toContain("topsecret");
     expect(titleText).not.toContain("user:");
     expect(titleText).not.toContain("secret:");
+    expect(titleText).not.toContain(leakMarker);
+    expect(titleText).not.toContain("Authorization");
+    expect(titleText).not.toContain("Bearer");
+    expect(titleText).not.toContain("token=");
+    expect(titleText).not.toContain("/data/proxy-secret");
+    expect(titleText).not.toContain("203.0.113.45");
+    expect(titleText).not.toContain("2001:db8::45");
     expect(mockListProxies).toHaveBeenCalledTimes(1);
   });
 

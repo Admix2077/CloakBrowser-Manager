@@ -5513,3 +5513,43 @@ git diff --check
 - 这是 frontend visible error release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 audit event schema、backend API response schemas、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy Manager persisted text public error guardrail
+
+背景：
+
+- Proxy Manager 的 API 操作失败提示已走 `publicErrorMessage()`。
+- 但 persisted proxy `notes` 和 `last_check_error` 在表格和本地搜索文本中仍只做 URL credential redaction。
+- 历史/手工污染 proxy row 可能把 Authorization/Bearer、token assignment、本地路径或 IP literal 放入这些字段，并进入 UI release evidence。
+
+已覆盖：
+
+- `frontend/src/components/ProxyManagerPage.tsx` 现在对表格中显示的 `proxy.notes` 和 `proxy.last_check_error` 使用 `publicErrorText()`。
+- 本地 search corpus 对这两个字段使用同一公共错误文本边界，避免敏感原文保留在可搜索文本中。
+- 普通 URL host/port 仍保留给 triage；URL credentials、Authorization/Bearer、token/path/IP literal 被清理。
+- 不改变 Proxy Asset API schema、proxy check 结果写入、正常 `last_check_ip` 业务字段展示或 provider/profile assignment 行为。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# RED: 旧实现在 Proxy Manager DOM 中保留 Authorization/Bearer、token=、/data path、IPv4 和 IPv6；GREEN: 23 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.27s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 234 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.52s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 Proxy Manager UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 backend API response schemas、proxy CRUD/check backend、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
