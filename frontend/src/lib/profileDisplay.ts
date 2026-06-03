@@ -9,6 +9,12 @@ export function formatProxyLabel(value: string | null | undefined): string {
   }
 }
 
+export type PublicRuntimeStatus = "running" | "stopped" | "unknown";
+
+export function publicRuntimeStatus(value: unknown): PublicRuntimeStatus {
+  return value === "running" || value === "stopped" ? value : "unknown";
+}
+
 const URL_PATTERN = /\b(?:https?|socks5):\/\/[^\s"'<>]+/gi;
 const LEGACY_PROXY_PATTERN = /(^|[\s"'(<>])([a-z0-9.-]+:\d{2,5}):[^:\s"'<>]+:[^:\s"'<>]+(?=$|[\s"')<>])/gi;
 

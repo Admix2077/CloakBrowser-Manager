@@ -192,6 +192,26 @@ describe("ProfileTable", () => {
     expect(onToggleVisibleSelection).toHaveBeenCalledWith(["good", "error"], true);
   });
 
+  it("folds non-public runtime statuses before rendering table evidence", () => {
+    const leakMarker = "profile-status-secret";
+    const pollutedStatus = `running Authorization=Bearer ${leakMarker} token=${leakMarker}`;
+
+    render(
+      <ProfileTable
+        profiles={[profile({ id: "polluted-status", status: pollutedStatus as Profile["status"] })]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("unknown")).toBeTruthy();
+    expect(screen.getByLabelText("Runtime unknown")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Authorization");
+    expect(document.body.textContent).not.toContain("Bearer");
+    expect(document.body.textContent).not.toContain("token=");
+    expect(document.body.innerHTML).not.toContain(leakMarker);
+  });
+
   it("keeps the desktop header offset below the sticky bulk action bar", () => {
     render(
       <ProfileTable

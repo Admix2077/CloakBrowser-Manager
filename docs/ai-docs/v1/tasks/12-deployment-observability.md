@@ -5745,3 +5745,46 @@ npm --prefix frontend run build
 - 这是 System diagnostics UI observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、Automation API backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile runtime status UI public-value guardrail
+
+背景：
+
+- Profile operations table、Profile summary Inspector 和 Proxy Manager assignment dialog 都会展示 profile runtime status。
+- 后端正常类型只有 `running` / `stopped`，但 release evidence UI 不能信任异常 response、历史/手工污染 row 或测试桩中的 status 字符串。
+- 污染 status 可能携带 `Authorization`、`Bearer`、`token=` 等内容，并进入 visible text、accessible label 或 Proxy Manager 本地 assignment search text。
+
+已覆盖：
+
+- 新增 `publicRuntimeStatus()`，只允许 `running` / `stopped`，其他值统一折叠为 `unknown`。
+- `StatusIndicator` 的 `aria-label` 使用公开 status，避免 accessible snapshot 泄漏异常 status。
+- Profile table 桌面行、窄屏 card 和 Profile summary runtime badge 使用公开 status。
+- Proxy Manager assignment dialog 的 profile runtime badge 和本地搜索语料使用公开 status；污染 status 不能被敏感词搜索命中，`unknown` 仍可用于排查异常 row。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# RED: 旧实现把污染 runtime status 渲染到 badge 和 Runtime aria-label；GREEN: 41 passed
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "folds non-public assignment profile runtime statuses"
+# RED: 旧实现把污染 runtime status 放入 assignment search text；GREEN: 1 passed, 23 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProxyManagerPage.test.tsx src/components/StatusIndicator.test.tsx
+# Test Files 3 passed；Tests 65 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.47s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 241 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.00s
+```
+
+边界：
+
+- 这是 Profile/Proxy frontend observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 backend profile status schema、profile lifecycle、launch/stop、bulk launch/stop、Proxy Manager assignment API、runtime session behavior、viewer behavior、Automation API backend、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

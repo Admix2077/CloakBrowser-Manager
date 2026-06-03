@@ -2,7 +2,7 @@ import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyProviderPresetCreateData, type ProxyRandomAssignRequestData } from "../lib/api";
 import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
-import { formatTimestamp, redactUrlCredentials } from "../lib/profileDisplay";
+import { formatTimestamp, publicRuntimeStatus, redactUrlCredentials } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
 const FILTER_ALL = "__all_proxy_filter__";
@@ -1979,6 +1979,7 @@ function AssignmentProfileRow({
   onToggle: () => void;
 }) {
   const safeProxy = profile.proxy ? redactUrlCredentials(profile.proxy) : "No proxy";
+  const runtimeStatus = publicRuntimeStatus(profile.status);
 
   return (
     <label className="choice-card items-center gap-2 px-3 py-2">
@@ -1995,11 +1996,11 @@ function AssignmentProfileRow({
             {profile.name}
           </span>
           <span className={`rounded-[999px] border px-1.5 py-0.5 text-[10px] font-medium ${
-            profile.status === "running"
+            runtimeStatus === "running"
               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
               : "border-slate-200 bg-slate-50 text-slate-500"
           }`}>
-            {profile.status}
+            {runtimeStatus}
           </span>
         </span>
         <span className="mt-1 grid min-w-0 gap-1 text-[11px] text-slate-500 sm:grid-cols-[120px_minmax(0,1fr)]">
@@ -2517,7 +2518,7 @@ function getAssignmentProfileSearchText(profile: Profile): string {
   return [
     profile.id,
     profile.name,
-    profile.status,
+    publicRuntimeStatus(profile.status),
     profile.proxy ? redactUrlCredentials(profile.proxy) : "no proxy",
   ]
     .map(normalizeFilterValue)

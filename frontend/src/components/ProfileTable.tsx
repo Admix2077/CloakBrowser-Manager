@@ -2,7 +2,7 @@ import { ArrowRight, Check, FilterX, HeartPulse, Minus, PlusCircle } from "lucid
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
+import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { Badge, CountryBadge, TagBadge } from "./Badge";
 import { BulkActionBar } from "./BulkActionBar";
 import { HealthBadge } from "./HealthBadge";
@@ -676,6 +676,7 @@ function ProfileCard({
   const locale = geoip?.locale ?? profile.last_geoip_locale;
   const lastChecked = health?.checked_at ?? profile.last_geoip_resolved_at;
   const proxyLabel = formatProxyLabel(profile.proxy);
+  const runtimeStatus = publicRuntimeStatus(profile.status);
 
   return (
     <article
@@ -726,8 +727,8 @@ function ProfileCard({
       <div className="mt-3 flex items-center justify-between gap-2 rounded-[6px] border border-slate-100 bg-slate-50/60 px-2 py-1.5">
         <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
-          <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
-            {profile.status}
+          <Badge type="runtime" tone={runtimeStatus === "running" ? "success" : "muted"}>
+            {runtimeStatus}
           </Badge>
         </span>
         <HealthBadge health={health} compact />
@@ -800,6 +801,7 @@ function ProfileTableRow({
   const locale = geoip?.locale ?? profile.last_geoip_locale;
   const lastChecked = health?.checked_at ?? profile.last_geoip_resolved_at;
   const proxyLabel = formatProxyLabel(profile.proxy);
+  const runtimeStatus = publicRuntimeStatus(profile.status);
 
   return (
     <tr
@@ -840,8 +842,8 @@ function ProfileTableRow({
       <td className="truncate border-b border-slate-100 px-2 py-2">
         <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
           <StatusIndicator status={profile.status} />
-          <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
-            {profile.status}
+          <Badge type="runtime" tone={runtimeStatus === "running" ? "success" : "muted"}>
+            {runtimeStatus}
           </Badge>
         </span>
       </td>

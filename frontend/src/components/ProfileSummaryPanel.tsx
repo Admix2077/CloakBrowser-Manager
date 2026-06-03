@@ -1,7 +1,7 @@
 import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { formatProxyLabel, formatTimestamp } from "../lib/profileDisplay";
+import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
 import { HealthBadge } from "./HealthBadge";
@@ -52,6 +52,7 @@ export function ProfileSummaryPanel({
   const timezoneOverride = Boolean(health?.manual_overrides.timezone ?? profile.timezone);
   const localeOverride = Boolean(health?.manual_overrides.locale ?? profile.locale);
   const proxyLabel = formatProxyLabel(profile.proxy);
+  const runtimeStatus = publicRuntimeStatus(profile.status);
 
   return (
     <aside
@@ -110,8 +111,8 @@ export function ProfileSummaryPanel({
           <SummarySection icon={<Monitor className="h-3.5 w-3.5" />} title="Runtime" priority="primary">
             <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
               <StatusIndicator status={profile.status} />
-              <Badge type="runtime" tone={profile.status === "running" ? "success" : "muted"}>
-                {profile.status}
+              <Badge type="runtime" tone={runtimeStatus === "running" ? "success" : "muted"}>
+                {runtimeStatus}
               </Badge>
             </div>
             <SummaryRow label="VNC" value={profile.vnc_ws_port ? `:${profile.vnc_ws_port}` : "-"} />

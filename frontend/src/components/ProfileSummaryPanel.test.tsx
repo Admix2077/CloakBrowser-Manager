@@ -132,4 +132,26 @@ describe("ProfileSummaryPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Seller US" }));
     expect(onOpen).toHaveBeenCalledWith("profile-1");
   });
+
+  it("folds non-public runtime statuses before rendering summary evidence", () => {
+    const leakMarker = "summary-status-secret";
+    const pollutedStatus = `stopped Authorization=Bearer ${leakMarker} token=${leakMarker}`;
+
+    render(
+      <ProfileSummaryPanel
+        profile={profile({ status: pollutedStatus as Profile["status"] })}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    const runtime = within(screen.getByRole("complementary", { name: "Profile summary" }))
+      .getByRole("region", { name: "Runtime" });
+    expect(within(runtime).getByText("unknown")).toBeTruthy();
+    expect(screen.getByLabelText("Runtime unknown")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Authorization");
+    expect(document.body.textContent).not.toContain("Bearer");
+    expect(document.body.textContent).not.toContain("token=");
+    expect(document.body.innerHTML).not.toContain(leakMarker);
+  });
 });
