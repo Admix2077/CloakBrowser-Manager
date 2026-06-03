@@ -2,6 +2,7 @@ import { ArrowRight, Check, FilterX, HeartPulse, Minus, PlusCircle } from "lucid
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import { publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { Badge, CountryBadge, TagBadge } from "./Badge";
 import { BulkActionBar } from "./BulkActionBar";
@@ -677,11 +678,12 @@ function ProfileCard({
   const lastChecked = health?.checked_at ?? profile.last_geoip_resolved_at;
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
+  const safeName = publicProfileName(profile.name);
 
   return (
     <article
       role="listitem"
-      aria-label={`Profile card ${profile.name}`}
+      aria-label={`Profile card ${safeName}`}
       data-state={selected ? "selected" : previewed ? "previewed" : undefined}
       className={`mb-2 overflow-hidden rounded-lg border border-l-2 bg-white p-3 transition-[border-color,background-color,box-shadow] duration-150 focus-within:ring-2 focus-within:ring-blue-500/10 hover:border-slate-300 ${
         selected
@@ -694,7 +696,7 @@ function ProfileCard({
     >
       <div className="flex items-start gap-2">
         <SelectionCheckbox
-          label={`Select ${profile.name}`}
+          label={`Select ${safeName}`}
           checked={selected}
           disabled={!onToggleSelection}
           onChange={() => onToggleSelection?.(profile.id)}
@@ -705,11 +707,11 @@ function ProfileCard({
             className={`block max-w-full truncate rounded-md text-left text-sm font-semibold transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
               selected ? "text-blue-950" : "text-slate-950"
             }`}
-            title={profile.name}
-            aria-label={`Preview ${profile.name}`}
+            title={safeName}
+            aria-label={`Preview ${safeName}`}
             onClick={() => onPreview?.(profile.id)}
           >
-            {profile.name}
+            {safeName}
           </button>
           <div className="mt-0.5 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</div>
         </div>
@@ -717,7 +719,7 @@ function ProfileCard({
           type="button"
           className="inline-flex h-8 shrink-0 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           onClick={() => onSelect(profile.id)}
-          aria-label={`Open ${profile.name}`}
+          aria-label={`Open ${safeName}`}
         >
           <ArrowRight className="h-3.5 w-3.5" />
           Open
@@ -802,6 +804,7 @@ function ProfileTableRow({
   const lastChecked = health?.checked_at ?? profile.last_geoip_resolved_at;
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
+  const safeName = publicProfileName(profile.name);
 
   return (
     <tr
@@ -819,7 +822,7 @@ function ProfileTableRow({
         className="border-b border-slate-100 px-1.5 py-2"
       >
         <SelectionCheckbox
-          label={`Select ${profile.name}`}
+          label={`Select ${safeName}`}
           checked={selected}
           disabled={!onToggleSelection}
           onChange={() => onToggleSelection?.(profile.id)}
@@ -831,11 +834,11 @@ function ProfileTableRow({
           className={`block max-w-[180px] truncate rounded-md text-left text-sm font-semibold transition-colors hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
             selected ? "text-blue-950" : "text-slate-950"
           }`}
-          title={profile.name}
-          aria-label={`Preview ${profile.name}`}
+          title={safeName}
+          aria-label={`Preview ${safeName}`}
           onClick={() => onPreview?.(profile.id)}
         >
-          {profile.name}
+          {safeName}
         </button>
         <div className="mt-0.5 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</div>
       </td>
@@ -878,7 +881,7 @@ function ProfileTableRow({
           type="button"
           className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 group-hover:border-slate-300 group-hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
           onClick={() => onSelect(profile.id)}
-          aria-label={`Open ${profile.name}`}
+          aria-label={`Open ${safeName}`}
         >
           <ArrowRight className="h-3.5 w-3.5" />
           Open

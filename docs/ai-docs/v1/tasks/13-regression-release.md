@@ -5867,3 +5867,56 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile persistence、proxy assignment backend、proxy URL credential redaction、provider/country filters、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 assignment profile name UI/search release-evidence 边界。
+
+## 2026-06-04 Profile operations name UI/search release-evidence guardrail
+
+背景：
+
+- 主 Profile operations table/card、left rail 和 summary inspector 属于 release smoke 的核心可见 UI evidence。
+- 旧实现直接渲染 persisted profile `name`，并把 name 放入 table/card title、select/preview/open aria-label，以及共享 profile search。
+- 历史/手工污染 profile name 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入可见 evidence 或 searchable evidence。
+
+已覆盖：
+
+- Profile operations table/card visible name、title、select/preview/open aria-label 统一使用共享 public profile name。
+- Profile summary inspector 和 left rail visible profile name/open label 使用同一公开边界。
+- `filterAndSortProfiles()` 的 search 和 sort tie-breaker 使用公开 profile name；secret marker 不再匹配该 row，正常低敏名称仍可匹配。
+- Profile edit form 的原始输入值保持不变，避免把用户编辑数据语义误改成展示 redaction。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts persisted profile names"
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "redacts persisted profile names"
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx -t "redacts persisted profile names"
+npm --prefix frontend test -- --run src/lib/filters.test.ts -t "uses public profile names"
+# RED then GREEN；旧实现把污染 profile name 原样写入 rendered/search evidence
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
+# 39 passed
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx
+# 4 passed
+
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx
+# 12 passed
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts src/lib/errorDisplay.test.ts
+# Test Files 2 passed；Tests 7 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 38.76s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 249 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.30s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、profile persistence、profile create/edit payload、delete semantics、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、proxy assignment/random assignment 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile operations name UI/search release-evidence 边界。

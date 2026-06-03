@@ -167,6 +167,48 @@ describe("ProfileList health display", () => {
     expect(screen.getByText("No matches")).toBeTruthy();
     expect(screen.queryByText("Stored Platform Profile")).toBeNull();
   });
+
+  it("redacts persisted profile names from rail rendering and search evidence", () => {
+    const leakMarker = "rail-profile-name-secret";
+    const rawName =
+      "Stored Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/rail-profile-name 203.0.113.91`;
+    const safeName = "Stored [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    render(
+      <ProfileList
+        profiles={[{ ...profile, name: rawName }]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(safeName)).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText("Search profiles..."), {
+      target: { value: leakMarker },
+    });
+    expect(screen.getByText("No matches")).toBeTruthy();
+    expect(screen.queryByText(safeName)).toBeNull();
+
+    fireEvent.change(screen.getByPlaceholderText("Search profiles..."), {
+      target: { value: "stored" },
+    });
+    expect(screen.getByText(safeName)).toBeTruthy();
+
+    const renderedEvidence = document.body.textContent ?? "";
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/rail-profile-name",
+      "203.0.113.91",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
 });
 
 describe("ProfileList empty states", () => {

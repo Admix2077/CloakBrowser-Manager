@@ -6185,3 +6185,57 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 profile API schema、profile persistence、proxy assignment backend、random assignment、proxy URL credential redaction、provider/country filters、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile operations name public text/search guardrail
+
+背景：
+
+- 主 Profile 操作界面会把 profile `name` 显示到 operations table/card、left rail、summary inspector、title 和 aria-label，并通过共享 `filterAndSortProfiles()` 做本地搜索。
+- Proxy Manager assignment dialog 已覆盖 profile name，但主操作界面仍会原样渲染/搜索历史或手工污染的 profile name。
+- 如果 profile name 含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 release UI/search evidence；这是 Manager 可控 UI 边界，不是底层 fingerprint 检测问题。
+
+已覆盖：
+
+- 新增共享 `publicProfileName()`，复用前端公开错误文本边界，空结果回退为 `unknown`。
+- Profile operations table/card 的 visible name、title、select/preview/open aria-label 现在使用公开 profile name。
+- Profile summary inspector 和 left rail list visible name/open aria-label 使用公开 profile name。
+- `filterAndSortProfiles()` 的 profile name 搜索与排序 tie-breaker 使用公开 profile name；secret marker 不再命中，普通低敏名称仍可搜索。
+- Profile edit form 的输入值仍保留原始 profile name，用于编辑数据本身；本轮只收主操作展示/搜索证据边界。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts persisted profile names"
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "redacts persisted profile names"
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx -t "redacts persisted profile names"
+npm --prefix frontend test -- --run src/lib/filters.test.ts -t "uses public profile names"
+# RED: 旧实现把污染 profile name 原样写入 rendered/search evidence；GREEN: focused tests passed
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
+# 39 passed
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx
+# 4 passed
+
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx
+# 12 passed
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts src/lib/errorDisplay.test.ts
+# Test Files 2 passed；Tests 7 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 38.76s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 249 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.30s
+```
+
+边界：
+
+- 这是 Profile operations UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 profile API schema、profile persistence、profile create/edit form payload、delete semantics、proxy assignment backend、random assignment、proxy URL credential redaction、provider/country filters、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -154,4 +154,40 @@ describe("ProfileSummaryPanel", () => {
     expect(document.body.textContent).not.toContain("token=");
     expect(document.body.innerHTML).not.toContain(leakMarker);
   });
+
+  it("redacts persisted profile names from summary rendered evidence", () => {
+    const leakMarker = "summary-profile-name-secret";
+    const rawName =
+      "Seller Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/summary-profile-name 203.0.113.90`;
+    const safeName = "Seller [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    render(
+      <ProfileSummaryPanel
+        profile={profile({ name: rawName })}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(safeName)).toBeTruthy();
+    expect(screen.getByRole("button", { name: `Open ${safeName}` })).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/summary-profile-name",
+      "203.0.113.90",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
 });

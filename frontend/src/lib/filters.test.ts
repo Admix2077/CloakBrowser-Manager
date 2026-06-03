@@ -100,6 +100,38 @@ describe("filterAndSortProfiles", () => {
     expect(result.map((item) => item.id)).toEqual(["gamma"]);
   });
 
+  it("uses public profile names for search matching", () => {
+    const leakMarker = "filter-profile-name-secret";
+    const polluted = profile({
+      id: "polluted",
+      name:
+        "Alpha Authorization=Bearer " +
+        `${leakMarker} token=${leakMarker} /data/filter-profile-name 203.0.113.92`,
+    });
+
+    const rawMatch = filterAndSortProfiles([polluted], {}, {
+      search: leakMarker,
+      status: "all",
+      health: "all",
+      proxy: "all",
+      country: "all",
+      tag: "all",
+      sortBy: "name",
+    });
+    expect(rawMatch).toEqual([]);
+
+    const publicMatch = filterAndSortProfiles([polluted], {}, {
+      search: "alpha",
+      status: "all",
+      health: "all",
+      proxy: "all",
+      country: "all",
+      tag: "all",
+      sortBy: "name",
+    });
+    expect(publicMatch.map((item) => item.id)).toEqual(["polluted"]);
+  });
+
   it("sorts health by risk first for operations triage", () => {
     const result = filterAndSortProfiles(profiles, healthByProfileId, {
       search: "",

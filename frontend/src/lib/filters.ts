@@ -1,4 +1,5 @@
 import type { HealthStatus, Profile, ProfileHealthResponse } from "./api";
+import { publicProfileName } from "./errorDisplay";
 
 export type RuntimeStatusFilter = "all" | Profile["status"];
 export type HealthStatusFilter = "all" | HealthStatus;
@@ -83,6 +84,10 @@ function compareNullableDateDesc(a: string | null, b: string | null): number {
   return 0;
 }
 
+function compareProfileNames(a: Profile, b: Profile): number {
+  return publicProfileName(a.name).localeCompare(publicProfileName(b.name)) || a.id.localeCompare(b.id);
+}
+
 export function filterAndSortProfiles(
   profiles: Profile[],
   healthByProfileId: Record<string, ProfileHealthResponse | undefined>,
@@ -90,7 +95,7 @@ export function filterAndSortProfiles(
 ): Profile[] {
   const search = filters.search.trim().toLowerCase();
   const filtered = profiles.filter((profile) => {
-    if (search && !profile.name.toLowerCase().includes(search)) return false;
+    if (search && !publicProfileName(profile.name).toLowerCase().includes(search)) return false;
     if (filters.status !== "all" && profile.status !== filters.status) return false;
     if (filters.health !== "all" && healthStatus(profile, healthByProfileId) !== filters.health) return false;
     if (filters.proxy === "with_proxy" && !profile.proxy) return false;
@@ -103,24 +108,24 @@ export function filterAndSortProfiles(
   return [...filtered].sort((a, b) => {
     switch (filters.sortBy) {
       case "status":
-        return a.status.localeCompare(b.status) || a.name.localeCompare(b.name);
+        return a.status.localeCompare(b.status) || compareProfileNames(a, b);
       case "health":
         return HEALTH_RISK_RANK[healthStatus(a, healthByProfileId)]
           - HEALTH_RISK_RANK[healthStatus(b, healthByProfileId)]
-          || a.name.localeCompare(b.name);
+          || compareProfileNames(a, b);
       case "country":
         return compareNullableText(
           countryCode(a, healthByProfileId),
           countryCode(b, healthByProfileId),
-        ) || a.name.localeCompare(b.name);
+        ) || compareProfileNames(a, b);
       case "last_checked":
         return compareNullableDateDesc(
           lastCheckedAt(a, healthByProfileId),
           lastCheckedAt(b, healthByProfileId),
-        ) || a.name.localeCompare(b.name);
+        ) || compareProfileNames(a, b);
       case "name":
       default:
-        return a.name.localeCompare(b.name);
+        return compareProfileNames(a, b);
     }
   });
 }

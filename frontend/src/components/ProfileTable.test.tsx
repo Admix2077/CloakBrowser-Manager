@@ -212,6 +212,46 @@ describe("ProfileTable", () => {
     expect(document.body.innerHTML).not.toContain(leakMarker);
   });
 
+  it("redacts persisted profile names from table rendered evidence", () => {
+    const leakMarker = "profile-name-secret";
+    const rawName =
+      "Alpha Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/profile-name-secret 203.0.113.88`;
+    const safeName = "Alpha [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    render(
+      <ProfileTable
+        profiles={[profile({ id: "polluted-name", name: rawName })]}
+        healthByProfileId={{}}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set()}
+        onToggleProfileSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(safeName)).toBeTruthy();
+    expect(screen.getByLabelText(`Select ${safeName}`)).toBeTruthy();
+    expect(screen.getByRole("button", { name: `Preview ${safeName}` })).toBeTruthy();
+    expect(screen.getByRole("button", { name: `Open ${safeName}` })).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-name-secret",
+      "203.0.113.88",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("keeps the desktop header offset below the sticky bulk action bar", () => {
     render(
       <ProfileTable

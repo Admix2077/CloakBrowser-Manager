@@ -9,6 +9,7 @@ import {
   type ProfileFilterOptions,
   type ProfileFilterState,
 } from "../lib/filters";
+import { publicProfileName } from "../lib/errorDisplay";
 import {
   getHealthGeoipParts,
   getHealthTone,
@@ -403,6 +404,7 @@ function ProfileListItem({
   const geoipParts = getHealthGeoipParts(health);
   const healthTone = getHealthTone(health?.status);
   const hasMeta = Boolean(profile.proxy || warningSummary || geoipParts.length);
+  const safeName = publicProfileName(profile.name);
 
   return (
     <button
@@ -417,7 +419,7 @@ function ProfileListItem({
     >
       <div className="flex min-w-0 items-center gap-2">
         <StatusIndicator status={profile.status} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{profile.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{safeName}</span>
         <span className="ml-auto shrink-0">
           <HealthBadge health={health} compact />
         </span>

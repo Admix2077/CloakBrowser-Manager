@@ -1,6 +1,7 @@
 import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import { publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
@@ -53,6 +54,7 @@ export function ProfileSummaryPanel({
   const localeOverride = Boolean(health?.manual_overrides.locale ?? profile.locale);
   const proxyLabel = formatProxyLabel(profile.proxy);
   const runtimeStatus = publicRuntimeStatus(profile.status);
+  const safeName = publicProfileName(profile.name);
 
   return (
     <aside
@@ -76,8 +78,8 @@ export function ProfileSummaryPanel({
           </div>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-slate-950" title={profile.name}>
-                {profile.name}
+              <h2 className="truncate text-sm font-semibold text-slate-950" title={safeName}>
+                {safeName}
               </h2>
               <p className="mt-1 font-mono text-[11px] text-slate-600">{profile.id.slice(0, 8)}</p>
             </div>
@@ -87,7 +89,7 @@ export function ProfileSummaryPanel({
             type="button"
             className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1 rounded-[6px] border border-slate-200 bg-white text-xs font-medium text-slate-700 shadow-[0_1px_1px_rgba(15,23,42,0.04)] transition-[background-color,border-color,color,box-shadow] hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 hover:shadow-[0_1px_2px_rgba(15,23,42,0.08)] focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             onClick={() => onOpenProfile(profile.id)}
-            aria-label={`Open ${profile.name}`}
+            aria-label={`Open ${safeName}`}
           >
             <ArrowRight className="h-3.5 w-3.5" />
             Open profile
