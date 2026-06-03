@@ -4547,3 +4547,50 @@ git diff --check
 - 这是 runtime viewer audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 viewer token 签发、VNC proxy、WebSocket close 行为、runtime session 状态、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Runtime viewer metadata allowlist audit guardrail
+
+背景：
+
+- Runtime viewer audit helper 是 VNC smoke 和 Project Mileage remote workspace 的低敏证据边界。
+- 正常 `runtime.viewer.connected` 只需要记录 negotiated subprotocol；正常 `runtime.viewer.disconnected` 只需要记录 close code。
+- helper 之前会复制未知 metadata key；如果未来调用方传入 origin、viewer URL、header/token 风格文本，通用 sanitizer 仍可能留下 host 或 `token=[redacted]` 这类非低敏证据。
+
+已覆盖：
+
+- `_runtime_viewer_audit_metadata()` 现在按 event type 输出固定白名单。
+- `runtime.viewer.connected` 只保留 public subprotocol：`binary` 或 null。
+- `runtime.viewer.disconnected` 只保留 public WebSocket close code：非 bool 整数 `0..65535` 或 null。
+- 其他 viewer event metadata 折叠为空对象，防止未知调试字段进入 release evidence。
+- 污染 subprotocol、origin 和 viewer URL 不再写入 audit evidence；正常 VNC success audit 仍记录 `subprotocol=binary` 和 `close_code=1000`。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_connected_audit_allows_only_public_subprotocol_metadata -q
+# RED: 旧实现保存污染 subprotocol 和 origin；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_connected_audit_allows_only_public_subprotocol_metadata backend/tests/test_session_broker.py::test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code backend/tests/test_session_broker.py::test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit -q
+# 3 passed in 0.95s
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 45 passed in 4.84s
+
+.venv/bin/python -m pytest backend/tests -q
+# 639 passed in 38.09s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.96s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 runtime viewer audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 viewer token 签发、WebSocket accept/subprotocol negotiation、VNC proxy、runtime session 状态、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

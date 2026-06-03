@@ -4238,3 +4238,50 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Runtime viewer metadata allowlist release-evidence guardrail
+
+背景：
+
+- Release runtime/VNC smoke 会读取 `runtime.viewer.connected` 和 `runtime.viewer.disconnected` audit event 作为低敏证据。
+- Connected event 只需要 negotiated subprotocol；disconnected event 只需要 close code。
+- 如果 helper 接受未知 metadata key，未来 origin、viewer URL、header/token 风格字段可能以 redacted 但仍非低敏的形式进入 release evidence。
+
+已覆盖：
+
+- `_runtime_viewer_audit_metadata()` 现在按 event type 生成固定 metadata shape。
+- `runtime.viewer.connected` 只输出 `{"subprotocol": "binary" | null}`。
+- `runtime.viewer.disconnected` 只输出 `{"close_code": int | null}`，且整数范围限制为 `0..65535`。
+- 未知 viewer event metadata 折叠为空对象。
+- 污染 subprotocol、origin、viewer_url、token/header 文本不再进入 audit；正常 VNC success audit 仍保留 `subprotocol: binary` 和 `close_code: 1000`。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_connected_audit_allows_only_public_subprotocol_metadata -q
+# RED then GREEN；旧实现保存污染 subprotocol 和 origin，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_connected_audit_allows_only_public_subprotocol_metadata backend/tests/test_session_broker.py::test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code backend/tests/test_session_broker.py::test_runtime_vnc_success_writes_redacted_connect_and_disconnect_audit -q
+# 3 passed in 0.95s
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 45 passed in 4.84s
+
+.venv/bin/python -m pytest backend/tests -q
+# 639 passed in 38.09s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.96s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- 不改变 viewer token、VNC/WebSocket 行为、runtime session 状态或 browser fingerprint 行为。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

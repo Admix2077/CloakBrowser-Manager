@@ -1180,11 +1180,17 @@ def _public_ws_close_code(value: object) -> int | None:
     return None
 
 
-def _runtime_viewer_audit_metadata(metadata: dict | None) -> dict:
-    safe = dict(metadata or {})
-    if "close_code" in safe:
-        safe["close_code"] = _public_ws_close_code(safe.get("close_code"))
-    return safe
+def _public_runtime_viewer_subprotocol(value: object) -> str | None:
+    return "binary" if value == "binary" else None
+
+
+def _runtime_viewer_audit_metadata(event_type: str, metadata: dict | None) -> dict:
+    raw = metadata or {}
+    if event_type == "runtime.viewer.connected":
+        return {"subprotocol": _public_runtime_viewer_subprotocol(raw.get("subprotocol"))}
+    if event_type == "runtime.viewer.disconnected":
+        return {"close_code": _public_ws_close_code(raw.get("close_code"))}
+    return {}
 
 
 def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict | None = None) -> None:
@@ -1194,7 +1200,7 @@ def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict |
         runtime_session_id=_public_uuid_identifier(session.get("id")),
         profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
-        metadata=_runtime_viewer_audit_metadata(metadata),
+        metadata=_runtime_viewer_audit_metadata(event_type, metadata),
     )
 
 
