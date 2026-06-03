@@ -970,6 +970,10 @@ _AUDIT_LOCAL_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+_AUDIT_BRACKETED_IP_RE = re.compile(r"\[([0-9A-Fa-f:.%]+)\]")
+_AUDIT_IPV6_RE = re.compile(
+    r"(?<![A-Za-z0-9:.])(?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:.%]*(?![A-Za-z0-9:.])"
+)
 _AUDIT_SENSITIVE_KEY_RE = re.compile(
     r"https?://|socks[45]://|[/\\?&#@]|"
     r"\b(?:authorization|bearer)\b|"
@@ -1021,19 +1025,31 @@ def _sanitize_audit_metadata(value: Any) -> Any:
         )
         sanitized = _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
         sanitized = _AUDIT_LOCAL_PATH_RE.sub("[redacted-path]", sanitized)
-        return _AUDIT_IPV4_RE.sub(
-            lambda match: "[redacted-ip]" if _is_ipv4_literal(match.group(0)) else match.group(0),
-            sanitized,
-        )
+        return _redact_audit_ip_literals(sanitized)
     return value
 
 
-def _is_ipv4_literal(value: str) -> bool:
+def _redact_audit_ip_literals(value: str) -> str:
+    sanitized = _AUDIT_BRACKETED_IP_RE.sub(
+        lambda match: "[redacted-ip]" if _is_ip_literal(match.group(1)) else match.group(0),
+        value,
+    )
+    sanitized = _AUDIT_IPV4_RE.sub(
+        lambda match: "[redacted-ip]" if _is_ip_literal(match.group(0)) else match.group(0),
+        sanitized,
+    )
+    return _AUDIT_IPV6_RE.sub(
+        lambda match: "[redacted-ip]" if _is_ip_literal(match.group(0)) else match.group(0),
+        sanitized,
+    )
+
+
+def _is_ip_literal(value: str) -> bool:
     try:
-        ipaddress.IPv4Address(value)
-    except ipaddress.AddressValueError:
+        parsed = ipaddress.ip_address(value)
+    except ValueError:
         return False
-    return True
+    return parsed.version in {4, 6}
 
 
 def _public_uuid_identifier(value: object) -> str | None:

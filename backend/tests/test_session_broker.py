@@ -1799,13 +1799,17 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
                 "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret "
                 r"C:\Users\Jeff\AppData\Local\CloakBrowser\profile-secret"
             ),
-            "ip_message": "exit ip 203.0.113.45 via 198.51.100.20:8080",
+            "ip_message": (
+                "exit ip 203.0.113.45 via 198.51.100.20:8080 "
+                "and ipv6 2001:db8::45 via [2001:db8::46]:443"
+            ),
             "path_list": [
                 "kept",
                 "/data/runtime/profile-secret/state.json",
                 {"path_message": "failed at /tmp/runtime-profile-secret/socket"},
                 {"windows_path": "D:/profiles/profile-secret/state.json"},
                 {"ip_message": "candidate 192.0.2.44 selected"},
+                {"ipv6_message": "candidate 2001:db8::44 selected"},
             ],
             f"Authorization: Bearer {leak_marker}": "header-key",
             f"token={leak_marker}": "token-key",
@@ -1828,13 +1832,17 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "[redacted-path] [redacted-path] [redacted-path] "
             "[redacted-path]"
         ),
-        "ip_message": "exit ip [redacted-ip] via [redacted-ip]:8080",
+        "ip_message": (
+            "exit ip [redacted-ip] via [redacted-ip]:8080 "
+            "and ipv6 [redacted-ip] via [redacted-ip]:443"
+        ),
         "path_list": [
             "kept",
             "[redacted-path]",
             {"path_message": "failed at [redacted-path]"},
             {"windows_path": "[redacted-path]"},
             {"ip_message": "candidate [redacted-ip] selected"},
+            {"ipv6_message": "candidate [redacted-ip] selected"},
         ],
         "nested": {"safe_nested": "also-kept"},
     }
@@ -1861,6 +1869,9 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "203.0.113.45" not in serialized_events
     assert "198.51.100.20" not in serialized_events
     assert "192.0.2.44" not in serialized_events
+    assert "2001:db8::45" not in serialized_events
+    assert "2001:db8::46" not in serialized_events
+    assert "2001:db8::44" not in serialized_events
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events

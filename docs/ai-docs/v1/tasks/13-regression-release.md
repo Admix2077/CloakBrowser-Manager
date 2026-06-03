@@ -5072,3 +5072,46 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata IPv4 value release-evidence 边界。
+
+## 2026-06-03 Audit metadata IPv6 value release-evidence guardrail
+
+背景：
+
+- Release evidence 会读取 audit events。
+- Audit metadata value 已经清理 URL credentials、Authorization/Bearer、token/password/secret/cookie assignments、本地路径、Windows drive path 和 IPv4 literal。
+- IPv6 literal 仍可能通过 WebRTC、GeoIP、proxy 或历史/手工污染 metadata value 进入 release evidence。
+
+已覆盖：
+
+- 数据库 audit sanitizer 现在会把裸 IPv6 literal 和 bracketed IPv6 literal 替换为 `[redacted-ip]`。
+- 嵌套 dict/list metadata 也走同一递归边界。
+- IPv4/IPv6 候选值统一经过 `ipaddress.ip_address()` 校验。
+- Bracketed endpoint 会保留低敏端口上下文，例如 `[2001:db8::46]:443` 变为 `[redacted-ip]:443`。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields -q
+# RED then GREEN；旧实现保留 2001:db8::45、2001:db8::46 和 2001:db8::44 metadata value
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 37.25s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 233 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.17s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata IPv6 value release-evidence 边界。
