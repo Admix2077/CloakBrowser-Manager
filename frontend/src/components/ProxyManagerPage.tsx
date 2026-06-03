@@ -7,6 +7,9 @@ import { formatTimestamp, publicRuntimeStatus, redactUrlCredentials } from "../l
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
 const FILTER_ALL = "__all_proxy_filter__";
 const CSV_SAMPLE = "name,url,country_code,city,asn,provider,tags,notes";
+const PUBLIC_ASSIGNMENT_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const SENSITIVE_ASSIGNMENT_PROFILE_ID_RE =
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];
@@ -1990,6 +1993,7 @@ function AssignmentProfileRow({
   onToggle: () => void;
 }) {
   const safeName = publicAssignmentProfileLabel(profile.name);
+  const safeProfileId = publicAssignmentProfileIdLabel(profile.id);
   const safeProxy = profile.proxy ? redactUrlCredentials(profile.proxy) : "No proxy";
   const runtimeStatus = publicRuntimeStatus(profile.status);
 
@@ -2016,7 +2020,7 @@ function AssignmentProfileRow({
           </span>
         </span>
         <span className="mt-1 grid min-w-0 gap-1 text-[11px] text-slate-500 sm:grid-cols-[120px_minmax(0,1fr)]">
-          <span className="truncate font-mono" title={profile.id}>{profile.id}</span>
+          <span className="truncate font-mono" title={safeProfileId}>{safeProfileId}</span>
           <span className="truncate font-mono" title={safeProxy}>{safeProxy}</span>
         </span>
       </span>
@@ -2280,6 +2284,13 @@ function publicProxyAssetLabel(value: string): string {
 
 function publicAssignmentProfileLabel(value: string): string {
   return publicErrorText(value) || "unknown";
+}
+
+function publicAssignmentProfileIdLabel(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || !PUBLIC_ASSIGNMENT_PROFILE_ID_RE.test(trimmed)) return "unknown";
+  if (SENSITIVE_ASSIGNMENT_PROFILE_ID_RE.test(trimmed)) return "unknown";
+  return trimmed;
 }
 
 function providerPresetToForm(preset: ProxyProviderPreset): ProviderPresetFormState {
@@ -2561,7 +2572,7 @@ function getProxySearchText(proxy: ProxyAsset): string {
 
 function getAssignmentProfileSearchText(profile: Profile): string {
   return [
-    profile.id,
+    publicAssignmentProfileIdLabel(profile.id),
     publicAssignmentProfileLabel(profile.name),
     publicRuntimeStatus(profile.status),
     profile.proxy ? redactUrlCredentials(profile.proxy) : "no proxy",

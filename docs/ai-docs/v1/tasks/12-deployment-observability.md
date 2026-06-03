@@ -6717,3 +6717,34 @@ npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx 
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy Manager assignment profile id evidence guardrail
+
+背景：
+
+- Proxy Manager assign-to-profiles dialog 会显示 profile id，并把 profile id 纳入本地搜索，是 proxy assignment release smoke 的常用 UI evidence 面。
+- Profile id 是内部 selection/API key，正常流程仍必须使用原始 id；但异常 response、历史/手工污染 row 或测试桩可能把 Authorization/Bearer、`token=`、本地路径或 IP 字面量混入 id 字段。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Assignment row 的 profile id visible text/title 只显示 public id；非公开/污染 id 显示为 `unknown`。
+- Assignment local search 使用同一个 public id label，因此敏感 marker 不能命中受污染 profile，`unknown` 可以命中该 fallback label。
+- Checkbox selection、assign/random-assign payload、profile id key、backend API contract 和 proxy assignment 行为继续使用原始 profile id。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts assignment profile ids"
+# RED: 旧实现把污染 profile id 写入 dialog text/title 并参与搜索；GREEN: 1 passed, 32 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 file passed, 33 tests passed
+```
+
+边界：
+
+- 这是 Proxy Manager assignment profile id UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、profile persistence、proxy persistence、proxy assignment/random assignment payload、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

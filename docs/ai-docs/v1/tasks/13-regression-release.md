@@ -6399,3 +6399,35 @@ npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx 
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、VNC websocket path、profile launch backend、runtime session/viewer token schema、Automation API backend、profile persistence、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile summary Runtime VNC port release-evidence 边界。
+
+## 2026-06-04 Proxy Manager assignment profile id release-evidence guardrail
+
+背景：
+
+- Proxy Manager assign-to-profiles dialog 会显示 profile id，并把 profile id 作为本地搜索字段，是 release regression 里容易被截图/文本采集的 evidence 面。
+- 正常 assignment 仍需要原始 profile id 作为 selection key 和 API payload；但污染 id 不应进入 visible text、title 或 searchable evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Assignment row profile id visible text/title 使用 public id boundary。
+- Authorization/Bearer/`token=`/path/IP-style profile id 显示为 `unknown`，且不能通过敏感 marker 搜索命中。
+- `unknown` fallback 可搜索，便于定位不可公开 id 的 profile row。
+- Raw profile id 继续用于 checkbox selection、selected id set、assign/random-assign API payload 和 backend persistence。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts assignment profile ids"
+# RED then GREEN；旧实现把污染 profile id 写入 assignment dialog text/title/search evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 1 file passed, 33 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、profile persistence、proxy persistence、proxy assignment/random assignment payload、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager assignment profile id release-evidence 边界。
