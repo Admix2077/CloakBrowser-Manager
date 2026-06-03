@@ -298,6 +298,25 @@ def _is_https(request: Request) -> bool:
     return "https" in proto
 
 
+def _websocket_public_host_label(value: str | None) -> str:
+    if not value:
+        return "missing"
+    raw_value = str(value).strip()
+    if not raw_value:
+        return "missing"
+    try:
+        parsed = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
+        host = parsed.hostname or ""
+        port = parsed.port
+    except ValueError:
+        return "malformed"
+    if not host:
+        return "missing"
+    if port and port not in (80, 443):
+        return f"{host}:{port}"
+    return host
+
+
 async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> bool:
     """Reject cross-origin WebSocket connections (CSWSH protection).
 
@@ -323,7 +342,7 @@ async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> boo
         origin_host = parsed.hostname or ""
         origin_port = parsed.port
     except ValueError:
-        logger.warning("WebSocket origin malformed: %s", origin)
+        logger.warning("WebSocket origin malformed: origin=%s", _websocket_public_host_label(origin))
         if on_rejected:
             on_rejected()
         await websocket.close(code=4403, reason="Origin not allowed")
@@ -345,7 +364,11 @@ async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> boo
     if origin_netloc == host_normalized:
         return True
 
-    logger.warning("WebSocket origin mismatch: origin=%s host=%s", origin, host)
+    logger.warning(
+        "WebSocket origin mismatch: origin=%s host=%s",
+        _websocket_public_host_label(origin),
+        _websocket_public_host_label(host),
+    )
     if on_rejected:
         on_rejected()
     await websocket.close(code=4403, reason="Origin not allowed")

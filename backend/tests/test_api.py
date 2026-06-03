@@ -5949,6 +5949,32 @@ def test_vnc_ws_rejects_cross_origin(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_vnc_ws_origin_rejection_logs_low_sensitive_origin(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "OriginVncLogRedaction"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    with pytest.raises(Exception):
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": "http://evil.com/path?viewer_token=origin-secret#frag"},
+        ):
+            pass
+
+    assert "WebSocket origin mismatch: origin=evil.com host=testserver" in caplog.text
+    assert "origin-secret" not in caplog.text
+    assert "viewer_token" not in caplog.text
+    assert "?viewer_token" not in caplog.text
+    assert "/path" not in caplog.text
+    assert "#frag" not in caplog.text
+    assert "http://evil.com/path" not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_same_origin(app_client: TestClient):
     """WebSocket from same origin should pass Origin check (not get 4403)."""
     create = app_client.post("/api/profiles", json={"name": "OriginOk"})

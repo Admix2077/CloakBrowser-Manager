@@ -2098,3 +2098,45 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 WebSocket origin log redaction guardrail
+
+背景：
+
+- 普通 VNC 和 runtime viewer VNC 都经过 `_check_websocket_origin()` 做 Origin/Host 校验。
+- 该边界会处理外部 client headers；此前 rejection warning 会输出 raw Origin/Host。恶意 header 可带 query token、path、fragment 或 token-like 文本。
+
+已覆盖：
+
+- Origin rejection logs 只输出低敏 host label，不输出 raw header。
+- Cross-origin rejection、same-origin/no-origin allow、runtime viewer `origin_not_allowed` audit 和 VNC proxy behavior 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_logs_low_sensitive_origin -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.71s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'vnc_ws or ws_allows or vnc_proxy'
+# 7 passed, 212 deselected in 1.13s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token -q
+# 1 passed in 0.71s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 569 passed in 33.95s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering、proxy logic 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

@@ -2269,3 +2269,49 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering 或 audit event schema。
 - 不在 VNC proxy disconnect logs 中公开 Xvnc raw log line、backend URL/port path、viewer token、Authorization/Bearer credential、profile dir、headers、cookies、local storage、automation payload 或页面内容。
+
+## 2026-06-03 WebSocket origin log redaction guardrail
+
+背景：
+
+- `_check_websocket_origin()` 是普通 VNC 和 runtime viewer VNC 的共享 CSWSH 防护边界。
+- Origin/Host header 属于外部输入；此前 malformed/mismatch 分支会把 raw `Origin` 和 `Host` 写入 manager warning log。恶意或非浏览器 client 可构造带 query token、path、fragment 或 token-like 文本的 Origin header。
+
+已覆盖：
+
+- WebSocket origin rejection logs 现在只记录低敏 host label：`origin=<host[:port]|missing|malformed>` 和 `host=<host[:port]|missing|malformed>`。
+- Query、fragment、path、userinfo 和 token-like header text 不再进入 origin warning logs。
+- 普通 VNC cross-origin rejection、same-origin/no-origin allow behavior、runtime viewer `origin_not_allowed` audit 语义保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_logs_low_sensitive_origin -q
+# RED: 1 failed；caplog 原样包含 http://evil.com/path?viewer_token=origin-secret#frag
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_logs_low_sensitive_origin -q
+# 1 passed in 0.71s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'vnc_ws or ws_allows or vnc_proxy'
+# 7 passed, 212 deselected in 1.13s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_vnc_rejects_cross_origin_even_with_valid_viewer_token -q
+# 1 passed in 0.71s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 569 passed in 33.95s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering、proxy logic 或 audit event schema。
+- 不在 WebSocket origin warning logs 中公开 raw Origin/Host header、query token、path、fragment、viewer token、Authorization/Bearer credential、headers、cookies、local storage、automation payload、profile dir 或页面内容。
