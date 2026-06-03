@@ -267,6 +267,56 @@ describe("ProxyManagerPage", () => {
     expect(mockListProxies).toHaveBeenCalledTimes(1);
   });
 
+  it("redacts persisted proxy asset names from rendered and search evidence", async () => {
+    const leakMarker = "proxy-name-token-super-secret";
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-polluted",
+        name:
+          "JP Pool Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-name-secret 203.0.113.77`,
+        url: "http://proxy.example:8080",
+        country_code: "JP",
+        city: "Tokyo",
+        provider: "ProxyJP",
+      }),
+    ]);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    const table = within(page).getByRole("table", { name: "Proxy assets" });
+    const safeName = "JP Pool [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    expect(within(table).getByText(safeName)).toBeTruthy();
+    expect(within(page).getByLabelText(`Select ${safeName}`)).toBeTruthy();
+
+    const search = within(page).getByLabelText("Search proxy assets");
+    fireEvent.change(search, { target: { value: leakMarker } });
+    expect(within(page).getByText("0 of 1 visible")).toBeTruthy();
+    expect(within(page).getByRole("status", { name: "No proxy assets match filters" })).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "jp pool" } });
+    expect(within(page).getByText("1 of 1 visible")).toBeTruthy();
+
+    const renderedEvidence = [
+      page.textContent,
+      ...Array.from(page.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(page.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/proxy-name-secret",
+      "203.0.113.77",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("filters by country provider and tag with AND semantics from clean option sets", async () => {
     mockListProxies.mockResolvedValue([
       proxy({

@@ -6106,3 +6106,42 @@ npm --prefix frontend run build
 - 这是 Proxy Manager provider preset UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 provider preset API schema、create/update/delete payload、CSV import preset matching、proxy CRUD/check backend、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy asset name public text/search guardrail
+
+背景：
+
+- Proxy Manager 表格、checkbox aria-label、proxy assign dialog 和本地搜索索引会使用 proxy asset `name`。
+- 之前已覆盖 proxy notes、last_check_error、city/asn 和 provider preset 文案，但 proxy asset name 仍会原样进入 visible/title/aria-label/search evidence。
+- 历史/手工污染 proxy row 如果把 Authorization/Bearer、`token=`、本地路径或 IP 字面量塞入 `name`，会进入 release smoke UI evidence。
+
+已覆盖：
+
+- Proxy asset 表格名称、名称 tooltip 和 checkbox aria-label 现在走 `publicErrorText()`，空结果回退为 `unknown`。
+- Assign proxy dialog 的 proxy asset 名称和 tooltip 使用同一公开展示名。
+- 本地搜索索引使用公开展示名，secret marker 不再能作为搜索词匹配该 proxy row；正常低敏名称仍可搜索。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted proxy asset names"
+# RED: 旧实现把污染 proxy name 原样写入文本、title、aria-label 和搜索索引；GREEN: 1 passed, 25 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 26 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 40.26s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 244 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+```
+
+边界：
+
+- 这是 Proxy Manager proxy asset UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 proxy asset API schema、proxy CRUD/check backend、proxy URL credential redaction、provider/country filters、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

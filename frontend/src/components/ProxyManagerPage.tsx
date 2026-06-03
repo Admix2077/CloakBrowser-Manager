@@ -1833,6 +1833,7 @@ function ProxyAssignDialog({
   onClose: () => void;
 }) {
   const safeProxyUrl = redactUrlCredentials(proxy.url);
+  const safeProxyName = publicProxyAssetLabel(proxy.name);
   const selectedCount = selectedProfileIds.size;
 
   return (
@@ -1871,8 +1872,8 @@ function ProxyAssignDialog({
         <div className="border-b border-slate-200 bg-white px-4 py-3">
           <div className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-slate-950" title={proxy.name}>
-                {proxy.name}
+              <div className="truncate text-sm font-semibold text-slate-950" title={safeProxyName}>
+                {safeProxyName}
               </div>
               <div className="mt-1 truncate font-mono text-[11px] text-slate-500" title={safeProxyUrl}>
                 {safeProxyUrl}
@@ -2025,6 +2026,7 @@ function ProxyRow({
   highlighted: boolean;
   onToggleSelection: (proxyId: string) => void;
 }) {
+  const safeName = publicProxyAssetLabel(proxy.name);
   const safeUrl = redactUrlCredentials(proxy.url);
   const safeCheckError = proxy.last_check_error
     ? publicErrorText(proxy.last_check_error)
@@ -2047,14 +2049,14 @@ function ProxyRow({
             className="choice-checkbox m-0"
             checked={selected}
             onChange={() => onToggleSelection(proxy.id)}
-            aria-label={`Select ${proxy.name}`}
+            aria-label={`Select ${safeName}`}
           />
         </label>
       </td>
       <td className="px-3 py-3 align-top">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950" title={proxy.name}>
-            {proxy.name}
+          <div className="truncate text-sm font-semibold text-slate-950" title={safeName}>
+            {safeName}
           </div>
           <div className="mt-1 truncate font-mono text-[11px] text-slate-500" title={safeUrl}>
             {safeUrl}
@@ -2240,6 +2242,10 @@ function emptyProviderPresetForm(): ProviderPresetFormState {
 }
 
 function publicProviderPresetLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
+function publicProxyAssetLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 
@@ -2499,7 +2505,7 @@ function normalizeFilterValue(value: string | null | undefined): string {
 
 function getProxySearchText(proxy: ProxyAsset): string {
   return [
-    proxy.name,
+    publicProxyAssetLabel(proxy.name),
     redactUrlCredentials(proxy.url),
     proxy.country_code,
     proxy.city,
