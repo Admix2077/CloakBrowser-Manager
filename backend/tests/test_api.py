@@ -97,6 +97,53 @@ def test_get_profile(app_client: TestClient):
     assert resp.json()["name"] == "Get Me"
 
 
+def test_profile_responses_redact_persisted_sensitive_geoip_fields(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "GeoIP Response Redaction"})
+    pid = create.json()["id"]
+    main.db.update_profile_geoip_result(
+        pid,
+        {
+            "ip": "https://geoip-secret.example/check?token=super-secret",
+            "country_code": "US-token-super-secret",
+            "timezone": "America/Los_Angeles?token=super-secret",
+            "locale": "en-US-token-super-secret",
+            "source": "ipapi.co?token=super-secret Authorization=Bearer bearer-secret",
+        },
+    )
+
+    get_resp = app_client.get(f"/api/profiles/{pid}")
+    list_resp = app_client.get("/api/profiles")
+
+    assert get_resp.status_code == 200
+    get_profile = get_resp.json()
+    assert get_profile["last_geoip_ip"] is None
+    assert get_profile["last_geoip_country_code"] is None
+    assert get_profile["last_geoip_timezone"] is None
+    assert get_profile["last_geoip_locale"] is None
+    assert get_profile["last_geoip_source"] == "unknown"
+
+    assert list_resp.status_code == 200
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
+    assert listed_profile["last_geoip_ip"] is None
+    assert listed_profile["last_geoip_country_code"] is None
+    assert listed_profile["last_geoip_timezone"] is None
+    assert listed_profile["last_geoip_locale"] is None
+    assert listed_profile["last_geoip_source"] == "unknown"
+
+    serialized = json.dumps({"get": get_resp.json(), "list": list_resp.json()}, sort_keys=True)
+    for leaked in (
+        "geoip-secret.example",
+        "token=super-secret",
+        "US-token-super-secret",
+        "America/Los_Angeles?token",
+        "en-US-token-super-secret",
+        "Authorization",
+        "Bearer",
+        "bearer-secret",
+    ):
+        assert leaked not in serialized
+
+
 def test_get_profile_not_found(app_client: TestClient):
     resp = app_client.get("/api/profiles/nonexistent")
     assert resp.status_code == 404

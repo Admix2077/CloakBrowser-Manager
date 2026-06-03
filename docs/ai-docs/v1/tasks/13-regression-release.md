@@ -2262,3 +2262,49 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation task execution、worker lease、browser page actions 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile GeoIP response redaction guardrail
+
+背景：
+
+- Release smoke 会反复读取 profile list/detail 来确认 launch、GeoIP、health 和 proxy-country 行为。
+- GeoIP result/health/proxy 成功路径已经过滤 provider/test double 的非公开值；继续复查发现 profile response 仍会直接回显历史 DB 中的 `last_geoip_*` 字段。
+- 旧版本或损坏 row 中的 URL/query token、Authorization/Bearer、provider host/path 风格 GeoIP 文本可能进入 `/api/profiles` 和 `/api/profiles/{profile_id}`。
+
+已覆盖：
+
+- Profile API 输出新增统一 `_profile_response()` helper。
+- `last_geoip_ip`、`last_geoip_country_code`、`last_geoip_timezone`、`last_geoip_locale`、`last_geoip_source` 输出前走 `public_geoip_*` 规则。
+- 非公开 source 折叠为 `unknown`，非公开 IP/country/timezone/locale 折叠为 `null`。
+- create/list/get/update、CSV import、config import、bundle import 中的 successful profile response 均使用同一 helper。
+- 正常 GeoIP success values、health response、profile tags、runtime status、VNC port、automation URL 和 audit metadata 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_redact_persisted_sensitive_geoip_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.72s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile and (geoip or get_profile or list_profiles or create_profile or update_profile or import_profile_configs or import_profile_bundle or launch_persists_resolved_geoip)"
+# 19 passed, 204 deselected in 1.83s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py backend/tests/test_geoip.py backend/tests/test_proxies.py -q -k "geoip or health_check or profile_health or proxy_check"
+# 38 passed, 33 deselected in 2.23s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 573 passed in 31.93s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.95s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup behavior、profile launch behavior、VNC/runtime viewer 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

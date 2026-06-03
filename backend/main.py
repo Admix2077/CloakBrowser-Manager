@@ -712,6 +712,17 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     return ProxyResponse(**safe)
 
 
+def _profile_response(profile: dict) -> ProfileResponse:
+    safe = dict(profile)
+    safe["last_geoip_ip"] = public_geoip_ip(safe.get("last_geoip_ip"))
+    safe["last_geoip_country_code"] = public_geoip_country_code(safe.get("last_geoip_country_code"))
+    safe["last_geoip_timezone"] = public_geoip_timezone(safe.get("last_geoip_timezone"))
+    safe["last_geoip_locale"] = public_geoip_locale(safe.get("last_geoip_locale"))
+    safe["last_geoip_source"] = public_geoip_source(safe.get("last_geoip_source"))
+    safe["tags"] = [TagResponse(**tag) for tag in safe.get("tags", [])]
+    return ProfileResponse(**safe)
+
+
 def _proxy_audit_metadata(proxy: dict, *, updated_fields: list[str] | None = None) -> dict:
     metadata = {
         "proxy_id": str(proxy["id"]),
@@ -1820,8 +1831,7 @@ async def list_profiles():
         p["status"] = status["status"]
         p["vnc_ws_port"] = status["vnc_ws_port"]
         p["automation_url"] = status["automation_url"]
-        p["tags"] = [TagResponse(**t) for t in p.get("tags", [])]
-        result.append(ProfileResponse(**p))
+        result.append(_profile_response(p))
     return result
 
 
@@ -1843,9 +1853,8 @@ async def create_profile(req: ProfileCreate):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["automation_url"] = status["automation_url"]
-    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     _audit_profile_event("profile.created", profile)
-    return ProfileResponse(**profile)
+    return _profile_response(profile)
 
 
 @app.post("/api/profiles/import/preview", response_model=ProfileImportPreviewResponse)
@@ -1904,14 +1913,13 @@ async def import_profiles(request: Request):
         profile["status"] = status["status"]
         profile["vnc_ws_port"] = status["vnc_ws_port"]
         profile["automation_url"] = status["automation_url"]
-        profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
         results.append(
             ProfileImportResult(
                 line_number=row.line_number,
                 ok=True,
                 errors=[],
                 source=row.source,
-                profile=ProfileResponse(**profile),
+                profile=_profile_response(profile),
             )
         )
 
@@ -2046,13 +2054,12 @@ async def import_profile_configs(request: Request):
         profile["status"] = status["status"]
         profile["vnc_ws_port"] = status["vnc_ws_port"]
         profile["automation_url"] = status["automation_url"]
-        profile["tags"] = [TagResponse(**tag) for tag in profile.get("tags", [])]
         results.append(
             ProfileConfigImportResult(
                 index=index,
                 ok=True,
                 errors=[],
-                profile=ProfileResponse(**profile),
+                profile=_profile_response(profile),
             )
         )
 
@@ -2365,7 +2372,6 @@ async def import_profile_bundle(request: Request):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["automation_url"] = status["automation_url"]
-    profile["tags"] = [TagResponse(**tag) for tag in profile.get("tags", [])]
     return ProfileConfigImportResponse(
         total=1,
         imported=1,
@@ -2375,7 +2381,7 @@ async def import_profile_bundle(request: Request):
                 index=0,
                 ok=True,
                 errors=[],
-                profile=ProfileResponse(**profile),
+                profile=_profile_response(profile),
             )
         ],
     )
@@ -2408,8 +2414,7 @@ async def get_profile(profile_id: str):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["automation_url"] = status["automation_url"]
-    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
-    return ProfileResponse(**profile)
+    return _profile_response(profile)
 
 
 @app.put("/api/profiles/{profile_id}", response_model=ProfileResponse)
@@ -2427,9 +2432,8 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
     profile["status"] = status["status"]
     profile["vnc_ws_port"] = status["vnc_ws_port"]
     profile["automation_url"] = status["automation_url"]
-    profile["tags"] = [TagResponse(**t) for t in profile.get("tags", [])]
     _audit_profile_event("profile.updated", profile, updated_fields=audit_fields)
-    return ProfileResponse(**profile)
+    return _profile_response(profile)
 
 
 @app.delete("/api/profiles/{profile_id}")

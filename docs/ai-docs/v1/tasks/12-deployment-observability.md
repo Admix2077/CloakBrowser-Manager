@@ -2448,3 +2448,52 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation task execution、worker lease、browser page actions 或 audit event schema。
 - 不在 Automation task responses 中公开历史/污染 status token、error URL query/fragment、Authorization/Bearer credential、Cookie header text、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Profile GeoIP response redaction guardrail
+
+背景：
+
+- GeoIP success/result 写入路径和 health response 已使用 `public_geoip_*` 过滤 IP、country、timezone、locale 和 source。
+- 继续复查 profile API 输出时发现 `GET /api/profiles`、`GET /api/profiles/{profile_id}` 以及 create/import/update/bundle import 返回的 `ProfileResponse` 仍直接信任 DB 中的 `last_geoip_*` 字段。
+- 如果旧版本、手工修复或损坏 DB row 含有 URL/query token、Authorization/Bearer 或 provider host/path 文本，这些字段会进入 profile list/detail response 和 UI。
+
+已覆盖：
+
+- 新增 `_profile_response()` 统一构造 profile API 输出。
+- `last_geoip_ip`、`last_geoip_country_code`、`last_geoip_timezone`、`last_geoip_locale` 和 `last_geoip_source` 在输出前复用 `public_geoip_*` 规则。
+- `last_geoip_source` 的非公开值折叠为 `unknown`；非公开 IP/country/timezone/locale 折叠为 `null`。
+- profile create、list、get、update、CSV import、config import 和 bundle import 的 successful profile response 都走同一 helper。
+- 正常 GeoIP success persistence、health warning logic、profile tags、runtime status、VNC port、automation URL 和 audit metadata 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_redact_persisted_sensitive_geoip_fields -q
+# RED: 1 failed；last_geoip_ip 原样返回 https://geoip-secret.example/check?token=super-secret
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_redact_persisted_sensitive_geoip_fields -q
+# 1 passed in 0.72s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile and (geoip or get_profile or list_profiles or create_profile or update_profile or import_profile_configs or import_profile_bundle or launch_persists_resolved_geoip)"
+# 19 passed, 204 deselected in 1.83s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py backend/tests/test_geoip.py backend/tests/test_proxies.py -q -k "geoip or health_check or profile_health or proxy_check"
+# 38 passed, 33 deselected in 2.23s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 573 passed in 31.93s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.95s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup、profile launch behavior、VNC/runtime viewer 或 audit event schema。
+- 不在 profile responses 中公开历史/污染 GeoIP IP URL、country token、timezone token、locale token、source query token、Authorization/Bearer credential、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
