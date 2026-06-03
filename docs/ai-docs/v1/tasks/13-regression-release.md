@@ -5627,3 +5627,43 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
 - 不改变 backend health response schema、GeoIP lookup provider 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health response profile id release-evidence 边界。
+
+## 2026-06-04 Profile/status runtime port and display release-evidence guardrail
+
+背景：
+
+- Release regression 会读取 profile list/detail 和 profile status API evidence。
+- 旧 response 装配直接信任 `browser_mgr.get_status()` 的 `vnc_ws_port`，profile status response 也直接信任 display。
+- 异常 running object 或测试桩可能把 Authorization/Bearer、`token=` 等文本放入 port/display，造成 response validation error 或 release evidence 泄漏。
+
+已覆盖：
+
+- Profile list/detail/create/import/update response 的 `vnc_ws_port` 统一走公开端口边界，只保留 1..65535 的整数。
+- Profile status response 的 `vnc_ws_port` 使用同一边界，异常值输出 `null`。
+- Profile status response 的 `display` 只保留 `:<digits>` 形态，异常值输出 `null`。
+- 正常 running/stopped status、内部 automation URL 生成、CDP URL 隐藏和 profile lifecycle 行为不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -k "runtime_port_and_display" -q
+# RED then GREEN；旧实现对污染 vnc_ws_port 触发 ProfileStatusResponse validation error
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q
+# 258 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 650 passed in 40.90s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.95s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 不改变 backend API response schema、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile/status runtime port/display release-evidence 边界。

@@ -2093,6 +2093,56 @@ def test_running_profile_exposes_automation_url_only(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_profile_status_and_profile_responses_sanitize_runtime_port_and_display(
+    app_client: TestClient,
+):
+    leak_marker = "runtime-status-secret"
+    create = app_client.post("/api/profiles", json={"name": "Runtime status polluted"})
+    pid = create.json()["id"]
+
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = f"100 token={leak_marker}"
+    mock_running.ws_port = f"6100 Authorization=Bearer {leak_marker}"
+    mock_running.engine = "invisible_playwright"
+    mock_running.profile_id = pid
+    main.browser_mgr.running[pid] = mock_running
+
+    try:
+        status_resp = app_client.get(f"/api/profiles/{pid}/status")
+        get_resp = app_client.get(f"/api/profiles/{pid}")
+        list_resp = app_client.get("/api/profiles")
+    finally:
+        main.browser_mgr.running.pop(pid, None)
+
+    assert status_resp.status_code == 200
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    status_data = status_resp.json()
+    profile_data = get_resp.json()
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
+
+    assert status_data["status"] == "running"
+    assert status_data["vnc_ws_port"] is None
+    assert status_data["display"] is None
+    assert status_data["automation_url"] == f"/api/profiles/{pid}/automation"
+    for profile in (profile_data, listed_profile):
+        assert profile["status"] == "running"
+        assert profile["vnc_ws_port"] is None
+        assert profile["automation_url"] == f"/api/profiles/{pid}/automation"
+
+    serialized = json.dumps(
+        {"status": status_data, "get": profile_data, "list": listed_profile},
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 # ── Automation API ──────────────────────────────────────────────────────────
 
 

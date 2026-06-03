@@ -5907,6 +5907,46 @@ npm --prefix frontend run build
 - 不改变 GeoIP lookup、profile health warning catalog、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
 
+## 2026-06-04 Profile/status runtime port and display public-value guardrail
+
+背景：
+
+- `/api/profiles`、`/api/profiles/{id}` 和 `/api/profiles/{id}/status` 会进入 runtime release evidence。
+- BrowserManager 正常只返回整数 `vnc_ws_port` 和 `:<display>` 形态的 display。
+- 异常 running object、测试桩或污染 runtime state 可能把 Authorization/Bearer、`token=` 等文本放入 `ws_port` 或 display，导致 response validation 失败或证据泄漏。
+
+已覆盖：
+
+- Profile list/detail/create/import/update response 的 `vnc_ws_port` 现在只保留 1..65535 的非 bool 整数，其他输出 `null`。
+- Profile status response 的 `vnc_ws_port` 使用同一公开端口边界。
+- Profile status response 的 `display` 只保留 `:<digits>` 形态，其他输出 `null`。
+- Automation URL 继续通过公开 profile id 生成内部 path；CDP URL 不暴露。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -k "runtime_port_and_display" -q
+# RED: 旧实现对污染 vnc_ws_port 触发 ProfileStatusResponse validation error；GREEN: 1 passed, 257 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q
+# 258 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 650 passed in 40.90s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.95s
+```
+
+边界：
+
+- 这是 Profile/status runtime response observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 profile launch/stop、VNC/runtime viewer、Automation API、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
 ## 2026-06-04 Health response profile id public-value guardrail
 
 背景：

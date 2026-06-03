@@ -1176,6 +1176,29 @@ def _profile_automation_pages_url(public_profile_id: str) -> str:
     return f"{_profile_automation_url(public_profile_id)}/pages"
 
 
+_PUBLIC_PROFILE_DISPLAY_RE = re.compile(r"^:\d{1,5}$")
+
+
+def _public_vnc_ws_port(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and 1 <= value <= 65535:
+        return value
+    return None
+
+
+def _public_profile_display(value: object) -> str | None:
+    if isinstance(value, int) and value >= 0:
+        display = f":{value}"
+    elif isinstance(value, str):
+        display = value.strip()
+    else:
+        return None
+    if _PUBLIC_PROFILE_DISPLAY_RE.fullmatch(display):
+        return display
+    return None
+
+
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     safe = dict(session)
     safe["id"] = _public_uuid_identifier(safe.get("id")) or "unknown"
@@ -2207,7 +2230,7 @@ async def list_profiles():
     for p in profiles:
         status = browser_mgr.get_status(p["id"])
         p["status"] = status["status"]
-        p["vnc_ws_port"] = status["vnc_ws_port"]
+        p["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
         p["automation_url"] = status["automation_url"]
         result.append(_profile_response(p))
     return result
@@ -2229,7 +2252,7 @@ async def create_profile(req: ProfileCreate):
     profile = db.create_profile(**data)
     status = browser_mgr.get_status(profile["id"])
     profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
     profile["automation_url"] = status["automation_url"]
     _audit_profile_event("profile.created", profile)
     return _profile_response(profile)
@@ -2289,7 +2312,7 @@ async def import_profiles(request: Request):
 
         status = browser_mgr.get_status(profile["id"])
         profile["status"] = status["status"]
-        profile["vnc_ws_port"] = status["vnc_ws_port"]
+        profile["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
         profile["automation_url"] = status["automation_url"]
         results.append(
             ProfileImportResult(
@@ -2432,7 +2455,7 @@ async def import_profile_configs(request: Request):
 
         status = browser_mgr.get_status(profile["id"])
         profile["status"] = status["status"]
-        profile["vnc_ws_port"] = status["vnc_ws_port"]
+        profile["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
         profile["automation_url"] = status["automation_url"]
         results.append(
             ProfileConfigImportResult(
@@ -2773,7 +2796,7 @@ async def import_profile_bundle(request: Request):
 
     status = browser_mgr.get_status(profile["id"])
     profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
     profile["automation_url"] = status["automation_url"]
     return ProfileConfigImportResponse(
         total=1,
@@ -2815,7 +2838,7 @@ async def get_profile(profile_id: str):
         raise HTTPException(status_code=404, detail="Profile not found")
     status = browser_mgr.get_status(profile_id)
     profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
     profile["automation_url"] = status["automation_url"]
     return _profile_response(profile)
 
@@ -2833,7 +2856,7 @@ async def update_profile(profile_id: str, req: ProfileUpdate):
         raise HTTPException(status_code=404, detail="Profile not found")
     status = browser_mgr.get_status(profile_id)
     profile["status"] = status["status"]
-    profile["vnc_ws_port"] = status["vnc_ws_port"]
+    profile["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
     profile["automation_url"] = status["automation_url"]
     _audit_profile_event("profile.updated", profile, updated_fields=audit_fields)
     return _profile_response(profile)
@@ -2958,6 +2981,9 @@ async def get_profile_status(profile_id: str):
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     status = dict(browser_mgr.get_status(profile_id))
+    status["status"] = _public_profile_runtime_status(status.get("status"))
+    status["vnc_ws_port"] = _public_vnc_ws_port(status.get("vnc_ws_port"))
+    status["display"] = _public_profile_display(status.get("display"))
     if status.get("automation_url") is not None:
         status["automation_url"] = _profile_automation_url(_public_profile_identifier(profile_id))
     return ProfileStatusResponse(**status)
