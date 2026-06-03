@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { api } from "../lib/api";
 import { ProfileViewer } from "./ProfileViewer";
@@ -188,7 +188,7 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(strip).toBeTruthy();
     const profileChip = screen.getByText("Profile profile-...7890");
     expect(profileChip).toBeTruthy();
-    expect(profileChip.getAttribute("title")).toBe("profile-1234567890");
+    expect(profileChip.getAttribute("title")).toBe("profile-...7890");
     expect(screen.getByText("Connecting")).toBeTruthy();
     expect(screen.getByText("Automation ready")).toBeTruthy();
     expect(screen.getByText("Clipboard sync on")).toBeTruthy();
@@ -219,7 +219,34 @@ describe("ProfileViewer Automation API toolbar action", () => {
 
     const sessionChip = screen.getByText("Session pm-remot...7890");
     expect(sessionChip).toBeTruthy();
-    expect(sessionChip.getAttribute("title")).toBe("pm-remote-session-1234567890");
+    expect(sessionChip.getAttribute("title")).toBe("pm-remot...7890");
+  });
+
+  it("folds non-public profile and business session handles before rendering viewer evidence", () => {
+    const leakMarker = "viewer-handle-secret";
+
+    render(
+      <ProfileViewer
+        profileId={`runtime-profile Authorization=Bearer ${leakMarker} token=${leakMarker}`}
+        externalSessionId={`/api/runtime/sessions/session-1/vnc?viewer_token=${leakMarker}`}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    const strip = screen.getByRole("region", { name: "Viewer environment" });
+    expect(within(strip).getByText("Profile unknown")).toBeTruthy();
+    expect(within(strip).getByText("Session unknown")).toBeTruthy();
+
+    const titleText = Array.from(strip.querySelectorAll("[title]"))
+      .map((element) => element.getAttribute("title") ?? "")
+      .join(" ");
+    expect(`${strip.textContent} ${titleText}`).not.toContain("Authorization");
+    expect(`${strip.textContent} ${titleText}`).not.toContain("Bearer");
+    expect(`${strip.textContent} ${titleText}`).not.toContain("token=");
+    expect(`${strip.textContent} ${titleText}`).not.toContain("viewer_token");
+    expect(`${strip.textContent} ${titleText}`).not.toContain(leakMarker);
   });
 
   it("omits the business session chip for regular profile viewers", () => {

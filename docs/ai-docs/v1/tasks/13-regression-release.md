@@ -5471,3 +5471,40 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、profile lifecycle、launch/stop、bulk launch/stop、Proxy Manager assignment API、runtime session behavior、viewer behavior、Automation API backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile runtime status UI/search release-evidence 边界。
+
+## 2026-06-04 Profile viewer handle release-evidence guardrail
+
+背景：
+
+- Release evidence 可能包含 ProfileViewer environment strip 的 visible text 和 DOM title 属性。
+- 前端此前对 profile/business session handle 的 visible text 做短化，但 title 保留完整 `profileId` / `externalSessionId`。
+- 异常 runtime viewer payload 或历史/手工污染数据可能把 Authorization/Bearer、`token=`、`viewer_token`、URL/path/query 等内容带入这些 handle。
+
+已覆盖：
+
+- ProfileViewer environment strip 现在对 profile handle 和 business session handle 使用公开值边界。
+- 非公开 handle 显示为 `unknown`，且 title 同样是 `unknown`。
+- 正常低敏 handle 继续短显示，例如 `profile-...7890` 和 `pm-remot...7890`；title 也使用短 handle，不再保存完整 id。
+- noVNC 连接、runtime viewer URL 使用、clipboard sync、Automation endpoint copy 和 disconnect/error redaction 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# RED then GREEN；旧实现把完整 id 放入 title，并把污染 id 的 secret 尾部显示成短 handle
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.34s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.02s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、runtime session/viewer token schema、VNC websocket path、noVNC connection、profile lifecycle、Automation API backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileViewer handle title/visible release-evidence 边界。

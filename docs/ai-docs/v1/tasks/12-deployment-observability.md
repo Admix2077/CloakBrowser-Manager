@@ -5788,3 +5788,41 @@ npm --prefix frontend run build
 - 这是 Profile/Proxy frontend observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 backend profile status schema、profile lifecycle、launch/stop、bulk launch/stop、Proxy Manager assignment API、runtime session behavior、viewer behavior、Automation API backend、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile viewer handle public-value guardrail
+
+背景：
+
+- ProfileViewer 顶部 environment strip 会展示 profile handle 和 Project Mileage business session handle。
+- 可见文本此前已经是短 handle，但 `title` 仍保存完整 `profileId` / `externalSessionId`。
+- 如果异常 runtime viewer payload、测试桩或历史数据把 Authorization/Bearer、`token=`、`viewer_token`、URL/path/query 等内容塞进这些 handle，release evidence DOM/title 仍可能泄漏。
+
+已覆盖：
+
+- ProfileViewer 新增 viewer handle 公开边界。
+- 只允许简单 ASCII id 字符；包含 URL/path/query/header/token/password/secret/cookie/空白等非公开特征的 handle 统一显示为 `unknown`。
+- 正常低敏 profile/session id 仍显示短 handle，例如 `profile-...7890` 和 `pm-remot...7890`。
+- `title` 现在也只保存公开短 handle，不再保存完整 id。
+- VNC websocket 连接使用的内部 raw `profileId` / `vncUrl` 行为不变；runtime viewer URL token 仍只传给 noVNC，不渲染到页面。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# RED: 旧实现把完整 id 放入 title，并把污染 id 的 secret 尾部显示成短 handle；GREEN: 17 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 41.34s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.02s
+```
+
+边界：
+
+- 这是 ProfileViewer frontend observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 backend runtime session schema、viewer token 签发/校验、VNC websocket path、noVNC connection、profile lifecycle、Automation API、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

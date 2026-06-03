@@ -19,10 +19,20 @@ const AUTOMATION_UNAVAILABLE_TITLE =
   "Launch the profile to expose its Automation API endpoint.";
 const RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE =
   "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.";
+const PUBLIC_VIEWER_HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const SENSITIVE_VIEWER_HANDLE_RE =
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
 
 function formatProfileHandle(profileId: string) {
   if (profileId.length <= 13) return profileId;
   return `${profileId.slice(0, 8)}...${profileId.slice(-4)}`;
+}
+
+function publicViewerHandle(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || !PUBLIC_VIEWER_HANDLE_RE.test(trimmed)) return "unknown";
+  if (SENSITIVE_VIEWER_HANDLE_RE.test(trimmed)) return "unknown";
+  return formatProfileHandle(trimmed);
 }
 
 export function ProfileViewer({
@@ -42,9 +52,9 @@ export function ProfileViewer({
   const [fullscreen, setFullscreen] = useState(false);
   const [clipboardSync, setClipboardSync] = useState(initialClipboardSync);
   const [automationCopied, setAutomationCopied] = useState(false);
-  const shortProfileId = formatProfileHandle(profileId);
-  const shortExternalSessionId = externalSessionId
-    ? formatProfileHandle(externalSessionId)
+  const publicProfileHandle = publicViewerHandle(profileId);
+  const publicExternalSessionHandle = externalSessionId
+    ? publicViewerHandle(externalSessionId)
     : null;
   const isRuntimeViewer = Boolean(vncUrl);
 
@@ -270,16 +280,16 @@ export function ProfileViewer({
           </span>
           <span
             className="shrink-0 rounded-[999px] border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-600 shadow-hairline"
-            title={profileId}
+            title={publicProfileHandle}
           >
-            Profile {shortProfileId}
+            Profile {publicProfileHandle}
           </span>
-          {externalSessionId && shortExternalSessionId ? (
+          {externalSessionId && publicExternalSessionHandle ? (
             <span
               className="shrink-0 rounded-[999px] border border-cyan-200 bg-cyan-50 px-2 py-1 font-mono text-[11px] font-semibold text-cyan-700 shadow-hairline"
-              title={externalSessionId}
+              title={publicExternalSessionHandle}
             >
-              Session {shortExternalSessionId}
+              Session {publicExternalSessionHandle}
             </span>
           ) : null}
           {onBackToProfiles ? (
