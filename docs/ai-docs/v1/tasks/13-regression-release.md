@@ -2389,3 +2389,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、viewer token validation、VNC proxying、profile launch behavior 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile template apply public-value guardrail
+
+背景：
+
+- Release smoke 会使用 profile templates 准备 profile 和 runtime sessions。
+- 正常 template API 输入有校验，但旧版本/手工 DB row 可能包含非公开或非类型匹配的 fingerprint/launch fields。
+- 之前 template apply 会直接复制这些历史字段到 profile create/import 数据，导致 profile response validation error 或污染 profile lifecycle。
+
+已覆盖：
+
+- Template apply 边界过滤 platform、screen_width、screen_height、gpu_vendor、gpu_renderer、hardware_concurrency、color_scheme、human_preset、humanize、geoip 和 launch_args。
+- 非公开 screen/hardware/GPU 值不会覆盖 profile 默认值；非公开 launch args 和 Firefox 冲突 args 会被丢弃。
+- 正常 template CRUD、template create profile、CSV import preview/import、profile config import/export 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_create_profile_from_template_sanitizes_persisted_identity_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.64s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 10 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "template or csv_import or config_import"
+# 16 passed, 3 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile_config or profile_launch_args or create_profile"
+# 11 passed, 212 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 576 passed in 33.90s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.13s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

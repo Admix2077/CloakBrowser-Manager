@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from starlette.testclient import TestClient
@@ -223,6 +224,44 @@ def test_create_profile_from_template_copies_template_fields(app_client: TestCli
     assert profile["human_preset"] == "careful"
     assert profile["launch_args"] == ["--private-window"]
     assert profile["geoip"] is False
+
+
+def test_create_profile_from_template_sanitizes_persisted_identity_fields(app_client: TestClient):
+    leak_marker = "template-identity-leak-marker"
+    template = db.create_profile_template(
+        name="Historical polluted template",
+        platform=f"linux-{leak_marker}",
+        screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
+        screen_height=f"1080?token={leak_marker}",
+        gpu_vendor=f"Google Inc. (NVIDIA)\nAuthorization: Bearer {leak_marker}",
+        gpu_renderer=f"ANGLE (NVIDIA) https://gpu.invalid/?token={leak_marker}",
+        hardware_concurrency=f"8 cookie={leak_marker}",
+        color_scheme=f"dark-{leak_marker}",
+        human_preset=f"careful-{leak_marker}",
+        launch_args=[
+            "--private-window",
+            f"--user-agent={leak_marker}",
+            f"Bearer {leak_marker}",
+        ],
+    )
+
+    create = app_client.post(
+        "/api/profiles",
+        json={"name": "From polluted template", "template_id": template["id"]},
+    )
+
+    assert create.status_code == 201
+    profile = create.json()
+    assert profile["platform"] == "windows"
+    assert profile["screen_width"] == 1920
+    assert profile["screen_height"] == 1080
+    assert profile["gpu_vendor"] is None
+    assert profile["gpu_renderer"] is None
+    assert profile["hardware_concurrency"] is None
+    assert profile["color_scheme"] is None
+    assert profile["human_preset"] == "default"
+    assert profile["launch_args"] == ["--private-window"]
+    assert leak_marker not in json.dumps(profile, sort_keys=True)
 
 
 def test_create_profile_template_fields_can_be_overridden(app_client: TestClient):

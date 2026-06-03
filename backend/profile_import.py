@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic import ValidationError
 
 from . import database as db
+from .browser_manager import (
+    _filter_firefox_launch_args,
+    _public_gpu_text,
+    _public_hardware_concurrency,
+    _public_screen_dimension,
+)
 from .models import (
     ProfileCreate,
     ProfileImportPreviewProfile,
@@ -65,6 +72,10 @@ SAFE_PROXY_ERROR_DETAILS = (
     ("Proxy URL invalid port", "Proxy URL invalid port"),
     ("Proxy URL missing port", "Proxy URL missing port"),
 )
+_SENSITIVE_TEMPLATE_ARG_RE = re.compile(
+    r"(?:https?://|[?&#]|\bauthorization\b|\bbearer\b|\btoken=|\bpassword=|\bsecret=|\bcookie=)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -95,8 +106,55 @@ def apply_profile_template_fields(data: dict[str, Any], explicit_fields: set[str
 
     for field in TEMPLATE_FIELDS:
         if field not in explicit_fields:
-            data[field] = template[field]
+            safe_value, should_copy = _safe_template_field(field, template.get(field))
+            if should_copy:
+                data[field] = safe_value
     return data
+
+
+def _safe_template_field(field: str, value: Any) -> tuple[Any, bool]:
+    if field == "platform":
+        return value, isinstance(value, str) and value in PLATFORMS
+    if field in {"screen_width", "screen_height"}:
+        dimension = _public_screen_dimension(value)
+        return dimension, dimension is not None
+    if field in {"gpu_vendor", "gpu_renderer"}:
+        if value is None:
+            return None, True
+        text = _public_gpu_text(value)
+        return text, bool(text)
+    if field == "hardware_concurrency":
+        concurrency = _public_hardware_concurrency(value)
+        return concurrency, concurrency is not None
+    if field == "color_scheme":
+        if value is None:
+            return None, True
+        return value, isinstance(value, str) and value in COLOR_SCHEMES
+    if field == "human_preset":
+        return value, isinstance(value, str) and value in HUMAN_PRESETS
+    if field in {"humanize", "geoip"}:
+        if isinstance(value, bool):
+            return value, True
+        if isinstance(value, int) and value in {0, 1}:
+            return bool(value), True
+        return None, False
+    if field == "launch_args":
+        return _safe_template_launch_args(value), True
+    return value, True
+
+
+def _safe_template_launch_args(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    candidates = []
+    for arg in value:
+        if not isinstance(arg, str):
+            continue
+        text = arg.strip()
+        if not text or _SENSITIVE_TEMPLATE_ARG_RE.search(text):
+            continue
+        candidates.append(text)
+    return _filter_firefox_launch_args(candidates)
 
 
 def preview_profile_csv_import(csv_text: str) -> ProfileImportPreviewResponse:
