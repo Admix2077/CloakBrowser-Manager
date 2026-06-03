@@ -6456,3 +6456,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 proxy/provider preset API schema、proxy asset persistence、provider preset persistence、CSV parsing/import payload、proxy assignment/random assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy asset metadata UI/search evidence guardrail
+
+背景：
+
+- Proxy Manager table 会显示 proxy `country_code`、`city`、`asn`、`provider`、tags 和 last-check location。
+- 后端响应已有多处 public-value 边界，但前端 release evidence 不应信任异常 response、历史/手工污染 row 或测试桩中的 raw metadata。
+- 污染 metadata 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 table 文本、tooltip、filter option text 或本地 search corpus。
+
+已覆盖：
+
+- Proxy table location、ASN、provider、tag chip、last-check location 和对应 `title` 属性现在使用共享 `publicErrorText()` 展示边界。
+- Proxy filter option visible labels 使用同一展示边界；option values 保持 raw，避免改变现有 filter matching 和 random assignment request 语义。
+- Proxy local search corpus 对 metadata 使用同一展示边界，raw token/path/IP marker 不再命中 search evidence；正常低敏 provider/country/tag 搜索保持可用。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted proxy asset metadata"
+# RED: 旧实现把污染 proxy metadata 写入 table text/title/search evidence；GREEN: 1 passed, 31 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 32 passed
+```
+
+边界：
+
+- 这是 Proxy Manager proxy asset metadata UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 proxy/provider preset API schema、proxy asset persistence、provider preset persistence、CSV parsing/import payload、filter values、random assignment payload、proxy assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

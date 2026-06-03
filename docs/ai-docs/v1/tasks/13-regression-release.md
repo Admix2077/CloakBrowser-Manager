@@ -6138,3 +6138,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、proxy/provider preset persistence、CSV parsing、CSV import payload、proxy assignment/random assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy CSV preview row metadata release-evidence 边界。
+
+## 2026-06-04 Proxy asset metadata UI/search release-evidence guardrail
+
+背景：
+
+- Proxy Manager asset table 和本地 search/filter 是 proxy/proxy-country release smoke 的常用 evidence 面。
+- 后端已经收敛 proxy city/asn/provider/country 等 response 边界，但前端仍直接显示和搜索异常 response、历史/手工污染 row 或测试桩中的 metadata。
+- 污染 metadata 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 table text/title、filter option text 或 search corpus。
+
+已覆盖：
+
+- Proxy table location、ASN、provider、tag chip、last-check location 和对应 title 属性使用共享 public error text boundary。
+- Filter option visible labels 使用同一 public label；option values 保持 raw，因此 clean filter matching 和 random assignment request payload 语义不变。
+- Local search corpus 使用 public metadata labels，raw token/path/IP marker 不再命中 search evidence；正常低敏 provider/country/tag 搜索保持可用。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted proxy asset metadata"
+# RED then GREEN；旧实现把污染 proxy metadata 写入 table text/title/search evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 32 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、proxy/provider preset persistence、CSV parsing、CSV import payload、filter values、random assignment payload、proxy assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy asset metadata UI/search release-evidence 边界。

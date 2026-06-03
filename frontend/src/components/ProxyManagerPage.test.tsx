@@ -317,6 +317,102 @@ describe("ProxyManagerPage", () => {
     }
   });
 
+  it("redacts persisted proxy asset metadata from rendered and search evidence", async () => {
+    const leakMarker = "proxy-meta-token-super-secret";
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-polluted-meta",
+        name: "Polluted Metadata Pool",
+        country_code:
+          "JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-country 203.0.113.68`,
+        city:
+          "Tokyo Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-city 203.0.113.69`,
+        asn:
+          "AS64512 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-asn 203.0.113.70`,
+        provider:
+          "ProxyJP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-provider-meta 203.0.113.71`,
+        tags: [{
+          tag:
+            "mobile Authorization=Bearer " +
+            `${leakMarker} token=${leakMarker} /data/proxy-tag-meta 203.0.113.72`,
+          color: "#0ea5e9",
+        }],
+        last_check_ip:
+          "198.51.100.44 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-check-ip 203.0.113.73`,
+        last_check_country_code:
+          "JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-check-country 203.0.113.74`,
+        last_check_timezone:
+          "Asia/Tokyo Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-check-timezone 203.0.113.75`,
+        last_check_locale:
+          "ja-JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-check-locale 203.0.113.76`,
+        last_check_source:
+          "qa Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/proxy-check-source 203.0.113.77`,
+      }),
+    ]);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    const table = within(page).getByRole("table", { name: "Proxy assets" });
+    expect(within(table).getByText("JP [redacted] [redacted] [redacted-path] [redacted-ip] · Tokyo [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(table).getByText("AS64512 [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(table).getByText("ProxyJP [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(table).getByText("mobile [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const search = within(page).getByLabelText("Search proxy assets");
+    fireEvent.change(search, { target: { value: leakMarker } });
+    expect(within(page).getByText("0 of 1 visible")).toBeTruthy();
+    expect(within(page).getByRole("status", { name: "No proxy assets match filters" })).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "proxyjp" } });
+    expect(within(page).getByText("1 of 1 visible")).toBeTruthy();
+
+    const renderedEvidence = [
+      table.textContent,
+      ...Array.from(table.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(table.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/proxy-country",
+      "/data/proxy-city",
+      "/data/proxy-asn",
+      "/data/proxy-provider-meta",
+      "/data/proxy-tag-meta",
+      "/data/proxy-check-ip",
+      "/data/proxy-check-country",
+      "/data/proxy-check-timezone",
+      "/data/proxy-check-locale",
+      "/data/proxy-check-source",
+      "198.51.100.44",
+      "203.0.113.68",
+      "203.0.113.69",
+      "203.0.113.70",
+      "203.0.113.71",
+      "203.0.113.72",
+      "203.0.113.73",
+      "203.0.113.74",
+      "203.0.113.75",
+      "203.0.113.76",
+      "203.0.113.77",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("filters by country provider and tag with AND semantics from clean option sets", async () => {
     mockListProxies.mockResolvedValue([
       proxy({

@@ -1006,7 +1006,7 @@ function FilterSelect({
         <option value={FILTER_ALL}>All</option>
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {publicProxyMetadataLabel(option)}
           </option>
         ))}
       </select>
@@ -2041,10 +2041,15 @@ function ProxyRow({
     ? publicErrorText(proxy.last_check_error)
     : null;
   const safeNotes = proxy.notes ? publicErrorText(proxy.notes) : null;
-  const location = [proxy.country_code, proxy.city].filter(Boolean).join(" · ") || "-";
+  const location = [
+    proxy.country_code ? publicProxyMetadataLabel(proxy.country_code) : null,
+    proxy.city ? publicProxyMetadataLabel(proxy.city) : null,
+  ].filter(Boolean).join(" · ") || "-";
+  const safeAsn = proxy.asn ? publicProxyMetadataLabel(proxy.asn) : null;
+  const safeProvider = proxy.provider ? publicProxyMetadataLabel(proxy.provider) : "-";
   const checkLocation = [
-    proxy.last_check_ip,
-    proxy.last_check_country_code,
+    proxy.last_check_ip ? publicProxyMetadataLabel(proxy.last_check_ip) : null,
+    proxy.last_check_country_code ? publicProxyMetadataLabel(proxy.last_check_country_code) : null,
   ].filter(Boolean).join(" · ");
 
   return (
@@ -2077,15 +2082,15 @@ function ProxyRow({
           <Globe2 className="h-3.5 w-3.5 shrink-0 text-slate-400" />
           <span className="truncate" title={location}>{location}</span>
         </div>
-        {proxy.asn && (
-          <div className="mt-1 truncate font-mono text-[11px] text-slate-400" title={proxy.asn}>
-            {proxy.asn}
+        {safeAsn && (
+          <div className="mt-1 truncate font-mono text-[11px] text-slate-400" title={safeAsn}>
+            {safeAsn}
           </div>
         )}
       </td>
       <td className="px-3 py-3 align-top">
-        <span className="truncate text-sm font-medium text-slate-700" title={proxy.provider ?? "-"}>
-          {proxy.provider ?? "-"}
+        <span className="truncate text-sm font-medium text-slate-700" title={safeProvider}>
+          {safeProvider}
         </span>
         {safeNotes && (
           <p className="mt-1 line-clamp-1 text-[11px] text-slate-400" title={safeNotes}>
@@ -2112,19 +2117,22 @@ function ProxyRow({
       <td className="px-3 py-3 align-top">
         {proxy.tags.length > 0 ? (
           <div className="flex max-w-full flex-wrap gap-1">
-            {proxy.tags.slice(0, 3).map((tag) => (
+            {proxy.tags.slice(0, 3).map((tag) => {
+              const safeTag = publicProxyMetadataLabel(tag.tag);
+              return (
               <span
                 key={`${proxy.id}-${tag.tag}`}
                 className="token-chip max-w-[128px] truncate"
-                title={tag.tag}
+                title={safeTag}
               >
                 <span
                   className="h-1.5 w-1.5 shrink-0 rounded-full"
                   style={{ backgroundColor: tag.color ?? "#94a3b8" }}
                 />
-                {tag.tag}
+                {safeTag}
               </span>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <span className="text-slate-400">-</span>
@@ -2259,6 +2267,10 @@ function publicProviderPresetMetadataLabel(value: string): string {
 }
 
 function publicProxyCsvPreviewLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
+function publicProxyMetadataLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 
@@ -2528,19 +2540,19 @@ function getProxySearchText(proxy: ProxyAsset): string {
   return [
     publicProxyAssetLabel(proxy.name),
     redactUrlCredentials(proxy.url),
-    proxy.country_code,
-    proxy.city,
-    proxy.asn,
-    proxy.provider,
+    proxy.country_code ? publicProxyMetadataLabel(proxy.country_code) : null,
+    proxy.city ? publicProxyMetadataLabel(proxy.city) : null,
+    proxy.asn ? publicProxyMetadataLabel(proxy.asn) : null,
+    proxy.provider ? publicProxyMetadataLabel(proxy.provider) : null,
     proxy.notes ? publicErrorText(proxy.notes) : null,
-    proxy.last_check_status,
-    proxy.last_check_ip,
-    proxy.last_check_country_code,
-    proxy.last_check_timezone,
-    proxy.last_check_locale,
-    proxy.last_check_source,
+    proxy.last_check_status ? publicProxyMetadataLabel(proxy.last_check_status) : null,
+    proxy.last_check_ip ? publicProxyMetadataLabel(proxy.last_check_ip) : null,
+    proxy.last_check_country_code ? publicProxyMetadataLabel(proxy.last_check_country_code) : null,
+    proxy.last_check_timezone ? publicProxyMetadataLabel(proxy.last_check_timezone) : null,
+    proxy.last_check_locale ? publicProxyMetadataLabel(proxy.last_check_locale) : null,
+    proxy.last_check_source ? publicProxyMetadataLabel(proxy.last_check_source) : null,
     proxy.last_check_error ? publicErrorText(proxy.last_check_error) : null,
-    ...proxy.tags.map((tag) => tag.tag),
+    ...proxy.tags.map((tag) => publicProxyMetadataLabel(tag.tag)),
   ]
     .map(normalizeFilterValue)
     .filter(Boolean)
