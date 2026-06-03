@@ -5157,3 +5157,43 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata IP key release-evidence 边界。
+
+## 2026-06-04 Frontend public error IP literal release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含前端错误态、warning summary 和失败提示。
+- 共享前端错误 helper 已清理 URL credentials、Authorization/Bearer、token/password/secret/cookie assignment、本地路径和 Windows drive path。
+- 裸 IPv4/IPv6 literal 仍可能来自 API/transport/manual error text，并被渲染到 UI。
+
+已覆盖：
+
+- `publicErrorText()` 现在 redacts IPv4 literal、裸 IPv6 literal 和 bracketed IPv6 literal。
+- Bracketed IPv6 endpoint 保留低敏端口上下文，例如 `[2001:db8::46]:443` 变为 `[redacted-ip]:443`。
+- 普通域名 URL host/port 仍保持可读，便于 triage。
+- Profile/Proxy table 的正常业务 IP 字段展示不走这条错误 helper，行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# RED then GREEN；旧实现保留 203.0.113.45、198.51.100.20、2001:db8::45 和 [2001:db8::46]
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 38.95s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 234 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.73s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 audit event schema、backend API response schemas、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、GeoIP lookup、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend public error IP literal release-evidence 边界。

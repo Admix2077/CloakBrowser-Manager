@@ -5,9 +5,44 @@ const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
 const ERROR_SENSITIVE_ASSIGNMENT_RE =
   /\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
+const ERROR_IPV4_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
+const ERROR_BRACKETED_IPV6_RE = /\[([0-9a-fA-F:.]{2,})\]/g;
+const ERROR_BARE_IPV6_RE = /(?<![A-Za-z0-9_.:[\]-])(?:[0-9a-fA-F]{1,4}:){2,}[0-9a-fA-F:.]*(?![A-Za-z0-9_.:[\]-])/g;
+
+function isValidIpv4Candidate(candidate: string): boolean {
+  const parts = candidate.split(".");
+  return parts.length === 4 && parts.every((part) => {
+    if (!/^\d{1,3}$/.test(part)) return false;
+    const value = Number(part);
+    return value >= 0 && value <= 255;
+  });
+}
+
+function isValidIpv6Candidate(candidate: string): boolean {
+  if (!candidate.includes(":")) return false;
+  try {
+    new URL(`http://[${candidate}]`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function redactIpLiterals(text: string): string {
+  return text
+    .replace(ERROR_BRACKETED_IPV6_RE, (match, candidate: string) => (
+      isValidIpv6Candidate(candidate) ? "[redacted-ip]" : match
+    ))
+    .replace(ERROR_BARE_IPV6_RE, (candidate: string) => (
+      isValidIpv6Candidate(candidate) ? "[redacted-ip]" : candidate
+    ))
+    .replace(ERROR_IPV4_RE, (candidate: string) => (
+      isValidIpv4Candidate(candidate) ? "[redacted-ip]" : candidate
+    ));
+}
 
 export function publicErrorText(value: string): string {
-  return redactUrlCredentials(value)
+  return redactIpLiterals(redactUrlCredentials(value))
     .replace(ERROR_AUTH_HEADER_RE, "[redacted]")
     .replace(ERROR_BEARER_RE, "[redacted]")
     .replace(ERROR_SENSITIVE_ASSIGNMENT_RE, "[redacted]")

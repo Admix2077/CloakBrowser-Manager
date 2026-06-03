@@ -5473,3 +5473,43 @@ git diff --check
 - 这是 audit metadata IP key release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Frontend public error IP literal redaction guardrail
+
+背景：
+
+- 前端公共错误 helper 已覆盖 URL credentials、Authorization/Bearer、token/password/secret/cookie assignment、本地路径和 Windows drive path。
+- 但 API/transport/manual error text 仍可能包含裸 IPv4、裸 IPv6 或 bracketed IPv6 literal。
+- 这些错误会进入 profile hooks、Proxy Manager、CSV import、health warning 等 UI release evidence 面。
+
+已覆盖：
+
+- `frontend/src/lib/errorDisplay.ts` 的 `publicErrorText()` 现在会把错误文本里的 IPv4 literal 替换为 `[redacted-ip]`。
+- 同一 helper 也会替换裸 IPv6 和 bracketed IPv6 literal，并保留端口上下文，例如 `[2001:db8::46]:443` 变为 `[redacted-ip]:443`。
+- IPv4 候选值经过 0..255 octet 校验；IPv6 候选值通过 bracketed URL parser 校验，避免把普通域名 URL 当成 IP。
+- 只影响公共错误文本脱敏路径；profile/proxy table 的正常 `last_geoip_ip` / `last_check_ip` 业务展示不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# RED: 旧实现保留 203.0.113.45、198.51.100.20、2001:db8::45 和 [2001:db8::46]；GREEN: 2 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 38.95s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 234 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.73s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend visible error release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 audit event schema、backend API response schemas、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、GeoIP lookup、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
