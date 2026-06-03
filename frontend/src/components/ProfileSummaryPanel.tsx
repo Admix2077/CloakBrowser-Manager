@@ -1,7 +1,7 @@
 import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { publicProfileName } from "../lib/errorDisplay";
+import { publicProfileGeoipLabel, publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
@@ -49,6 +49,10 @@ export function ProfileSummaryPanel({
   const timezone = geoip?.timezone ?? profile.last_geoip_timezone;
   const locale = geoip?.locale ?? profile.last_geoip_locale;
   const checkedAt = health?.checked_at ?? profile.last_geoip_resolved_at;
+  const safeIp = ip ? publicProfileGeoipLabel(ip) : "-";
+  const safeCountry = country ? publicProfileGeoipLabel(country) : null;
+  const safeTimezone = timezone ? publicProfileGeoipLabel(timezone) : "-";
+  const safeLocale = locale ? publicProfileGeoipLabel(locale) : "-";
   const warningSummary = getHealthWarningSummary(health);
   const timezoneOverride = Boolean(health?.manual_overrides.timezone ?? profile.timezone);
   const localeOverride = Boolean(health?.manual_overrides.locale ?? profile.locale);
@@ -122,14 +126,14 @@ export function ProfileSummaryPanel({
           </SummarySection>
 
           <SummarySection icon={<Globe2 className="h-3.5 w-3.5" />} title="GeoIP" priority="secondary">
-            <SummaryRow label="IP" value={ip ?? "-"} mono />
+            <SummaryRow label="IP" value={safeIp} mono />
             <SummaryRow
               label="Country"
-              value={country ? <CountryBadge country={country} /> : "-"}
-              title={country ?? "-"}
+              value={safeCountry ? <CountryBadge country={safeCountry} /> : "-"}
+              title={safeCountry ?? "-"}
             />
-            <SummaryRow label="Timezone" value={timezone ?? "-"} />
-            <SummaryRow label="Locale" value={locale ?? "-"} />
+            <SummaryRow label="Timezone" value={safeTimezone} />
+            <SummaryRow label="Locale" value={safeLocale} />
             <div className="mt-2 flex flex-wrap gap-1">
               <OverridePill label="Timezone override" active={timezoneOverride} />
               <OverridePill label="Locale override" active={localeOverride} />

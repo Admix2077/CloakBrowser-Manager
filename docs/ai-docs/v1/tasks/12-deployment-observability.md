@@ -6617,3 +6617,41 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile summary/rail GeoIP evidence guardrail
+
+背景：
+
+- Profile summary inspector 和左侧 operations rail 同样会展示 health/profile response 中的 IP、country、timezone 和 locale。
+- Profile country filter options 会从 health/profile GeoIP country 派生，也是 release smoke 页面文本的一部分。
+- 普通 GeoIP 值需要继续展示；但异常 response、历史/手工污染 row 或测试桩如果把 Authorization/Bearer、`token=`、本地路径、IP 字面量或 credential URL 混入这些字段，前端不应原样写入正文、`title` 或 filter option evidence。
+
+已覆盖：
+
+- Profile summary 的 IP、country、timezone、locale visible text/title 使用 public profile GeoIP label。
+- ProfileList rail 的 health GeoIP parts 使用同一 public profile GeoIP label。
+- Profile filter country options 和 country filter matching 使用安全 country label，普通 `US`/`JP` 等值保持原样。
+- 正常 GeoIP 展示、CountryBadge、profile search/sort、profile operations rail 行为和 raw backend data 语义保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "redacts persisted geoip labels"
+# RED: 旧实现把污染 Summary GeoIP 写入 text/title；GREEN: 1 passed, 4 skipped
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts -t "redacts polluted geoip country options"
+# RED: 旧实现把污染 country option 原样返回；GREEN: 1 passed, 5 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx -t "redacts health geoip labels"
+# RED: 旧实现把污染 rail/filter GeoIP 写入页面 evidence；GREEN: 1 passed, 12 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx src/lib/filters.test.ts src/lib/errorDisplay.test.ts src/components/ProfileTable.test.tsx
+# 5 files passed, 69 tests passed
+```
+
+边界：
+
+- 这是 Profile summary/rail/filter GeoIP UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

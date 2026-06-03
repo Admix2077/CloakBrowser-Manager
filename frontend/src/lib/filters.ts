@@ -1,5 +1,5 @@
 import type { HealthStatus, Profile, ProfileHealthResponse } from "./api";
-import { publicProfileName } from "./errorDisplay";
+import { publicProfileGeoipLabel, publicProfileName } from "./errorDisplay";
 
 export type RuntimeStatusFilter = "all" | Profile["status"];
 export type HealthStatusFilter = "all" | HealthStatus;
@@ -56,9 +56,10 @@ function countryCode(
   profile: Profile,
   healthByProfileId: Record<string, ProfileHealthResponse | undefined>,
 ): string | null {
-  return profileHealth(profile, healthByProfileId)?.geoip?.country_code
+  const country = profileHealth(profile, healthByProfileId)?.geoip?.country_code
     ?? profile.last_geoip_country_code
     ?? null;
+  return country ? publicProfileGeoipLabel(country) : null;
 }
 
 function lastCheckedAt(

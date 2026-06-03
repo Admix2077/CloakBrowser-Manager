@@ -1,5 +1,5 @@
 import type { HealthStatus, ProfileHealthResponse } from "./api";
-import { publicErrorText } from "./errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel } from "./errorDisplay";
 
 export function getHealthLabel(status: HealthStatus | undefined): string {
   switch (status) {
@@ -75,7 +75,7 @@ export function getHealthGeoipParts(
 ): string[] {
   const geoip = health?.geoip;
   if (!geoip) return [];
-  return [geoip.ip, geoip.country_code, geoip.timezone, geoip.locale].filter(
-    (part): part is string => Boolean(part),
-  );
+  return [geoip.ip, geoip.country_code, geoip.timezone, geoip.locale]
+    .filter((part): part is string => Boolean(part))
+    .map((part) => publicProfileGeoipLabel(part));
 }

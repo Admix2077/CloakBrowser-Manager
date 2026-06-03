@@ -168,4 +168,44 @@ describe("getProfileFilterOptions", () => {
     expect(options.countries).toEqual(["DE", "JP", "US"]);
     expect(options.tags).toEqual(["client-a", "client-b"]);
   });
+
+  it("redacts polluted geoip country options while keeping country filters usable", () => {
+    const leakMarker = "filter-country-secret";
+    const polluted = profile({
+      id: "polluted-country",
+      name: "Polluted country",
+    });
+    const pollutedHealth = health("polluted-country", {
+      geoip: {
+        ip: "203.0.113.120",
+        country_code:
+          "JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/filter-country 203.0.113.121`,
+        timezone: "Asia/Tokyo",
+        locale: "ja-JP",
+        source: "qa",
+        resolved_at: "2026-05-25T00:00:00Z",
+      },
+    });
+    const safeCountry = "JP [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    const options = getProfileFilterOptions([polluted], {
+      "polluted-country": pollutedHealth,
+    });
+
+    expect(options.countries).toEqual([safeCountry]);
+    expect(options.countries.join(" ")).not.toContain(leakMarker);
+    expect(options.countries.join(" ")).not.toContain("/data/filter-country");
+
+    const result = filterAndSortProfiles([polluted], { "polluted-country": pollutedHealth }, {
+      search: "",
+      status: "all",
+      health: "all",
+      proxy: "all",
+      country: safeCountry,
+      tag: "all",
+      sortBy: "name",
+    });
+    expect(result.map((item) => item.id)).toEqual(["polluted-country"]);
+  });
 });

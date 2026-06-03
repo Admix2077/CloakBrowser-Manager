@@ -209,6 +209,62 @@ describe("ProfileList health display", () => {
       expect(renderedEvidence).not.toContain(leaked);
     }
   });
+
+  it("redacts health geoip labels from rail rendered evidence", () => {
+    const leakMarker = "rail-geoip-secret";
+    const pollutedHealth: ProfileHealthResponse = {
+      ...warningHealth,
+      geoip: {
+        ip:
+          "203.0.113.20 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/rail-geoip-ip 203.0.113.109`,
+        country_code:
+          "JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/rail-geoip-country 203.0.113.110`,
+        timezone:
+          "Asia/Tokyo Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/rail-geoip-timezone 203.0.113.111`,
+        locale:
+          "ja-JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/rail-geoip-locale 203.0.113.112`,
+        source: "ipwho.is",
+        resolved_at: "2026-05-25T00:00:00Z",
+      },
+    };
+
+    render(
+      <ProfileList
+        profiles={[profile]}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+        healthByProfileId={{ "profile-1": pollutedHealth }}
+      />,
+    );
+
+    expect(screen.getByText("[redacted-ip] [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getAllByText("JP [redacted] [redacted] [redacted-path] [redacted-ip]").length).toBeGreaterThan(0);
+    expect(screen.getByText("Asia/Tokyo [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("ja-JP [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = document.body.textContent ?? "";
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/rail-geoip-ip",
+      "/data/rail-geoip-country",
+      "/data/rail-geoip-timezone",
+      "/data/rail-geoip-locale",
+      "203.0.113.109",
+      "203.0.113.110",
+      "203.0.113.111",
+      "203.0.113.112",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
 });
 
 describe("ProfileList empty states", () => {

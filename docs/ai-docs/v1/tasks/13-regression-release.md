@@ -6299,3 +6299,41 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile table/card GeoIP release-evidence 边界。
+
+## 2026-06-04 Profile summary/rail/filter GeoIP release-evidence guardrail
+
+背景：
+
+- Profile summary inspector、左侧 operations rail 和 Profile country filter options 都会显示或派生 GeoIP 字段，是 release regression 中容易进入截图/日志/文本 evidence 的 UI 面。
+- 普通 GeoIP 值仍需要展示；但异常 response 或历史/手工污染 row 可能把 Authorization/Bearer、`token=`、本地路径、IP 字面量或 credential URL 混入 IP、country、timezone、locale。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Profile summary inspector 的 GeoIP text/title 使用 public profile GeoIP label。
+- ProfileList rail 的 health GeoIP parts 使用同一 public profile GeoIP label。
+- Profile country filter options 和 country filter matching 使用安全 country label；普通 `US`/`JP`/timezone/locale/IP 值保持原样。
+- Backend health/GeoIP API、GeoIP lookup provider、profile persistence、Profile edit raw input 和 browser fingerprint 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "redacts persisted geoip labels"
+# RED then GREEN；旧实现把污染 Summary GeoIP 写入 text/title evidence
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts -t "redacts polluted geoip country options"
+# RED then GREEN；旧实现把污染 country option 原样返回
+
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx -t "redacts health geoip labels"
+# RED then GREEN；旧实现把污染 rail/filter GeoIP 写入页面 evidence
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx src/components/ProfileList.test.tsx src/lib/filters.test.ts src/lib/errorDisplay.test.ts src/components/ProfileTable.test.tsx
+# 5 files passed, 69 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、health check API、GeoIP lookup provider 行为、普通 GeoIP 值展示语义、profile persistence、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile summary/rail/filter GeoIP release-evidence 边界。

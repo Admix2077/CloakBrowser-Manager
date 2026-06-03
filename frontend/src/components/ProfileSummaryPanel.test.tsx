@@ -190,4 +190,61 @@ describe("ProfileSummaryPanel", () => {
       expect(renderedEvidence).not.toContain(leaked);
     }
   });
+
+  it("redacts persisted geoip labels from summary rendered evidence", () => {
+    const leakMarker = "summary-geoip-secret";
+    const pollutedHealth = health({
+      geoip: {
+        ip:
+          "23.144.4.92 Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-geoip-ip 203.0.113.105`,
+        country_code:
+          "US Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-geoip-country 203.0.113.106`,
+        timezone:
+          "America/Los_Angeles Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-geoip-timezone 203.0.113.107`,
+        locale:
+          "en-US Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/summary-geoip-locale 203.0.113.108`,
+        source: "qa",
+        resolved_at: "2026-05-25T00:00:00Z",
+      },
+    });
+
+    render(
+      <ProfileSummaryPanel
+        profile={profile({})}
+        health={pollutedHealth}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("[redacted-ip] [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("US [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("America/Los_Angeles [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getByText("en-US [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/summary-geoip-ip",
+      "/data/summary-geoip-country",
+      "/data/summary-geoip-timezone",
+      "/data/summary-geoip-locale",
+      "203.0.113.105",
+      "203.0.113.106",
+      "203.0.113.107",
+      "203.0.113.108",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
 });
