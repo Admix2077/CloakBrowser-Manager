@@ -164,6 +164,78 @@ def test_runtime_session_response_sanitizes_persisted_status(
     assert leak_marker not in json.dumps(data, sort_keys=True)
 
 
+def test_runtime_session_response_sanitizes_persisted_external_session_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    leak_marker = "runtime-external-session-secret"
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id=(
+            f"https://runtime.example/session?token={leak_marker} "
+            f"Authorization=Bearer {leak_marker}"
+        ),
+        lease_seconds=900,
+    )
+
+    resp = app_client.get(
+        f"/api/runtime/sessions/{session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["external_session_id"] == "unknown"
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "runtime.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
+def test_runtime_viewer_failure_audit_omits_sensitive_external_session_id(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    leak_marker = "viewer-external-session-secret"
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id=(
+            f"https://viewer.example/session?token={leak_marker} "
+            f"Authorization=Bearer {leak_marker}"
+        ),
+        lease_seconds=900,
+    )
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            f"/api/runtime/sessions/{session['id']}/vnc?viewer_token=wrong-token",
+            headers={"origin": "http://testserver"},
+        ):
+            pass
+
+    assert rejected.value.code == 4401
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["external_session_id"] is None
+    serialized = json.dumps(failures, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "viewer.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+        "wrong-token",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_session_create_respects_max_running_profiles(
     app_client: TestClient,
     runtime_headers: dict[str, str],

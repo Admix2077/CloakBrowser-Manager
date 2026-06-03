@@ -1016,6 +1016,12 @@ def _template_response(template: dict) -> ProfileTemplateResponse:
 
 
 _PUBLIC_RUNTIME_SESSION_STATUSES = {"active", "terminated"}
+_PUBLIC_RUNTIME_EXTERNAL_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SENSITIVE_RUNTIME_EXTERNAL_SESSION_ID_RE = re.compile(
+    r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer)\b|"
+    r"\b(auth_token|password|cookie|secret|token|viewer_token)\s*=",
+    re.IGNORECASE,
+)
 
 
 def _public_runtime_session_status(value: object) -> str:
@@ -1024,9 +1030,25 @@ def _public_runtime_session_status(value: object) -> str:
     return "unknown"
 
 
+def _public_runtime_external_session_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    external_session_id = value.strip()
+    if not external_session_id:
+        return None
+    if not _PUBLIC_RUNTIME_EXTERNAL_SESSION_ID_RE.fullmatch(external_session_id):
+        return None
+    if _SENSITIVE_RUNTIME_EXTERNAL_SESSION_ID_RE.search(external_session_id):
+        return None
+    return external_session_id
+
+
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     safe = dict(session)
     safe["status"] = _public_runtime_session_status(safe.get("status"))
+    safe["external_session_id"] = _public_runtime_external_session_id(
+        safe.get("external_session_id")
+    ) or "unknown"
     return RuntimeSessionResponse(**safe)
 
 
@@ -1036,7 +1058,7 @@ def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None =
         actor_type="runtime_service",
         runtime_session_id=str(session["id"]),
         profile_id=str(session["profile_id"]),
-        external_session_id=str(session["external_session_id"]),
+        external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
         metadata=metadata,
     )
 
@@ -1047,7 +1069,7 @@ def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict |
         actor_type="runtime_viewer",
         runtime_session_id=str(session["id"]),
         profile_id=str(session["profile_id"]),
-        external_session_id=str(session["external_session_id"]),
+        external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
         metadata=metadata,
     )
 
@@ -1064,7 +1086,11 @@ def _audit_runtime_viewer_failure(
             actor_type="runtime_viewer",
             runtime_session_id=str(session["id"]) if session else session_id,
             profile_id=str(session["profile_id"]) if session else None,
-            external_session_id=str(session["external_session_id"]) if session else None,
+            external_session_id=(
+                _public_runtime_external_session_id(session.get("external_session_id"))
+                if session
+                else None
+            ),
             metadata={"reason_code": reason_code},
         )
     except Exception as exc:

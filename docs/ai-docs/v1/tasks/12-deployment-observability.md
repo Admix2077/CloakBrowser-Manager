@@ -2909,3 +2909,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager、external smoke scripts 或 stored profile fields。
 - 不在 profile response sanitizer 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Runtime external session id public-value guardrail
+
+背景：
+
+- Runtime service API 与 runtime viewer VNC audit 使用 `external_session_id` 作为跨系统关联字段。
+- Runtime session `status` 已做 response sanitizer，但 `external_session_id` 仍是 runtime service caller 控制的字符串；response 与 audit event 顶层字段都会直接使用它。
+- DB audit metadata sanitizer 不处理顶层 `external_session_id`，因此 URL/query token、Authorization/Bearer 或 viewer-token 风格 external id 会进入 release smoke audit evidence。
+
+已覆盖：
+
+- 新增 runtime external session id public-value filter：保留普通短 id，如 `pm-session-token`、`pm-session-auth-enabled` 和 `external-1`；丢弃 URL、proxy scheme、userinfo、query/fragment、Authorization/Bearer 和 token/password/cookie/secret assignment 风格字符串。
+- RuntimeSessionResponse 中非公开 external id 折叠为 `unknown`。
+- Runtime service audit、runtime viewer connected/disconnected audit 和 runtime viewer failure audit 的顶层 `external_session_id` 均复用该 filter；非公开值省略为 `null`。
+- DB 原始 session row、viewer token flow、runtime service token flow 和正常 external id 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_external_session_id backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_omits_sensitive_external_session_id -q
+# RED: 2 failed；response 和 audit 顶层 external_session_id 直接保留 URL/query token/Authorization/Bearer 文本
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_external_session_id backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_omits_sensitive_external_session_id -q
+# 2 passed in 0.75s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 33 passed in 3.59s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 590 passed in 34.51s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.87s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage, viewer token generation, VNC proxying, or external smoke scripts。
+- 不在 runtime external id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
