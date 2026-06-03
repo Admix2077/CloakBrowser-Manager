@@ -145,6 +145,42 @@ def test_profile_responses_redact_persisted_sensitive_geoip_fields(app_client: T
         assert leaked not in serialized
 
 
+def test_profile_responses_sanitize_persisted_timestamp_fields(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Profile Timestamp Redaction"})
+    assert create.status_code == 201
+    pid = create.json()["id"]
+    leak_marker = "profile-timestamp-secret"
+    with main.db.get_db() as conn:
+        conn.execute(
+            """UPDATE profiles
+               SET created_at = ?, updated_at = ?, last_geoip_resolved_at = ?
+               WHERE id = ?""",
+            (
+                f"created Authorization=Bearer {leak_marker}",
+                f"https://profile.example/updated?token={leak_marker}",
+                f"2026-06-03T00:00:00+00:00 token={leak_marker}",
+                pid,
+            ),
+        )
+        conn.commit()
+
+    get_resp = app_client.get(f"/api/profiles/{pid}")
+    list_resp = app_client.get("/api/profiles")
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    get_profile = get_resp.json()
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
+    for data in (get_profile, listed_profile):
+        assert data["created_at"] == "unknown"
+        assert data["updated_at"] == "unknown"
+        assert data["last_geoip_resolved_at"] is None
+
+    serialized = json.dumps({"get": get_profile, "list": listed_profile}, sort_keys=True)
+    for leaked in (leak_marker, "Authorization", "Bearer", "profile.example"):
+        assert leaked not in serialized
+
+
 def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestClient):
     leak_marker = "profile-response-token-secret"
     create = app_client.post(

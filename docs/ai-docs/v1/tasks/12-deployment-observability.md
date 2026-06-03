@@ -3818,3 +3818,49 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 runtime session timestamp guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 Management response timestamp guardrail
+
+背景：
+
+- Profile、Proxy、Profile Template 和 Proxy Provider Preset list/detail responses 是运营台、Proxy Manager、template import preview 和 release smoke 的常用低敏证据面。
+- 这些响应已清洗 id、provider/country、GeoIP、tags 和若干 identity 字段，但历史/手工 DB row 的 `created_at`、`updated_at`、`last_check_at`、`last_geoip_resolved_at` 仍可能直接进入 response。
+- 如果这些 timestamp 字段被污染为 URL/header/token 风格文本，会进入低敏 release evidence。
+
+已覆盖：
+
+- ProfileResponse `created_at`、`updated_at` 现在只保留可解析 ISO timestamp；污染值折叠为 `unknown`。
+- ProfileResponse `last_geoip_resolved_at`、ProxyResponse `last_check_at` 现在只保留可解析 ISO timestamp；污染值折叠为 `null`。
+- ProxyResponse、ProfileTemplateResponse、ProxyProviderPresetResponse `created_at`、`updated_at` 现在只保留可解析 ISO timestamp；污染值折叠为 `unknown`。
+- DB 内部 ordering、update timestamps、GeoIP/proxy check persistence、template/preset CRUD 和 random assignment selection 不变，只在 response 输出侧过滤。
+- 正常 profile/proxy/template/preset CRUD、existing response id/identity/GeoIP/provider/tag redaction 和相关管理 API 行为保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_api_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_provider_preset_responses_sanitize_persisted_timestamp_fields backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_timestamp_fields -q
+# RED: 4 failed；created_at 直接保留 token/header-like timestamp text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_api_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_provider_preset_responses_sanitize_persisted_timestamp_fields backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_timestamp_fields -q
+# 4 passed in 1.18s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py backend/tests/test_proxies.py backend/tests/test_templates.py -q
+# 294 passed in 25.61s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 620 passed in 39.13s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.96s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 management response timestamp guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。

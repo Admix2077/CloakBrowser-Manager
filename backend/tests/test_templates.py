@@ -266,6 +266,40 @@ def test_profile_template_api_and_import_preview_sanitize_persisted_template_id(
         assert leaked not in serialized
 
 
+def test_profile_template_api_sanitizes_persisted_timestamp_fields(
+    app_client: TestClient,
+):
+    template = db.create_profile_template(
+        name="Historical template timestamps",
+        platform="linux",
+    )
+    leak_marker = "template-timestamp-secret"
+    with db.get_db() as conn:
+        conn.execute(
+            """UPDATE profile_templates
+               SET created_at = ?, updated_at = ?
+               WHERE id = ?""",
+            (
+                f"created Authorization=Bearer {leak_marker}",
+                f"https://template.example/updated?token={leak_marker}",
+                template["id"],
+            ),
+        )
+        conn.commit()
+
+    detail = app_client.get(f"/api/profile-templates/{template['id']}")
+    listed = app_client.get("/api/profile-templates")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["created_at"] == "unknown"
+        assert data["updated_at"] == "unknown"
+        serialized = json.dumps(data, sort_keys=True)
+        for leaked in (leak_marker, "Authorization", "Bearer", "template.example"):
+            assert leaked not in serialized
+
+
 def test_delete_profile_template_requires_explicit_confirmation_without_side_effects(
     app_client: TestClient,
 ):

@@ -2612,6 +2612,52 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Management response timestamp guardrail
+
+背景：
+
+- Release regression 和运营台 smoke 会读取 profile/proxy/template/preset list/detail responses 作为低敏证据。
+- ProfileResponse、ProxyResponse、ProfileTemplateResponse、ProxyProviderPresetResponse 中的 timestamp 字段此前仍信任历史/手工 DB row。
+- 如果这些字段被污染为 URL/query token/header 风格 timestamp text，release evidence 会回显该文本。
+
+已覆盖：
+
+- ProfileResponse `created_at`、`updated_at` 只保留可解析 ISO timestamp；污染值返回 `unknown`。
+- ProfileResponse `last_geoip_resolved_at` 和 ProxyResponse `last_check_at` 只保留可解析 ISO timestamp；污染值返回 `null`。
+- ProxyResponse、ProfileTemplateResponse、ProxyProviderPresetResponse `created_at`、`updated_at` 只保留可解析 ISO timestamp；污染值返回 `unknown`。
+- 内部 DB 排序、更新时间写入、GeoIP/proxy check persistence、profile/template/preset CRUD、random assignment 和 import preview 语义不变。
+- 正常管理 API 相邻路径、existing id/identity/GeoIP/provider/tag redaction 和 frontend type/build gates 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_api_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_provider_preset_responses_sanitize_persisted_timestamp_fields backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_timestamp_fields -q
+# RED: 4 failed；created_at 直接保留 token/header-like timestamp text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_api_responses_sanitize_persisted_timestamp_fields backend/tests/test_proxies.py::test_proxy_provider_preset_responses_sanitize_persisted_timestamp_fields backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_timestamp_fields -q
+# 4 passed in 1.18s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py backend/tests/test_proxies.py backend/tests/test_templates.py -q
+# 294 passed in 25.61s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 620 passed in 39.13s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.96s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Runtime session timestamp guardrail
 
 背景：

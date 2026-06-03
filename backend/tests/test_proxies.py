@@ -225,6 +225,45 @@ def test_proxy_api_responses_redact_persisted_sensitive_last_check_fields(app_cl
             assert leaked not in json.dumps(data, sort_keys=True)
 
 
+def test_proxy_api_responses_sanitize_persisted_timestamp_fields(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Historical timestamp fields",
+            "url": "http://user:hiddenpass@timestamp.proxy.example:8080",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+    leak_marker = "proxy-timestamp-secret"
+    with db.get_db() as conn:
+        conn.execute(
+            """UPDATE proxies
+               SET created_at = ?, updated_at = ?, last_check_at = ?
+               WHERE id = ?""",
+            (
+                f"created Authorization=Bearer {leak_marker}",
+                f"https://proxy-timestamp-leak.invalid/updated?token={leak_marker}",
+                f"2026-06-03T00:00:00+00:00 token={leak_marker}",
+                proxy_id,
+            ),
+        )
+        conn.commit()
+
+    detail = app_client.get(f"/api/proxies/{proxy_id}")
+    listed = app_client.get("/api/proxies")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["created_at"] == "unknown"
+        assert data["updated_at"] == "unknown"
+        assert data["last_check_at"] is None
+        serialized = json.dumps(data, sort_keys=True)
+        for leaked in (leak_marker, "Authorization", "Bearer", "proxy-timestamp-leak.invalid"):
+            assert leaked not in serialized
+
+
 def test_proxy_asset_responses_and_audits_sanitize_persisted_proxy_id(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -1458,6 +1497,42 @@ def test_provider_preset_responses_and_audits_sanitize_persisted_preset_id(
         "hiddenpass",
     ):
         assert leaked not in serialized
+
+
+def test_proxy_provider_preset_responses_sanitize_persisted_timestamp_fields(
+    app_client: TestClient,
+):
+    preset = db.create_proxy_provider_preset(
+        name="Historical preset timestamps",
+        provider="ProxyJP",
+        country_code="JP",
+        tags=[{"tag": "mobile", "color": "#0ea5e9"}],
+    )
+    leak_marker = "provider-preset-timestamp-secret"
+    with db.get_db() as conn:
+        conn.execute(
+            """UPDATE proxy_provider_presets
+               SET created_at = ?, updated_at = ?
+               WHERE id = ?""",
+            (
+                f"created Authorization=Bearer {leak_marker}",
+                f"https://preset.example/updated?token={leak_marker}",
+                preset["id"],
+            ),
+        )
+        conn.commit()
+
+    detail = app_client.get(f"/api/proxy-provider-presets/{preset['id']}")
+    listed = app_client.get("/api/proxy-provider-presets")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["created_at"] == "unknown"
+        assert data["updated_at"] == "unknown"
+        serialized = json.dumps(data, sort_keys=True)
+        for leaked in (leak_marker, "Authorization", "Bearer", "preset.example"):
+            assert leaked not in serialized
 
 
 def test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_metadata(

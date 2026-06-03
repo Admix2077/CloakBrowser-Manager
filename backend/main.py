@@ -763,6 +763,26 @@ def _public_audit_name(value: object) -> str | None:
     return name
 
 
+def _public_required_timestamp(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    text = value.strip()
+    if not text or _parse_datetime(text) is None:
+        return "unknown"
+    return text
+
+
+def _public_optional_timestamp(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or _parse_datetime(text) is None:
+        return None
+    return text
+
+
 def _tag_responses(tags: object) -> list[TagResponse]:
     if not isinstance(tags, list):
         return []
@@ -791,6 +811,9 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     safe["last_check_locale"] = public_geoip_locale(safe.get("last_check_locale"))
     safe["last_check_source"] = public_geoip_source(safe.get("last_check_source"))
     safe["last_check_error"] = _public_proxy_check_error(safe.get("last_check_error"))
+    safe["last_check_at"] = _public_optional_timestamp(safe.get("last_check_at"))
+    safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
+    safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
     safe["tags"] = _tag_responses(safe.get("tags"))
     return ProxyResponse(**safe)
 
@@ -806,6 +829,9 @@ def _profile_response(profile: dict) -> ProfileResponse:
     safe["last_geoip_timezone"] = public_geoip_timezone(safe.get("last_geoip_timezone"))
     safe["last_geoip_locale"] = public_geoip_locale(safe.get("last_geoip_locale"))
     safe["last_geoip_source"] = public_geoip_source(safe.get("last_geoip_source"))
+    safe["last_geoip_resolved_at"] = _public_optional_timestamp(safe.get("last_geoip_resolved_at"))
+    safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
+    safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
     safe["tags"] = _tag_responses(safe.get("tags"))
     return ProfileResponse(**safe)
 
@@ -925,6 +951,8 @@ def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse
     safe["id"] = _public_proxy_provider_preset_identifier(safe.get("id"))
     safe["provider"] = _public_proxy_provider(safe.get("provider"))
     safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
+    safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
+    safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
     safe["tags"] = _tag_responses(safe.get("tags"))
     return ProxyProviderPresetResponse(**safe)
 
@@ -1018,7 +1046,10 @@ def _proxy_matches_selection(
 
 
 def _template_response(template: dict) -> ProfileTemplateResponse:
-    return ProfileTemplateResponse(**sanitize_profile_template_response_data(template))
+    safe = sanitize_profile_template_response_data(template)
+    safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
+    safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
+    return ProfileTemplateResponse(**safe)
 
 
 _PUBLIC_RUNTIME_SESSION_STATUSES = {"active", "terminated"}
@@ -1050,12 +1081,7 @@ def _public_runtime_external_session_id(value: object) -> str | None:
 
 
 def _public_runtime_session_timestamp(value: object) -> str:
-    if not isinstance(value, str):
-        return "unknown"
-    text = value.strip()
-    if not text or _parse_datetime(text) is None:
-        return "unknown"
-    return text
+    return _public_required_timestamp(value)
 
 
 def _public_uuid_identifier(value: object) -> str | None:
