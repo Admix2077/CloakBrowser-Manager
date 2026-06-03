@@ -1168,6 +1168,68 @@ describe("ProxyManagerPage", () => {
     expect(within(dialog).getByText("mobile, bulk")).toBeTruthy();
   });
 
+  it("redacts selected provider preset metadata in the CSV import summary", async () => {
+    const leakMarker = "preset-summary-token-super-secret";
+    mockListProxies.mockResolvedValue([]);
+    mockListProxyProviderPresets.mockResolvedValue([
+      {
+        id: "preset-polluted-summary",
+        name: "Japan import default",
+        provider:
+          "Provider Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/provider-summary 203.0.113.62`,
+        country_code:
+          "JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/provider-country-summary 203.0.113.63`,
+        tags: [{
+          tag:
+            "mobile Authorization=Bearer " +
+            `${leakMarker} token=${leakMarker} /data/provider-tag-summary 203.0.113.64`,
+          color: "#0ea5e9",
+        }],
+        notes: "Tokyo exits",
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    await waitFor(() => expect(mockListProxyProviderPresets).toHaveBeenCalledTimes(1));
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    fireEvent.change(within(dialog).getByLabelText("Provider preset"), {
+      target: { value: "preset-polluted-summary" },
+    });
+
+    expect(within(dialog).getByText(
+      "Provider [redacted] [redacted] [redacted-path] [redacted-ip] · JP [redacted] [redacted] [redacted-path] [redacted-ip] · mobile [redacted] [redacted] [redacted-path] [redacted-ip]",
+    )).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/provider-summary",
+      "/data/provider-country-summary",
+      "/data/provider-tag-summary",
+      "203.0.113.62",
+      "203.0.113.63",
+      "203.0.113.64",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("updates and deletes proxy provider presets from the manager dialog", async () => {
     mockListProxies.mockResolvedValue([]);
     mockListProxyProviderPresets.mockResolvedValue([

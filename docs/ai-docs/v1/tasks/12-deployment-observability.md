@@ -6394,3 +6394,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 provider preset API schema、provider preset persistence、provider preset edit form raw values、CSV parsing/import payload、proxy asset persistence、proxy assignment/random assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 CSV import selected preset summary evidence guardrail
+
+背景：
+
+- Proxy Manager CSV import 右侧会在选择 provider preset 后显示 selected preset summary。
+- 前一轮已覆盖 provider preset 管理弹窗的 metadata chips，但 CSV import summary 仍会直接渲染 selected preset 的 persisted `provider`、`country_code` 和 tag 文本。
+- 如果历史/手工污染 preset metadata 包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 import dialog 文本和 tooltip evidence。
+
+已覆盖：
+
+- CSV import selected preset summary 现在对 provider、country 和 tags 使用共享 `publicErrorText()` 展示边界。
+- 正常低敏 provider/country/tag 摘要、provider preset option name、CSV preview、preset 默认值合并和 valid row import 保持不变。
+- Provider preset persistence、edit form raw values、CSV parsing/import payload、proxy assignment 和 browser launch 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts selected provider preset metadata"
+# RED: 旧实现把污染 selected preset metadata 写入 CSV import summary text/title；GREEN: 1 passed, 29 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 30 passed
+```
+
+边界：
+
+- 这是 Proxy Manager CSV import selected preset summary UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 provider preset API schema、provider preset persistence、provider preset edit form raw values、CSV parsing/import payload、proxy asset persistence、proxy assignment/random assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

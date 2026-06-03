@@ -1364,9 +1364,9 @@ function ProxyCsvImportDialog({
   const selectedPreset = providerPresets.find((preset) => preset.id === selectedPresetId) ?? null;
   const selectedPresetSummary = selectedPreset
     ? [
-        selectedPreset.provider,
-        selectedPreset.country_code,
-        selectedPreset.tags.map((tag) => tag.tag).join(", "),
+        selectedPreset.provider ? publicProviderPresetMetadataLabel(selectedPreset.provider) : null,
+        selectedPreset.country_code ? publicProviderPresetMetadataLabel(selectedPreset.country_code) : null,
+        selectedPreset.tags.map((tag) => publicProviderPresetMetadataLabel(tag.tag)).join(", "),
       ].filter(Boolean).join(" · ")
     : null;
 

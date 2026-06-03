@@ -6076,3 +6076,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、provider preset persistence、provider preset edit form raw values、CSV parsing、CSV import payload、proxy assignment/random assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Provider preset metadata UI release-evidence 边界。
+
+## 2026-06-04 CSV import selected preset summary release-evidence guardrail
+
+背景：
+
+- Proxy Manager CSV import dialog 在选择 provider preset 后，会展示 selected preset summary，属于 proxy/proxy-country 回归路径上的可见 release evidence。
+- Provider preset 管理弹窗 metadata 已覆盖，但 CSV import summary 仍直接使用 selected preset 的 persisted `provider`、`country_code` 和 tag 文本。
+- 历史/手工污染的 selected preset metadata 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 import dialog 文本和 tooltip。
+
+已覆盖：
+
+- CSV import selected preset summary 对 provider/country/tag 使用共享 public error text boundary。
+- 正常低敏 provider/country/tag 摘要、provider preset option name、CSV preview、preset 默认值合并和 valid row import 行为保持不变。
+- 选择仍使用原始 preset id，导入仍使用原始 merged payload，因此 provider preset persistence、raw edit form value、CSV parsing/import payload、proxy assignment 和浏览器启动行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts selected provider preset metadata"
+# RED then GREEN；旧实现把污染 selected preset metadata 写入 CSV import summary text/title evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 30 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、provider preset persistence、provider preset edit form raw values、CSV parsing、CSV import payload、proxy assignment/random assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CSV import selected preset summary release-evidence 边界。
