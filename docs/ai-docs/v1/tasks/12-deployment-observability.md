@@ -4069,3 +4069,43 @@ npm --prefix frontend run build
 
 - 这是 cookie/profile bundle failure log 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation expressions/results/payloads 或 raw audit metadata。
+
+## 2026-06-03 VNC/RFB raw frame log guardrail
+
+背景：
+
+- VNC proxy 会解析 noVNC client -> KasmVNC 的 RFB frame，并在 release smoke 或 VNC 排障时输出 debug/info 日志。
+- 旧日志在 handshake、filtered send、安全拒绝和 unknown message drop 路径中记录 raw frame hex。
+- RFB ClientCutText 或异常 client frame 可能包含 clipboard/token-like 文本；即使以 hex 形式记录，也仍会把敏感 payload 留在 release evidence/logs 中。
+
+已覆盖：
+
+- `_filter_rfb_client_messages()` 对 unknown message 只记录 type、offset、总长度和 skipped byte count，不再记录 frame hex。
+- VNC handshake debug 只记录序号和 byte length。
+- RFB safety refusal 只记录 first byte 和 filtered length。
+- VNC send debug 只记录 byte length 和 first_type。
+- RFB filtering、extension skip、SetEncodings rewrite、PointerEvent rewrite 和 VNC forwarding 语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_rfb_filter_unknown_message_does_not_log_raw_frame_hex -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.77s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "vnc or clipboard or rfb"
+# 17 passed, 230 deselected in 1.75s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 629 passed in 40.11s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.33s
+```
+
+边界：
+
+- 这是 VNC/RFB runtime log 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw VNC/RFB frames、automation payloads 或 raw audit metadata。

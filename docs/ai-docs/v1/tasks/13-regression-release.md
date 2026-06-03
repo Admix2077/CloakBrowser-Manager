@@ -2726,6 +2726,46 @@ npm --prefix frontend run build
 - 这是 cookie/profile bundle release evidence hardening，不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 VNC/RFB raw frame release-evidence guardrail
+
+背景：
+
+- Release VNC smoke 和远程 viewer 排障会触发 noVNC client frame 转发、RFB filter 和 handshake 日志。
+- 旧 debug/info 日志会保留 raw frame hex；clipboard/client text 即使以 hex 形式出现，也不适合进入 release evidence。
+
+已覆盖：
+
+- RFB unknown message drop 不再输出 raw frame hex。
+- VNC handshake debug 不再输出 raw handshake bytes hex。
+- RFB safety refusal 不再输出 filtered frame hex。
+- VNC send debug 不再输出 filtered frame hex。
+- 保留低敏排障字段：message type、offset、length、skipped byte count、first_type。
+- 不改变 VNC forwarding、RFB filtering 或 noVNC/KasmVNC compatibility behavior。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_rfb_filter_unknown_message_does_not_log_raw_frame_hex -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.77s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "vnc or clipboard or rfb"
+# 17 passed, 230 deselected in 1.75s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 629 passed in 40.11s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.33s
+```
+
+边界：
+
+- 这是 VNC/RFB release evidence hardening，不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 BrowserManager lifecycle profile-id log guardrail
 
 背景：

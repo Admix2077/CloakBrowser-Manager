@@ -7167,6 +7167,23 @@ def _mock_running_profile(pid: str) -> MagicMock:
     return mock
 
 
+def test_rfb_filter_unknown_message_does_not_log_raw_frame_hex(
+    caplog: pytest.LogCaptureFixture,
+):
+    secret_payload = b"vnc-token-super-secret"
+    frame = b"\xff" + secret_payload
+    caplog.set_level("INFO", logger="invisible_browser.manager")
+
+    result = main._filter_rfb_client_messages(frame)
+
+    assert result == b""
+    assert "RFB filter: DROPPING unknown type=" in caplog.text
+    assert "hex=" not in caplog.text
+    assert frame[:20].hex() not in caplog.text
+    assert secret_payload.hex() not in caplog.text
+    assert "vnc-token-super-secret" not in caplog.text
+
+
 @pytest.mark.parametrize("path", [
     "/cdp",
     "/cdp/json/version",

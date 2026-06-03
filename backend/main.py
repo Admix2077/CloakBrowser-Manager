@@ -586,8 +586,13 @@ def _filter_rfb_client_messages(data: bytes) -> bytes:
         msg_type = data[offset]
         msg_len = _rfb_msg_length(data, offset)
         if msg_len is None:
-            _log.info("RFB filter: DROPPING unknown type=%d at offset=%d/%d, skipping %d trailing bytes, hex=%s",
-                       msg_type, offset, len(data), len(data) - offset, data[offset:offset+20].hex())
+            _log.info(
+                "RFB filter: DROPPING unknown type=%d at offset=%d/%d, skipping %d trailing bytes",
+                msg_type,
+                offset,
+                len(data),
+                len(data) - offset,
+            )
             break
         if offset + msg_len > len(data):
             # Incomplete message — DO NOT forward partial data, it desynchronizes
@@ -4415,7 +4420,7 @@ async def _proxy_running_vnc(
 
                             # First 3 messages are RFB handshake — forward as-is
                             if handshake <= 3:
-                                logger.debug("VNC handshake #%d: %d bytes hex=%s", handshake, len(data), data[:20].hex())
+                                logger.debug("VNC handshake #%d: %d bytes", handshake, len(data))
                                 await vnc_ws.send(data)
                                 continue
 
@@ -4424,11 +4429,18 @@ async def _proxy_running_vnc(
                             if filtered:
                                 # Safety: verify first byte is a valid RFB client type
                                 if filtered[0] not in _RFB_MSG_SIZE:
-                                    logger.error("RFB SAFETY: refusing to send data with invalid first byte=%d hex=%s",
-                                                 filtered[0], filtered[:20].hex())
+                                    logger.error(
+                                        "RFB SAFETY: refusing to send data with invalid first byte=%d length=%d",
+                                        filtered[0],
+                                        len(filtered),
+                                    )
                                     dropped += 1
                                     continue
-                                logger.debug("VNC send: %d bytes first_type=%d hex=%s", len(filtered), filtered[0], filtered[:100].hex())
+                                logger.debug(
+                                    "VNC send: %d bytes first_type=%d",
+                                    len(filtered),
+                                    filtered[0],
+                                )
                                 await vnc_ws.send(filtered)
                             else:
                                 dropped += 1
