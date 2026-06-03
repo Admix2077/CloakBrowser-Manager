@@ -7635,6 +7635,72 @@ def test_vnc_proxy_connects_websockify_path(app_client: TestClient, monkeypatch:
     main.browser_mgr.running.pop(pid, None)
 
 
+@pytest.mark.asyncio
+async def test_vnc_proxy_disconnect_close_code_is_public_in_logs_and_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "vnc-close-code-secret"
+    close_code = f"1000 Authorization=Bearer {leak_marker} token={leak_marker}"
+    running = MagicMock(spec=RunningProfile)
+    running.display = 100
+    running.ws_port = 6100
+    running.profile_id = "vnc-close-code-profile"
+    disconnected: list[dict[str, object]] = []
+
+    class FakeClientWebSocket:
+        scope = {"subprotocols": ["binary"]}
+
+        async def accept(self, subprotocol=None):
+            pass
+
+        async def receive(self):
+            return {"type": "websocket.disconnect", "code": close_code}
+
+        async def close(self):
+            pass
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+    caplog.set_level("INFO", logger="invisible_browser.manager")
+
+    await main._proxy_running_vnc(
+        FakeClientWebSocket(),
+        "vnc-close-code-profile",
+        running,
+        on_connected=lambda _metadata: None,
+        on_disconnected=lambda metadata: disconnected.append(metadata),
+    )
+
+    assert len(disconnected) == 1
+    assert disconnected[0]["close_code"] in (None, 1000)
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+
+
 def test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

@@ -206,14 +206,15 @@ Project Mileage 的账号商品和远程工作台场景决定了 CloakBrowser �
 
 下一步：
 
-- 需要底层 runtime/prefs A/B，找到同时满足 Pixelscan、BrowserScan、BrowserLeaks、CreepJS 和 seed-stability 的替代方案。
+- 按当前产品决策，该问题标记为底层/第三方检测站 blocker；Manager 侧不继续硬磕 Pixelscan bypass。
+- 只有当上游 `invisible_playwright` / patched Firefox 提供新的 runtime 能力，或出现能同时满足 BrowserScan、BrowserLeaks、CreepJS 和 seed-stability 的替代方案时，才重新开启底层 runtime/prefs A/B。
 - 受保护 diagnostics 现在返回低敏 `runtime.stealth_pref_count` 和 `runtime.stealth_pref_categories`，用于比较当前 `invisible_playwright` package 的 stealth surface；该摘要不返回 `zoom.stealth.*` 原始 key、pref value、seed、IP、profile dir、proxy、headers、cookie/local storage 或页面内容。
-- 在替代方案通过前，Pixelscan/IPhey gate 保持未完成，`cbim-23h.6` 保持 release blocker。
+- 在替代方案通过前，Pixelscan/IPhey gate 保持未完成，`cbim-23h.6` 保持已知外部 release blocker；后续交付继续推进 Manager 可控的稳定性、脱敏、观测、Docker smoke 和非底层指纹门禁。
 
 ## 下一步顺序
 
 1. 把 BrowserScan 分项验收自动化成脚本：创建临时 profile、启动、跑 browser-checker/webrtc/timezone/bot-detection/canvas，保存低敏 JSON 摘要和截图。
-2. 扩展到 BrowserLeaks、Pixelscan、CreepJS、IPhey、Fingerprint demo、PrintLeaks。
+2. 扩展到 BrowserLeaks、CreepJS、Fingerprint demo、PrintLeaks；Pixelscan/IPhey 作为已知外部 blocker 只记录低敏状态，不作为 Manager 侧硬解目标。
 3. 增加稳定性验收：同一 seed 停止/重启后关键 hash 不变，不同 seed 关键 hash 有合理差异。
 4. 增加多出口验收：无 proxy、US proxy、JP proxy、DE proxy。
 5. 长期升级底层 patched Firefox：当 CSS/window/JS 可检测面真实达到新版本，再把 `MANAGED_FIREFOX_USER_AGENT` 从 149 提升到对应版本。

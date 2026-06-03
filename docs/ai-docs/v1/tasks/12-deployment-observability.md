@@ -4827,3 +4827,40 @@ git diff --check
 - 这是 automation retry stability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 normal retry semantics、worker lease、runner selection、task run/cancel、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。
+
+## 2026-06-03 VNC proxy close-code log guardrail
+
+背景：
+
+- Runtime viewer audit metadata 已经把 WebSocket `close_code` 过滤为 public integer 或 `null`。
+- VNC proxy 日志仍直接打印 client/backend disconnect close code；正常 close code 是整数，但 transport dict 不应被信任为 release evidence。
+- 如果测试/异常 transport 给 `code` 填入 URL/query token/header 风格文本，日志会保留这些文本。
+
+已覆盖：
+
+- `_proxy_running_vnc()` 现在在写 disconnect metadata 和日志前统一调用 `_public_ws_close_code()`。
+- Client-to-VNC disconnect、client WebSocketDisconnect、KasmVNC stream ended、backend-to-client WebSocketDisconnect 四条 close-code 路径都只记录 public close code 或 `None`。
+- 正常 integer close code 语义保留；VNC/RFB proxy 行为、frame filtering、viewer token 校验和 runtime session 状态机不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_disconnect_close_code_is_public_in_logs_and_metadata -q
+# RED: 旧实现在 VNC proxy client disconnect 日志中写入 Authorization/Bearer/token 风格 close code；GREEN: 1 passed
+
+.venv/bin/python -m pytest \
+  backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path \
+  backend/tests/test_api.py::test_vnc_proxy_disconnect_close_code_is_public_in_logs_and_metadata \
+  backend/tests/test_api.py::test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log \
+  backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception \
+  backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_public_profile_id \
+  backend/tests/test_session_broker.py::test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code \
+  -q
+# 6 passed in 1.07s
+```
+
+边界：
+
+- 这是 VNC/runtime viewer release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone、proxy、profile launch 或 Docker runtime 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

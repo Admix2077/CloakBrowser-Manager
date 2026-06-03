@@ -4538,8 +4538,9 @@ async def _proxy_running_vnc(
                         msg = await websocket.receive()
                         msg_type = msg.get("type", "")
                         if msg_type == "websocket.disconnect":
-                            disconnect_metadata["close_code"] = msg.get("code")
-                            logger.info("VNC proxy [c->v]: client disconnect (code=%s) after %d msgs (%d dropped)", msg.get("code"), count, dropped)
+                            close_code = _public_ws_close_code(msg.get("code"))
+                            disconnect_metadata["close_code"] = close_code
+                            logger.info("VNC proxy [c->v]: client disconnect (code=%s) after %d msgs (%d dropped)", close_code, count, dropped)
                             break
                         if "bytes" in msg and msg["bytes"]:
                             count += 1
@@ -4582,8 +4583,9 @@ async def _proxy_running_vnc(
                         else:
                             logger.warning("VNC proxy [c->v]: unhandled msg keys=%s type=%s", list(msg.keys()), msg_type)
                 except WebSocketDisconnect as exc:
-                    disconnect_metadata["close_code"] = exc.code
-                    logger.info("VNC proxy [c->v]: WebSocketDisconnect code=%s after %d msgs (%d dropped)", exc.code, count, dropped)
+                    close_code = _public_ws_close_code(exc.code)
+                    disconnect_metadata["close_code"] = close_code
+                    logger.info("VNC proxy [c->v]: WebSocketDisconnect code=%s after %d msgs (%d dropped)", close_code, count, dropped)
                 except Exception as exc:
                     logger.warning(
                         "action=vnc.client_to_backend_failed profile_id=%s error_type=%s messages=%d",
@@ -4614,11 +4616,13 @@ async def _proxy_running_vnc(
                             await websocket.send_bytes(msg)
                         else:
                             await websocket.send_text(msg)
-                    disconnect_metadata["close_code"] = vnc_ws.close_code
-                    logger.info("VNC proxy [v->c]: KasmVNC stream ended after %d msgs (close_code=%s)", count, vnc_ws.close_code)
+                    close_code = _public_ws_close_code(vnc_ws.close_code)
+                    disconnect_metadata["close_code"] = close_code
+                    logger.info("VNC proxy [v->c]: KasmVNC stream ended after %d msgs (close_code=%s)", count, close_code)
                 except WebSocketDisconnect as exc:
-                    disconnect_metadata["close_code"] = exc.code
-                    logger.info("VNC proxy [v->c]: client disconnect code=%s after %d msgs", exc.code, count)
+                    close_code = _public_ws_close_code(exc.code)
+                    disconnect_metadata["close_code"] = close_code
+                    logger.info("VNC proxy [v->c]: client disconnect code=%s after %d msgs", close_code, count)
                 except Exception as exc:
                     logger.warning(
                         "action=vnc.backend_to_client_failed profile_id=%s error_type=%s messages=%d",

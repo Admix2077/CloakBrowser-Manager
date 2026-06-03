@@ -4518,3 +4518,42 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - 不改变 normal retry semantics、automation execution、worker lease、task run/cancel、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Pixelscan blocker classification and VNC close-code release-evidence guardrail
+
+背景：
+
+- 产品决策：如果检测站问题已经定位到底层 patched Firefox / `invisible_playwright` / `zoom.stealth.*` fingerprint masking 可检测面，Manager 不继续硬磕绕过。
+- Pixelscan 当前失败点仍是 `PXLSCN-FINGERPRINT-MASKING` / `Masking detected Fingerprint`，已有低敏证据未指向 Manager proxy、GeoIP、language、timezone、WebRTC、WebGL 或 release-evidence redaction 单点。
+- Release convergence 继续推进 Manager 可控范围：日志、response、audit、diagnostics、Docker smoke、VNC viewer、Automation、Proxy Manager 和低敏外部验收证据。
+- 本轮发现 VNC proxy 日志仍会直接打印 transport close code，可能让异常 close code 中的 token/header 风格文本进入 release evidence。
+
+已覆盖：
+
+- `cbim-23h.6` / `cbim-23h.1` 已追加 blocker classification comment：Pixelscan fingerprint masking 作为底层/第三方检测站 blocker，不作为本仓硬解目标。
+- `docs/ai-docs/v1/fingerprint-consistency-qa-plan.md` 更新下一步策略：Pixelscan/IPhey 只记录低敏状态，除非上游 runtime 能力变化，否则不继续做 Manager 侧 bypass。
+- `_proxy_running_vnc()` 的 client/backend close-code 日志和 disconnect metadata 现在统一走 `_public_ws_close_code()`。
+- 正常整数 close code 保留；污染字符串 close code 折叠为 `None`，不会进入 VNC release logs 或 callback metadata。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_disconnect_close_code_is_public_in_logs_and_metadata -q
+# RED then GREEN；旧实现日志泄露 Authorization/Bearer/token 风格 close code，最终 1 passed
+
+.venv/bin/python -m pytest \
+  backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path \
+  backend/tests/test_api.py::test_vnc_proxy_disconnect_close_code_is_public_in_logs_and_metadata \
+  backend/tests/test_api.py::test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log \
+  backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception \
+  backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_public_profile_id \
+  backend/tests/test_session_broker.py::test_runtime_viewer_disconnect_audit_sanitizes_non_integer_close_code \
+  -q
+# 6 passed in 1.07s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 现在按底层/第三方检测站 blocker 管理。
+- 不改变 VNC proxy forwarding、RFB filtering、viewer token validation、runtime session state machine、profile launch、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；后续可以继续关闭 Manager 可控的 release stability/redaction/observability 缺口。
