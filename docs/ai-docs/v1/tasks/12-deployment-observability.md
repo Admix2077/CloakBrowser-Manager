@@ -4199,3 +4199,48 @@ git diff --check
 
 - 这是 fingerprint launch input 和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 GeoIP WebRTC env IP guardrail
+
+背景：
+
+- Browser launch 会把 GeoIP 解析出的 exit IP 临时写入 `STEALTHFOX_WEBRTC_PUBLIC_IP`，让底层 Firefox WebRTC 行为与出口 IP 对齐。
+- GeoIP 模块已经对 provider response 和 persisted result 做 `public_geoip_ip()` 过滤，但 BrowserManager launch path 仍直接信任 `_geoip_result["ip"]`。
+- 如果历史/损坏 profile dict 或异常 resolver 返回 URL/query token 风格 IP 文本，旧实现会把该文本放入进程环境并让 `InvisiblePlaywright.__aenter__()` 继承。
+
+已覆盖：
+
+- `_geoip_exit_ip()` 现在复用 `public_geoip_ip()`。
+- 正常 IP 仍会在 launch 期间临时写入 `STEALTHFOX_WEBRTC_PUBLIC_IP`，并在 launch 后恢复原环境。
+- URL/query token 风格 IP 不再写入 launch env。
+- GeoIP timezone/locale、Accept-Language、managed Firefox identity 和 WebRTC local IP suppression prefs 既有行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_drops_non_public_geoip_exit_ip_for_webrtc_env -q
+# RED: 污染 URL/token IP 进入 STEALTHFOX_WEBRTC_PUBLIC_IP；GREEN: 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_passes_geoip_exit_ip_to_invisible_webrtc_env backend/tests/test_browser_manager.py::test_launch_drops_non_public_geoip_exit_ip_for_webrtc_env backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 3 passed in 0.06s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 72 passed in 0.92s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 631 passed in 40.83s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.71s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 GeoIP/WebRTC launch env 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

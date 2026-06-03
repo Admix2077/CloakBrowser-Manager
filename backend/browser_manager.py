@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from invisible_playwright.async_api import InvisiblePlaywright
 
-from .geoip import resolve_profile_network_fingerprint
+from .geoip import public_geoip_ip, resolve_profile_network_fingerprint
 from .vnc_manager import VNCManager
 
 logger = logging.getLogger("invisible_browser.manager.browser")
@@ -445,10 +445,7 @@ def _geoip_exit_ip(profile: dict[str, Any]) -> str | None:
     geoip_result = profile.get("_geoip_result")
     if not isinstance(geoip_result, dict):
         return None
-    ip = geoip_result.get("ip")
-    if isinstance(ip, str) and ip.strip():
-        return ip.strip()
-    return None
+    return public_geoip_ip(geoip_result.get("ip"))
 
 
 def _navigator_languages(locale: str | None) -> list[str]:

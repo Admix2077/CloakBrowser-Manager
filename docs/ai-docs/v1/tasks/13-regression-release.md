@@ -2612,6 +2612,51 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 GeoIP WebRTC env IP guardrail
+
+背景：
+
+- Release smoke 会验证 WebRTC 不泄漏 local IP，并尽量让 WebRTC public IP 与 GeoIP exit IP 对齐。
+- BrowserManager launch path 会用 `_geoip_result["ip"]` 临时设置 `STEALTHFOX_WEBRTC_PUBLIC_IP`。
+- 该字段正常来自 GeoIP provider 的 public IP，但 release hardening 需要防御历史/损坏 profile dict 或异常 resolver 把 URL/query token 风格文本传入 launch env。
+
+已覆盖：
+
+- `_geoip_exit_ip()` 现在只返回 `public_geoip_ip()` 认可的 IP 字符串。
+- 正常 GeoIP exit IP 仍会传入 `InvisiblePlaywright.__aenter__()` 期间的 env。
+- 非 public IP 文本折叠为 `None`，不会覆盖 launch env。
+- launch 后环境恢复、GeoIP timezone/locale fill、Accept-Language 和 WebRTC suppression prefs 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_drops_non_public_geoip_exit_ip_for_webrtc_env -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_passes_geoip_exit_ip_to_invisible_webrtc_env backend/tests/test_browser_manager.py::test_launch_drops_non_public_geoip_exit_ip_for_webrtc_env backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 3 passed in 0.06s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 72 passed in 0.92s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 631 passed in 40.83s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.71s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Fingerprint seed launch guardrail
 
 背景：
