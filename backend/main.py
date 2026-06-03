@@ -1086,6 +1086,10 @@ def _public_proxy_provider_preset_identifier(value: object) -> str:
     return _public_uuid_identifier(value) or "unknown"
 
 
+def _public_automation_task_identifier(value: object) -> str:
+    return _public_uuid_identifier(value) or "unknown"
+
+
 def _public_profile_platform(value: object) -> str | None:
     return value if isinstance(value, str) and value in {"windows", "macos", "linux"} else None
 
@@ -3161,6 +3165,7 @@ def _automation_task_redacted_result(result: dict | None) -> dict | None:
 def _automation_task_response(task: dict) -> AutomationTaskResponse:
     task = {
         **task,
+        "id": _public_automation_task_identifier(task.get("id")),
         "profile_id": _public_profile_identifier(task.get("profile_id")),
         "status": _automation_task_public_status(task.get("status")),
         "error": _automation_task_public_error(task.get("error")),
@@ -3244,7 +3249,7 @@ def _automation_task_audit_metadata(
     reason_code: str | None = None,
 ) -> dict:
     metadata = {
-        "task_id": task.get("id"),
+        "task_id": _public_uuid_identifier(task.get("id")),
         "status": _automation_task_public_status(task.get("status")),
         "step_count": len(task.get("steps") or []),
         "step_types": _automation_task_step_types(task),
@@ -3255,9 +3260,9 @@ def _automation_task_audit_metadata(
         metadata["runner_type"] = runner_type
         metadata.update(_automation_task_result_counts(task))
     if source_task_id is not None:
-        metadata["source_task_id"] = source_task_id
+        metadata["source_task_id"] = _public_uuid_identifier(source_task_id)
     if new_task_id is not None:
-        metadata["new_task_id"] = new_task_id
+        metadata["new_task_id"] = _public_uuid_identifier(new_task_id)
     if reason_code is not None:
         metadata["reason_code"] = reason_code
     return {key: value for key, value in metadata.items() if value is not None}

@@ -2612,6 +2612,43 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Automation task id guardrail
+
+背景：
+
+- Release smoke 会读取 automation task list/detail、cancel/retry/run response，并查看 automation.task audit metadata。
+- 旧实现已经对 profile_id、step、result、status 和 error 做了低敏处理，但仍直接回显历史/手工 DB task id。
+
+已覆盖：
+
+- AutomationTaskResponse `id` 只保留 canonical UUID；非 UUID task id 返回 `unknown`。
+- automation.task audit metadata `task_id`、retry `source_task_id` 和 `new_task_id` 只保留 canonical UUID；非 UUID id 省略。
+- 内部 task lookup 语义不变，普通 UUID task create/list/detail/cancel/retry/run 和 audit 仍保持既有格式。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_sanitize_persisted_task_id -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.89s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task"
+# 40 passed, 198 deselected in 5.26s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 612 passed in 38.90s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.84s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Proxy provider preset id guardrail
 
 背景：

@@ -3599,3 +3599,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 proxy provider preset id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Automation task id guardrail
+
+背景：
+
+- Automation task list/detail/cancel/retry/run response 和 automation.task audit event 是 release smoke 常用证据面。
+- 继续复查发现 response `id`、audit metadata `task_id`、retry `source_task_id/new_task_id` 仍信任历史/手工 DB task id。
+- 如果历史/手工 DB row 含有非 UUID task id，这些 API/audit 边界会把 URL/header/token 风格 id 文本带入低敏 release evidence。
+
+已覆盖：
+
+- AutomationTaskResponse `id` 现在只保留 canonical UUID；非 UUID 历史/手工 id 折叠为 `unknown`。
+- automation.task audit metadata `task_id`、`source_task_id` 和 `new_task_id` 现在只保留 canonical UUID；非 UUID id 会省略。
+- 内部 get/list/cancel/retry/run 仍使用原始 task id 做 DB lookup，不改变既有路由语义。
+- 正常 UUID task create/list/detail/cancel/retry/run、profile id redaction、step/result redaction 和 worker lease metadata 边界保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_sanitize_persisted_task_id -q
+# RED: 1 failed；task detail response id 直接保留非 UUID task id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_sanitize_persisted_task_id -q
+# 1 passed in 0.89s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task"
+# 40 passed, 198 deselected in 5.26s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 612 passed in 38.90s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.84s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 automation task id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
