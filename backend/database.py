@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import ipaddress
 import json
 import random
 import re
@@ -968,6 +969,7 @@ _AUDIT_LOCAL_PATH_RE = re.compile(
     r"(?:/(?:data|tmp|home)/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s\"'<>),;]+",
     re.IGNORECASE,
 )
+_AUDIT_IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 _AUDIT_SENSITIVE_KEY_RE = re.compile(
     r"https?://|socks[45]://|[/\\?&#@]|"
     r"\b(?:authorization|bearer)\b|"
@@ -1018,8 +1020,20 @@ def _sanitize_audit_metadata(value: Any) -> Any:
             sanitized,
         )
         sanitized = _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
-        return _AUDIT_LOCAL_PATH_RE.sub("[redacted-path]", sanitized)
+        sanitized = _AUDIT_LOCAL_PATH_RE.sub("[redacted-path]", sanitized)
+        return _AUDIT_IPV4_RE.sub(
+            lambda match: "[redacted-ip]" if _is_ipv4_literal(match.group(0)) else match.group(0),
+            sanitized,
+        )
     return value
+
+
+def _is_ipv4_literal(value: str) -> bool:
+    try:
+        ipaddress.IPv4Address(value)
+    except ipaddress.AddressValueError:
+        return False
+    return True
 
 
 def _public_uuid_identifier(value: object) -> str | None:
