@@ -4286,3 +4286,48 @@ git diff --check
 
 - 这是 VNC startup failure exception 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw VNC/Xvnc logs、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Profile directory launch guardrail
+
+背景：
+
+- 正常 profile `user_data_dir` 由数据库生成在 `/data/profiles/<uuid>`。
+- BrowserManager launch 旧实现直接信任 profile dict 中的 `user_data_dir`，在 VNC allocation 后用于 Firefox startup-state cleanup，并传给 `InvisiblePlaywright(profile_dir=...)`。
+- 如果历史/手工 DB row 或内部 runtime profile dict 被污染为 URL/query token/header 风格路径，启动流程可能触碰该 raw path 或把它传入底层 runtime。
+
+已覆盖：
+
+- 新增 profile directory public boundary，拒绝空值、非字符串/path-like、URL/query token/header 风格文本和控制字符。
+- `BrowserManager.launch()` 现在在 VNC allocation 前验证 profile dir。
+- `_build_invisible_kwargs()` 复用同一边界后再构造 `profile_dir`。
+- 正常本地 profile path、startup-state cleanup、VNC allocation、launch kwargs 和 GeoIP/locale/timezone 流程保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_rejects_non_public_user_data_dir_before_vnc_allocation -q
+# RED: 污染 user_data_dir 进入 VNC allocation；GREEN: 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_launch_rejects_non_public_user_data_dir_before_vnc_allocation backend/tests/test_browser_manager.py::test_launch_clears_launching_state_when_vnc_allocation_fails backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 5 passed in 0.06s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 73 passed in 0.95s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 633 passed in 42.95s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 6.59s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 profile lifecycle launch input 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

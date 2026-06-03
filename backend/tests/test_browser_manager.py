@@ -893,6 +893,38 @@ async def test_launch_clears_launching_state_when_vnc_allocation_fails(tmp_path:
 
 
 @pytest.mark.asyncio
+async def test_launch_rejects_non_public_user_data_dir_before_vnc_allocation(
+    caplog: pytest.LogCaptureFixture,
+):
+    mgr = BrowserManager()
+    mgr.vnc.allocate = AsyncMock()  # type: ignore[attr-defined]
+    caplog.set_level("WARNING", logger="invisible_browser.manager.browser")
+
+    with pytest.raises(ValueError, match="Invalid profile directory"):
+        await mgr.launch({
+            "id": "profile-dir-redaction",
+            "fingerprint_seed": 123,
+            "user_data_dir": "https://profile-dir.example/path?token=profile-dir-super-secret",
+            "screen_width": 1366,
+            "screen_height": 768,
+            "proxy": None,
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "humanize": False,
+            "headless": False,
+            "launch_args": [],
+        })
+
+    mgr.vnc.allocate.assert_not_awaited()
+    assert mgr.launch_failure_summary() == {
+        "launch_failure_count": 1,
+        "launch_failure_stage_counts": {"validate_profile_dir": 1},
+    }
+    assert "profile-dir-super-secret" not in caplog.text
+    assert "profile-dir.example" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_launch_releases_vnc_when_startup_state_cleanup_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

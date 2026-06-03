@@ -89,6 +89,7 @@ LAUNCH_FAILURE_STAGES = frozenset({
     "validate_proxy",
     "claim_launch_slot",
     "resource_limit",
+    "validate_profile_dir",
     "allocate_vnc",
     "cleanup_startup_state",
     "start_vnc",
@@ -421,6 +422,21 @@ def _public_timezone(value: str | None) -> str:
     return timezone
 
 
+def _public_profile_dir(value: object) -> Path:
+    try:
+        raw_path = os.fspath(value)
+    except TypeError as exc:
+        raise ValueError("Invalid profile directory") from exc
+    if not isinstance(raw_path, str):
+        raise ValueError("Invalid profile directory")
+    profile_dir = raw_path.strip()
+    if not profile_dir or SENSITIVE_TEXT_RE.search(profile_dir):
+        raise ValueError("Invalid profile directory")
+    if any(ord(char) < 32 for char in profile_dir):
+        raise ValueError("Invalid profile directory")
+    return Path(profile_dir)
+
+
 def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
     """Build kwargs for InvisiblePlaywright from a Manager profile."""
     extra_prefs = {
@@ -437,7 +453,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         "locale": _public_locale(profile.get("locale")),
         "timezone": _public_timezone(profile.get("timezone")),
         "extra_prefs": extra_prefs,
-        "profile_dir": str(profile["user_data_dir"]),
+        "profile_dir": str(_public_profile_dir(profile.get("user_data_dir"))),
     }
 
 
@@ -734,8 +750,11 @@ class BrowserManager:
         runner: InvisiblePlaywright | None = None
         display: int | None = None
         launch_registered = False
-        failure_stage = "validate_proxy"
+        failure_stage = "validate_profile_dir"
         try:
+            user_data_dir = _public_profile_dir(profile.get("user_data_dir"))
+
+            failure_stage = "validate_proxy"
             raw_proxy = profile.get("proxy")
             if raw_proxy:
                 _validate_proxy(_normalize_proxy(raw_proxy))
@@ -755,7 +774,6 @@ class BrowserManager:
             failure_stage = "allocate_vnc"
             display, ws_port = await self.vnc.allocate()
 
-            user_data_dir = Path(profile["user_data_dir"])
             failure_stage = "cleanup_startup_state"
             _clean_firefox_startup_state(user_data_dir)
             display_width, display_height = _public_display_dimensions(profile)

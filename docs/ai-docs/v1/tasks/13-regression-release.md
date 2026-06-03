@@ -2612,6 +2612,51 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Profile directory launch guardrail
+
+背景：
+
+- Release profile/VNC/runtime smoke 会依赖 persisted profile `user_data_dir` 启动 Firefox。
+- 旧 launch path 直接信任 profile dict 中的 `user_data_dir`，在 VNC allocation 后用于 cleanup 和 `InvisiblePlaywright(profile_dir=...)`。
+- 为防御历史/损坏 DB row 或内部 dict 把 URL/query token/header 风格路径送入 release runtime，需要在启动前固定拒绝。
+
+已覆盖：
+
+- `BrowserManager.launch()` 在 VNC allocation 前验证 profile directory。
+- `_build_invisible_kwargs()` 构造 `profile_dir` 时复用同一 public boundary。
+- 污染 profile dir 返回固定 `Invalid profile directory`，launch failure summary 记录低敏 stage `validate_profile_dir`。
+- 正常 profile dir、VNC allocation、startup-state cleanup、launch kwargs、GeoIP/locale/timezone flow 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_launch_rejects_non_public_user_data_dir_before_vnc_allocation -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_launch_rejects_non_public_user_data_dir_before_vnc_allocation backend/tests/test_browser_manager.py::test_launch_clears_launching_state_when_vnc_allocation_fails backend/tests/test_browser_manager.py::test_launch_resolves_missing_timezone_and_locale_before_invisible_launch -q
+# 5 passed in 0.06s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 73 passed in 0.95s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 633 passed in 42.95s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 6.59s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 VNC start failure exception guardrail
 
 背景：
