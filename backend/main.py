@@ -958,8 +958,19 @@ def _template_response(template: dict) -> ProfileTemplateResponse:
     return ProfileTemplateResponse(**template)
 
 
+_PUBLIC_RUNTIME_SESSION_STATUSES = {"active", "terminated"}
+
+
+def _public_runtime_session_status(value: object) -> str:
+    if isinstance(value, str) and value in _PUBLIC_RUNTIME_SESSION_STATUSES:
+        return value
+    return "unknown"
+
+
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
-    return RuntimeSessionResponse(**session)
+    safe = dict(session)
+    safe["status"] = _public_runtime_session_status(safe.get("status"))
+    return RuntimeSessionResponse(**safe)
 
 
 def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None = None) -> None:

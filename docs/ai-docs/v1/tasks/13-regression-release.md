@@ -2352,3 +2352,40 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup behavior、proxy check resolver、profile launch behavior、VNC/runtime viewer 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Runtime session status response redaction guardrail
+
+背景：
+
+- Release runtime/VNC viewer smoke 会通过 runtime service API 创建、读取、续期和终止 session。
+- Runtime diagnostics aggregate 已有 status allowlist，但 runtime session response 仍直接返回 DB 中的 raw `status`。
+- 历史/损坏 runtime session row 可把非公开 status 文本显示到 `/api/runtime/sessions/{session_id}` response。
+
+已覆盖：
+
+- Runtime session response `status` 只保留 `active`、`terminated`；其他值折叠为 `unknown`。
+- 正常 create/get/renew/terminate、viewer token、runtime audit、VNC proxy、lease expiration 和 diagnostics aggregate 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_status -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.69s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 31 passed in 3.48s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 575 passed in 35.78s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、viewer token validation、VNC proxying、profile launch behavior 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

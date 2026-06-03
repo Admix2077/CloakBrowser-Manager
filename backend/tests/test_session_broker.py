@@ -140,6 +140,30 @@ def test_runtime_session_create_launches_profile_and_persists_session(
     assert get_resp.json() == data
 
 
+def test_runtime_session_response_sanitizes_persisted_status(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    leak_marker = "runtime-status-leak-marker"
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm-session-persisted-status",
+        lease_seconds=900,
+        status=f"active {leak_marker}",
+    )
+
+    resp = app_client.get(
+        f"/api/runtime/sessions/{session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "unknown"
+    assert leak_marker not in json.dumps(data, sort_keys=True)
+
+
 def test_runtime_session_create_respects_max_running_profiles(
     app_client: TestClient,
     runtime_headers: dict[str, str],

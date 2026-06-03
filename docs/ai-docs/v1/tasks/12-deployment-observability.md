@@ -2542,3 +2542,43 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、GeoIP provider order、proxy lookup behavior、proxy check resolver、profile launch behavior、VNC/runtime viewer 或 audit event schema。
 - 不在 proxy responses 中公开历史/污染 last-check URL/path marker、country marker、timezone marker、locale marker、source marker、Bearer-like credential text、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Runtime session status response redaction guardrail
+
+背景：
+
+- Runtime session diagnostics aggregate 已将非公开 status 折叠为 `unknown`。
+- 继续复查 runtime service API 时发现 `RuntimeSessionResponse` 仍直接信任 DB row 中的 `status`。
+- 如果旧版本、手工修复或损坏 row 写入 URL/header/token-like 文本，`GET /api/runtime/sessions/{session_id}` 会把它作为可见 session status 返回。
+
+已覆盖：
+
+- Runtime session response `status` 只保留 `active`、`terminated`；其他值折叠为 `unknown`。
+- create/get/renew/terminate 正常路径、viewer token creation、runtime/VNC audit、lease logic、viewer token hash storage 和 diagnostics aggregate 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_status -q
+# RED: 1 failed；status 原样返回人工 leak marker
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_status -q
+# 1 passed in 0.69s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 31 passed in 3.48s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 575 passed in 35.78s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、viewer token validation、VNC proxying、profile launch behavior 或 audit event schema。
+- 不在 runtime session responses 中公开历史/污染 status marker、headers、cookies、local storage、viewer token、viewer token hash、runtime service token、automation payload、profile dir 或页面内容。
