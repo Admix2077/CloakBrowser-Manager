@@ -6045,3 +6045,34 @@ npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、cookie import/export payload、cookie document/text contents、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Cookie export download filename release-evidence 边界。
+
+## 2026-06-04 Provider preset metadata UI release-evidence guardrail
+
+背景：
+
+- Proxy Manager provider preset 管理弹窗属于 proxy/proxy-country 回归路径上的可见 release evidence。
+- 之前已覆盖 provider preset `name` / `notes` 和 CSV import selector 的 preset name，但 persisted `provider`、`country_code` 和 tag 文本仍直接进入 preset card summary、chip 文本和 tooltip。
+- 历史/手工污染的 provider/country/tag 元数据如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入发布证据。
+
+已覆盖：
+
+- Provider preset card summary、provider/country/tag chips 和对应 `title` 属性使用共享 public error text boundary。
+- 正常 provider/country/tag 低敏短值、preset name/notes、edit/delete、provider preset 管理弹窗和 CSV import selector 行为保持不变。
+- 选择和编辑仍使用原始 preset id/raw form value，因此 provider preset persistence、CSV parsing/import payload、proxy assignment 和浏览器启动行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted provider preset metadata"
+# RED then GREEN；旧实现把污染 provider/country/tag 元数据写入 dialog text/title evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 29 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、provider preset persistence、provider preset edit form raw values、CSV parsing、CSV import payload、proxy assignment/random assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Provider preset metadata UI release-evidence 边界。

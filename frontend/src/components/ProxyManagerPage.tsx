@@ -1246,8 +1246,14 @@ function ProviderPresetRow({
 }) {
   const safeName = publicProviderPresetLabel(preset.name);
   const safeNotes = preset.notes ? publicErrorText(preset.notes) : null;
-  const tagText = preset.tags.map((tag) => tag.tag).join(", ") || "-";
-  const summary = [preset.provider, preset.country_code, tagText !== "-" ? tagText : null]
+  const safeProvider = preset.provider ? publicProviderPresetMetadataLabel(preset.provider) : null;
+  const safeCountry = preset.country_code ? publicProviderPresetMetadataLabel(preset.country_code) : null;
+  const safeTags = preset.tags.map((tag) => ({
+    ...tag,
+    safeTag: publicProviderPresetMetadataLabel(tag.tag),
+  }));
+  const tagText = safeTags.map((tag) => tag.safeTag).join(", ") || "-";
+  const summary = [safeProvider, safeCountry, tagText !== "-" ? tagText : null]
     .filter(Boolean)
     .join(" / ") || "No defaults";
 
@@ -1293,23 +1299,23 @@ function ProviderPresetRow({
         </div>
       </div>
       <div className="mt-2 flex flex-wrap gap-1">
-        {preset.provider && (
-          <span className="token-chip max-w-[160px] truncate" title={preset.provider}>
-            {preset.provider}
+        {safeProvider && (
+          <span className="token-chip max-w-[160px] truncate" title={safeProvider}>
+            {safeProvider}
           </span>
         )}
-        {preset.country_code && (
-          <span className="token-chip max-w-[72px] truncate" title={preset.country_code}>
-            {preset.country_code}
+        {safeCountry && (
+          <span className="token-chip max-w-[72px] truncate" title={safeCountry}>
+            {safeCountry}
           </span>
         )}
-        {preset.tags.map((tag) => (
-          <span key={`${preset.id}-${tag.tag}`} className="token-chip max-w-[128px] truncate" title={tag.tag}>
+        {safeTags.map((tag, index) => (
+          <span key={`${preset.id}-${index}-${tag.tag}`} className="token-chip max-w-[128px] truncate" title={tag.safeTag}>
             <span
               className="h-1.5 w-1.5 shrink-0 rounded-full"
               style={{ backgroundColor: tag.color ?? "#94a3b8" }}
             />
-            {tag.tag}
+            {tag.safeTag}
           </span>
         ))}
       </div>
@@ -2243,6 +2249,10 @@ function emptyProviderPresetForm(): ProviderPresetFormState {
 }
 
 function publicProviderPresetLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
+function publicProviderPresetMetadataLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 

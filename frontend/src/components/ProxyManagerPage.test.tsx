@@ -1050,6 +1050,63 @@ describe("ProxyManagerPage", () => {
     }
   });
 
+  it("redacts persisted provider preset metadata from rendered evidence", async () => {
+    const leakMarker = "preset-meta-token-super-secret";
+    mockListProxies.mockResolvedValue([]);
+    mockListProxyProviderPresets.mockResolvedValue([
+      {
+        id: "preset-polluted-metadata",
+        name: "Japan default",
+        provider:
+          "Provider Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/provider-meta 203.0.113.59`,
+        country_code:
+          "JP Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/provider-country 203.0.113.60`,
+        tags: [{
+          tag:
+            "mobile Authorization=Bearer " +
+            `${leakMarker} token=${leakMarker} /data/provider-tag 203.0.113.61`,
+          color: "#0ea5e9",
+        }],
+        notes: null,
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Manage presets" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Manage provider presets" });
+    expect(within(dialog).getByText("Provider [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(dialog).getByText("JP [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(dialog).getByText("mobile [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/provider-meta",
+      "/data/provider-country",
+      "/data/provider-tag",
+      "203.0.113.59",
+      "203.0.113.60",
+      "203.0.113.61",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts provider preset names in the CSV import selector", async () => {
     const leakMarker = "preset-select-token-super-secret";
     mockListProxies.mockResolvedValue([]);

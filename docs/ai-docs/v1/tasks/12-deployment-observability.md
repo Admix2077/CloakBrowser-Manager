@@ -6363,3 +6363,34 @@ npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 cookie import/export API payload、cookie document/text contents、explicit export confirmation、profile API schema、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Provider preset metadata UI evidence guardrail
+
+背景：
+
+- Proxy Manager 的 provider preset 管理弹窗会把 persisted `provider`、`country_code` 和 tag 文本写入卡片 summary、chip 文本和 tooltip。
+- 之前已覆盖 preset `name` / `notes` 和 CSV import selector 的 preset name，但元数据字段仍可在历史/手工污染数据下把 Authorization/Bearer、`token=`、本地路径或 IP 字面量带入可见 evidence。
+- 这是 Manager 可控 UI 展示边界；按当前策略，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解。
+
+已覆盖：
+
+- Provider preset card 的 summary、provider chip、country chip、tag chip 和对应 `title` 属性现在使用共享 `publicErrorText()` 展示边界。
+- 正常 provider/country/tag 低敏短值、preset name、notes、edit/delete 操作和弹窗状态保持不变。
+- Provider preset persistence、edit form raw value、CSV parsing/import payload、proxy assignment 和 browser launch 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted provider preset metadata"
+# RED: 旧实现把污染 provider/country/tag 元数据写入 dialog text/title；GREEN: 1 passed, 28 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 29 passed
+```
+
+边界：
+
+- 这是 Proxy Manager provider preset metadata UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 provider preset API schema、provider preset persistence、provider preset edit form raw values、CSV parsing/import payload、proxy asset persistence、proxy assignment/random assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
