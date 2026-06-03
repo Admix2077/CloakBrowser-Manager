@@ -3072,9 +3072,15 @@ async def get_system_diagnostics():
 # ── Automation Tasks ─────────────────────────────────────────────────────────
 
 
-def _automation_task_redacted_steps(steps: list[dict]) -> list[dict]:
+def _automation_task_public_steps(steps: object) -> list[dict]:
+    if not isinstance(steps, list):
+        return []
+    return [step for step in steps if isinstance(step, dict)]
+
+
+def _automation_task_redacted_steps(steps: object) -> list[dict]:
     redacted_steps = []
-    for step in steps:
+    for step in _automation_task_public_steps(steps):
         step_type = _automation_task_public_step_type(step.get("type"))
         redacted = {"type": step_type}
         if step_type == "wait" and isinstance(step.get("ms"), int) and not isinstance(step.get("ms"), bool):
@@ -3362,7 +3368,7 @@ def _automation_task_response(task: dict) -> AutomationTaskResponse:
         "created_at": _automation_task_public_required_timestamp(task.get("created_at")),
         "started_at": _automation_task_public_optional_timestamp(task.get("started_at")),
         "finished_at": _automation_task_public_optional_timestamp(task.get("finished_at")),
-        "steps": _automation_task_redacted_steps(task.get("steps") or []),
+        "steps": _automation_task_redacted_steps(task.get("steps")),
         "result": _automation_task_redacted_result(task.get("result")),
     }
     return AutomationTaskResponse(**task)
@@ -3379,8 +3385,14 @@ def _automation_task_finished_response(
 
 
 def _automation_task_step_types(task: dict) -> list[str]:
-    steps = task.get("steps") or []
-    return [_automation_task_public_step_type(step.get("type")) for step in steps if isinstance(step, dict)]
+    return [
+        _automation_task_public_step_type(step.get("type"))
+        for step in _automation_task_public_steps(task.get("steps"))
+    ]
+
+
+def _automation_task_step_count(task: dict) -> int:
+    return len(_automation_task_public_steps(task.get("steps")))
 
 
 def _automation_task_result_counts(task: dict) -> dict[str, int]:
@@ -3444,7 +3456,7 @@ def _automation_task_audit_metadata(
     metadata = {
         "task_id": _public_uuid_identifier(task.get("id")),
         "status": _automation_task_public_status(task.get("status")),
-        "step_count": len(task.get("steps") or []),
+        "step_count": _automation_task_step_count(task),
         "step_types": _automation_task_step_types(task),
     }
     if previous_status is not None:

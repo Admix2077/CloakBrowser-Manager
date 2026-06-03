@@ -4380,3 +4380,50 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - 不改变 automation execution、worker lease、task retry/cancel/run、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation task persisted-step shape release-evidence guardrail
+
+背景：
+
+- Release automation smoke 会读取 task get/list/cancel responses 和 automation task audit。
+- 历史/手工 DB row 可能把 `steps` list item 污染为 URL/query token/header 风格字符串；旧 response redaction 会对该字符串调用 `.get()` 并导致 500。
+- `step_count` 和 `step_types` 也应基于 public step objects，而不是任意 list item。
+
+已覆盖：
+
+- `_automation_task_public_steps()` 现在过滤 persisted steps list，只保留 dict item。
+- Task response redaction、audit step types 和 audit step count 使用同一个 public step boundary。
+- 非 dict persisted step 被跳过；污染 dict step type 折叠为 `unknown`。
+- Task get/list/cancel 对污染 persisted steps 仍返回低敏响应，并且 audit step_count 只统计 public dict steps。
+- 污染 step URL/host/token/header 文本不再进入 response 或 audit evidence。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_skip_non_dict_persisted_steps -q
+# RED then GREEN；旧实现对 string step 调用 .get() 并 500，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_skip_non_dict_persisted_steps backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit backend/tests/test_api.py::test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events -q
+# 3 passed in 1.20s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 56 passed, 195 deselected in 6.45s
+
+.venv/bin/python -m pytest backend/tests -q
+# 642 passed in 38.23s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.21s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- 不改变 normal automation execution、worker lease、task retry/cancel/run、runtime session、VNC/WebSocket 或 browser fingerprint 行为。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

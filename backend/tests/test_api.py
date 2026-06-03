@@ -5188,6 +5188,72 @@ def test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_task_responses_and_audit_skip_non_dict_persisted_steps(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskNonDictStepRedactProfile"})
+    pid = create.json()["id"]
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    ).json()
+    leak_marker = "automation-non-dict-step-secret"
+    polluted_steps = [
+        f"https://steps.example/path?token={leak_marker} Authorization=Bearer {leak_marker}",
+        {
+            "type": f"https://step-type.example/action?token={leak_marker}",
+            "payload": {"token": leak_marker},
+        },
+    ]
+    with main.db.get_db() as conn:
+        conn.execute(
+            "UPDATE automation_tasks SET steps = ? WHERE id = ?",
+            (json.dumps(polluted_steps), task["id"]),
+        )
+        conn.commit()
+
+    get_resp = app_client.get(f"/api/tasks/{task['id']}")
+    list_resp = app_client.get("/api/tasks")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{task['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
+    events = _automation_task_audit_events()
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["steps"] == [{"type": "unknown"}]
+    assert list_resp.status_code == 200
+    listed_task = next(item for item in list_resp.json()["tasks"] if item["id"] == task["id"])
+    assert listed_task["steps"] == [{"type": "unknown"}]
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["steps"] == [{"type": "unknown"}]
+    assert [event["event_type"] for event in events] == [
+        "automation.task.created",
+        "automation.task.cancelled",
+    ]
+    assert events[1]["metadata"]["step_count"] == 1
+    assert events[1]["metadata"]["step_types"] == ["unknown"]
+
+    serialized = json.dumps(
+        {
+            "get": get_resp.json(),
+            "list": list_resp.json(),
+            "cancel": cancel_resp.json(),
+            "events": events,
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "steps.example",
+        "step-type.example",
+        "token=",
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized
+
+
 def test_create_automation_task_persists_sanitized_screenshot_step(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskScreenshotPersistProfile"})
     pid = create.json()["id"]

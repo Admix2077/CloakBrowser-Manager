@@ -4689,3 +4689,50 @@ git diff --check
 - 这是 automation task audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 automation task execution、worker lease、runner selection、task retry/cancel/run、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。
+
+## 2026-06-03 Automation task persisted-step shape guardrail
+
+背景：
+
+- Automation task DB reader 会保证 `steps` 顶层是 list，但历史/手工 row 仍可能包含非 dict list item。
+- Response redaction 旧实现直接对每个 item 调用 `.get()`；如果 persisted step item 是 URL/query token/header 风格字符串，task get/list/cancel 等 release smoke 路径会 500。
+- Audit `step_count` 也不应把非 step item 计入低敏证据。
+
+已覆盖：
+
+- 新增 `_automation_task_public_steps()`，只允许 dict step item 进入 response/audit step processing。
+- `_automation_task_redacted_steps()`、`_automation_task_step_types()` 和 audit `step_count` 现在共用这个边界。
+- 非 dict persisted step 被跳过；污染 dict step type 仍按既有规则折叠为 `unknown`。
+- Task get/list/cancel 不再因 polluted non-dict persisted steps 崩溃，也不回显 secret、host、`token=`、Authorization 或 Bearer 文本。
+- Automation task audit step_count 只统计 public dict steps，step_types 只输出 public step type labels。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_skip_non_dict_persisted_steps -q
+# RED: 旧实现对 string step 调用 .get() 并 500；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_skip_non_dict_persisted_steps backend/tests/test_api.py::test_automation_task_sanitizes_sensitive_unknown_step_type_before_persisting_responding_or_audit backend/tests/test_api.py::test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events -q
+# 3 passed in 1.20s
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task or automation_worker" -q
+# 56 passed, 195 deselected in 6.45s
+
+.venv/bin/python -m pytest backend/tests -q
+# 642 passed in 38.23s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.21s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 automation task response/audit stability and release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 normal automation task create/run/cancel/retry semantics、worker lease、runner selection、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、automation payload 或外站页面原文。
