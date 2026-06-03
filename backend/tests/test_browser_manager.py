@@ -259,6 +259,30 @@ def test_build_invisible_kwargs_omits_empty_optional_values(tmp_path: Path):
     assert kwargs["extra_args"] == []
 
 
+def test_build_invisible_kwargs_drops_non_public_fingerprint_seed_values(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": "https://seed.example/profile?token=seed-super-secret",
+        "user_data_dir": str(tmp_path / "profile"),
+        "proxy": None,
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US",
+        "launch_args": None,
+    })
+
+    assert kwargs["seed"] is None
+    assert "seed-super-secret" not in repr(kwargs)
+
+    bool_kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": True,
+        "user_data_dir": str(tmp_path / "profile-bool"),
+        "proxy": None,
+        "timezone": "America/Los_Angeles",
+        "locale": "en-US",
+        "launch_args": None,
+    })
+    assert bool_kwargs["seed"] is None
+
+
 def test_build_invisible_kwargs_drops_non_public_locale_text(tmp_path: Path):
     kwargs = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,

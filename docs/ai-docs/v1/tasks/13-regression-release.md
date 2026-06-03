@@ -2612,6 +2612,49 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Fingerprint seed launch guardrail
+
+背景：
+
+- Release smoke 的 same-seed stability / different-seed variation 依赖 `fingerprint_seed` 作为底层 fingerprint generation 输入。
+- `fingerprint_seed` 正常来自 API/Pydantic 整数，但 release blocker 排查期间仍需要防御历史/损坏 profile row 或内部 dict 把 URL/query token/header 风格文本送入 `InvisiblePlaywright(seed=...)`。
+
+已覆盖：
+
+- `_build_invisible_kwargs()` 现在只把 public int seed 传给 `InvisiblePlaywright`。
+- 非整数、bool、URL/query token 风格 seed 折叠为 `None`，不会进入底层 launch kwargs。
+- 正常整数 seed、locale/timezone、managed Firefox identity prefs、WebRTC local IP suppression prefs 和 launch args 过滤语义保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_fingerprint_seed_values -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_fingerprint_seed_values backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_timezone_text backend/tests/test_browser_manager.py::test_build_invisible_kwargs_pins_managed_firefox_identity -q
+# 6 passed in 0.05s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 71 passed in 0.88s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 630 passed in 40.55s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.70s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Firefox identity major-version diagnostics guardrail
 
 背景：

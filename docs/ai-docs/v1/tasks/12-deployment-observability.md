@@ -4154,3 +4154,48 @@ git diff --check
 
 - 这是 Firefox identity observability guardrail，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录 full UA、package path、Firefox binary path、screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Fingerprint seed launch guardrail
+
+背景：
+
+- `fingerprint_seed` 决定底层 `invisible_playwright` profile generation，是 Pixelscan/seed stability 排障的关键输入。
+- 正常 API 输入会被 Pydantic 解析为整数，但历史/手工 DB row 或内部 runtime profile dict 仍可能绕过请求校验。
+- 旧 `_build_invisible_kwargs()` 直接把 `profile["fingerprint_seed"]` 传给 `InvisiblePlaywright(seed=...)`，非整数 URL/token/path 风格文本可能进入底层 runtime。
+
+已覆盖：
+
+- 新增 `_public_fingerprint_seed()`，在构造 invisible kwargs 前复用 public int 过滤。
+- 正常整数 seed 保持不变。
+- URL/query token 风格 seed、bool seed 等非公开值在 launch kwargs 中折叠为 `None`。
+- locale、timezone、screen/GPU/hardware、proxy 和 launch args 既有 guardrails 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_fingerprint_seed_values -q
+# RED: kwargs["seed"] 原样返回 URL/token 风格文本；GREEN: 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_build_invisible_kwargs_maps_manager_profile backend/tests/test_browser_manager.py::test_build_invisible_kwargs_omits_empty_optional_values backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_fingerprint_seed_values backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_locale_text backend/tests/test_browser_manager.py::test_build_invisible_kwargs_drops_non_public_timezone_text backend/tests/test_browser_manager.py::test_build_invisible_kwargs_pins_managed_firefox_identity -q
+# 6 passed in 0.05s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 71 passed in 0.88s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 630 passed in 40.55s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.70s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 fingerprint launch input 和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

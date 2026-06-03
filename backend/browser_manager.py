@@ -279,6 +279,10 @@ def _public_hardware_concurrency(value: object) -> int | None:
     return None
 
 
+def _public_fingerprint_seed(value: object) -> int | None:
+    return _public_int(value)
+
+
 def _public_gpu_text(value: object) -> str:
     if not isinstance(value, str):
         return ""
@@ -424,7 +428,7 @@ def _build_invisible_kwargs(profile: dict[str, Any]) -> dict[str, Any]:
         **WEBRTC_LOCAL_IP_SUPPRESSION_PREFS,
     }
     return {
-        "seed": profile.get("fingerprint_seed"),
+        "seed": _public_fingerprint_seed(profile.get("fingerprint_seed")),
         "pin": _build_invisible_pin(profile),
         "headless": False,
         "proxy": _proxy_to_invisible(profile.get("proxy") or None),
