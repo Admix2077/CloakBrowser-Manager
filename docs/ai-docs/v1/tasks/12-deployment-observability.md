@@ -2403,3 +2403,48 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request/console behavior、browser-side capture event subscription 或 audit event schema。
 - 不在 Automation cached console/network summary responses 中公开 URL userinfo/query/fragment token、console text token、console type token、location token、method/header-like token、resource/status/failure token、Authorization/Bearer credential、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Automation task status/error response redaction guardrail
+
+背景：
+
+- Automation task create/run/cancel/retry 正常路径只写固定状态和固定错误文本。
+- 继续复查历史数据防御时发现 `_automation_task_response()` 已清洗 `steps` 和 `result`，但仍直接返回 DB 中的 `status` 和 `error`。
+- 如果旧版本任务、手工 DB 修复或损坏 row 含有 URL/query token、Authorization/Bearer/Cookie 文本，这些字段会通过 `GET /api/tasks/{task_id}` 和 `GET /api/tasks` 进入 response/UI。
+
+已覆盖：
+
+- Automation task response `status` 现在只保留 `queued`、`running`、`cancel_requested`、`cancelled`、`failed`、`succeeded`；其他值折叠为 `unknown`。
+- Automation task response `error` 现在只保留当前执行器写入的固定低敏错误文本；其他字符串或非字符串折叠为 `Automation task failed`。
+- Automation task audit metadata 中的 `status` 和 `previous_status` 复用同一 public status allowlist。
+- 正常任务执行、worker lease、result summary、step redaction、retry/cancel/run 语义和 audit event schema 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_response_sanitizes_persisted_status_and_error_fields -q
+# RED: 1 failed；response 原样返回 failed-token-super-secret Authorization=Bearer bearer-secret
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_response_sanitizes_persisted_status_and_error_fields -q
+# 1 passed in 0.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task or list_automation_tasks or get_automation_task or retry_automation_task or run_automation_worker"
+# 38 passed, 184 deselected in 4.66s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 572 passed in 32.80s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.95s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation task execution、worker lease、browser page actions 或 audit event schema。
+- 不在 Automation task responses 中公开历史/污染 status token、error URL query/fragment、Authorization/Bearer credential、Cookie header text、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

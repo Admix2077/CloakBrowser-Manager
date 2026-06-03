@@ -2800,8 +2800,41 @@ _AUTOMATION_STEP_TYPES = {
     "wait_for_selector",
 }
 _AUTOMATION_RESULT_STATUSES = {"cancelled", "failed", "succeeded"}
+_AUTOMATION_TASK_STATUSES = {
+    "cancel_requested",
+    "cancelled",
+    "failed",
+    "queued",
+    "running",
+    "succeeded",
+}
 _AUTOMATION_UNKNOWN_STEP_TYPE = "unknown"
 _AUTOMATION_UNKNOWN_RESULT_STATUS = "unknown"
+_AUTOMATION_UNKNOWN_TASK_STATUS = "unknown"
+_AUTOMATION_UNKNOWN_TASK_ERROR = "Automation task failed"
+_AUTOMATION_TASK_PUBLIC_ERRORS = {
+    "Automation step failed",
+    "Click step failed",
+    "Evaluate step failed",
+    "Fill step failed",
+    "Invalid click step",
+    "Invalid evaluate step",
+    "Invalid fill step",
+    "Invalid keyboard_type step",
+    "Invalid open_url step",
+    "Invalid screenshot step",
+    "Invalid scroll step",
+    "Invalid wait step",
+    "Invalid wait_for_selector step",
+    "Keyboard type step failed",
+    "Open URL step failed",
+    "Profile not found",
+    "Profile not running",
+    "Screenshot step failed",
+    "Scroll step failed",
+    "Unsupported automation step type",
+    "Wait for selector step failed",
+}
 
 
 def _automation_task_public_step_type(value: object) -> str:
@@ -2814,6 +2847,20 @@ def _automation_task_public_result_status(value: object) -> str:
     if not isinstance(value, str):
         return _AUTOMATION_UNKNOWN_RESULT_STATUS
     return value if value in _AUTOMATION_RESULT_STATUSES else _AUTOMATION_UNKNOWN_RESULT_STATUS
+
+
+def _automation_task_public_status(value: object) -> str:
+    if not isinstance(value, str):
+        return _AUTOMATION_UNKNOWN_TASK_STATUS
+    return value if value in _AUTOMATION_TASK_STATUSES else _AUTOMATION_UNKNOWN_TASK_STATUS
+
+
+def _automation_task_public_error(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return _AUTOMATION_UNKNOWN_TASK_ERROR
+    return value if value in _AUTOMATION_TASK_PUBLIC_ERRORS else _AUTOMATION_UNKNOWN_TASK_ERROR
 
 
 def _automation_task_public_result_index(value: object) -> int | None:
@@ -2894,6 +2941,8 @@ def _automation_task_redacted_result(result: dict | None) -> dict | None:
 def _automation_task_response(task: dict) -> AutomationTaskResponse:
     task = {
         **task,
+        "status": _automation_task_public_status(task.get("status")),
+        "error": _automation_task_public_error(task.get("error")),
         "steps": _automation_task_redacted_steps(task.get("steps") or []),
         "result": _automation_task_redacted_result(task.get("result")),
     }
@@ -2975,12 +3024,12 @@ def _automation_task_audit_metadata(
 ) -> dict:
     metadata = {
         "task_id": task.get("id"),
-        "status": task.get("status"),
+        "status": _automation_task_public_status(task.get("status")),
         "step_count": len(task.get("steps") or []),
         "step_types": _automation_task_step_types(task),
     }
     if previous_status is not None:
-        metadata["previous_status"] = previous_status
+        metadata["previous_status"] = _automation_task_public_status(previous_status)
     if runner_type is not None:
         metadata["runner_type"] = runner_type
         metadata.update(_automation_task_result_counts(task))

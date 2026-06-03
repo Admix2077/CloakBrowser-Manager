@@ -4190,6 +4190,46 @@ def test_automation_task_result_summary_sanitizes_corrupted_summary_fields(app_c
     assert "raw-super-secret" not in serialized
 
 
+def test_automation_task_response_sanitizes_persisted_status_and_error_fields(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "TaskStatusErrorSanitizeProfile"})
+    pid = create.json()["id"]
+    create_resp = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "wait", "ms": 1}]},
+    )
+    task_id = create_resp.json()["id"]
+    main.db.update_automation_task(
+        task_id,
+        status="failed-token-super-secret Authorization=Bearer bearer-secret",
+        error=(
+            "Playwright error for https://example.com/app?token=super-secret "
+            "Authorization=Bearer bearer-secret Cookie sid=cookie-secret"
+        ),
+    )
+
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+
+    assert get_resp.status_code == 200
+    assert get_resp.json()["status"] == "unknown"
+    assert get_resp.json()["error"] == "Automation task failed"
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    assert listed_task["status"] == "unknown"
+    assert listed_task["error"] == "Automation task failed"
+
+    serialized = json.dumps({"get": get_resp.json(), "list": list_resp.json()}, sort_keys=True)
+    for leaked in (
+        "failed-token-super-secret",
+        "super-secret",
+        "Authorization",
+        "Bearer",
+        "cookie-secret",
+        "https://example.com/app?token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_get_automation_task_returns_persisted_task(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskGetProfile"})
     pid = create.json()["id"]

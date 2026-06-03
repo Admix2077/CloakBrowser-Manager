@@ -2220,3 +2220,45 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation navigation target URL、actual browser request/console behavior、browser-side capture event subscription 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Automation task status/error response redaction guardrail
+
+背景：
+
+- Release automation/VNC smoke 会通过 task API 查看 queued/running/finished automation tasks。
+- 之前已清洗 task `steps`、`page_ref`、result summary 和 cached console/network summaries。
+- 继续复查发现 task response 仍信任 DB 中的 `status` 和 `error` 字段；历史/损坏 row 可把 URL/query token、Authorization/Bearer 或 Cookie 文本回显到 `GET /api/tasks/{task_id}` 和 `GET /api/tasks`。
+
+已覆盖：
+
+- Task response `status` 只保留公开状态 `queued`、`running`、`cancel_requested`、`cancelled`、`failed`、`succeeded`；其他值折叠为 `unknown`。
+- Task response `error` 只保留当前执行路径写入的固定低敏错误；其他值折叠为 `Automation task failed`。
+- Automation task audit metadata 的 `status` / `previous_status` 同步使用 public status allowlist。
+- 正常 create/run/cancel/retry、worker lease、result summary、step redaction 和 audit event schema 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_response_sanitizes_persisted_status_and_error_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.76s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task or list_automation_tasks or get_automation_task or retry_automation_task or run_automation_worker"
+# 38 passed, 184 deselected in 4.66s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 572 passed in 32.80s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.95s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC/runtime viewer、proxy logic、automation task execution、worker lease、browser page actions 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
