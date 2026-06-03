@@ -3992,3 +3992,41 @@ npm --prefix frontend run build
 
 - 这是 VNC/clipboard 运行日志和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw audit metadata。
+
+## 2026-06-03 Automation page/action profile-id log guardrail
+
+背景：
+
+- Direct Automation API 是 release smoke 和脚本侧排障的主要证据面。
+- Automation response/audit 已经做过 profile id 脱敏，但 page title failure 和 page action failure 日志仍直接记录 `running.profile_id` 或 path `profile_id`。
+- 如果历史/手工 running map 或调用路径里出现 URL/query/header/token 风格 profile id，automation failure logs 会保留该文本。
+
+已覆盖：
+
+- automation pages 读取 title 失败时，`action=automation.page_title_failed` 日志只记录公开 profile id；非 UUID 折叠为 `unknown`。
+- automation page action failure helper 现在统一过滤 profile id，覆盖 `new_page`、`goto`、`evaluate`、`wait_for_selector`、`click`、`fill`、`keyboard_type`、`scroll`、`screenshot` 和 `close_page` failure logs。
+- API response、running profile lookup、page lookup、page action 执行和错误响应语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_page_title_failure_logs_public_profile_id backend/tests/test_api.py::test_automation_action_failure_logs_public_profile_id -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 0.78s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation and not task"
+# 46 passed, 198 deselected in 4.03s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 626 passed in 37.92s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.18s
+```
+
+边界：
+
+- 这是 Automation API failure log 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation expressions/results/payloads 或 raw audit metadata。

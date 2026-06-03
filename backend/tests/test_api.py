@@ -3564,6 +3564,36 @@ def test_automation_page_title_failure_logs_error_type_without_raw_exception(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_page_title_failure_logs_public_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "automation-title-profile-secret"
+    polluted_profile_id = (
+        f"automation-title Authorization=Bearer {leak_marker} token={leak_marker}"
+    )
+    page = _automation_page("https://example.com/app", "unused")
+    page.title = AsyncMock(side_effect=RuntimeError("title failed"))
+    _automation_running_profile(polluted_profile_id, [page])
+    caplog.set_level("DEBUG", logger="invisible_browser.manager")
+
+    resp = app_client.get(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/automation/pages"
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["pages"][0]["title"] == ""
+    assert (
+        "action=automation.page_title_failed profile_id=unknown "
+        "page_index=0 error_type=RuntimeError"
+    ) in caplog.text
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+
+
 def test_automation_pages_hide_internal_about_home_from_numeric_refs(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationInternalHome"})
     pid = create.json()["id"]
@@ -3669,6 +3699,37 @@ def test_automation_goto_failure_uses_fixed_error_without_leaking_url(
     assert secret_url not in caplog.text
     assert "super-secret" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_action_failure_logs_public_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "automation-action-profile-secret"
+    polluted_profile_id = (
+        f"automation-action Authorization=Bearer {leak_marker} token={leak_marker}"
+    )
+    page = _automation_page("about:blank", "Before")
+    page.goto.side_effect = RuntimeError("navigation failed")
+    _automation_running_profile(polluted_profile_id, [page])
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/automation/pages/0/goto",
+        json={"url": "https://example.com/", "wait_until": "domcontentloaded", "timeout_ms": 5000},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Automation page action failed"}
+    assert (
+        "action=automation.goto_failed profile_id=unknown "
+        "page_index=0 error_type=RuntimeError"
+    ) in caplog.text
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+    main.browser_mgr.running.pop(polluted_profile_id, None)
 
 
 def test_automation_evaluate_returns_json_result(app_client: TestClient):

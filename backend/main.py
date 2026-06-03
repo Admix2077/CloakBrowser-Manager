@@ -4846,7 +4846,7 @@ async def _automation_page_summary(running, index: int, page) -> AutomationPageR
     except Exception as exc:
         logger.debug(
             "action=automation.page_title_failed profile_id=%s page_index=%d error_type=%s",
-            running.profile_id,
+            _public_profile_identifier(running.profile_id),
             index,
             type(exc).__name__,
         )
@@ -4899,10 +4899,11 @@ def _raise_automation_page_action_failed(
     page_index: int,
     exc: Exception,
 ) -> None:
+    public_profile_id = _public_profile_identifier(profile_id)
     logger.warning(
         "action=automation.%s_failed profile_id=%s page_index=%d error_type=%s",
         action,
-        profile_id,
+        public_profile_id,
         page_index,
         type(exc).__name__,
     )
