@@ -4154,3 +4154,45 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile response directory release-evidence guardrail
+
+背景：
+
+- Release profile/API smoke 会读取 profile create/list/detail 响应。
+- ProfileResponse 仍保留 `user_data_dir` 字段；普通本地管理台语义可以保留，但历史/手工污染 row 不应把 URL/query token/header 风格 profile dir 文本带入 release evidence。
+- Launch/delete 已复用 `_public_profile_dir()`；response 层需要同等防御，避免 profile dir、Authorization/Bearer 或 token marker 出现在低敏证据里。
+
+已覆盖：
+
+- `_profile_response()` 对 persisted `user_data_dir` 使用 public profile-dir boundary。
+- 正常本地 profile dir 继续返回；非公开 URL/query token/header 风格值折叠为 `unknown`。
+- Profile get/list 响应不再包含污染 host、`token=`、Authorization、Bearer 或 secret marker。
+- 相邻 profile response、profile CRUD、create/get 和 delete guardrail 回归通过。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_profile_response_sanitizes_persisted_user_data_dir -q
+# RED then GREEN；旧实现原样回显污染 user_data_dir，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "profile_response or profile_responses or profile_crud or delete_profile or create_profile or get_profile" -q
+# 25 passed, 224 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 637 passed in 39.23s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.61s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

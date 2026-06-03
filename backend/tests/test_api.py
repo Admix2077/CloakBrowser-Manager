@@ -314,6 +314,43 @@ def test_profile_response_sanitizes_persisted_profile_id_and_automation_url(
         assert leaked not in serialized
 
 
+def test_profile_response_sanitizes_persisted_user_data_dir(
+    app_client: TestClient,
+):
+    leak_marker = "profile-dir-response-secret"
+    pid = app_client.post("/api/profiles", json={"name": "Polluted Dir"}).json()["id"]
+    polluted_user_data_dir = (
+        f"https://profile-dir-response.example/path?token={leak_marker} "
+        f"Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute(
+            "UPDATE profiles SET user_data_dir = ? WHERE id = ?",
+            (polluted_user_data_dir, pid),
+        )
+        conn.commit()
+
+    get_resp = app_client.get(f"/api/profiles/{pid}")
+    list_resp = app_client.get("/api/profiles")
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    get_profile = get_resp.json()
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == pid)
+    assert get_profile["user_data_dir"] == "unknown"
+    assert listed_profile["user_data_dir"] == "unknown"
+
+    serialized = json.dumps({"get": get_profile, "list": listed_profile}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "profile-dir-response.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_profile_response_sanitizes_persisted_malformed_tags(app_client: TestClient):
     create = app_client.post(
         "/api/profiles",

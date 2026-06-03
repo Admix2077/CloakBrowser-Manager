@@ -828,6 +828,10 @@ def _profile_response(profile: dict) -> ProfileResponse:
     safe = sanitize_profile_response_data(profile)
     public_profile_id = _public_profile_identifier(safe.get("id"))
     safe["id"] = public_profile_id
+    try:
+        safe["user_data_dir"] = str(_public_profile_dir(safe.get("user_data_dir")))
+    except ValueError:
+        safe["user_data_dir"] = "unknown"
     if safe.get("automation_url") is not None:
         safe["automation_url"] = _profile_automation_url(public_profile_id)
     safe["last_geoip_ip"] = public_geoip_ip(safe.get("last_geoip_ip"))

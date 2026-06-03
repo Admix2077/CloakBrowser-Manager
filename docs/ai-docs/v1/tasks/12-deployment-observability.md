@@ -4461,3 +4461,46 @@ git diff --check
 - 这是 profile lifecycle delete path 和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone、proxy 或 profile launch 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Profile response directory guardrail
+
+背景：
+
+- Profile list/detail/create/update 响应仍保留既有 `user_data_dir` API 字段。
+- 正常 profile 目录可继续作为本地管理台语义返回，但历史/手工 DB row 可能把 URL/query token/header 风格文本写进 `user_data_dir`。
+- Release evidence 禁止记录 profile dir 和 token/header 文本，因此响应层需要和 launch/delete 路径使用同一条 public profile-dir 边界。
+
+已覆盖：
+
+- `_profile_response()` 现在用 `_public_profile_dir()` 过滤 persisted `user_data_dir`。
+- 普通本地 profile dir 仍返回原字符串，保持既有 API 语义。
+- 非公开 URL/query token/header 风格 `user_data_dir` 折叠为固定低敏 `unknown`。
+- Profile get/list 响应不再回显污染 host、`token=`、Authorization/Bearer 或 secret marker。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_profile_response_sanitizes_persisted_user_data_dir -q
+# RED: 旧实现原样回显污染 user_data_dir；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "profile_response or profile_responses or profile_crud or delete_profile or create_profile or get_profile" -q
+# 25 passed, 224 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 637 passed in 39.23s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.61s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 profile response release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 DB 存储、profile launch/delete 内部路径、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
