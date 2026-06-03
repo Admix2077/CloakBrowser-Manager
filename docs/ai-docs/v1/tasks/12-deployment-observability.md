@@ -3249,3 +3249,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 profile launch/status automation URL guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Automation task profile id guardrail
+
+背景：
+
+- Automation Task response 已清洗 steps、result、error、status 和 lease metadata。
+- 继续复查发现 task response 顶层 `profile_id` 和 `automation.task.*` audit event 顶层 `profile_id` 仍直接使用 task 中的 profile id。
+- 如果历史/手工 DB row 含有非 UUID profile id，task create/get/list/cancel/retry/run response 和 audit evidence 会保留该文本。
+
+已覆盖：
+
+- AutomationTaskResponse 的 `profile_id` 现在只保留 canonical UUID；非 UUID 折叠为 `unknown`。
+- `automation.task.*` audit event 顶层 `profile_id` 现在只保留 canonical UUID；非 UUID 省略。
+- Task create/list/get/cancel/retry/run response 和 created/cancelled/retried/succeeded audit flow 均覆盖。
+- 正常 UUID Automation Task response/audit 行为保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_sanitize_persisted_profile_id -q
+# RED: 1 failed；Automation Task responses 直接保留非 UUID profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_sanitize_persisted_profile_id -q
+# 1 passed in 0.86s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task"
+# 39 passed, 193 deselected in 5.16s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 603 passed in 36.54s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 automation task profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

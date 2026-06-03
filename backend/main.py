@@ -3115,6 +3115,7 @@ def _automation_task_redacted_result(result: dict | None) -> dict | None:
 def _automation_task_response(task: dict) -> AutomationTaskResponse:
     task = {
         **task,
+        "profile_id": _public_profile_identifier(task.get("profile_id")),
         "status": _automation_task_public_status(task.get("status")),
         "error": _automation_task_public_error(task.get("error")),
         "steps": _automation_task_redacted_steps(task.get("steps") or []),
@@ -3229,7 +3230,7 @@ def _audit_automation_task_event(
     db.create_audit_event(
         event_type=event_type,
         actor_type="local_admin",
-        profile_id=str(task["profile_id"]),
+        profile_id=_public_uuid_identifier(task.get("profile_id")),
         metadata=_automation_task_audit_metadata(
             task,
             previous_status=previous_status,

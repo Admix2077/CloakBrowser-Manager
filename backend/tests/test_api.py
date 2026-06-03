@@ -3912,6 +3912,73 @@ def test_create_automation_task_queues_steps_without_running_script(app_client: 
     assert data["finished_at"] is None
 
 
+def test_automation_task_responses_and_audit_sanitize_persisted_profile_id(
+    app_client: TestClient,
+):
+    leak_marker = "automation-task-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "TaskPollutedProfileId"}).json()["id"]
+    polluted_profile_id = (
+        f"task-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    _automation_running_profile(polluted_profile_id)
+
+    create_resp = app_client.post(
+        "/api/tasks",
+        json={"profile_id": polluted_profile_id, "steps": [{"type": "wait", "ms": 1}]},
+    )
+    created = create_resp.json()
+    get_resp = app_client.get(f"/api/tasks/{created['id']}")
+    list_resp = app_client.get(f"/api/tasks?profile_id={quote(polluted_profile_id, safe='')}")
+    cancel_resp = app_client.post(
+        f"/api/tasks/{created['id']}/cancel",
+        json=_confirm_cancel_payload(),
+    )
+    retry_resp = app_client.post(f"/api/tasks/{created['id']}/retry")
+    run_resp = app_client.post(f"/api/tasks/{retry_resp.json()['id']}/run")
+
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+    assert create_resp.status_code == 201
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    assert cancel_resp.status_code == 200
+    assert retry_resp.status_code == 201
+    assert run_resp.status_code == 200
+    response_profiles = [
+        created,
+        get_resp.json(),
+        next(task for task in list_resp.json()["tasks"] if task["id"] == created["id"]),
+        cancel_resp.json(),
+        retry_resp.json(),
+        run_resp.json(),
+    ]
+    assert all(task["profile_id"] == "unknown" for task in response_profiles)
+
+    events = _automation_task_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "automation.task.created",
+        "automation.task.cancelled",
+        "automation.task.retried",
+        "automation.task.succeeded",
+    ]
+    assert all(event["profile_id"] is None for event in events)
+
+    serialized = json.dumps(
+        {"responses": response_profiles, "events": events},
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_automation_task_create_cancel_retry_and_run_write_redacted_audit_events(
     app_client: TestClient,
 ):

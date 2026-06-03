@@ -2612,6 +2612,45 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Automation task profile id guardrail
+
+背景：
+
+- Release Automation smoke 会创建、查询、取消、重试和运行 task，并检查 audit event 是否低敏。
+- 旧实现已清洗 task steps/result/error/status/lease metadata，但 task response 顶层 `profile_id` 和 automation.task audit 顶层 `profile_id` 仍信任 task profile id。
+- 历史/手工污染的非 UUID profile id 不应进入 release smoke task responses 或 audit evidence。
+
+已覆盖：
+
+- AutomationTaskResponse 的 `profile_id` 现在只保留 canonical UUID；非 UUID 返回 `unknown`。
+- Automation task audit event 顶层 `profile_id` 现在只保留 canonical UUID；非 UUID 省略。
+- 覆盖 create/get/list/cancel/retry/run response 与 created/cancelled/retried/succeeded audit flow。
+- 正常 UUID profile task response/audit behavior 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_responses_and_audit_sanitize_persisted_profile_id -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.86s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task"
+# 39 passed, 193 deselected in 5.16s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 603 passed in 36.54s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile launch/status automation URL guardrail
 
 背景：
