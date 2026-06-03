@@ -4766,3 +4766,45 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 API request order、profile state mutations、bulk concurrency、health cache refresh、VNC viewer、Automation API、Proxy Manager、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend profile hook error release-evidence 边界。
+
+## 2026-06-03 Frontend auth and automation load error release-evidence guardrail
+
+背景：
+
+- Release smoke 可能截图登录失败状态和 Automation task viewer load failure alert。
+- `LoginPage` 和 `AutomationTaskLogViewer` 原先会把 raw API/transport `Error.message` 渲染到页面。
+- Raw message 可能包含 token/header/path/internal URL 风格文本。
+
+已覆盖：
+
+- 登录失败固定显示 `Login failed`。
+- Automation task list 加载失败固定显示 `Unable to load automation tasks`。
+- 正常 login submit、task refresh、task table、status filter、search filter 和 detail drawer redaction 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/LoginPage.test.tsx
+# RED then GREEN；旧实现登录失败显示 login-token-super-secret/token=/Authorization/Bearer//data/auth，最终 1 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED then GREEN；旧实现任务加载失败 alert 显示 automation-load-token-secret/token=/Authorization/Bearer//data/tasks，最终 7 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.63s
+
+npm --prefix frontend test -- --run
+# Test Files 18 passed；Tests 227 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.73s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 auth token submit flow、login success callback、automation task list request shape、task filtering、task detail redaction、VNC viewer、Automation API backend、Proxy Manager、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend auth/task-load error release-evidence 边界。

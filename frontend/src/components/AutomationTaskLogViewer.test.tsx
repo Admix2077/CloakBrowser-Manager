@@ -134,6 +134,25 @@ describe("AutomationTaskLogViewer", () => {
     expect(mockListAutomationTasks).toHaveBeenLastCalledWith({ limit: 50 });
   });
 
+  it("does not render raw task load failure details", async () => {
+    const leakMarker = "automation-load-token-secret";
+    mockListAutomationTasks.mockRejectedValueOnce(
+      new Error(
+        `load failed token=${leakMarker} Authorization=Bearer ${leakMarker} /data/tasks/${leakMarker}`,
+      ),
+    );
+
+    render(<AutomationTaskLogViewer />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Unable to load automation tasks");
+    expect(alert.textContent).not.toContain(leakMarker);
+    expect(alert.textContent).not.toContain("Authorization");
+    expect(alert.textContent).not.toContain("Bearer");
+    expect(alert.textContent).not.toContain("token=");
+    expect(alert.textContent).not.toContain("/data/tasks");
+  });
+
   it("filters the local read-only task list by status group", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [

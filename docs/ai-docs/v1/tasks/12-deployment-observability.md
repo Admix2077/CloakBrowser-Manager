@@ -5073,3 +5073,46 @@ git diff --check
 - 这是 frontend profile hook UI/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 API request order、profile state mutations、bulk concurrency、health cache refresh、Proxy Manager、VNC viewer、Automation API、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Frontend auth and automation load error guardrail
+
+背景：
+
+- 登录页和 Automation task viewer 的加载失败状态会直接显示在前端页面。
+- `LoginPage` 原先会把 login API/transport 的 raw `Error.message` 渲染给用户。
+- `AutomationTaskLogViewer` 原先会把 task list API/transport 的 raw `Error.message` 渲染到 alert。
+- 这些错误可能包含 token、Authorization/Bearer、本地路径或内部接口细节，并进入 release smoke 截图/triage 证据。
+
+已覆盖：
+
+- `LoginPage` 登录失败现在只显示固定低敏 `Login failed`。
+- `AutomationTaskLogViewer` task list 加载失败现在只显示固定低敏 `Unable to load automation tasks`。
+- 正常 submit、refresh、loading、empty state、task table 和 task detail drawer 行为不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/LoginPage.test.tsx
+# RED: 旧实现登录失败显示 login-token-super-secret/token=/Authorization/Bearer//data/auth；GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED: 旧实现任务加载失败 alert 显示 automation-load-token-secret/token=/Authorization/Bearer//data/tasks；GREEN: 7 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 40.63s
+
+npm --prefix frontend test -- --run
+# Test Files 18 passed；Tests 227 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.73s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend auth/task-load UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 auth token submit flow、login success callback、automation task list request shape、task filtering、task detail redaction、Proxy Manager、VNC viewer、Automation API backend、profile launch backend、proxy、fingerprint seed 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

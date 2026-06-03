@@ -18,8 +18,8 @@ export function LoginPage({ onSuccess }: LoginPageProps) {
     try {
       await api.login(token);
       onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+    } catch {
+      setError("Login failed");
     } finally {
       setLoading(false);
     }

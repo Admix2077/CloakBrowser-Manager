@@ -35,8 +35,8 @@ export function AutomationTaskLogViewer() {
     try {
       const response = await api.listAutomationTasks({ limit: DEFAULT_TASK_LIMIT });
       setTasks(response.tasks);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to load automation tasks");
+    } catch {
+      setError("Unable to load automation tasks");
     } finally {
       if (quiet) {
         setRefreshing(false);
