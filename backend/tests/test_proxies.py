@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from starlette.testclient import TestClient
@@ -222,6 +223,117 @@ def test_proxy_api_responses_redact_persisted_sensitive_last_check_fields(app_cl
         assert data["last_check_error"] == "Proxy check failed"
         for leaked in (leak_marker, "geo.invalid", "ip.invalid", "Bearer"):
             assert leaked not in json.dumps(data, sort_keys=True)
+
+
+def test_proxy_asset_responses_and_audits_sanitize_persisted_proxy_id(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    leak_marker = "proxy-id-secret"
+    proxy = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Polluted proxy id",
+            "url": "http://user:hiddenpass@polluted-proxy.example:8080",
+            "provider": "ProxyCo",
+        },
+    ).json()
+    profile = app_client.post("/api/profiles", json={"name": "Polluted proxy assignment"}).json()
+    polluted_proxy_id = (
+        f"proxy-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute("UPDATE proxies SET id = ? WHERE id = ?", (polluted_proxy_id, proxy["id"]))
+        conn.commit()
+
+    async def fake_resolve_network_geo(_raw_url: str) -> GeoIPResult:
+        return GeoIPResult(
+            ip="198.51.100.8",
+            country_code="US",
+            timezone="America/New_York",
+            locale="en-US",
+            source="qa",
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve_network_geo)
+
+    detail = app_client.get(f"/api/proxies/{quote(polluted_proxy_id, safe='')}")
+    listed = app_client.get("/api/proxies")
+    updated = app_client.put(
+        f"/api/proxies/{quote(polluted_proxy_id, safe='')}",
+        json={"name": "Polluted proxy id updated"},
+    )
+    assigned = app_client.post(
+        f"/api/proxies/{quote(polluted_proxy_id, safe='')}/assign",
+        json={"profile_ids": [profile["id"]], "confirm_assign": True},
+    )
+    random_assigned = app_client.post(
+        "/api/proxies/assign/random",
+        json={"profile_ids": [profile["id"]], "provider": "ProxyCo", "confirm_assign": True},
+    )
+    bulk_checked = app_client.post(
+        "/api/proxies/bulk/check",
+        json={"proxy_ids": [polluted_proxy_id], "confirm_bulk_check": True},
+    )
+    deleted = app_client.request(
+        "DELETE",
+        f"/api/proxies/{quote(polluted_proxy_id, safe='')}",
+        json={"confirm_delete": True},
+    )
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    assert updated.status_code == 200
+    assert assigned.status_code == 200
+    assert random_assigned.status_code == 200
+    assert bulk_checked.status_code == 200
+    assert deleted.status_code == 200
+
+    assert detail.json()["id"] == "unknown"
+    assert listed.json()[0]["id"] == "unknown"
+    assert updated.json()["id"] == "unknown"
+    assert assigned.json()["proxy_id"] == "unknown"
+    assert assigned.json()["proxy"]["id"] == "unknown"
+    assert random_assigned.json()["results"][0]["proxy_id"] == "unknown"
+    assert random_assigned.json()["results"][0]["proxy"]["id"] == "unknown"
+    assert bulk_checked.json()["results"][0]["proxy_id"] == "unknown"
+    assert bulk_checked.json()["results"][0]["proxy"]["id"] == "unknown"
+
+    events = [
+        event
+        for event in db.list_audit_events()
+        if event["event_type"]
+        in {"proxy.updated", "proxy.deleted", "proxy.assigned", "proxy.bulk_checked"}
+    ]
+    assert [event["event_type"] for event in events] == [
+        "proxy.updated",
+        "proxy.assigned",
+        "proxy.bulk_checked",
+        "proxy.deleted",
+    ]
+    assert all("proxy_id" not in event["metadata"] for event in events)
+
+    serialized = json.dumps(
+        {
+            "detail": detail.json(),
+            "list": listed.json(),
+            "updated": updated.json(),
+            "assigned": assigned.json(),
+            "random_assigned": random_assigned.json(),
+            "bulk_checked": bulk_checked.json(),
+            "events": events,
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+        "hiddenpass",
+    ):
+        assert leaked not in serialized
 
 
 def test_proxy_api_responses_redact_persisted_sensitive_selection_fields(app_client: TestClient):

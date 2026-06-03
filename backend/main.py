@@ -780,6 +780,7 @@ def _tag_responses(tags: object) -> list[TagResponse]:
 
 def _proxy_response(proxy: dict) -> ProxyResponse:
     safe = dict(proxy)
+    safe["id"] = _public_proxy_identifier(safe.get("id"))
     safe["url"] = redact_proxy_asset_url(str(safe["url"]))
     safe["provider"] = _public_proxy_provider(safe.get("provider"))
     safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
@@ -811,7 +812,7 @@ def _profile_response(profile: dict) -> ProfileResponse:
 
 def _proxy_audit_metadata(proxy: dict, *, updated_fields: list[str] | None = None) -> dict:
     metadata = {
-        "proxy_id": str(proxy["id"]),
+        "proxy_id": _public_uuid_identifier(proxy.get("id")),
         "name": _public_audit_name(proxy.get("name")),
         "provider": _public_proxy_provider(proxy.get("provider")),
         "country_code": public_geoip_country_code(proxy.get("country_code")),
@@ -819,7 +820,7 @@ def _proxy_audit_metadata(proxy: dict, *, updated_fields: list[str] | None = Non
     }
     if updated_fields is not None:
         metadata = {
-            "proxy_id": str(proxy["id"]),
+            "proxy_id": _public_uuid_identifier(proxy.get("id")),
             "updated_fields": sorted(updated_fields),
             "tag_count": len(proxy.get("tags") or []),
         }
@@ -1067,6 +1068,16 @@ def _public_profile_identifier(value: object) -> str:
 def _public_profile_result_identifier(value: object, *, exists: bool) -> str:
     if exists:
         return _public_profile_identifier(value)
+    return _public_uuid_identifier(value) or _public_runtime_external_session_id(value) or "unknown"
+
+
+def _public_proxy_identifier(value: object) -> str:
+    return _public_uuid_identifier(value) or "unknown"
+
+
+def _public_proxy_result_identifier(value: object, *, exists: bool) -> str:
+    if exists:
+        return _public_proxy_identifier(value)
     return _public_uuid_identifier(value) or _public_runtime_external_session_id(value) or "unknown"
 
 
@@ -1575,7 +1586,7 @@ async def assign_proxy_to_profiles(proxy_id: str, request: Request):
 
     succeeded = sum(1 for result in results if result.ok)
     response = ProxyAssignResponse(
-        proxy_id=proxy_id,
+        proxy_id=_public_proxy_identifier(proxy.get("id")),
         proxy=_proxy_response(proxy),
         total=len(req.profile_ids),
         succeeded=succeeded,
@@ -1583,14 +1594,15 @@ async def assign_proxy_to_profiles(proxy_id: str, request: Request):
         results=results,
     )
     if succeeded:
+        audit_metadata = {
+            "proxy_id": _public_uuid_identifier(proxy.get("id")),
+            "profile_count": len(req.profile_ids),
+            "assigned_count": succeeded,
+            "missing_profile_count": len(req.profile_ids) - succeeded,
+        }
         _audit_bulk_event(
             "proxy.assigned",
-            {
-                "proxy_id": proxy_id,
-                "profile_count": len(req.profile_ids),
-                "assigned_count": succeeded,
-                "missing_profile_count": len(req.profile_ids) - succeeded,
-            },
+            {key: value for key, value in audit_metadata.items() if value is not None},
         )
     return response
 
@@ -1668,7 +1680,7 @@ async def assign_random_proxy_to_profiles(request: Request):
                 profile_id=_public_profile_result_identifier(profile_id, exists=True),
                 ok=True,
                 error=None,
-                proxy_id=str(chosen["id"]),
+                proxy_id=_public_proxy_identifier(chosen.get("id")),
                 proxy=_proxy_response(chosen),
             )
         )
@@ -1732,7 +1744,7 @@ async def bulk_check_proxies(request: Request):
         if not proxy:
             results.append(
                 ProxyBulkCheckResult(
-                    proxy_id=proxy_id,
+                    proxy_id=_public_proxy_result_identifier(proxy_id, exists=False),
                     ok=False,
                     error="Proxy not found",
                     proxy=None,
@@ -1744,7 +1756,7 @@ async def bulk_check_proxies(request: Request):
         ok = updated.get("last_check_status") == "good"
         results.append(
             ProxyBulkCheckResult(
-                proxy_id=proxy_id,
+                proxy_id=_public_proxy_result_identifier(proxy_id, exists=True),
                 ok=ok,
                 error=None if ok else updated.get("last_check_error") or _PROXY_CHECK_ERROR_DETAIL,
                 proxy=_proxy_response(updated),

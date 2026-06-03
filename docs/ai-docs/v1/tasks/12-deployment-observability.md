@@ -3512,3 +3512,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 profile/health audit profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Proxy asset id guardrail
+
+背景：
+
+- Proxy Manager、proxy assignment、random assignment 和 bulk check 都是 proxy-country release gate 的准备与证据路径。
+- 继续复查发现 proxy asset response、fixed/random assignment result、bulk check result 和 proxy CRUD/assignment audit metadata 仍直接使用 proxy asset id。
+- 如果历史/手工 DB row 含有非 UUID proxy id，这些 API/audit 边界会把 URL/header/token 风格 id 文本带入低敏 release evidence。
+
+已覆盖：
+
+- Proxy list/detail/update response 的 `id` 现在只保留 canonical UUID；非 UUID 历史/手工 id 折叠为 `unknown`。
+- Fixed proxy assignment response 顶层 `proxy_id` 和 nested proxy response id 使用同一 public proxy id。
+- Random proxy assignment per-result `proxy_id` 和 nested proxy response id 使用同一 public proxy id。
+- Proxy bulk check existing-result `proxy_id` 和 nested proxy response id 使用同一 public proxy id；missing proxy 的普通低敏 id 仍保持既有语义，敏感/非公开 missing id 折叠为 `unknown`。
+- Proxy CRUD audit 和 fixed assignment audit metadata 只保留 canonical UUID proxy id；非 UUID proxy id 会省略。
+- 正常 UUID proxy CRUD、audit、bulk check、fixed assignment、random assignment、provider/country/tag filtering 和 credential redaction 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_asset_responses_and_audits_sanitize_persisted_proxy_id -q
+# RED: 1 failed；proxy detail response id 直接保留非 UUID proxy id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_asset_responses_and_audits_sanitize_persisted_proxy_id -q
+# 1 passed in 0.99s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_api.py -q -k "proxy_asset_responses_and_audits_sanitize_persisted_proxy_id or proxy_crud_api or proxy_crud_audit or proxy_assign or random_proxy_assignment or proxy_bulk_check or proxy_assignment_responses"
+# 19 passed, 256 deselected in 2.75s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 610 passed in 36.73s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.03s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 proxy asset id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

@@ -2612,6 +2612,47 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Proxy asset id guardrail
+
+背景：
+
+- Release regression 的 Proxy Manager / proxy-country 准备路径会读取 proxy list/detail、执行 fixed/random assignment、bulk check，并抽查对应 audit。
+- 继续复查发现这些边界会保留历史/手工污染的非 UUID proxy asset id。
+- 普通 DB 生成的 UUID proxy id 不受影响，但污染 id 会污染低敏 release evidence。
+
+已覆盖：
+
+- Proxy list/detail/update response id 改为 UUID-only；非 UUID 命中值返回 `unknown`。
+- Fixed proxy assignment response 顶层 `proxy_id`、nested proxy id、assignment audit metadata 使用 public proxy id。
+- Random proxy assignment result `proxy_id` 和 nested proxy id 使用 public proxy id。
+- Bulk check result `proxy_id` 和 nested proxy id 使用 public proxy id；ordinary missing proxy id 保持既有语义。
+- Proxy CRUD audit metadata 只保留 canonical UUID proxy id。
+- 正常 proxy CRUD、audit、fixed/random assignment、bulk check 和 frontend gates 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py::test_proxy_asset_responses_and_audits_sanitize_persisted_proxy_id -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.99s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxies.py backend/tests/test_api.py -q -k "proxy_asset_responses_and_audits_sanitize_persisted_proxy_id or proxy_crud_api or proxy_crud_audit or proxy_assign or random_proxy_assignment or proxy_bulk_check or proxy_assignment_responses"
+# 19 passed, 256 deselected in 2.75s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 610 passed in 36.73s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.03s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile/health audit profile id guardrail
 
 背景：
