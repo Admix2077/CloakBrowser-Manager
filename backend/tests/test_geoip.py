@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -120,6 +122,29 @@ def test_geoip_provider_failure_warning_does_not_log_raw_response_message(
     assert "source=ip-api" in caplog.text
     assert "geoip-super-secret" not in caplog.text
     assert "rate limited" not in caplog.text
+
+
+def test_geoip_result_as_dict_filters_sensitive_public_fields():
+    result = geoip.GeoIPResult(
+        timezone="https://timezone.example/check?token=geoip-secret",
+        locale="Authorization=Bearer geoip-secret",
+        ip="203.0.113.20",
+        country_code="JP?token=geoip-secret",
+        source="qa",
+    )
+
+    data = result.as_dict()
+
+    assert data == {
+        "timezone": None,
+        "locale": None,
+        "ip": "203.0.113.20",
+        "country_code": None,
+        "source": "qa",
+    }
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in ("timezone.example", "geoip-secret", "Authorization", "Bearer"):
+        assert leaked not in serialized
 
 
 @pytest.mark.asyncio

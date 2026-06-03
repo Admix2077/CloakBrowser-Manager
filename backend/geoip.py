@@ -11,6 +11,7 @@ import re
 import time
 from dataclasses import dataclass
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -43,11 +44,57 @@ COUNTRY_LOCALE_MAP: dict[str, str] = {
 
 _transport_for_tests: httpx.AsyncBaseTransport | None = None
 _cache: dict[str, tuple[float, "GeoIPResult"]] = {}
+_PUBLIC_GEOIP_COUNTRY_CODE_RE = re.compile(r"^[A-Za-z]{2}$")
+_PUBLIC_GEOIP_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2,8}|\d{3})){0,2}$")
+_PUBLIC_GEOIP_TIMEZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+){0,3}$")
 _PUBLIC_GEOIP_SOURCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 _SENSITIVE_GEOIP_SOURCE_RE = re.compile(
     r"https?://|socks5://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
     re.IGNORECASE,
 )
+
+
+def public_geoip_country_code(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    country_code = value.strip()
+    if not _PUBLIC_GEOIP_COUNTRY_CODE_RE.fullmatch(country_code):
+        return None
+    return country_code.upper()
+
+
+def public_geoip_locale(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    locale = value.strip().replace("_", "-")
+    if not _PUBLIC_GEOIP_LOCALE_RE.fullmatch(locale):
+        return None
+
+    parts = locale.split("-")
+    canonical = [parts[0].lower()]
+    for part in parts[1:]:
+        if part.isalpha() and len(part) == 2:
+            canonical.append(part.upper())
+        elif part.isalpha() and len(part) == 4:
+            canonical.append(part.title())
+        elif part.isalpha():
+            canonical.append(part.lower())
+        else:
+            canonical.append(part)
+    return "-".join(canonical)
+
+
+def public_geoip_timezone(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    timezone = value.strip()
+    if not timezone or not _PUBLIC_GEOIP_TIMEZONE_RE.fullmatch(timezone):
+        return None
+    try:
+        ZoneInfo(timezone)
+    except ZoneInfoNotFoundError:
+        return None
+    return timezone
 
 
 def public_geoip_source(value: object) -> str | None:
@@ -75,10 +122,10 @@ class GeoIPResult:
 
     def as_dict(self) -> dict[str, str | None]:
         return {
-            "timezone": self.timezone,
-            "locale": self.locale,
+            "timezone": public_geoip_timezone(self.timezone),
+            "locale": public_geoip_locale(self.locale),
             "ip": self.ip,
-            "country_code": self.country_code,
+            "country_code": public_geoip_country_code(self.country_code),
             "source": public_geoip_source(self.source),
         }
 
@@ -160,10 +207,10 @@ def _parse_ip_api_response(data: object) -> GeoIPResult:
 
     timezone = data.get("timezone") if isinstance(data.get("timezone"), str) else None
     country = data.get("countryCode") if isinstance(data.get("countryCode"), str) else None
-    country_code = country.upper() if country else None
-    locale = COUNTRY_LOCALE_MAP.get(country_code) if country_code else None
+    country_code = public_geoip_country_code(country)
+    locale = public_geoip_locale(COUNTRY_LOCALE_MAP.get(country_code)) if country_code else None
     return GeoIPResult(
-        timezone=timezone,
+        timezone=public_geoip_timezone(timezone),
         locale=locale,
         ip=_valid_ip(data.get("query")),
         country_code=country_code,
@@ -193,10 +240,10 @@ def _parse_ipapi_response(data: object) -> GeoIPResult:
 
     timezone = data.get("timezone") if isinstance(data.get("timezone"), str) else None
     country = data.get("country_code") if isinstance(data.get("country_code"), str) else None
-    country_code = country.upper() if country else None
+    country_code = public_geoip_country_code(country)
     return GeoIPResult(
-        timezone=timezone,
-        locale=_first_language_locale(data.get("languages"), country_code),
+        timezone=public_geoip_timezone(timezone),
+        locale=public_geoip_locale(_first_language_locale(data.get("languages"), country_code)),
         ip=_valid_ip(data.get("ip")),
         country_code=country_code,
         source="ipapi.co",
@@ -215,10 +262,10 @@ def _parse_ipwhois_response(data: object) -> GeoIPResult:
     elif isinstance(timezone_data, str):
         timezone = timezone_data
     country = data.get("country_code") if isinstance(data.get("country_code"), str) else None
-    country_code = country.upper() if country else None
+    country_code = public_geoip_country_code(country)
     return GeoIPResult(
-        timezone=timezone,
-        locale=_first_language_locale(data.get("languages"), country_code),
+        timezone=public_geoip_timezone(timezone),
+        locale=public_geoip_locale(_first_language_locale(data.get("languages"), country_code)),
         ip=_valid_ip(data.get("ip")),
         country_code=country_code,
         source="ipwho.is",
@@ -273,13 +320,14 @@ async def resolve_network_geo(proxy_url: str | None = None) -> GeoIPResult:
                 continue
 
             _cache[key] = (time.monotonic(), result)
+            public_result = result.as_dict()
             logger.debug(
                 "GeoIP resolved source=%s ip=%s country=%s timezone=%s locale=%s",
-                result.source,
-                result.ip,
-                result.country_code,
-                result.timezone,
-                result.locale,
+                public_result["source"],
+                public_result["ip"],
+                public_result["country_code"],
+                public_result["timezone"],
+                public_result["locale"],
             )
             return result
 
@@ -310,16 +358,17 @@ async def resolve_profile_network_fingerprint(profile: dict[str, Any]) -> dict[s
         return resolved
 
     geo = await resolve_network_geo(_normalize_proxy_url(profile.get("proxy") or None))
-    if any((geo.timezone, geo.locale, geo.ip, geo.country_code)):
-        resolved["_geoip_result"] = geo.as_dict()
+    geo_data = geo.as_dict()
+    if any((geo_data["timezone"], geo_data["locale"], geo_data["ip"], geo_data["country_code"])):
+        resolved["_geoip_result"] = geo_data
     if timezone:
         resolved["timezone"] = timezone
-    elif geo.timezone:
-        resolved["timezone"] = geo.timezone
+    elif geo_data["timezone"]:
+        resolved["timezone"] = geo_data["timezone"]
 
     if locale:
         resolved["locale"] = locale
-    elif geo.locale:
-        resolved["locale"] = geo.locale
+    elif geo_data["locale"]:
+        resolved["locale"] = geo_data["locale"]
 
     return resolved

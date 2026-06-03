@@ -2003,3 +2003,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 provider preset storage/response fields、random assign selection semantics、CSV import preset application、profile/proxy CRUD behavior、audit event schema、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
 - 不记录或公开 provider preset name/provider/notes/tag text、provider URL/host/query token、Authorization/Bearer、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 GeoIP success field public-value guardrail
+
+背景：
+
+- GeoIP success fields 会进入 `GeoIPResult.as_dict()`、proxy `last_check_*`、profile `last_geoip_*`、profile health response、health audit metadata 和 profile launch 的 GeoIP 填充边界。
+- 真实 provider 当前返回低敏 country/timezone/locale，但测试替身、未来 provider 或历史 DB 值若把 URL、query token、Authorization/Bearer、provider host/path 文本塞进 `country_code`、`timezone` 或 `locale`，成功路径会把这些字段持久化或回显。
+
+已覆盖：
+
+- 新增共享 `public_geoip_country_code`、`public_geoip_timezone`、`public_geoip_locale`：
+  - `country_code` 只保留 2 字母 ISO 风格值并大写。
+  - `timezone` 只保留可由 `zoneinfo` 解析的 IANA/UTC 风格值。
+  - `locale` 只保留短 BCP47 风格值并规范化大小写。
+- `GeoIPResult.as_dict()`、GeoIP provider parser、profile network fingerprint 填充、profile health 新 lookup、persisted health cache response、health audit metadata 和 proxy check success write/read paths 都使用低敏字段。
+- 非公开字段降为 `None`，不以 `unknown` 字符串替代，因为 country/timezone/locale 是可选事实字段。
+- IP、source 既有语义保持；source 继续使用 `public_geoip_source`。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# RED: 4 failed；GeoIPResult.as_dict、health/check、health GET 和 proxy check success 原样暴露 sensitive country/timezone/locale
+
+. .venv/bin/activate && python -m pytest backend/tests/test_geoip.py backend/tests/test_health.py backend/tests/test_proxies.py -q
+# 71 passed in 4.54s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 564 passed in 32.87s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.13s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、proxy lookup order、provider URLs、profile schema 或 audit event schema。
+- 不记录或公开 raw GeoIP country/timezone/locale 中的 provider URL/host/path/query token、Authorization/Bearer、headers、cookies、local storage、proxy credentials、viewer token、runtime service token、automation payload、profile dir 或页面内容。

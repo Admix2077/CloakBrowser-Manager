@@ -410,6 +410,71 @@ def test_proxy_check_redacts_sensitive_success_source(
         assert leaked not in json.dumps(stored, sort_keys=True)
 
 
+def test_proxy_check_redacts_sensitive_success_geoip_fields(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sensitive_timezone = "https://timezone.example/check?token=proxy-geoip-secret"
+    sensitive_locale = "Authorization=Bearer proxy-geoip-secret"
+    sensitive_country = "JP?token=proxy-geoip-secret"
+
+    async def fake_resolve(proxy_url: str | None):
+        return GeoIPResult(
+            timezone=sensitive_timezone,
+            locale=sensitive_locale,
+            ip="203.0.113.8",
+            country_code=sensitive_country,
+            source="qa",
+        )
+
+    monkeypatch.setattr(main, "resolve_network_geo", fake_resolve)
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Sensitive geo fields",
+            "url": "socks5://user:hiddenpass@geo-fields.proxy.example:1080",
+        },
+    )
+    proxy_id = create.json()["id"]
+
+    resp = app_client.post(f"/api/proxies/{proxy_id}/check")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["last_check_status"] == "good"
+    assert data["last_check_ip"] == "203.0.113.8"
+    assert data["last_check_country_code"] is None
+    assert data["last_check_timezone"] is None
+    assert data["last_check_locale"] is None
+    assert data["last_check_source"] == "qa"
+    for leaked in (
+        "timezone.example",
+        "proxy-geoip-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_timezone,
+        sensitive_locale,
+        sensitive_country,
+    ):
+        assert leaked not in json.dumps(data, sort_keys=True)
+
+    stored = db.get_proxy(proxy_id)
+    assert stored is not None
+    assert stored["last_check_country_code"] is None
+    assert stored["last_check_timezone"] is None
+    assert stored["last_check_locale"] is None
+    for leaked in (
+        "timezone.example",
+        "proxy-geoip-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_timezone,
+        sensitive_locale,
+        sensitive_country,
+    ):
+        assert leaked not in json.dumps(stored, sort_keys=True)
+
+
 def test_proxy_check_records_failure_without_leaking_credentials(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

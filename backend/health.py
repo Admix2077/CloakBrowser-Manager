@@ -8,7 +8,13 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from .browser_manager import _normalize_proxy, _validate_proxy
-from .geoip import GeoIPResult, public_geoip_source
+from .geoip import (
+    GeoIPResult,
+    public_geoip_country_code,
+    public_geoip_locale,
+    public_geoip_source,
+    public_geoip_timezone,
+)
 
 HealthStatus = Literal["good", "warning", "error", "unknown"]
 WarningSeverity = Literal["info", "warning", "error"]
@@ -83,23 +89,19 @@ def _nonempty(value: object) -> str | None:
 
 
 def _profile_geoip(profile: dict[str, Any]) -> HealthGeoIP | None:
-    if not any(
-        _nonempty(profile.get(field))
-        for field in (
-            "last_geoip_ip",
-            "last_geoip_country_code",
-            "last_geoip_timezone",
-            "last_geoip_locale",
-            "last_geoip_source",
-        )
-    ):
+    ip = _nonempty(profile.get("last_geoip_ip"))
+    country_code = public_geoip_country_code(profile.get("last_geoip_country_code"))
+    timezone = public_geoip_timezone(profile.get("last_geoip_timezone"))
+    locale = public_geoip_locale(profile.get("last_geoip_locale"))
+    source = public_geoip_source(profile.get("last_geoip_source"))
+    if not any((ip, country_code, timezone, locale, source)):
         return None
     return HealthGeoIP(
-        ip=_nonempty(profile.get("last_geoip_ip")),
-        country_code=_nonempty(profile.get("last_geoip_country_code")),
-        timezone=_nonempty(profile.get("last_geoip_timezone")),
-        locale=_nonempty(profile.get("last_geoip_locale")),
-        source=public_geoip_source(profile.get("last_geoip_source")),
+        ip=ip,
+        country_code=country_code,
+        timezone=timezone,
+        locale=locale,
+        source=source,
         resolved_at=_nonempty(profile.get("last_geoip_resolved_at")),
     )
 
@@ -125,13 +127,16 @@ def _is_geoip_stale(resolved_at: str | None, checked_at: str) -> bool:
 
 
 def _geoip_from_result(result: GeoIPResult) -> HealthGeoIP | None:
-    if not any((result.ip, result.country_code, result.timezone, result.locale)):
+    country_code = public_geoip_country_code(result.country_code)
+    timezone = public_geoip_timezone(result.timezone)
+    locale = public_geoip_locale(result.locale)
+    if not any((result.ip, country_code, timezone, locale)):
         return None
     return HealthGeoIP(
         ip=result.ip,
-        country_code=result.country_code,
-        timezone=result.timezone,
-        locale=result.locale,
+        country_code=country_code,
+        timezone=timezone,
+        locale=locale,
         source=public_geoip_source(result.source),
         resolved_at=now_iso(),
     )

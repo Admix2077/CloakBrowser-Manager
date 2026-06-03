@@ -308,6 +308,79 @@ def test_health_check_redacts_sensitive_geoip_source(app_client: TestClient):
         assert leaked not in json.dumps(events[0], sort_keys=True)
 
 
+def test_health_check_redacts_sensitive_geoip_success_fields(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Health Sensitive Geo Fields"})
+    pid = create.json()["id"]
+    sensitive_timezone = "https://timezone.example/check?token=health-geoip-secret"
+    sensitive_locale = "Authorization=Bearer health-geoip-secret"
+    sensitive_country = "JP?token=health-geoip-secret"
+
+    with patch(
+        "backend.main.resolve_network_geo",
+        new=AsyncMock(
+            return_value=GeoIPResult(
+                timezone=sensitive_timezone,
+                locale=sensitive_locale,
+                ip="203.0.113.20",
+                country_code=sensitive_country,
+                source="qa",
+            )
+        ),
+    ):
+        resp = app_client.post(f"/api/profiles/{pid}/health/check")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["geoip"]["ip"] == "203.0.113.20"
+    assert body["geoip"]["country_code"] is None
+    assert body["geoip"]["timezone"] is None
+    assert body["geoip"]["locale"] is None
+    assert body["geoip"]["source"] == "qa"
+    for leaked in (
+        "timezone.example",
+        "health-geoip-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_timezone,
+        sensitive_locale,
+        sensitive_country,
+    ):
+        assert leaked not in json.dumps(body, sort_keys=True)
+
+    profile = db.get_profile(pid)
+    assert profile is not None
+    assert profile["last_geoip_ip"] == "203.0.113.20"
+    assert profile["last_geoip_country_code"] is None
+    assert profile["last_geoip_timezone"] is None
+    assert profile["last_geoip_locale"] is None
+    assert profile["last_geoip_source"] == "qa"
+    for leaked in (
+        "timezone.example",
+        "health-geoip-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_timezone,
+        sensitive_locale,
+        sensitive_country,
+    ):
+        assert leaked not in json.dumps(dict(profile), sort_keys=True)
+
+    events = _health_audit_events()
+    assert len(events) == 1
+    assert events[0]["metadata"].get("geoip_source") == "qa"
+    assert "geoip_country_code" not in events[0]["metadata"]
+    for leaked in (
+        "timezone.example",
+        "health-geoip-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_timezone,
+        sensitive_locale,
+        sensitive_country,
+    ):
+        assert leaked not in json.dumps(events[0], sort_keys=True)
+
+
 def test_health_get_redacts_persisted_sensitive_geoip_source(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Health Existing Source"})
     pid = create.json()["id"]
@@ -332,6 +405,44 @@ def test_health_get_redacts_persisted_sensitive_geoip_source(app_client: TestCli
     body = resp.json()
     assert body["geoip"]["source"] == "unknown"
     for leaked in ("geo.example", "super-secret", "Authorization", "Bearer", sensitive_source):
+        assert leaked not in json.dumps(body, sort_keys=True)
+
+
+def test_health_get_redacts_persisted_sensitive_geoip_fields(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "Health Existing Geo Fields"})
+    pid = create.json()["id"]
+    sensitive_timezone = "https://timezone.example/check?token=stored-geoip-secret"
+    sensitive_locale = "Authorization=Bearer stored-geoip-secret"
+    sensitive_country = "JP?token=stored-geoip-secret"
+    db.update_profile_geoip_result(
+        pid,
+        {
+            "ip": "203.0.113.20",
+            "country_code": sensitive_country,
+            "timezone": sensitive_timezone,
+            "locale": sensitive_locale,
+            "source": "qa",
+        },
+    )
+
+    resp = app_client.get(f"/api/profiles/{pid}/health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["geoip"]["ip"] == "203.0.113.20"
+    assert body["geoip"]["country_code"] is None
+    assert body["geoip"]["timezone"] is None
+    assert body["geoip"]["locale"] is None
+    assert body["geoip"]["source"] == "qa"
+    for leaked in (
+        "timezone.example",
+        "stored-geoip-secret",
+        "Authorization",
+        "Bearer",
+        sensitive_timezone,
+        sensitive_locale,
+        sensitive_country,
+    ):
         assert leaked not in json.dumps(body, sort_keys=True)
 
 
