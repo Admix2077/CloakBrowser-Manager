@@ -6527,3 +6527,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile persistence、profile proxy raw value、proxy persistence、proxy assignment/random assignment payload、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager assignment profile current proxy release-evidence 边界。
+
+## 2026-06-04 Profile CSV preview proxy release-evidence guardrail
+
+背景：
+
+- Profile CSV import preview table 的 proxy 列会出现在 release regression 截图/文本 evidence 中。
+- 正常 endpoint host/port 仍需要展示；但污染 preview row proxy 不应进入 visible text 或 title evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Profile CSV preview row proxy 使用 public preview label。
+- URL credentials、Authorization/Bearer、`token=`、path 和 IP-style proxy 片段不会进入 table text/title evidence。
+- Raw CSV 仍用于 `previewProfileImport` 和 `importProfiles`；preview textarea 脱敏和 import payload 保存继续分离。
+- Row validation errors、profile metadata columns、tag rendering、backend preview/import contract 和 profile persistence 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx -t "redacts preview row proxy evidence"
+# RED then GREEN；旧实现把污染 row proxy 写入 Profile CSV preview table evidence
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx src/lib/errorDisplay.test.ts src/lib/profileDisplay.test.ts
+# 2 files passed, 9 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile proxy raw value、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV preview proxy release-evidence 边界。

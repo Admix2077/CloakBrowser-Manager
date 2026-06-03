@@ -9,7 +9,6 @@ import {
   type ProfileImportPreviewRow,
 } from "../lib/api";
 import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
-import { redactUrlCredentials } from "../lib/profileDisplay";
 import { TagBadge } from "./Badge";
 
 const PROFILE_CSV_SAMPLE = "name,proxy,tags,notes,template,platform,locale,timezone";
@@ -264,7 +263,7 @@ function ImportCountPill({
 
 function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | ProfileImportResult }) {
   const profile = row.profile;
-  const safeProxy = redactUrlCredentials(profile?.proxy ?? row.source.proxy ?? "-");
+  const proxy = profile?.proxy ?? row.source.proxy ?? "-";
   const name = profile?.name ?? row.source.name ?? "-";
   const platform = profile?.platform ?? row.source.platform ?? "-";
   const locale = profile?.locale ?? row.source.locale ?? "-";
@@ -276,6 +275,7 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
   const safeLocale = publicProfileCsvPreviewLabel(locale);
   const safeTimezone = publicProfileCsvPreviewLabel(timezone);
   const safeTemplateId = templateId ? publicProfileCsvPreviewLabel(templateId) : null;
+  const safeProxy = publicProfileCsvPreviewLabel(proxy);
 
   return (
     <tr className={`shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors ${

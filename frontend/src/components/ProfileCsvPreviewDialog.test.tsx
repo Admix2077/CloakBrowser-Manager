@@ -268,4 +268,73 @@ describe("ProfileCsvPreviewDialog", () => {
       expect(renderedEvidence).not.toContain(leaked);
     }
   });
+
+  it("redacts preview row proxy evidence without changing submitted import CSV", async () => {
+    const leakMarker = "profile-csv-proxy-secret";
+    const rawProxy =
+      "http://user:hiddenpass@preview.proxy.example:8080 " +
+      `Authorization=Bearer ${leakMarker} token=${leakMarker} /data/profile-row-proxy 203.0.113.125`;
+    const rawCsv = [
+      "name,proxy",
+      `Imported Proxy,"${rawProxy}"`,
+    ].join("\n");
+    mockPreviewProfileImport.mockResolvedValueOnce({
+      total: 1,
+      valid: 1,
+      invalid: 0,
+      rows: [
+        {
+          line_number: 2,
+          ok: true,
+          errors: [],
+          source: {
+            name: "Imported Proxy",
+            proxy: rawProxy,
+          },
+          profile: {
+            ...validPreview.rows[0].profile!,
+            name: "Imported Proxy",
+            proxy: rawProxy,
+          },
+        },
+      ],
+    });
+    mockImportProfiles.mockResolvedValueOnce({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+    });
+
+    render(<ProfileCsvPreviewDialog onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Profile CSV content"), {
+      target: { value: rawCsv },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview CSV" }));
+
+    const table = await screen.findByRole("table", { name: "Profile CSV preview" });
+    expect(within(table).getByText("http://preview.proxy.example:8080 [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      table.textContent,
+      ...Array.from(table.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "hiddenpass",
+      "user:",
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-row-proxy",
+      "203.0.113.125",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create valid profiles" }));
+    await waitFor(() => expect(mockImportProfiles).toHaveBeenCalledWith(rawCsv));
+  });
 });
