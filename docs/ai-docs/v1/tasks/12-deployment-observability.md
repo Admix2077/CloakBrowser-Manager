@@ -6332,3 +6332,34 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 bulk action API 调用、profile health check/export/tag/delete semantics、ProfileTable selection behavior、profile API schema、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Cookie export download filename guardrail
+
+背景：
+
+- ProfileCookieManager 的 JSON/Netscape cookie export 会创建本地下载文件名。
+- 旧实现直接把 `profile.id` 拼入 `anchor.download`，如果组件收到历史/异常 profile id，Authorization/Bearer、`token=`、本地路径或 IP 字面量可能进入下载文件名 evidence。
+- Cookie 文档内容本身仍是用户显式导出的敏感数据；本轮只收 Manager UI/download metadata 边界。
+
+已覆盖：
+
+- Cookie export 下载文件名现在只保留常规短 ASCII profile id 段；非公开 id 回退为 `unknown`。
+- Cookie import/export API 调用仍使用原始 profile id，避免破坏运行中 profile 查找。
+- JSON/Netscape cookie export、explicit confirmation、summary counts 和固定错误文案保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx -t "uses a public profile id"
+# RED: 旧实现把污染 profile id 原样写入 download filename；GREEN: 1 passed, 6 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
+# 7 passed
+```
+
+边界：
+
+- 这是 ProfileCookieManager download metadata release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 cookie import/export API payload、cookie document/text contents、explicit export confirmation、profile API schema、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

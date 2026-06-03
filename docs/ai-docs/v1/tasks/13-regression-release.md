@@ -6014,3 +6014,34 @@ npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、bulk action API semantics、profile health/export/tag/delete semantics、ProfileTable selection behavior、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 BulkActionBar feedback UI release-evidence 边界。
+
+## 2026-06-04 Cookie export download filename release-evidence guardrail
+
+背景：
+
+- Cookie JSON/Netscape export 是 Profile operations 回归路径的一部分，导出动作会创建本地下载文件名。
+- 旧实现把 raw `profile.id` 拼入 `anchor.download`；异常/历史 profile id 可能把 Authorization/Bearer、`token=`、本地路径或 IP 字面量写入 download metadata evidence。
+- Cookie export 内容仍是用户明确导出的敏感数据，本轮只收 Manager 生成的下载文件名。
+
+已覆盖：
+
+- Cookie export download filename 使用 public filename id boundary，普通短 ASCII id 保留，非公开 id 回退 `unknown`。
+- API 调用仍使用原始 profile id，保证运行中 profile cookie import/export 查找不变。
+- JSON/Netscape 导入导出、explicit confirmation、summary counts 和固定错误文案保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx -t "uses a public profile id"
+# RED then GREEN；旧实现把污染 profile id 原样写入 cookie export download filename
+
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
+# 7 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、cookie import/export payload、cookie document/text contents、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Cookie export download filename release-evidence 边界。

@@ -8,6 +8,7 @@ const INVALID_JSON_MESSAGE = "Invalid Cookie JSON document";
 const INVALID_NETSCAPE_MESSAGE = "Invalid Netscape cookie document";
 const IMPORT_FAILED_MESSAGE = "Cookie import failed";
 const EXPORT_FAILED_MESSAGE = "Cookie export failed";
+const PUBLIC_DOWNLOAD_ID_RE = /^[A-Za-z0-9._-]{1,80}$/;
 
 type CookieFormatMode = "json" | "netscape";
 
@@ -303,11 +304,15 @@ function downloadCookieText(
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `cloakbrowser-cookies-${profileId}.${extension}`;
+  anchor.download = `cloakbrowser-cookies-${publicDownloadProfileId(profileId)}.${extension}`;
   anchor.rel = "noopener";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.URL.revokeObjectURL(url);
   return true;
+}
+
+function publicDownloadProfileId(profileId: string): string {
+  return PUBLIC_DOWNLOAD_ID_RE.test(profileId) ? profileId : "unknown";
 }

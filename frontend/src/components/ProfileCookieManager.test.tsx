@@ -221,6 +221,51 @@ describe("ProfileCookieManager", () => {
     expect(manager.textContent).not.toContain("#frag");
   });
 
+  it("uses a public profile id in cookie export download names", async () => {
+    const leakMarker = "cookie-download-token-super-secret";
+    const pollutedProfileId =
+      "profile Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/cookie-profile 203.0.113.58`;
+    mockExportProfileCookies.mockResolvedValueOnce(exportResponse({ profile_id: pollutedProfileId }));
+    const createObjectURL = vi.fn(() => "blob:cookie-export");
+    const revokeObjectURL = vi.fn();
+    let downloadName = "";
+
+    Object.defineProperty(window.URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(window.URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloadName = this.download;
+    });
+
+    render(<ProfileCookieManager profile={profile({ id: pollutedProfileId })} />);
+
+    const manager = screen.getByRole("region", { name: "Cookie management" });
+    fireEvent.click(within(manager).getByLabelText("Confirm cookie export"));
+    fireEvent.click(within(manager).getByRole("button", { name: "Export cookies" }));
+
+    await waitFor(() => expect(mockExportProfileCookies).toHaveBeenCalledWith(pollutedProfileId));
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:cookie-export");
+    expect(downloadName).toBe("cloakbrowser-cookies-unknown.json");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/cookie-profile",
+      "203.0.113.58",
+    ]) {
+      expect(downloadName).not.toContain(leaked);
+    }
+  });
+
   it("imports Netscape cookie text and only renders low-risk summary counts", async () => {
     mockImportProfileCookiesNetscape.mockResolvedValueOnce(importResponse({
       summary: {
