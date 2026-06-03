@@ -4600,3 +4600,42 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 VNC proxy forwarding、RFB filtering、clipboard handling、viewer token validation、runtime session state machine、profile launch、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC release evidence 日志边界。
+
+## 2026-06-03 VNC backend subprotocol release-evidence guardrail
+
+背景：
+
+- VNC release smoke 会查看 proxy connect 成功日志确认 viewer 链路是否建立。
+- 成功日志中的 KasmVNC backend websocket `subprotocol` 来自 backend adapter，正常是 `binary`，但 release evidence 不应直接信任 raw transport 字段。
+- 异常 adapter/fake transport 如果把 token/header 文本放进 `subprotocol`，旧实现会写入日志。
+
+已覆盖：
+
+- VNC proxy connected 日志现在使用 `_public_runtime_viewer_subprotocol(vnc_ws.subprotocol)`。
+- Public backend subprotocol 只允许 `binary`；其它值折叠为 `None`。
+- 正常 client requested subprotocol 选择、KasmVNC connect、VNC frame forwarding、runtime viewer audit metadata 语义保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_connected_log_uses_public_backend_subprotocol -q
+# RED then GREEN；旧实现泄露 Authorization/Bearer/token 风格 backend subprotocol，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc or runtime_viewer" -q
+# 10 passed, 246 deselected in 1.13s
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 37.45s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.61s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 VNC proxy forwarding、RFB filtering、clipboard handling、viewer token validation、runtime session state machine、profile launch、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC connected log release-evidence 边界。

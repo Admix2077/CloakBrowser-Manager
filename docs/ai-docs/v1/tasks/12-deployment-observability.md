@@ -4906,3 +4906,42 @@ git diff --check
 - 这是 VNC proxy log/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 WebSocket accept、VNC forwarding、RFB filtering、clipboard bridge、viewer token、runtime session、profile launch 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 VNC backend subprotocol log guardrail
+
+背景：
+
+- VNC proxy 连接 KasmVNC 成功时会记录 backend websocket `subprotocol`。
+- 正常值是 `binary`，但 backend websocket adapter/fake transport 不应被信任为 release evidence。
+- 原实现直接打印 `vnc_ws.subprotocol`；异常 adapter 如果返回 token/header 风格文本，会进入 VNC release logs。
+
+已覆盖：
+
+- KasmVNC connected 日志现在通过 `_public_runtime_viewer_subprotocol()` 输出 backend subprotocol。
+- 只有 `binary` 保留；其它值折叠为 `None`。
+- Client requested subprotocol、WebSocket accept、VNC forwarding、runtime viewer audit metadata 行为不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_connected_log_uses_public_backend_subprotocol -q
+# RED: 旧实现泄露 Authorization/Bearer/token 风格 backend subprotocol；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc or runtime_viewer" -q
+# 10 passed, 246 deselected in 1.13s
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 37.45s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.61s
+```
+
+边界：
+
+- 这是 VNC proxy connected log/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone、proxy、profile launch、VNC frame forwarding 或 Docker runtime 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

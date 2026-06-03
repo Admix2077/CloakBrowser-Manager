@@ -4538,7 +4538,8 @@ async def _proxy_running_vnc(
         ) as vnc_ws:
             logger.info(
                 "VNC proxy: connected to KasmVNC for %s (subprotocol=%s)",
-                public_profile_id, vnc_ws.subprotocol,
+                public_profile_id,
+                _public_runtime_viewer_subprotocol(vnc_ws.subprotocol),
             )
             if on_connected:
                 on_connected({"subprotocol": subprotocol})
