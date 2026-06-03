@@ -2806,3 +2806,43 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Runtime template profile name guardrail
+
+背景：
+
+- Release runtime smoke 可以通过 `template_id` 创建临时 profile。
+- 旧实现把 caller-controlled `external_session_id` 拼进新 profile name；如果 external id 是 URL/query token/header 风格文本，profile list/detail 会作为 name 语义保留并回显。
+
+已覆盖：
+
+- Template-created runtime profile name 现在只使用 public external session id。
+- 非公开 external id 生成固定低敏名称 `Runtime session`。
+- 正常 `pm-session-*` external id 仍生成 `Runtime <id>`；template field application、launch、runtime session response 和 audit guardrails 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_creates_profile_then_launches backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_external_session_id -q
+# 3 passed in 3.14s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 39 passed in 4.48s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 596 passed in 34.65s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.06s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

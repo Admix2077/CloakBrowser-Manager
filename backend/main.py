@@ -1805,8 +1805,14 @@ async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
         template = db.get_profile_template(req.template_id or "")
         if not template:
             raise HTTPException(status_code=404, detail="Profile template not found")
+        public_external_session_id = _public_runtime_external_session_id(req.external_session_id)
+        runtime_profile_name = (
+            f"Runtime {public_external_session_id}"
+            if public_external_session_id
+            else "Runtime session"
+        )
         profile = db.create_profile(
-            name=f"Runtime {req.external_session_id}",
+            name=runtime_profile_name,
             platform=template.get("platform", "windows"),
             screen_width=template.get("screen_width", 1920),
             screen_height=template.get("screen_height", 1080),

@@ -595,6 +595,55 @@ def test_runtime_session_create_from_template_creates_profile_then_launches(
     launch.assert_awaited_once()
 
 
+def test_runtime_session_create_from_template_sanitizes_generated_profile_name(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    leak_marker = "runtime-template-name-secret"
+    template = app_client.post(
+        "/api/profile-templates",
+        json={
+            "name": "Runtime Template",
+            "platform": "windows",
+            "geoip": False,
+        },
+    )
+    assert template.status_code == 201
+
+    with patch.object(
+        main.browser_mgr,
+        "launch",
+        new=AsyncMock(return_value=_mock_running_profile()),
+    ):
+        resp = app_client.post(
+            "/api/runtime/sessions",
+            headers=runtime_headers,
+            json={
+                "external_session_id": (
+                    f"https://runtime-template.example/session?token={leak_marker} "
+                    f"Authorization=Bearer {leak_marker}"
+                ),
+                "template_id": template.json()["id"],
+                "lease_seconds": 600,
+            },
+        )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["external_session_id"] == "unknown"
+    created_profile = app_client.get(f"/api/profiles/{data['profile_id']}").json()
+    assert created_profile["name"] == "Runtime session"
+    serialized = json.dumps({"session": data, "profile": created_profile}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "runtime-template.example",
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_session_create_rejects_missing_or_ambiguous_profile_source(
     app_client: TestClient,
     runtime_headers: dict[str, str],

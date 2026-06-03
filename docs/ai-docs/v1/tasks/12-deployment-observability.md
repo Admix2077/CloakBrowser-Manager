@@ -3035,3 +3035,46 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 runtime session id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Runtime template profile name public-value guardrail
+
+背景：
+
+- Runtime session 使用 `template_id` 创建临时 profile 时，会自动生成 profile name。
+- 旧实现直接拼接 caller-controlled `external_session_id`，即使 runtime response/audit 顶层 external id 已过滤，profile list/detail 仍会保留 name 语义并可能回显 URL/query token/header-like external id。
+
+已覆盖：
+
+- Template-created runtime profile name 现在只拼接 public external session id。
+- 非公开 external id 不进入 profile name；生成名称固定为 `Runtime session`。
+- 正常 public external id 仍生成 `Runtime <external_session_id>`，template platform/screen/geoip 应用、launch、runtime session persistence 和 existing profile_id flow 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name -q
+# RED: 1 failed；template-created profile name 直接保留 URL/header/token-like external id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name -q
+# 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_create_from_template_creates_profile_then_launches backend/tests/test_session_broker.py::test_runtime_session_create_from_template_sanitizes_generated_profile_name backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_external_session_id -q
+# 3 passed in 3.14s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 39 passed in 4.48s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 596 passed in 34.65s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.06s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 runtime template profile name guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
