@@ -487,7 +487,7 @@ export function ProxyManagerPage({
         : await api.createProxyProviderPreset(payload);
 
       setProviderPresets((current) => upsertProviderPreset(current, savedPreset));
-      setProviderPresetNotice(`Saved provider preset ${savedPreset.name}`);
+      setProviderPresetNotice(`Saved provider preset ${publicProviderPresetLabel(savedPreset.name)}`);
       setEditingProviderPresetId(savedPreset.id);
       setProviderPresetForm(providerPresetToForm(savedPreset));
     } catch (err) {
@@ -512,7 +512,7 @@ export function ProxyManagerPage({
         setEditingProviderPresetId(null);
         setProviderPresetForm(emptyProviderPresetForm());
       }
-      setProviderPresetNotice(`Deleted provider preset ${preset.name}`);
+      setProviderPresetNotice(`Deleted provider preset ${publicProviderPresetLabel(preset.name)}`);
     } catch (err) {
       setProviderPresetError(`Delete failed: ${publicErrorMessage(err, "Unable to delete provider preset")}`);
     } finally {
@@ -1244,6 +1244,8 @@ function ProviderPresetRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const safeName = publicProviderPresetLabel(preset.name);
+  const safeNotes = preset.notes ? publicErrorText(preset.notes) : null;
   const tagText = preset.tags.map((tag) => tag.tag).join(", ") || "-";
   const summary = [preset.provider, preset.country_code, tagText !== "-" ? tagText : null]
     .filter(Boolean)
@@ -1258,8 +1260,8 @@ function ProviderPresetRow({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-slate-950" title={preset.name}>
-            {preset.name}
+          <div className="truncate text-sm font-semibold text-slate-950" title={safeName}>
+            {safeName}
           </div>
           <div className="mt-1 truncate text-xs text-slate-500" title={summary}>
             {summary}
@@ -1271,7 +1273,7 @@ function ProviderPresetRow({
             className="icon-action h-7 w-7"
             onClick={onEdit}
             disabled={disabled || deleting}
-            aria-label={`Edit ${preset.name}`}
+            aria-label={`Edit ${safeName}`}
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -1280,7 +1282,7 @@ function ProviderPresetRow({
             className="icon-action h-7 w-7 text-red-500 hover:border-red-200 hover:text-red-700"
             onClick={onDelete}
             disabled={disabled || deleting}
-            aria-label={`Delete ${preset.name}`}
+            aria-label={`Delete ${safeName}`}
           >
             {deleting ? (
               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
@@ -1311,9 +1313,9 @@ function ProviderPresetRow({
           </span>
         ))}
       </div>
-      {preset.notes && (
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500" title={preset.notes}>
-          {preset.notes}
+      {safeNotes && (
+        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500" title={safeNotes}>
+          {safeNotes}
         </p>
       )}
     </div>
@@ -2235,6 +2237,10 @@ function emptyProviderPresetForm(): ProviderPresetFormState {
     tags: "",
     notes: "",
   };
+}
+
+function publicProviderPresetLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
 }
 
 function providerPresetToForm(preset: ProxyProviderPreset): ProviderPresetFormState {

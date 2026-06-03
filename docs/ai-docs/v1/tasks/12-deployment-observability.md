@@ -6067,3 +6067,42 @@ npm --prefix frontend run build
 - 这是 ProxyResponse/Proxy Manager release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 proxy CRUD request schema、proxy asset URL redaction、provider/country matching、bulk check、random assignment、GeoIP lookup、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Provider preset card public text guardrail
+
+背景：
+
+- Proxy Manager 的 provider preset 管理弹窗会把 preset `name` / `notes` 显示到卡片文本、tooltip 和 edit/delete aria-label。
+- 后端 selection/timestamp/id 边界已覆盖 provider preset 的部分 API evidence，但前端卡片仍会原样渲染历史/手工污染的 `name` / `notes`。
+- 这些字段可能包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，属于 Manager 可控的 UI release evidence 边界。
+
+已覆盖：
+
+- Provider preset 卡片中的名称、名称 tooltip、edit/delete aria-label 现在走 `publicErrorText()`，空结果回退为 `unknown`。
+- Provider preset 卡片备注和备注 tooltip 现在同样走 `publicErrorText()`。
+- Save/Delete notice 使用同一公开展示名；正常 `Japan mobile default`、`Tokyo exits` 等低敏文案保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted provider preset name"
+# RED: 旧实现把污染 name/notes 原样写入文本、title、aria-label；GREEN: 1 passed, 24 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 25 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 41.26s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 243 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.46s
+```
+
+边界：
+
+- 这是 Proxy Manager provider preset UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 provider preset API schema、create/update/delete payload、CSV import preset matching、proxy CRUD/check backend、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

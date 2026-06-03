@@ -896,6 +896,55 @@ describe("ProxyManagerPage", () => {
     expect(within(dialog).getByText("mobile")).toBeTruthy();
   });
 
+  it("redacts persisted provider preset name and notes from rendered evidence", async () => {
+    const leakMarker = "preset-card-token-super-secret";
+    mockListProxies.mockResolvedValue([]);
+    mockListProxyProviderPresets.mockResolvedValue([
+      {
+        id: "preset-polluted",
+        name:
+          "Japan default Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/provider-secret 203.0.113.55`,
+        provider: "ProxyJP",
+        country_code: "JP",
+        tags: [{ tag: "mobile", color: "#0ea5e9" }],
+        notes:
+          "Notes Bearer " +
+          `${leakMarker} token=${leakMarker} /home/provider-secret 2001:db8::55`,
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Manage presets" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Manage provider presets" });
+    expect(within(dialog).getByText("Japan default [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(dialog).getByText("Notes [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/provider-secret",
+      "/home/provider-secret",
+      "203.0.113.55",
+      "2001:db8::55",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("updates and deletes proxy provider presets from the manager dialog", async () => {
     mockListProxies.mockResolvedValue([]);
     mockListProxyProviderPresets.mockResolvedValue([

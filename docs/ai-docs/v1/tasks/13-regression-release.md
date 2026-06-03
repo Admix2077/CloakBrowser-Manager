@@ -5749,3 +5749,42 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
 - 不改变 backend request schema、proxy URL credential redaction、provider/country filters、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProxyResponse `city` / `asn` release-evidence 边界。
+
+## 2026-06-04 Provider preset UI text release-evidence guardrail
+
+背景：
+
+- Proxy Manager provider preset 管理弹窗属于 release smoke 的可见 UI evidence。
+- 旧卡片直接渲染 persisted preset `name` / `notes`，并把 name 放入 title 与 edit/delete aria-label。
+- 历史/手工污染 preset 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入可见 evidence。
+
+已覆盖：
+
+- Provider preset 卡片名称、title、edit/delete aria-label、备注和备注 title 统一走前端 public error boundary。
+- Save/Delete notice 也使用公开展示名，避免异常 API response name 进入 toast/notice。
+- 正常 provider preset 创建、编辑、删除和普通低敏名称/备注显示保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted provider preset name"
+# RED then GREEN；旧实现把污染 name/notes 原样写入 rendered evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 25 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 652 passed in 41.26s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 243 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.46s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 不改变 backend request/response schema、provider preset persistence、CSV import preset matching、proxy URL credential redaction、provider/country filters、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 provider preset UI text release-evidence 边界。
