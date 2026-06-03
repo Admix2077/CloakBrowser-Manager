@@ -3460,3 +3460,55 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 profile config export profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Profile/health audit profile id guardrail
+
+背景：
+
+- Release smoke 会抽查 profile CRUD audit、profile health audit 和 health lookup failure logs。
+- 继续复查发现 profile CRUD audit 和 health audit 的顶层 `profile_id` 仍直接使用 DB/path profile id；health GeoIP lookup failure log 也直接打印 path profile id。
+- 如果历史/手工 DB row 含有非 UUID profile id，这些 audit/log 边界会把 URL/header/token 风格文本带入低敏 evidence。
+
+已覆盖：
+
+- Profile CRUD audit 顶层 `profile_id` 现在只保留 canonical UUID；非 UUID 历史/手工 id 会省略。
+- Profile audit metadata 的 `platform` 现在只保留 `windows`、`macos`、`linux`；非公开/污染 platform 会省略。
+- Profile health audit 顶层 `profile_id` 现在只保留 canonical UUID；非 UUID id 会省略。
+- Health GeoIP lookup failure log 的 profile id 现在使用 UUID-only 值，非 UUID 记录为固定 `unknown`。
+- 正常 UUID profile CRUD audit、health audit metadata、GeoIP lookup failure log、response redaction 和 existing health behavior 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_crud_audit_sanitizes_persisted_profile_id_and_platform -q
+# RED: 1 failed；profile.updated/profile.deleted audit 顶层 profile_id 直接保留非 UUID profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_check_audit_and_logs_sanitize_persisted_profile_id -q
+# RED: 1 failed；profile.health_checked audit 和 health lookup failure log 直接保留非 UUID profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_crud_audit_sanitizes_persisted_profile_id_and_platform -q
+# 1 passed in 0.79s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_check_audit_and_logs_sanitize_persisted_profile_id -q
+# 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile_crud_audit or profile.created or profile.updated or profile.deleted"
+# 2 passed, 235 deselected in 0.89s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q -k "health_check_success_writes_redacted_audit_event or health_check_invalid_proxy_writes_redacted_audit_without_lookup or health_check_lookup_failure_writes_redacted_audit_event or health_check_lookup_failure_logs_error_type_without_raw_exception or health_check_audit_and_logs_sanitize_persisted_profile_id"
+# 5 passed, 20 deselected in 1.06s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 609 passed in 38.42s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 profile/health audit profile id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

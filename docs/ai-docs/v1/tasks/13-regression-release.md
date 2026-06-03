@@ -2612,6 +2612,52 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Profile/health audit profile id guardrail
+
+背景：
+
+- Release regression 会保留低敏 profile CRUD audit、profile health audit 和 health lookup failure log 摘要。
+- 继续复查发现这些边界仍可从历史/手工污染 DB row 或 path profile id 写入非 UUID profile id。
+- 该缺口不会影响普通 UUID profile flow，但会污染 release smoke evidence。
+
+已覆盖：
+
+- Profile CRUD audit 顶层 `profile_id` 改为 UUID-only；非 UUID 值省略。
+- Profile audit metadata `platform` 改为 public enum-only；污染值省略。
+- Profile health audit 顶层 `profile_id` 改为 UUID-only；非 UUID 值省略。
+- Health GeoIP lookup failure log 对非 UUID profile id 输出固定 `unknown`。
+- 正常 profile CRUD audit、health audit、health lookup failure log 和 frontend gates 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_profile_crud_audit_sanitizes_persisted_profile_id_and_platform -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.79s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py::test_health_check_audit_and_logs_sanitize_persisted_profile_id -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.70s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile_crud_audit or profile.created or profile.updated or profile.deleted"
+# 2 passed, 235 deselected in 0.89s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_health.py -q -k "health_check_success_writes_redacted_audit_event or health_check_invalid_proxy_writes_redacted_audit_without_lookup or health_check_lookup_failure_writes_redacted_audit_event or health_check_lookup_failure_logs_error_type_without_raw_exception or health_check_audit_and_logs_sanitize_persisted_profile_id"
+# 5 passed, 20 deselected in 1.06s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 609 passed in 38.42s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.05s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile config export profile id guardrail
 
 背景：

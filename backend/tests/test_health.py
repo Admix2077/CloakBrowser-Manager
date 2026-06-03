@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -727,6 +728,49 @@ def test_health_check_lookup_failure_logs_error_type_without_raw_exception(
     assert "provider-token-super-secret" not in caplog.text
     assert "secret-proxy-password" not in caplog.text
     assert "health-log.example" not in caplog.text
+
+
+def test_health_check_audit_and_logs_sanitize_persisted_profile_id(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "health-audit-profile-id-secret"
+    create = app_client.post(
+        "/api/profiles",
+        json={"name": "Health polluted profile id"},
+    )
+    original_id = create.json()["id"]
+    polluted_profile_id = (
+        f"health-profile {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, original_id))
+        conn.commit()
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    with patch(
+        "backend.main.resolve_network_geo",
+        new=AsyncMock(side_effect=RuntimeError(f"provider failed {leak_marker}")),
+    ):
+        resp = app_client.post(
+            f"/api/profiles/{quote(polluted_profile_id, safe='')}/health/check"
+        )
+
+    assert resp.status_code == 200
+    events = _health_audit_events()
+    assert len(events) == 1
+    assert events[0]["profile_id"] is None
+    assert "action=profile.health_geoip_lookup_failed profile_id=unknown" in caplog.text
+
+    serialized = json.dumps({"event": events[0], "logs": caplog.text}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
 
 
 def test_get_profile_health_does_not_write_audit(app_client: TestClient):

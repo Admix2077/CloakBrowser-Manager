@@ -842,7 +842,7 @@ def _profile_audit_metadata(profile: dict, *, updated_fields: list[str] | None =
         }
     metadata = {
         "name": _public_audit_name(profile.get("name")),
-        "platform": profile.get("platform"),
+        "platform": _public_profile_platform(profile.get("platform")),
         "tag_count": len(profile.get("tags") or []),
     }
     return {key: value for key, value in metadata.items() if value is not None}
@@ -857,7 +857,7 @@ def _audit_profile_event(
     db.create_audit_event(
         event_type=event_type,
         actor_type="local_admin",
-        profile_id=str(profile["id"]),
+        profile_id=_public_uuid_identifier(profile.get("id")),
         metadata=_profile_audit_metadata(profile, updated_fields=updated_fields),
     )
 
@@ -910,7 +910,7 @@ def _audit_health_check(
     db.create_audit_event(
         event_type="profile.health_checked",
         actor_type="local_admin",
-        profile_id=profile_id,
+        profile_id=_public_uuid_identifier(profile_id),
         metadata=_health_check_audit_metadata(
             health,
             lookup_attempted=lookup_attempted,
@@ -1068,6 +1068,10 @@ def _public_profile_result_identifier(value: object, *, exists: bool) -> str:
     if exists:
         return _public_profile_identifier(value)
     return _public_uuid_identifier(value) or _public_runtime_external_session_id(value) or "unknown"
+
+
+def _public_profile_platform(value: object) -> str | None:
+    return value if isinstance(value, str) and value in {"windows", "macos", "linux"} else None
 
 
 def _profile_automation_url(public_profile_id: str) -> str:
@@ -2782,7 +2786,7 @@ async def check_profile_health(profile_id: str):
     except Exception as exc:
         logger.warning(
             "action=profile.health_geoip_lookup_failed profile_id=%s error_type=%s",
-            profile_id,
+            _public_uuid_identifier(profile_id) or "unknown",
             type(exc).__name__,
         )
         health = compute_profile_health(

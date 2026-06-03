@@ -566,6 +566,56 @@ def test_profile_crud_audit_omits_sensitive_name_metadata(app_client: TestClient
         assert leaked not in serialized_events
 
 
+def test_profile_crud_audit_sanitizes_persisted_profile_id_and_platform(
+    app_client: TestClient,
+):
+    leak_marker = "profile-audit-id-secret"
+    original_id = app_client.post(
+        "/api/profiles",
+        json={"name": "Polluted profile audit"},
+    ).json()["id"]
+    polluted_profile_id = (
+        f"profile-audit {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute(
+            "UPDATE profiles SET id = ?, platform = ? WHERE id = ?",
+            (
+                polluted_profile_id,
+                f"windows?token={leak_marker}",
+                original_id,
+            ),
+        )
+        conn.commit()
+
+    update_resp = app_client.put(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}",
+        json={"name": "Updated polluted profile audit"},
+    )
+    delete_resp = app_client.request(
+        "DELETE",
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}",
+        json={"confirm_delete": True},
+    )
+
+    assert update_resp.status_code == 200
+    assert delete_resp.status_code == 200
+    events = _audit_events_of_type("profile.updated") + _audit_events_of_type("profile.deleted")
+    assert len(events) == 2
+    assert [event["profile_id"] for event in events] == [None, None]
+    assert "platform" not in events[1]["metadata"]
+
+    serialized = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_delete_profile_stops_running(app_client: TestClient):
     """Deleting a running profile should stop it first."""
     create = app_client.post("/api/profiles", json={"name": "Running"})
