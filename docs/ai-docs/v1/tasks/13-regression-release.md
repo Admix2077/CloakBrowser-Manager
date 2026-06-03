@@ -5920,3 +5920,35 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile persistence、profile create/edit payload、delete semantics、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、proxy assignment/random assignment 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile operations name UI/search release-evidence 边界。
+
+## 2026-06-04 Profile form template/delete name UI release-evidence guardrail
+
+背景：
+
+- ProfileForm 的 template selector 和 delete confirmation 是 create/edit/delete 回归路径上的可见 release evidence。
+- 旧实现仍直接渲染 template `name` 和 delete subject，即使主 Profile operations 名称展示已经收敛到 public profile name。
+- 历史/手工污染 template/profile name 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入可见 evidence。
+
+已覆盖：
+
+- Template option text 使用共享 public profile name boundary。
+- Delete confirmation subject 使用共享 public profile name boundary。
+- Profile Name 输入框继续保留原始值，避免把编辑数据本身误改为 redacted display text。
+- 正常 template selection、form save payload、delete confirmation flow 和 cancel flow 保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx -t "redacts template and delete confirmation names"
+# RED then GREEN；旧实现把污染 template name 原样写入 rendered evidence
+
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx
+# 10 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、profile persistence、template application behavior、profile create/edit payload、delete semantics、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、proxy assignment/random assignment 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileForm template/delete name UI release-evidence 边界。

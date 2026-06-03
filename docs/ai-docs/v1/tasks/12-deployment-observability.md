@@ -6239,3 +6239,34 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 profile API schema、profile persistence、profile create/edit form payload、delete semantics、proxy assignment backend、random assignment、proxy URL credential redaction、provider/country filters、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile form template/delete name UI evidence guardrail
+
+背景：
+
+- Profile create/edit form 的模板下拉和删除确认弹窗属于 release smoke 可见 UI evidence。
+- 主 Profile operations 已经使用公开 profile name，但 ProfileForm 仍会把 template `name` 和 delete subject 原样渲染。
+- 历史/手工污染 template/profile name 如果包含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入可见 evidence；这是 Manager 可控 UI 展示边界，不是底层 fingerprint 检测问题。
+
+已覆盖：
+
+- Profile template 下拉 option 文案现在使用共享 `publicProfileName()`。
+- Delete profile 确认弹窗 subject 现在使用共享 `publicProfileName()`。
+- Profile Name 输入框仍保留原始 `form.name`，用于编辑真实 profile 数据；本轮不改变 create/edit payload 或用户输入语义。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx -t "redacts template and delete confirmation names"
+# RED: 旧实现把污染 template name 原样写入 option；GREEN: 1 passed, 9 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx
+# 10 passed
+```
+
+边界：
+
+- 这是 ProfileForm template/delete confirmation UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 profile API schema、profile persistence、template application behavior、profile create/edit payload、delete semantics、proxy assignment backend、random assignment、proxy URL credential redaction、provider/country filters、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileForm } from "./ProfileForm";
-import type { Profile } from "../lib/api";
+import type { Profile, ProfileTemplate } from "../lib/api";
 
 const humanizedProfile: Profile = {
   id: "profile-1",
@@ -34,6 +34,27 @@ const humanizedProfile: Profile = {
   vnc_ws_port: null,
   automation_url: null,
 };
+
+function template(overrides: Partial<ProfileTemplate>): ProfileTemplate {
+  return {
+    id: "template-1",
+    name: "Starter",
+    platform: "windows",
+    screen_width: 1920,
+    screen_height: 1080,
+    gpu_vendor: null,
+    gpu_renderer: null,
+    hardware_concurrency: null,
+    color_scheme: null,
+    humanize: false,
+    human_preset: "default",
+    launch_args: [],
+    geoip: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
 
 describe("ProfileForm launch arguments", () => {
   it("describes launch args as Firefox browser engine arguments", () => {
@@ -219,6 +240,63 @@ describe("ProfileForm accessibility and control polish", () => {
     expect(screen.queryByRole("dialog", { name: "Delete profile" })).toBeNull();
 
     nativeConfirm.mockRestore();
+  });
+
+  it("redacts template and delete confirmation names from rendered evidence", () => {
+    const leakMarker = "profile-form-name-secret";
+    const rawName =
+      "Humanized Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/profile-form-name 203.0.113.93`;
+    const safeName = "Humanized [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    const { rerender } = render(
+      <ProfileForm
+        profile={null}
+        templates={[template({ name: rawName })]}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("option", { name: safeName })).toBeTruthy();
+    expect(document.body.textContent).not.toContain(leakMarker);
+    expect(document.body.textContent).not.toContain("Authorization");
+    expect(document.body.textContent).not.toContain("Bearer");
+    expect(document.body.textContent).not.toContain("token=");
+    expect(document.body.textContent).not.toContain("/data/profile-form-name");
+    expect(document.body.textContent).not.toContain("203.0.113.93");
+
+    rerender(
+      <ProfileForm
+        profile={{ ...humanizedProfile, name: rawName }}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect((screen.getByLabelText("Profile Name") as HTMLInputElement).value).toBe(rawName);
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("dialog", { name: "Delete profile" });
+    expect(dialog.textContent).toContain(safeName);
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/profile-form-name",
+      "203.0.113.93",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
   });
 
   it("switches sections without losing the save payload", async () => {

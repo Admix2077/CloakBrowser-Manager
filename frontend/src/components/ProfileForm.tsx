@@ -1,6 +1,7 @@
 import { Dices, Fingerprint, Monitor, MousePointer2, Network, Save, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Profile, ProfileCreateData, ProfileTemplate } from "../lib/api";
+import { publicProfileName } from "../lib/errorDisplay";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface ProfileFormProps {
@@ -298,7 +299,7 @@ export function ProfileForm({ profile, templates = [], onSave, onDelete, onCance
                   <option value="">Blank profile</option>
                   {templates.map((template) => (
                     <option key={template.id} value={template.id}>
-                      {template.name}
+                      {publicProfileName(template.name)}
                     </option>
                   ))}
                 </select>
@@ -666,7 +667,7 @@ export function ProfileForm({ profile, templates = [], onSave, onDelete, onCance
         <ConfirmDialog
           title="Delete profile"
           description="Browser data will be permanently removed. This action cannot be undone."
-          subject={profile.name}
+          subject={publicProfileName(profile.name)}
           confirmLabel="Confirm delete profile"
           cancelLabel="Cancel"
           loading={deleting}
