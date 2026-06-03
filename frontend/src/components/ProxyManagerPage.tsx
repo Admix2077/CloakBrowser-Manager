@@ -1573,8 +1573,10 @@ function ImportCountPill({
 
 function ProxyCsvPreviewRow({ row }: { row: ProxyCsvImportRow }) {
   const hasIssues = row.issues.length > 0;
+  const safeName = row.data.name ? publicProxyCsvPreviewLabel(row.data.name) : "-";
   const safeUrl = row.data.url ? redactUrlCredentials(row.data.url) : "-";
-  const tags = row.data.tags?.map((tag) => tag.tag).join(", ") || "-";
+  const safeProvider = row.data.provider ? publicProxyCsvPreviewLabel(row.data.provider) : "-";
+  const tags = row.data.tags?.map((tag) => publicProxyCsvPreviewLabel(tag.tag)).join(", ") || "-";
 
   return (
     <tr className={`shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors ${
@@ -1584,8 +1586,8 @@ function ProxyCsvPreviewRow({ row }: { row: ProxyCsvImportRow }) {
         Row {row.rowNumber}
       </td>
       <td className="px-3 py-2 align-top">
-        <span className="block truncate text-sm font-semibold text-slate-900" title={row.data.name || "-"}>
-          {row.data.name || "-"}
+        <span className="block truncate text-sm font-semibold text-slate-900" title={safeName}>
+          {safeName}
         </span>
       </td>
       <td className="px-3 py-2 align-top">
@@ -1594,8 +1596,8 @@ function ProxyCsvPreviewRow({ row }: { row: ProxyCsvImportRow }) {
         </span>
       </td>
       <td className="px-3 py-2 align-top">
-        <span className="block truncate text-sm text-slate-700" title={row.data.provider ?? "-"}>
-          {row.data.provider ?? "-"}
+        <span className="block truncate text-sm text-slate-700" title={safeProvider}>
+          {safeProvider}
         </span>
       </td>
       <td className="px-3 py-2 align-top">
@@ -2253,6 +2255,10 @@ function publicProviderPresetLabel(value: string): string {
 }
 
 function publicProviderPresetMetadataLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
+function publicProxyCsvPreviewLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 

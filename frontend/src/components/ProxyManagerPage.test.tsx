@@ -1362,6 +1362,71 @@ describe("ProxyManagerPage", () => {
     expect(renderedEvidence).not.toContain("user:");
   });
 
+  it("redacts proxy CSV preview row metadata without changing the import payload", async () => {
+    const leakMarker = "proxy-preview-token-super-secret";
+    const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
+    const importedProxy = proxy({ id: "proxy-imported", name: "Imported Safe" });
+    mockListProxies
+      .mockResolvedValueOnce([existingProxy])
+      .mockResolvedValueOnce([existingProxy, importedProxy]);
+    mockCreateProxy.mockResolvedValue(importedProxy);
+
+    const rawName = `Imported Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxy-name 203.0.113.65`;
+    const rawProvider = `Provider Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxy-provider 203.0.113.66`;
+    const rawTag = `warmup Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxy-tag 203.0.113.67`;
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    fireEvent.change(within(dialog).getByLabelText("Proxy CSV content"), {
+      target: {
+        value: [
+          "name,url,provider,tags",
+          `"${rawName}",http://user:hiddenpass@preview.proxy.example:8080,"${rawProvider}","${rawTag}"`,
+        ].join("\n"),
+      },
+    });
+
+    const previewTable = within(dialog).getByRole("table", { name: "Proxy CSV preview" });
+    expect(within(previewTable).getByText("Imported [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(previewTable).getByText("Provider [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(within(previewTable).getByText("warmup [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      previewTable.textContent,
+      ...Array.from(previewTable.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/proxy-name",
+      "/data/proxy-provider",
+      "/data/proxy-tag",
+      "203.0.113.65",
+      "203.0.113.66",
+      "203.0.113.67",
+      "hiddenpass",
+      "user:",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import valid rows" }));
+
+    await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledWith({
+      name: rawName,
+      url: "http://user:hiddenpass@preview.proxy.example:8080",
+      provider: rawProvider,
+      tags: [{ tag: rawTag, color: null }],
+    }));
+  });
+
   it("applies proxy provider preset defaults to CSV import rows", async () => {
     const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
     const importedProxy = proxy({

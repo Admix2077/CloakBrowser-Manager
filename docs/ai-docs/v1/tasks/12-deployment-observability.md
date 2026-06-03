@@ -6425,3 +6425,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 provider preset API schema、provider preset persistence、provider preset edit form raw values、CSV parsing/import payload、proxy asset persistence、proxy assignment/random assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy CSV preview row metadata evidence guardrail
+
+背景：
+
+- Proxy Manager CSV import preview table 会在导入前显示 row `name`、`provider` 和 tags。
+- URL preview 已隐藏 credentials，但 row metadata 仍会直接渲染用户粘贴 CSV 中的 Authorization/Bearer、`token=`、本地路径或 IP 字面量。
+- 这是 Manager 可控的 preview UI release evidence 边界；导入 payload 仍需要保留原始解析结果，避免改变用户显式导入语义。
+
+已覆盖：
+
+- Proxy CSV preview row 的 name、provider、tags 文本和 `title` 属性现在使用共享 `publicErrorText()` 展示边界。
+- Endpoint preview 继续使用现有 URL credential redaction。
+- `createProxy()` import payload 仍使用原始 `row.data`，CSV parsing、provider preset merge、valid/blocked row 计数和 partial import behavior 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts proxy CSV preview row metadata"
+# RED: 旧实现把污染 CSV row name/provider/tag 写入 preview table text/title；GREEN: 1 passed, 30 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 31 passed
+```
+
+边界：
+
+- 这是 Proxy Manager CSV preview row UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 proxy/provider preset API schema、proxy asset persistence、provider preset persistence、CSV parsing/import payload、proxy assignment/random assignment、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
