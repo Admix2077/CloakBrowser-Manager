@@ -2182,6 +2182,87 @@ def test_import_cookie_netscape_add_cookies_failure_uses_fixed_error_without_lea
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_cookie_import_export_sanitizes_persisted_profile_id_response_and_audit(
+    app_client: TestClient,
+):
+    leak_marker = "cookie-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "CookiePollutedProfileId"}).json()["id"]
+    polluted_profile_id = (
+        f"cookie-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    running = _automation_running_profile(polluted_profile_id)
+    running.context.cookies.return_value = [
+        {
+            "name": "sid",
+            "value": "cookie-export-value",
+            "domain": "example.com",
+            "path": "/",
+            "secure": True,
+        }
+    ]
+
+    cookie_import_resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/cookies/import",
+        json={
+            "confirm_import": True,
+            "schema_version": 1,
+            "cookies": [
+                {
+                    "name": "sid",
+                    "value": "cookie-import-value",
+                    "domain": "example.com",
+                }
+            ],
+        },
+    )
+    netscape_import_resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/cookies/import/netscape",
+        json={
+            "confirm_import": True,
+            "text": "example.com\tFALSE\t/\tFALSE\t0\tsid\tcookie-import-value",
+        },
+    )
+    cookie_export_resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/cookies/export",
+        json={"confirm_export": True},
+    )
+    netscape_export_resp = app_client.post(
+        f"/api/profiles/{quote(polluted_profile_id, safe='')}/cookies/export/netscape",
+        json={"confirm_export": True},
+    )
+
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+    assert cookie_import_resp.status_code == 200
+    assert netscape_import_resp.status_code == 200
+    assert cookie_export_resp.status_code == 200
+    assert netscape_export_resp.status_code == 200
+    cookie_export = cookie_export_resp.json()
+    responses = [
+        cookie_import_resp.json(),
+        netscape_import_resp.json(),
+        cookie_export,
+        netscape_export_resp.json(),
+    ]
+    assert all(response["profile_id"] == "unknown" for response in responses)
+    assert cookie_export["document"]["profile_id"] == "unknown"
+
+    events = _audit_events_of_type("cookie.exported")
+    assert [event["event_type"] for event in events] == ["cookie.exported", "cookie.exported"]
+    assert all(event["profile_id"] is None for event in events)
+    serialized = json.dumps({"responses": responses, "events": events}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_export_cookie_json_requires_explicit_confirmation_without_reading_context(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "CookieExportConfirmProfile"})
     pid = create.json()["id"]

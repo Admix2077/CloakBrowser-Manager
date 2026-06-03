@@ -2612,6 +2612,45 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Cookie import/export profile id guardrail
+
+背景：
+
+- Release artifact smoke 会通过 running profile 导入/导出 Cookie JSON 与 Netscape cookie 文件，并检查 cookie export audit evidence。
+- 旧实现已清洗 cookie values、names、domains 和 URL query/fragment，但 cookie API response、JSON export metadata 和 `cookie.exported` audit 顶层 `profile_id` 仍信任 route/profile id。
+- 历史/手工污染的非 UUID profile id 不应进入 cookie API response、export metadata 或低敏 audit evidence。
+
+已覆盖：
+
+- Cookie JSON import/export 与 Netscape import/export response 的 `profile_id` 现在只保留 canonical UUID；非 UUID 返回 `unknown`。
+- Cookie JSON export document metadata `profile_id` 现在使用同一 public profile id。
+- `cookie.exported` audit event 顶层 `profile_id` 现在只保留 canonical UUID；非 UUID 省略。
+- 正常 UUID cookie import/export response、document、Netscape text 和 audit summary 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_cookie_import_export_sanitizes_persisted_profile_id_response_and_audit -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.78s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "cookie"
+# 28 passed, 205 deselected in 2.63s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 604 passed in 36.83s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.25s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Automation task profile id guardrail
 
 背景：
