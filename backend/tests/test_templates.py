@@ -155,6 +155,43 @@ def test_profile_template_crud_api(app_client: TestClient):
     assert app_client.get(f"/api/profile-templates/{data['id']}").status_code == 404
 
 
+def test_profile_template_api_sanitizes_persisted_identity_fields(app_client: TestClient):
+    leak_marker = "template-response-leak-marker"
+    template = db.create_profile_template(
+        name="Historical polluted response template",
+        platform=f"linux-{leak_marker}",
+        screen_width=f"1920\nAuthorization: Bearer {leak_marker}",
+        screen_height=f"1080?token={leak_marker}",
+        gpu_vendor=f"Google Inc. (NVIDIA)\nAuthorization: Bearer {leak_marker}",
+        gpu_renderer=f"ANGLE (NVIDIA) https://gpu.invalid/?token={leak_marker}",
+        hardware_concurrency=f"8 cookie={leak_marker}",
+        color_scheme=f"dark-{leak_marker}",
+        human_preset=f"careful-{leak_marker}",
+        launch_args=[
+            "--private-window",
+            f"--user-agent={leak_marker}",
+            f"Bearer {leak_marker}",
+        ],
+    )
+
+    detail = app_client.get(f"/api/profile-templates/{template['id']}")
+    listed = app_client.get("/api/profile-templates")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["platform"] == "windows"
+        assert data["screen_width"] == 1920
+        assert data["screen_height"] == 1080
+        assert data["gpu_vendor"] is None
+        assert data["gpu_renderer"] is None
+        assert data["hardware_concurrency"] is None
+        assert data["color_scheme"] is None
+        assert data["human_preset"] == "default"
+        assert data["launch_args"] == ["--private-window"]
+        assert leak_marker not in json.dumps(data, sort_keys=True)
+
+
 def test_delete_profile_template_requires_explicit_confirmation_without_side_effects(
     app_client: TestClient,
 ):

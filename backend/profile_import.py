@@ -40,6 +40,19 @@ TEMPLATE_FIELDS = (
     "launch_args",
     "geoip",
 )
+TEMPLATE_RESPONSE_DEFAULTS: dict[str, Any] = {
+    "platform": "windows",
+    "screen_width": 1920,
+    "screen_height": 1080,
+    "gpu_vendor": None,
+    "gpu_renderer": None,
+    "hardware_concurrency": None,
+    "color_scheme": None,
+    "humanize": False,
+    "human_preset": "default",
+    "launch_args": [],
+    "geoip": True,
+}
 
 SUPPORTED_COLUMNS = {
     "name",
@@ -110,6 +123,14 @@ def apply_profile_template_fields(data: dict[str, Any], explicit_fields: set[str
             if should_copy:
                 data[field] = safe_value
     return data
+
+
+def sanitize_profile_template_response_data(template: dict[str, Any]) -> dict[str, Any]:
+    safe = dict(template)
+    for field in TEMPLATE_FIELDS:
+        safe_value, should_copy = _safe_template_field(field, template.get(field))
+        safe[field] = safe_value if should_copy else TEMPLATE_RESPONSE_DEFAULTS[field]
+    return safe
 
 
 def _safe_template_field(field: str, value: Any) -> tuple[Any, bool]:

@@ -2433,3 +2433,47 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile template response redaction guardrail
+
+背景：
+
+- Release smoke 会读取 profile template list/detail 来准备 profile/runtime session。
+- Template apply 已过滤污染字段，但 list/detail response 仍直接信任 DB row。
+- 历史/损坏 template row 可在 response 构造时触发 validation error，或把非公开 GPU/launch arg 文本暴露到 API/UI。
+
+已覆盖：
+
+- Profile template list/detail response 复用 template public-value 过滤。
+- 非公开 screen/hardware/GPU/enum/launch arg 值会折叠为安全默认值或过滤结果。
+- 正常 template CRUD、template create profile、CSV import preview/import、profile config import/export 保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_identity_fields -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.65s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 11 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "template or csv_import or config_import"
+# 16 passed, 3 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile_config or profile_launch_args or create_profile"
+# 11 passed, 212 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 577 passed in 34.81s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.53s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

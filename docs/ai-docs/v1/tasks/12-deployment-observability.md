@@ -2629,3 +2629,49 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
 - 不在 profile/template apply responses 中公开历史/污染 template identity marker、Authorization/Bearer-like text、URL/query token、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。
+
+## 2026-06-03 Profile template response redaction guardrail
+
+背景：
+
+- Template apply 边界已过滤历史/手工 template fingerprint 字段，但 template list/detail response 仍直接构造 `ProfileTemplateResponse`。
+- 旧版本或损坏 row 中的非类型匹配 screen/hardware 字段会触发 response validation error，GPU/launch args 中的非公开文本也可能进入 UI/API。
+
+已覆盖：
+
+- Profile template list/detail response 现在复用 template public-value 过滤。
+- 非公开 platform、screen_width、screen_height、gpu_vendor、gpu_renderer、hardware_concurrency、color_scheme、human_preset 和 launch_args 会折叠为安全默认值或过滤结果。
+- 正常 template CRUD、template create profile、CSV import preview/import、profile config import/export 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_identity_fields -q
+# RED: 1 failed；template detail response 因污染 screen/hardware 字段触发 ProfileTemplateResponse ValidationError
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py::test_profile_template_api_sanitizes_persisted_identity_fields -q
+# 1 passed in 0.65s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_templates.py -q
+# 11 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_bulk.py -q -k "template or csv_import or config_import"
+# 16 passed, 3 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "profile_config or profile_launch_args or create_profile"
+# 11 passed, 212 deselected
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 577 passed in 34.81s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.53s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、runtime session state transitions、VNC proxying、profile launch manager 或 audit event schema。
+- 不在 profile template responses 中公开历史/污染 identity marker、Authorization/Bearer-like text、URL/query token、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

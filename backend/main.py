@@ -155,6 +155,7 @@ from .profile_import import (
     parse_profile_csv_import,
     profile_create_data_for_import,
     preview_profile_csv_import,
+    sanitize_profile_template_response_data,
 )
 from .profile_bundle import (
     ProfileBundleImportRequest,
@@ -955,7 +956,7 @@ def _proxy_matches_selection(
 
 
 def _template_response(template: dict) -> ProfileTemplateResponse:
-    return ProfileTemplateResponse(**template)
+    return ProfileTemplateResponse(**sanitize_profile_template_response_data(template))
 
 
 _PUBLIC_RUNTIME_SESSION_STATUSES = {"active", "terminated"}
