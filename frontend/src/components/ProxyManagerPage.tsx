@@ -886,7 +886,7 @@ export function ProxyManagerPage({
           failures={importFailures}
           onTextChange={(value) => {
             setImportSourceText(value);
-            setImportText(redactUrlCredentials(value));
+            setImportText(publicProxyCsvVisibleText(value));
             setImportError(null);
             setImportFailures([]);
             setImportNotice(null);
@@ -2274,6 +2274,13 @@ function publicProviderPresetMetadataLabel(value: string): string {
 
 function publicProxyCsvPreviewLabel(value: string): string {
   return publicErrorText(value) || "unknown";
+}
+
+function publicProxyCsvVisibleText(value: string): string {
+  return value
+    .split(/\r?\n/)
+    .map((line) => publicErrorText(line))
+    .join("\n");
 }
 
 function publicProxyMetadataLabel(value: string): string {

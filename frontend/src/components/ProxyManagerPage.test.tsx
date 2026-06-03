@@ -1718,6 +1718,59 @@ describe("ProxyManagerPage", () => {
     }));
   });
 
+  it("redacts proxy CSV textarea evidence without changing the import payload", async () => {
+    const leakMarker = "proxy-csv-textarea-secret";
+    const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
+    const importedProxy = proxy({ id: "proxy-imported", name: "Imported Safe" });
+    mockListProxies
+      .mockResolvedValueOnce([existingProxy])
+      .mockResolvedValueOnce([existingProxy, importedProxy]);
+    mockCreateProxy.mockResolvedValue(importedProxy);
+
+    const rawName = `Imported Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxy-textarea-name 203.0.113.126`;
+    const rawProvider = `Provider Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxy-textarea-provider 203.0.113.127`;
+    const rawCsv = [
+      "name,url,provider",
+      `"${rawName}",http://user:hiddenpass@textarea.proxy.example:8080,"${rawProvider}"`,
+    ].join("\n");
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    const textarea = within(dialog).getByLabelText("Proxy CSV content") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: rawCsv } });
+
+    expect(textarea.value).toContain("Imported [redacted] [redacted] [redacted-path] [redacted-ip]");
+    expect(textarea.value).toContain("Provider [redacted] [redacted] [redacted-path] [redacted-ip]");
+    expect(textarea.value).toContain("http://textarea.proxy.example:8080");
+
+    for (const leaked of [
+      leakMarker,
+      "hiddenpass",
+      "user:",
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/proxy-textarea-name",
+      "/data/proxy-textarea-provider",
+      "203.0.113.126",
+      "203.0.113.127",
+    ]) {
+      expect(textarea.value).not.toContain(leaked);
+    }
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import valid rows" }));
+
+    await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledWith({
+      name: rawName,
+      url: "http://user:hiddenpass@textarea.proxy.example:8080",
+      provider: rawProvider,
+    }));
+  });
+
   it("applies proxy provider preset defaults to CSV import rows", async () => {
     const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
     const importedProxy = proxy({

@@ -6876,3 +6876,35 @@ npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile proxy raw value、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy CSV import textarea evidence guardrail
+
+背景：
+
+- Proxy Manager CSV import dialog 的 textarea 会立即显示 pasted CSV，是 proxy import release evidence 的可见面。
+- Preview table row metadata 已有 public label；但 textarea 之前只做 URL credential redaction，CSV name/provider/tag/notes 中的 Authorization/Bearer、`token=`、本地路径或 IP 字面量仍会进入 visible textarea evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Proxy CSV import textarea visible text 按行使用 public error-text boundary。
+- URL credentials、Authorization/Bearer、`token=`、path 和 IP-style CSV 字段片段不会进入 textarea evidence。
+- `importSourceText` 仍保存同一次 paste 的原始 CSV，`Import valid rows` / `createProxy` payload 继续使用 raw name/url/provider/tag/notes。
+- Preview table、provider preset merge、row validation、partial import failure rendering、proxy persistence 和 random assignment 语义保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts proxy CSV textarea evidence"
+# RED: 旧实现把污染 CSV name/provider 写入 import textarea evidence；GREEN: 1 passed, 35 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/lib/errorDisplay.test.ts src/lib/profileDisplay.test.ts
+# 2 files passed, 39 tests passed
+```
+
+边界：
+
+- 这是 Proxy CSV import textarea UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -6559,3 +6559,35 @@ npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw CSV import payload、profile persistence、profile proxy raw value、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV preview proxy release-evidence 边界。
+
+## 2026-06-04 Proxy CSV import textarea release-evidence guardrail
+
+背景：
+
+- Proxy Manager CSV import textarea 会在用户 paste 后立即显示 CSV，是 release regression 截图/文本 evidence 面。
+- 正常 endpoint host/port 仍需要展示；但污染 CSV name/provider/tag/notes 不应进入 visible textarea evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Proxy CSV import textarea visible text 使用 public error-text boundary。
+- URL credentials、Authorization/Bearer、`token=`、path 和 IP-style CSV 片段不会进入 textarea evidence。
+- Raw CSV source 仍用于 parse/import；`createProxy` request payload 继续携带原始 name/url/provider 字段。
+- Preview row metadata redaction、provider preset defaults、partial import failure rendering、proxy persistence 和 assignment behavior 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts proxy CSV textarea evidence"
+# RED then GREEN；旧实现把污染 CSV name/provider 写入 import textarea evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/lib/errorDisplay.test.ts src/lib/profileDisplay.test.ts
+# 2 files passed, 39 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy CSV import textarea release-evidence 边界。
