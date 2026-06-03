@@ -1035,6 +1035,46 @@ def test_launch_success_response_exposes_automation_url(app_client: TestClient):
     }
 
 
+def test_launch_success_response_sanitizes_persisted_profile_id_and_automation_url(
+    app_client: TestClient,
+):
+    leak_marker = "launch-response-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "LaunchPollutedId"}).json()["id"]
+    polluted_profile_id = (
+        f"launch-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    running = RunningProfile(
+        profile_id=polluted_profile_id,
+        context=MagicMock(),
+        display=103,
+        ws_port=6103,
+        engine="invisible_playwright",
+    )
+
+    with patch.object(main.browser_mgr, "launch", new=AsyncMock(return_value=running)):
+        resp = app_client.post(
+            f"/api/profiles/{quote(polluted_profile_id, safe='')}/launch",
+            json={"confirm_launch": True},
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["profile_id"] == "unknown"
+    assert data["automation_url"] == "/api/profiles/unknown/automation"
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_launch_persists_resolved_geoip_result(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "LaunchGeoIP"})
     pid = create.json()["id"]
@@ -3005,6 +3045,43 @@ def test_automation_info_running(app_client: TestClient):
         "pages_url": f"/api/profiles/{pid}/automation/pages",
     }
     main.browser_mgr.running.pop(pid, None)
+
+
+def test_status_and_automation_info_sanitize_persisted_profile_id_urls(
+    app_client: TestClient,
+):
+    leak_marker = "automation-info-profile-id-secret"
+    profile_id = app_client.post("/api/profiles", json={"name": "AutomationPollutedId"}).json()["id"]
+    polluted_profile_id = (
+        f"automation-profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    with main.db.get_db() as conn:
+        conn.execute("UPDATE profiles SET id = ? WHERE id = ?", (polluted_profile_id, profile_id))
+        conn.commit()
+    _automation_running_profile(polluted_profile_id)
+
+    status_resp = app_client.get(f"/api/profiles/{quote(polluted_profile_id, safe='')}/status")
+    automation_resp = app_client.get(f"/api/profiles/{quote(polluted_profile_id, safe='')}/automation")
+
+    main.browser_mgr.running.pop(polluted_profile_id, None)
+    assert status_resp.status_code == 200
+    assert automation_resp.status_code == 200
+    assert status_resp.json()["automation_url"] == "/api/profiles/unknown/automation"
+    automation_data = automation_resp.json()
+    assert automation_data["profile_id"] == "unknown"
+    assert automation_data["pages_url"] == "/api/profiles/unknown/automation/pages"
+    serialized = json.dumps(
+        {"status": status_resp.json(), "automation": automation_data},
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
 
 
 def test_automation_info_not_running(app_client: TestClient):

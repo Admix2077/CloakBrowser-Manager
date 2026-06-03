@@ -3207,3 +3207,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 profile response id / automation URL guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。
+
+## 2026-06-03 Profile launch/status automation URL guardrail
+
+背景：
+
+- Profile list/detail response 已经对顶层 id 和 running automation URL 使用 public UUID guardrail。
+- 继续复查相邻 API 后发现 launch success response、profile status response 和 automation info response 仍直接使用 raw path/DB profile id 拼接 response `profile_id`、`automation_url` 和 `pages_url`。
+- 历史/手工非 UUID profile id 不应进入 release smoke response、UI-facing automation URL 或低敏交接证据。
+
+已覆盖：
+
+- `POST /api/profiles/{profile_id}/launch` 成功响应的 `profile_id` 现在只保留 canonical UUID；非 UUID 折叠为 `unknown`。
+- Launch success 和 `GET /api/profiles/{profile_id}/status` 的 `automation_url` 现在由 public profile id 重建。
+- `GET /api/profiles/{profile_id}/automation` 的 `profile_id` 和 `pages_url` 现在由 public profile id 重建。
+- 正常 UUID launch/status/automation info 路径保持通过；内部 running profile lookup 和 route path 语义不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_success_response_sanitizes_persisted_profile_id_and_automation_url backend/tests/test_api.py::test_status_and_automation_info_sanitize_persisted_profile_id_urls -q
+# RED: 2 failed；launch success profile_id 与 status automation_url 直接保留非 UUID profile id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_success_response_sanitizes_persisted_profile_id_and_automation_url backend/tests/test_api.py::test_status_and_automation_info_sanitize_persisted_profile_id_urls -q
+# 2 passed in 1.06s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "launch_success_response or automation_info or running_profile_exposes_automation_url_only or profile_response_sanitizes_persisted_profile_id"
+# 7 passed, 224 deselected in 1.12s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 602 passed in 34.37s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.94s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 profile launch/status automation URL guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、proxy credentials 或 raw browser artifacts。

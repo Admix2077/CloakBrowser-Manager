@@ -796,10 +796,10 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
 
 def _profile_response(profile: dict) -> ProfileResponse:
     safe = sanitize_profile_response_data(profile)
-    public_profile_id = _public_uuid_identifier(safe.get("id")) or "unknown"
+    public_profile_id = _public_profile_identifier(safe.get("id"))
     safe["id"] = public_profile_id
     if safe.get("automation_url") is not None:
-        safe["automation_url"] = f"/api/profiles/{public_profile_id}/automation"
+        safe["automation_url"] = _profile_automation_url(public_profile_id)
     safe["last_geoip_ip"] = public_geoip_ip(safe.get("last_geoip_ip"))
     safe["last_geoip_country_code"] = public_geoip_country_code(safe.get("last_geoip_country_code"))
     safe["last_geoip_timezone"] = public_geoip_timezone(safe.get("last_geoip_timezone"))
@@ -1058,6 +1058,18 @@ def _public_uuid_identifier(value: object) -> str | None:
     except ValueError:
         return None
     return str(parsed)
+
+
+def _public_profile_identifier(value: object) -> str:
+    return _public_uuid_identifier(value) or "unknown"
+
+
+def _profile_automation_url(public_profile_id: str) -> str:
+    return f"/api/profiles/{public_profile_id}/automation"
+
+
+def _profile_automation_pages_url(public_profile_id: str) -> str:
+    return f"{_profile_automation_url(public_profile_id)}/pages"
 
 
 def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
@@ -2669,12 +2681,13 @@ async def launch_profile(profile_id: str, request: Request):
 
     db.update_profile_geoip_result(profile_id, getattr(running, "resolved_geoip", None))
 
+    public_profile_id = _public_profile_identifier(profile_id)
     return LaunchResponse(
-        profile_id=profile_id,
+        profile_id=public_profile_id,
         status="running",
         vnc_ws_port=running.ws_port,
         display=f":{running.display}",
-        automation_url=f"/api/profiles/{profile_id}/automation",
+        automation_url=_profile_automation_url(public_profile_id),
     )
 
 
@@ -2705,7 +2718,9 @@ async def get_profile_status(profile_id: str):
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    status = browser_mgr.get_status(profile_id)
+    status = dict(browser_mgr.get_status(profile_id))
+    if status.get("automation_url") is not None:
+        status["automation_url"] = _profile_automation_url(_public_profile_identifier(profile_id))
     return ProfileStatusResponse(**status)
 
 
@@ -4782,11 +4797,12 @@ def _raise_automation_page_action_failed(
 @app.get("/api/profiles/{profile_id}/automation", response_model=AutomationInfoResponse)
 async def automation_info(profile_id: str):
     running = _automation_running(profile_id)
+    public_profile_id = _public_profile_identifier(profile_id)
     return AutomationInfoResponse(
-        profile_id=profile_id,
+        profile_id=public_profile_id,
         engine=running.engine,
         status="running",
-        pages_url=f"/api/profiles/{profile_id}/automation/pages",
+        pages_url=_profile_automation_pages_url(public_profile_id),
     )
 
 

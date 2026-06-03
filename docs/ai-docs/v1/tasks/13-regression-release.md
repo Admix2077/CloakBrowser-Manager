@@ -2612,6 +2612,45 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Profile launch/status automation URL guardrail
+
+背景：
+
+- Release profile/API smoke 会启动 profile、读取 status，并进入 Automation info/pages flow。
+- 旧实现已清洗 profile list/detail 的顶层 id 和 running automation URL，但 launch success、status 和 automation info 仍使用 raw path/DB profile id 构造 response fields。
+- 历史/手工污染的非 UUID profile id 不应进入 release smoke 响应、UI-facing automation URL、Automation pages URL 或低敏交接证据。
+
+已覆盖：
+
+- Launch success response 的 `profile_id` 现在只保留 canonical UUID；非 UUID 返回 `unknown`。
+- Launch success response 和 status response 的 `automation_url` 现在由 public profile id 重建。
+- Automation info response 的 `profile_id` 和 `pages_url` 现在由 public profile id 重建。
+- 正常 UUID launch/status/automation info behavior 保持通过；内部 running profile lookup、route path 和 automation actions 不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_launch_success_response_sanitizes_persisted_profile_id_and_automation_url backend/tests/test_api.py::test_status_and_automation_info_sanitize_persisted_profile_id_urls -q
+# RED then GREEN；初始 2 failed，最终 2 passed in 1.06s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "launch_success_response or automation_info or running_profile_exposes_automation_url_only or profile_response_sanitizes_persisted_profile_id"
+# 7 passed, 224 deselected in 1.12s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 602 passed in 34.37s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.94s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile response id / automation URL guardrail
 
 背景：
