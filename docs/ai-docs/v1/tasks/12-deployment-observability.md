@@ -3909,3 +3909,48 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager, runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 launch failure stage diagnostics guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 BrowserManager lifecycle profile-id log guardrail
+
+背景：
+
+- BrowserManager lifecycle logs 是 release smoke 和 runtime/VNC triage 的主要低敏证据面。
+- API 层已经对 profile id response/audit 做 UUID-only 或 public-value 过滤，但 BrowserManager 内部 lifecycle logs 仍直接记录传入的 `profile_id`。
+- 如果历史/手工 profile id 被污染为 URL/header/token 风格文本，launch failure、stop、browser_closed、auto_launch 等日志会保留 raw id。
+
+已覆盖：
+
+- BrowserManager 新增 public profile log id 过滤；普通低敏 id 如 `profile-log`、`auto-ok` 继续保留。
+- URL/query/header/token/password/secret/cookie 风格 id 在 lifecycle logs 中统一折叠为 `unknown`。
+- 已接入 launch success/failure、existing page init debug、bootstrap debug、launch teardown debug、browser_closed、stop requested/finished、stop close failures、auto_launch success/failure。
+- 内部 running map、profile lookup、automation_url construction 和 API response 语义不变；只过滤日志输出参数。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_lifecycle_logs_sanitize_sensitive_profile_ids -q
+# RED: 1 failed；BrowserManager lifecycle logs included raw URL/header/token-like profile_id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_lifecycle_logs_sanitize_sensitive_profile_ids -q
+# 1 passed in 0.04s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 70 passed in 0.89s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 622 passed in 39.92s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 BrowserManager lifecycle profile-id log guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。

@@ -987,6 +987,49 @@ async def test_launch_and_stop_logs_include_action_and_profile_id(
 
 
 @pytest.mark.asyncio
+async def test_lifecycle_logs_sanitize_sensitive_profile_ids(
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("INFO", logger="invisible_browser.manager.browser")
+    mgr = BrowserManager()
+    mgr.vnc.stop_vnc = AsyncMock()  # type: ignore[attr-defined]
+    leak_marker = "profile-log-secret"
+    polluted_profile_id = (
+        f"https://profile.example/{leak_marker}"
+        f"?token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+
+    mgr._record_launch_failure(polluted_profile_id, "allocate_vnc")
+    mgr.running[polluted_profile_id] = bm.RunningProfile(
+        profile_id=polluted_profile_id,
+        context=SimpleNamespace(close=AsyncMock()),
+        display=111,
+        ws_port=6111,
+        engine="invisible_playwright",
+        runner=None,
+    )
+    await mgr.stop(polluted_profile_id)
+    mgr.running[polluted_profile_id] = bm.RunningProfile(
+        profile_id=polluted_profile_id,
+        context=SimpleNamespace(close=AsyncMock()),
+        display=112,
+        ws_port=6112,
+        engine="invisible_playwright",
+        runner=None,
+    )
+    await mgr._on_browser_closed(polluted_profile_id)
+
+    assert "action=profile.launch_failed profile_id=unknown stage=allocate_vnc" in caplog.text
+    assert "action=profile.stop_requested profile_id=unknown" in caplog.text
+    assert "action=profile.stop_finished profile_id=unknown" in caplog.text
+    assert "action=profile.browser_closed profile_id=unknown" in caplog.text
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "profile.example" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_launch_fits_firefox_window_to_vnc_after_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

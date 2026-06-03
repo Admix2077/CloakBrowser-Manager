@@ -2612,6 +2612,50 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 BrowserManager lifecycle profile-id log guardrail
+
+背景：
+
+- Release regression 会依赖 BrowserManager lifecycle logs 判断 launch/stop/browser_closed/auto_launch 过程是否稳定。
+- BrowserManager 内部日志此前直接记录传入的 `profile_id`；历史/手工污染 profile id 可能把 URL/query token/header text 带入 release evidence。
+
+已覆盖：
+
+- BrowserManager lifecycle logs 现在通过 public profile log id 过滤。
+- 普通低敏 id 继续保留，URL/query/header/token/password/secret/cookie 风格 id 折叠为 `unknown`。
+- 覆盖 launch success/failure、launch debug/teardown、stop requested/finished、stop close failures、browser_closed、browser_closed teardown 和 auto_launch success/failure。
+- 内部 runtime lookup、running map key、status response 和 API-level response redaction 不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_lifecycle_logs_sanitize_sensitive_profile_ids -q
+# RED: 1 failed；BrowserManager lifecycle logs included raw URL/header/token-like profile_id
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py::test_lifecycle_logs_sanitize_sensitive_profile_ids -q
+# 1 passed in 0.04s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_browser_manager.py -q
+# 70 passed in 0.89s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 622 passed in 39.92s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Launch failure stage diagnostics guardrail
 
 背景：

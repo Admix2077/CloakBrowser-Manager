@@ -63,6 +63,7 @@ SENSITIVE_TEXT_RE = re.compile(
     r"(?:https?://|[?&#]|authorization:|bearer\s+|token=|password=|secret=|cookie=)",
     re.IGNORECASE,
 )
+PUBLIC_PROFILE_LOG_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STEALTH_PREF_CATEGORY_ALIASES = {
     "fpp": "fingerprint",
     "hw_concurrency": "hardware",
@@ -156,6 +157,19 @@ def _redact_proxy_url(url: str) -> str:
         port = None
     port_part = f":{port}" if port else ""
     return f"{parsed.scheme}://{host}{port_part}"
+
+
+def _public_profile_log_id(profile_id: Any) -> str:
+    if not isinstance(profile_id, str):
+        return "unknown"
+    text = profile_id.strip()
+    if not text:
+        return "unknown"
+    if not PUBLIC_PROFILE_LOG_ID_RE.fullmatch(text):
+        return "unknown"
+    if SENSITIVE_TEXT_RE.search(text):
+        return "unknown"
+    return text
 
 
 def get_max_running_profiles_limit() -> int | None:
@@ -800,7 +814,7 @@ class BrowserManager:
                 except Exception as exc:
                     logger.debug(
                         "action=profile.existing_page_init_failed profile_id=%s error_type=%s",
-                        profile_id,
+                        _public_profile_log_id(profile_id),
                         type(exc).__name__,
                     )
 
@@ -811,7 +825,7 @@ class BrowserManager:
                 except Exception as exc:
                     logger.debug(
                         "action=profile.bootstrap_page_failed profile_id=%s error_type=%s",
-                        profile_id,
+                        _public_profile_log_id(profile_id),
                         type(exc).__name__,
                     )
 
@@ -845,7 +859,7 @@ class BrowserManager:
 
             logger.info(
                 "action=profile.launch_succeeded profile_id=%s display=:%d ws_port=%d engine=%s",
-                profile_id, display, ws_port, running.engine,
+                _public_profile_log_id(profile_id), display, ws_port, running.engine,
             )
 
             return running
@@ -862,7 +876,7 @@ class BrowserManager:
                 except Exception as exc:
                     logger.debug(
                         "action=profile.launch_teardown_failed profile_id=%s error_type=%s",
-                        profile_id,
+                        _public_profile_log_id(profile_id),
                         type(exc).__name__,
                     )
             if display is not None:
@@ -876,7 +890,7 @@ class BrowserManager:
         )
         logger.warning(
             "action=profile.launch_failed profile_id=%s stage=%s",
-            profile_id,
+            _public_profile_log_id(profile_id),
             public_stage,
         )
 
@@ -902,14 +916,17 @@ class BrowserManager:
             running = self.running.pop(profile_id, None)
 
         if running:
-            logger.info("action=profile.browser_closed profile_id=%s", profile_id)
+            logger.info(
+                "action=profile.browser_closed profile_id=%s",
+                _public_profile_log_id(profile_id),
+            )
             if running.runner is not None:
                 try:
                     await running.runner.__aexit__(None, None, None)
                 except Exception as exc:
                     logger.debug(
                         "action=profile.browser_closed_teardown_failed profile_id=%s error_type=%s",
-                        profile_id,
+                        _public_profile_log_id(profile_id),
                         type(exc).__name__,
                     )
             await self.vnc.stop_vnc(running.display)
@@ -923,7 +940,10 @@ class BrowserManager:
         if not running:
             return
 
-        logger.info("action=profile.stop_requested profile_id=%s", profile_id)
+        logger.info(
+            "action=profile.stop_requested profile_id=%s",
+            _public_profile_log_id(profile_id),
+        )
 
         if running.runner is not None:
             try:
@@ -931,7 +951,7 @@ class BrowserManager:
             except Exception as exc:
                 logger.warning(
                     "action=profile.stop_runner_close_failed profile_id=%s error_type=%s",
-                    profile_id,
+                    _public_profile_log_id(profile_id),
                     type(exc).__name__,
                 )
         else:
@@ -940,12 +960,15 @@ class BrowserManager:
             except Exception as exc:
                 logger.warning(
                     "action=profile.stop_context_close_failed profile_id=%s error_type=%s",
-                    profile_id,
+                    _public_profile_log_id(profile_id),
                     type(exc).__name__,
                 )
 
         await self.vnc.stop_vnc(running.display)
-        logger.info("action=profile.stop_finished profile_id=%s", profile_id)
+        logger.info(
+            "action=profile.stop_finished profile_id=%s",
+            _public_profile_log_id(profile_id),
+        )
 
     def get_status(self, profile_id: str) -> dict[str, Any]:
         """Get running status for a profile."""
@@ -1008,12 +1031,12 @@ class BrowserManager:
                 await asyncio.wait_for(self.launch(profile), timeout=60)
                 logger.info(
                     "action=profile.auto_launch_succeeded profile_id=%s",
-                    profile["id"],
+                    _public_profile_log_id(profile.get("id")),
                 )
             except Exception as exc:
                 logger.error(
                     "action=profile.auto_launch_failed profile_id=%s error_type=%s",
-                    profile["id"],
+                    _public_profile_log_id(profile.get("id")),
                     type(exc).__name__,
                 )
         logger.info("Auto-launch complete: %d running", len(self.running))
