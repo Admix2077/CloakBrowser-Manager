@@ -455,6 +455,50 @@ def test_delete_profile(app_client: TestClient):
     assert app_client.get(f"/api/profiles/{pid}").status_code == 404
 
 
+def test_delete_profile_rejects_non_public_user_data_dir_without_side_effects(
+    app_client: TestClient,
+    tmp_path: Path,
+):
+    leak_marker = "delete-profile-dir-secret"
+    create = app_client.post("/api/profiles", json={"name": "Delete Polluted Dir"})
+    pid = create.json()["id"]
+    polluted_dir = tmp_path / f"profile?token={leak_marker}"
+    polluted_dir.mkdir()
+    marker = polluted_dir / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    with main.db.get_db() as conn:
+        conn.execute(
+            "UPDATE profiles SET user_data_dir = ? WHERE id = ?",
+            (str(polluted_dir), pid),
+        )
+        conn.commit()
+    mock_running = MagicMock(spec=RunningProfile)
+    mock_running.display = 100
+    mock_running.ws_port = 6100
+    mock_running.engine = "invisible_playwright"
+    main.browser_mgr.running[pid] = mock_running
+    main.browser_mgr.stop = AsyncMock()
+
+    with patch.object(main.shutil, "rmtree") as rmtree:
+        resp = app_client.request(
+            "DELETE",
+            f"/api/profiles/{pid}",
+            json={"confirm_delete": True},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Invalid profile directory"}
+    main.browser_mgr.stop.assert_not_called()
+    rmtree.assert_not_called()
+    assert main.db.get_profile(pid) is not None
+    assert marker.read_text(encoding="utf-8") == "keep"
+    assert _audit_events_except("profile.created") == []
+    serialized = json.dumps(resp.json(), sort_keys=True)
+    assert leak_marker not in serialized
+    assert "token=" not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_delete_profile_requires_explicit_confirmation_without_side_effects(
     app_client: TestClient,
 ):

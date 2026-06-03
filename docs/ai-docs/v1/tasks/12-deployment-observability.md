@@ -4418,3 +4418,46 @@ git diff --check
 - 这是 profile response/config export/bundle manifest 稳定性和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变底层 `invisible_playwright` seed generation、same-seed stability、different-seed variation、stealth prefs、WebGL、WebRTC、UA、locale/timezone、proxy 或 profile launch 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Profile delete directory guardrail
+
+背景：
+
+- BrowserManager launch 已经在 VNC 分配和 invisible_playwright kwargs 前校验 `user_data_dir`。
+- Profile delete 路径仍直接把 DB 中的 `user_data_dir` 转成 `Path`，再删除 DB 和清理磁盘。
+- 如果历史/手工 DB row 被污染为 URL/query token/header 风格目录文本，delete 可能在可信边界外尝试 stop/cleanup，并把 profile lifecycle evidence 带入不可预测状态。
+
+已覆盖：
+
+- `DELETE /api/profiles/{id}` 现在复用 `_public_profile_dir()` 校验持久化 `user_data_dir`。
+- 非公开 profile dir 返回固定低敏 `400 Invalid profile directory`。
+- 校验失败时不会 stop running profile、不会删除 DB row、不会调用 `shutil.rmtree()`、不会写 `profile.deleted` audit。
+- 正常删除、缺少显式确认、not found、running profile stop 和 profile CRUD audit 行为保持通过。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_delete_profile_rejects_non_public_user_data_dir_without_side_effects -q
+# RED: 旧实现返回 200；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "delete_profile or profile_crud" -q
+# 8 passed, 240 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 636 passed in 38.89s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.74s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 profile lifecycle delete path 和 release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone、proxy 或 profile launch 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

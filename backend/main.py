@@ -38,6 +38,7 @@ from .browser_manager import (
     BrowserResourceLimitError,
     get_max_running_profiles_limit,
     managed_firefox_identity_summary,
+    _public_profile_dir,
 )
 from .cookie_formats import (
     CookieJsonDocument,
@@ -2746,15 +2747,18 @@ async def delete_profile(profile_id: str, request: Request):
             detail="Profile delete requires explicit confirmation",
         )
 
-    # Stop browser if running
-    if profile_id in browser_mgr.running:
-        await browser_mgr.stop(profile_id)
-
     profile = db.get_profile(profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    user_data_dir = Path(profile["user_data_dir"])
+    try:
+        user_data_dir = _public_profile_dir(profile.get("user_data_dir"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid profile directory") from None
+
+    # Stop browser if running
+    if profile_id in browser_mgr.running:
+        await browser_mgr.stop(profile_id)
 
     # DB first — if this fails, filesystem is untouched
     db.delete_profile(profile_id)

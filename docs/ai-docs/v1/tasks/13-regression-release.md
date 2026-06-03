@@ -4112,3 +4112,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Profile delete directory release-evidence guardrail
+
+背景：
+
+- Release smoke 会覆盖 profile create/edit/delete；delete 路径需要和 launch 路径使用同一条 profile dir public boundary。
+- 启动路径已拒绝 URL/query token/header 风格 `user_data_dir`，但删除路径此前直接信任 DB row 并先删除 DB 后清理磁盘。
+- 历史/手工污染的 `user_data_dir` 不应导致 running profile 被 stop、DB row 被删除、磁盘清理被调用或 `profile.deleted` audit 被写入。
+
+已覆盖：
+
+- `DELETE /api/profiles/{id}` 在 stop/delete/rmtree/audit 之前先复用 `_public_profile_dir()` 校验持久化目录。
+- 非公开目录返回固定 `400 Invalid profile directory`，响应不包含 URL/query/token/header 文本。
+- 校验失败时 profile row 保留、running map 不被 stop、磁盘 marker 保留、`shutil.rmtree()` 未调用、除 `profile.created` 外无新增 audit。
+- 正常 delete、显式确认 gate、not found、running profile stop 和 profile CRUD audit 回归通过。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_delete_profile_rejects_non_public_user_data_dir_without_side_effects -q
+# RED then GREEN；旧实现返回 200，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "delete_profile or profile_crud" -q
+# 8 passed, 240 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 636 passed in 38.89s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.74s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
