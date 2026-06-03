@@ -1094,6 +1094,18 @@ def _public_runtime_session_timestamp(value: object) -> str:
     return _public_required_timestamp(value)
 
 
+def _public_runtime_profile_source(value: object) -> str:
+    return value if value in {"profile_id", "template_id"} else "unknown"
+
+
+def _public_runtime_seconds(value: object, *, maximum: int) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and 1 <= value <= maximum:
+        return value
+    return None
+
+
 def _public_uuid_identifier(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -1162,14 +1174,43 @@ def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
 
 
 def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None = None) -> None:
+    safe_metadata = _runtime_service_audit_metadata(event_type, metadata)
     db.create_audit_event(
         event_type=event_type,
         actor_type="runtime_service",
         runtime_session_id=_public_uuid_identifier(session.get("id")),
         profile_id=_public_uuid_identifier(session.get("profile_id")),
         external_session_id=_public_runtime_external_session_id(session.get("external_session_id")),
-        metadata=metadata,
+        metadata=safe_metadata,
     )
+
+
+def _runtime_service_audit_metadata(event_type: str, metadata: dict | None) -> dict:
+    raw = metadata or {}
+    if event_type == "runtime.session.created":
+        return {
+            "profile_source": _public_runtime_profile_source(raw.get("profile_source")),
+            "lease_seconds": _public_runtime_seconds(
+                raw.get("lease_seconds"),
+                maximum=86_400,
+            ),
+        }
+    if event_type == "runtime.viewer_token.created":
+        return {
+            "ttl_seconds": _public_runtime_seconds(raw.get("ttl_seconds"), maximum=300),
+            "viewer_token_expires_at": _public_runtime_session_timestamp(
+                raw.get("viewer_token_expires_at")
+            ),
+        }
+    if event_type == "runtime.session.renewed":
+        return {
+            "lease_seconds": _public_runtime_seconds(
+                raw.get("lease_seconds"),
+                maximum=86_400,
+            ),
+            "lease_expires_at": _public_runtime_session_timestamp(raw.get("lease_expires_at")),
+        }
+    return {}
 
 
 def _public_ws_close_code(value: object) -> int | None:

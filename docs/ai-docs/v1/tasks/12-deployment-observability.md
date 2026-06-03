@@ -4594,3 +4594,51 @@ git diff --check
 - 这是 runtime viewer audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 viewer token 签发、WebSocket accept/subprotocol negotiation、VNC proxy、runtime session 状态、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 Runtime service metadata allowlist audit guardrail
+
+背景：
+
+- Runtime service audit 是 Project Mileage server-to-server session broker 的 release evidence 面。
+- 正常 runtime service events 只需要固定 metadata：session create 的 profile source/lease、viewer token create 的 TTL/expiry、renew 的 lease/expiry，read/terminate 不需要 metadata。
+- helper 之前直接依赖通用 audit sanitizer；如果未来调用方传入 wallet/order/billing、viewer URL、header/token 风格字段，仍可能留下 redacted 但非低敏的 evidence。
+
+已覆盖：
+
+- `_audit_runtime_event()` 现在通过 `_runtime_service_audit_metadata()` 按 event type 输出固定白名单。
+- `runtime.session.created` 只保留 public profile source 和 `1..86400` lease seconds。
+- `runtime.viewer_token.created` 只保留 `1..300` TTL seconds 和 parseable expiry timestamp。
+- `runtime.session.renewed` 只保留 `1..86400` lease seconds 和 parseable lease expiry timestamp。
+- `runtime.session.read`、`runtime.session.terminated` 和未知 runtime service events metadata 折叠为空对象。
+- 污染 profile source、seconds、timestamps、wallet/order/billing 和 viewer URL 不再写入 runtime service audit evidence；正常 runtime service audit flow 保持原 shape。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_service_audit_allows_only_public_metadata_shapes -q
+# RED: 旧实现保存污染 metadata；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_service_audit_allows_only_public_metadata_shapes backend/tests/test_session_broker.py::test_runtime_service_actions_write_redacted_audit_events -q
+# 2 passed in 1.04s
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed in 4.72s
+
+.venv/bin/python -m pytest backend/tests -q
+# 640 passed in 37.47s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.27s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 runtime service audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 runtime service token 校验、viewer token 签发、lease/renew/terminate 业务行为、VNC/WebSocket 行为、底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata、wallet/order/billing 数据或外站页面原文。

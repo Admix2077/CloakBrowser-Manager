@@ -4285,3 +4285,51 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - 不改变 viewer token、VNC/WebSocket 行为、runtime session 状态或 browser fingerprint 行为。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Runtime service metadata allowlist release-evidence guardrail
+
+背景：
+
+- Release runtime service smoke 会读取 `runtime.session.created/read/renewed/terminated` 和 `runtime.viewer_token.created` audit event。
+- 这些 event 的 metadata 应保持固定低敏 shape；wallet/order/billing、viewer URL、header/token 或污染 timestamp 不应以 redacted 文本进入 release evidence。
+- Runtime service audit 是 Project Mileage 后端接入 CloakBrowser 的关键交接面，因此 helper 层需要和 viewer audit 一样固定白名单。
+
+已覆盖：
+
+- `_audit_runtime_event()` 现在按 event type 生成固定 metadata。
+- `runtime.session.created` 只输出 `profile_source` 和 `lease_seconds`，非法值折叠为 `unknown`/null。
+- `runtime.viewer_token.created` 只输出 `ttl_seconds` 和 `viewer_token_expires_at`，非法值折叠为 null/`unknown`。
+- `runtime.session.renewed` 只输出 `lease_seconds` 和 `lease_expires_at`，非法值折叠为 null/`unknown`。
+- `runtime.session.read`、`runtime.session.terminated` 和未知 runtime service events 输出 `{}`。
+- 污染 metadata 不再泄漏 secret marker、`token=`、Authorization/Bearer、viewer URL、wallet/order/billing 文本；正常 runtime service audit flow 保持通过。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_service_audit_allows_only_public_metadata_shapes -q
+# RED then GREEN；旧实现保存污染 metadata，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_service_audit_allows_only_public_metadata_shapes backend/tests/test_session_broker.py::test_runtime_service_actions_write_redacted_audit_events -q
+# 2 passed in 1.04s
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 46 passed in 4.72s
+
+.venv/bin/python -m pytest backend/tests -q
+# 640 passed in 37.47s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.27s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- 不改变 runtime service token、viewer token、lease/renew/terminate、VNC/WebSocket 行为、runtime session 状态或 browser fingerprint 行为。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。

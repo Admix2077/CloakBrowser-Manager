@@ -1663,6 +1663,101 @@ def test_runtime_service_actions_write_redacted_audit_events(
     assert "billing" not in serialized_events
 
 
+def test_runtime_service_audit_allows_only_public_metadata_shapes(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-runtime-audit-shape",
+    )
+    stored_session = db.get_runtime_session(session["id"])
+    assert stored_session is not None
+    leak_marker = "runtime-service-metadata-secret"
+
+    main._audit_runtime_event(
+        "runtime.session.created",
+        stored_session,
+        {
+            "profile_source": (
+                f"profile_id token={leak_marker} "
+                f"Authorization=Bearer {leak_marker}"
+            ),
+            "lease_seconds": f"900 token={leak_marker}",
+            "wallet": f"wallet-{leak_marker}",
+        },
+    )
+    main._audit_runtime_event(
+        "runtime.viewer_token.created",
+        stored_session,
+        {
+            "ttl_seconds": f"60 token={leak_marker}",
+            "viewer_token_expires_at": f"2026-06-03T00:00:00+00:00 token={leak_marker}",
+            "viewer_url": f"/api/runtime/sessions/{session['id']}/vnc?viewer_token={leak_marker}",
+        },
+    )
+    main._audit_runtime_event(
+        "runtime.session.renewed",
+        stored_session,
+        {
+            "lease_seconds": f"1800 token={leak_marker}",
+            "lease_expires_at": f"2026-06-03T00:30:00+00:00 token={leak_marker}",
+            "order": f"order-{leak_marker}",
+        },
+    )
+    main._audit_runtime_event(
+        "runtime.session.read",
+        stored_session,
+        {
+            "viewer_url": f"/api/runtime/sessions/{session['id']}/vnc?viewer_token={leak_marker}",
+            "billing": f"billing-{leak_marker}",
+        },
+    )
+
+    events = [
+        event
+        for event in db.list_audit_events(session["id"])
+        if event["created_at"] >= stored_session["created_at"]
+    ][-4:]
+    assert [event["event_type"] for event in events] == [
+        "runtime.session.created",
+        "runtime.viewer_token.created",
+        "runtime.session.renewed",
+        "runtime.session.read",
+    ]
+    assert events[0]["metadata"] == {
+        "profile_source": "unknown",
+        "lease_seconds": None,
+    }
+    assert events[1]["metadata"] == {
+        "ttl_seconds": None,
+        "viewer_token_expires_at": "unknown",
+    }
+    assert events[2]["metadata"] == {
+        "lease_seconds": None,
+        "lease_expires_at": "unknown",
+    }
+    assert events[3]["metadata"] == {}
+
+    serialized_events = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "token=",
+        "Authorization",
+        "Bearer",
+        "viewer_url",
+        "viewer_token=",
+        "/vnc?",
+        "wallet",
+        "order",
+        "billing",
+    ):
+        assert leaked not in serialized_events
+
+
 def test_runtime_audit_ignores_unauthenticated_runtime_requests(
     app_client: TestClient,
 ):
