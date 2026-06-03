@@ -211,6 +211,45 @@ def test_health_warns_when_running_runtime_urls_are_missing():
     assert {"runtime_vnc_missing", "runtime_automation_missing"} <= _warning_codes(result)
 
 
+def test_health_response_sanitizes_non_public_runtime_evidence():
+    leak_marker = "health-runtime-secret"
+    result = compute_profile_health(
+        _profile(
+            id="profile-runtime-redaction",
+            last_geoip_ip="23.144.4.92",
+            last_geoip_country_code="US",
+            last_geoip_timezone="America/Los_Angeles",
+            last_geoip_locale="en-US",
+            last_geoip_source="ip-api",
+            last_geoip_resolved_at="2026-05-25T00:00:00Z",
+        ),
+        _runtime(
+            status=f"running Authorization=Bearer {leak_marker}",
+            vnc_ws_port=f"6100 token={leak_marker}",
+            automation_url=(
+                f"https://manager.example/api/profiles/profile-runtime-redaction"
+                f"/automation?token={leak_marker}"
+            ),
+        ),
+        checked_at="2026-05-25T00:05:00Z",
+    )
+
+    assert result.runtime == {
+        "status": "unknown",
+        "vnc_ws_port": None,
+        "automation_url": None,
+    }
+    serialized = result.model_dump_json()
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+        "manager.example",
+    ):
+        assert leaked not in serialized
+
+
 def test_get_profile_health_does_not_perform_network_lookup(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "Health GET"})
     pid = create.json()["id"]

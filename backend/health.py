@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -50,6 +51,13 @@ _SAFE_PROXY_ERROR_DETAILS = (
     ("Proxy URL missing hostname", "Proxy URL missing hostname"),
     ("Proxy URL invalid port", "Proxy URL invalid port"),
     ("Proxy URL missing port", "Proxy URL missing port"),
+)
+_PUBLIC_RUNTIME_STATUSES = {"running", "stopped"}
+_PUBLIC_AUTOMATION_URL_RE = re.compile(r"^/api/profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/automation$")
+_SENSITIVE_RUNTIME_TEXT_RE = re.compile(
+    r"https?://|socks[45]://|@|\b(authorization|bearer)\b|"
+    r"\b(auth_token|password|cookie|secret|token|viewer_token)\b",
+    re.IGNORECASE,
 )
 
 
@@ -170,6 +178,33 @@ def _safe_proxy_error_detail(message: str) -> str:
     return "Invalid proxy URL"
 
 
+def _public_runtime_status(value: object) -> str:
+    if isinstance(value, str) and value in _PUBLIC_RUNTIME_STATUSES:
+        return value
+    return "unknown"
+
+
+def _public_runtime_vnc_ws_port(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and 1 <= value <= 65535:
+        return value
+    return None
+
+
+def _public_runtime_automation_url(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if not _PUBLIC_AUTOMATION_URL_RE.fullmatch(text):
+        return None
+    if _SENSITIVE_RUNTIME_TEXT_RE.search(text):
+        return None
+    return text
+
+
 def compute_profile_health(
     profile: dict[str, Any],
     runtime_status: dict[str, Any],
@@ -249,8 +284,11 @@ def compute_profile_health(
             )
         )
 
-    if runtime_status.get("status") == "running":
-        if not runtime_status.get("vnc_ws_port"):
+    public_runtime_status = _public_runtime_status(runtime_status.get("status"))
+    public_vnc_ws_port = _public_runtime_vnc_ws_port(runtime_status.get("vnc_ws_port"))
+    public_automation_url = _public_runtime_automation_url(runtime_status.get("automation_url"))
+    if public_runtime_status == "running":
+        if public_vnc_ws_port is None:
             warnings.append(
                 HealthWarning(
                     code="runtime_vnc_missing",
@@ -259,7 +297,7 @@ def compute_profile_health(
                     action="重启 profile 或检查 VNC runtime。",
                 )
             )
-        if not runtime_status.get("automation_url"):
+        if public_automation_url is None:
             warnings.append(
                 HealthWarning(
                     code="runtime_automation_missing",
@@ -278,9 +316,9 @@ def compute_profile_health(
             "locale": manual_locale is not None,
         },
         runtime={
-            "status": runtime_status.get("status", "stopped"),
-            "vnc_ws_port": runtime_status.get("vnc_ws_port"),
-            "automation_url": runtime_status.get("automation_url"),
+            "status": public_runtime_status,
+            "vnc_ws_port": public_vnc_ws_port,
+            "automation_url": public_automation_url,
         },
         warnings=warnings,
         checked_at=checked_at,

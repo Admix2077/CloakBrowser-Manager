@@ -5866,3 +5866,43 @@ npm --prefix frontend run build
 - 这是 health-check audit/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 health response schema、GeoIP lookup provider 选择、profile health 业务判断、profile lifecycle、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Health response runtime public-value guardrail
+
+背景：
+
+- Profile health response 的 `runtime` 对象会进入 API/UI release evidence。
+- 正常 BrowserManager runtime 只应提供 `running` / `stopped`、合法 VNC WebSocket 端口，以及内部 `/api/profiles/<id>/automation` path。
+- 异常测试桩、污染 runtime object 或未来集成错误不应把 Authorization/Bearer、`token=`、外部 manager host、URL query 或非法端口文本带入 health response。
+
+已覆盖：
+
+- `compute_profile_health()` 对 runtime response 做公开值过滤：非 `running` / `stopped` status 折叠为 `unknown`。
+- `vnc_ws_port` 只保留 1..65535 的非 bool 整数；字符串、bool、越界值统一输出 `null`。
+- `automation_url` 只保留内部 `/api/profiles/<public-id>/automation` 形态，并过滤 token/header/password/secret/cookie/viewer token 词；外部 URL、query、header/token 文本输出 `null`。
+- 运行态缺失 warning 现在基于公开 runtime 值判断，避免污染字符串因为 truthy 而掩盖缺失 VNC/Automation。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -k "runtime_evidence" -q
+# RED: 旧实现把污染 runtime status/port/automation_url 原样写入 response；GREEN: 1 passed, 25 deselected
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 26 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 649 passed in 39.21s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+```
+
+边界：
+
+- 这是 Profile health response observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 GeoIP lookup、profile health warning catalog、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

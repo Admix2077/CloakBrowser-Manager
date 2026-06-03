@@ -5548,3 +5548,43 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
 - 不改变 backend API response schemas、health warning catalog、GeoIP lookup provider 行为、profile lifecycle、VNC/runtime viewer、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health-check audit metadata release-evidence 边界。
+
+## 2026-06-04 Health response runtime release-evidence guardrail
+
+背景：
+
+- Release regression 的 Profile health evidence 不只读取 audit metadata，也会读取 health API response。
+- 旧 `compute_profile_health()` 直接把 `runtime_status.status`、`vnc_ws_port`、`automation_url` 写入 response。
+- 如果异常 runtime object 或测试桩把 Authorization/Bearer、`token=`、外部 URL/query 或非法端口文本塞进这些字段，health response evidence 会出现非公开内容。
+
+已覆盖：
+
+- Health response `runtime.status` 只保留 `running` / `stopped`，其他值折叠为 `unknown`。
+- `runtime.vnc_ws_port` 只保留合法 TCP 端口整数，污染字符串、bool 和越界值输出 `null`。
+- `runtime.automation_url` 只保留内部 `/api/profiles/<id>/automation` path，并拒绝 URL/query/header/token/password/secret/cookie/viewer token 文本。
+- Runtime missing warning 判断改为使用公开 runtime 值，避免污染 truthy 字符串掩盖 VNC/Automation 缺失。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -k "runtime_evidence" -q
+# RED then GREEN；旧实现把污染 runtime status/port/automation_url 原样写入 health response
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 26 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 649 passed in 39.21s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.20s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 不改变 backend health response schema、GeoIP lookup provider 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health response runtime release-evidence 边界。
