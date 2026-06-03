@@ -790,6 +790,36 @@ def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse
     return ProxyProviderPresetResponse(**safe)
 
 
+def _proxy_provider_preset_audit_metadata(
+    preset: dict,
+    *,
+    updated_fields: list[str] | None = None,
+) -> dict:
+    metadata = {
+        "preset_id": str(preset["id"]),
+        "tag_count": len(preset.get("tags") or []),
+    }
+    if updated_fields is not None:
+        metadata["updated_fields"] = sorted(updated_fields)
+    return metadata
+
+
+def _audit_proxy_provider_preset_event(
+    event_type: str,
+    preset: dict,
+    *,
+    updated_fields: list[str] | None = None,
+) -> None:
+    db.create_audit_event(
+        event_type=event_type,
+        actor_type="local_admin",
+        metadata=_proxy_provider_preset_audit_metadata(
+            preset,
+            updated_fields=updated_fields,
+        ),
+    )
+
+
 def _tag_payloads(tags: list[dict] | None) -> list[dict]:
     return [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in (tags or [])]
 
@@ -1225,6 +1255,7 @@ async def create_proxy_provider_preset(req: ProxyProviderPresetCreate):
     data = req.model_dump()
     data["tags"] = _tag_payloads(data.get("tags"))
     preset = db.create_proxy_provider_preset(**data)
+    _audit_proxy_provider_preset_event("proxy.provider_preset.created", preset)
     return _proxy_provider_preset_response(preset)
 
 
@@ -1239,11 +1270,17 @@ async def get_proxy_provider_preset(preset_id: str):
 @app.put("/api/proxy-provider-presets/{preset_id}", response_model=ProxyProviderPresetResponse)
 async def update_proxy_provider_preset(preset_id: str, req: ProxyProviderPresetUpdate):
     data = req.model_dump(exclude_unset=True)
+    audit_fields = sorted(data.keys())
     if "tags" in data and data["tags"] is not None:
         data["tags"] = _tag_payloads(data["tags"])
     preset = db.update_proxy_provider_preset(preset_id, **data)
     if not preset:
         raise HTTPException(status_code=404, detail="Proxy provider preset not found")
+    _audit_proxy_provider_preset_event(
+        "proxy.provider_preset.updated",
+        preset,
+        updated_fields=audit_fields,
+    )
     return _proxy_provider_preset_response(preset)
 
 
@@ -1263,9 +1300,13 @@ async def delete_proxy_provider_preset(preset_id: str, request: Request):
             detail="Proxy provider preset delete requires explicit confirmation",
         )
 
+    preset = db.get_proxy_provider_preset(preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Proxy provider preset not found")
     deleted = db.delete_proxy_provider_preset(preset_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Proxy provider preset not found")
+    _audit_proxy_provider_preset_event("proxy.provider_preset.deleted", preset)
     return {"ok": True}
 
 

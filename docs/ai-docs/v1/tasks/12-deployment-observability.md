@@ -1956,3 +1956,50 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 audit event schema、event types、actor/profile/session ids、runtime viewer flow、automation task semantics、profile/proxy CRUD behavior、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
 - 不记录或公开 audit metadata string value 中的 token/password/secret/cookie/Authorization/Bearer 文本；proxy URL host redaction 行为保持既有低敏 URL bucket。
+
+## 2026-06-03 Proxy provider preset audit observability guardrail
+
+背景：
+
+- Proxy provider presets 会影响 random assign 与 CSV import 默认值，但 CRUD API 之前没有 audit event。
+- Preset 的 name/provider/notes/tags 是自由文本，可能包含 provider URL、token、Authorization/Bearer 或内部命名；新增 audit 需要只记录低敏 metadata。
+
+已覆盖：
+
+- Provider preset create/update/delete 成功后写入 audit events：
+  - `proxy.provider_preset.created`
+  - `proxy.provider_preset.updated`
+  - `proxy.provider_preset.deleted`
+- Audit metadata 仅包含 `preset_id`、`tag_count`，update 时额外包含 `updated_fields`。
+- 不记录 name、provider、country_code、notes、tag text、credential、provider host 或 token-like 文本。
+- Provider preset CRUD API、proxy manager frontend API/page 行为保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_crud_writes_low_sensitive_audit_events -q
+# RED: 1 failed；provider preset CRUD 没有 audit events
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_crud_writes_low_sensitive_audit_events -q
+# 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py backend/tests/test_proxies.py -q
+# 40 passed in 3.64s
+
+npm --prefix frontend test -- --run ProxyManagerPage api
+# Test Files 2 passed；Tests 61 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 560 passed in 33.39s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.91s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 provider preset storage/response fields、random assign selection semantics、CSV import preset application、profile/proxy CRUD behavior、audit event schema、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- 不记录或公开 provider preset name/provider/notes/tag text、provider URL/host/query token、Authorization/Bearer、headers、cookies、local storage、viewer token、runtime service token、automation payload、profile dir 或页面内容。

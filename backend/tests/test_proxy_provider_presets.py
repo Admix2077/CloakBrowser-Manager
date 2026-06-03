@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from starlette.testclient import TestClient
@@ -131,6 +132,74 @@ def test_proxy_provider_preset_crud_api(app_client: TestClient):
     assert delete.status_code == 200
     assert delete.json() == {"ok": True}
     assert app_client.get(f"/api/proxy-provider-presets/{data['id']}").status_code == 404
+
+
+def test_proxy_provider_preset_crud_writes_low_sensitive_audit_events(
+    app_client: TestClient,
+):
+    create = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Preset https://provider.example/?token=super-secret",
+            "provider": "Authorization=Bearer super-secret",
+            "country_code": "JP",
+            "tags": [{"tag": "mobile-token-super-secret", "color": "#0ea5e9"}],
+            "notes": "notes token=super-secret provider.example",
+        },
+    )
+    assert create.status_code == 201
+    preset_id = create.json()["id"]
+
+    update = app_client.put(
+        f"/api/proxy-provider-presets/{preset_id}",
+        json={
+            "name": "Updated https://provider.example/?token=new-secret",
+            "provider": "token=new-secret",
+            "tags": [{"tag": "priority-secret", "color": None}],
+            "notes": "Authorization=Bearer new-secret",
+        },
+    )
+    assert update.status_code == 200
+
+    delete = app_client.request(
+        "DELETE",
+        f"/api/proxy-provider-presets/{preset_id}",
+        json={"confirm_delete": True},
+    )
+    assert delete.status_code == 200
+
+    events = db.list_audit_events()
+    assert [event["event_type"] for event in events] == [
+        "proxy.provider_preset.created",
+        "proxy.provider_preset.updated",
+        "proxy.provider_preset.deleted",
+    ]
+    assert all(event["actor_type"] == "local_admin" for event in events)
+    assert events[0]["metadata"] == {
+        "preset_id": preset_id,
+        "tag_count": 1,
+    }
+    assert events[1]["metadata"] == {
+        "preset_id": preset_id,
+        "updated_fields": ["name", "notes", "provider", "tags"],
+        "tag_count": 1,
+    }
+    assert events[2]["metadata"] == {
+        "preset_id": preset_id,
+        "tag_count": 1,
+    }
+
+    serialized_events = json.dumps(events, sort_keys=True)
+    for leaked in (
+        "provider.example",
+        "super-secret",
+        "new-secret",
+        "Authorization",
+        "Bearer",
+        "mobile-token-super-secret",
+        "priority-secret",
+    ):
+        assert leaked not in serialized_events
 
 
 def test_delete_proxy_provider_preset_requires_explicit_confirmation_without_side_effects(

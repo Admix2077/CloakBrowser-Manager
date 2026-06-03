@@ -1822,3 +1822,43 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 audit event schema、event types、actor/profile/session ids、runtime viewer flow、automation task semantics、profile/proxy CRUD behavior、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 Proxy provider preset audit observability guardrail
+
+背景：
+
+- Proxy provider presets 是 proxy release workflow 的配置面，但 create/update/delete 缺少 audit trail。
+- Preset 字段是自由文本，审计必须避免记录 provider host、token、Authorization/Bearer 或 tag/name/notes 内容。
+
+已覆盖：
+
+- Provider preset CRUD 成功路径写入低敏 audit events。
+- Metadata 仅记录 `preset_id`、`tag_count` 和 update 的 `updated_fields`。
+- Provider preset CRUD、random assign、CSV import preset 使用和前端 proxy manager 行为保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py::test_proxy_provider_preset_crud_writes_low_sensitive_audit_events -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_proxy_provider_presets.py backend/tests/test_proxies.py -q
+# 40 passed in 3.64s
+
+npm --prefix frontend test -- --run ProxyManagerPage api
+# Test Files 2 passed；Tests 61 passed
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 560 passed in 33.39s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 4.91s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 provider preset storage/response fields、random assign selection semantics、CSV import preset application、profile/proxy CRUD behavior、audit event schema、stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token 或 runtime session 行为。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
