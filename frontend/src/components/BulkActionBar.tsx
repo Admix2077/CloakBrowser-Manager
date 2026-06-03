@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, Download, HeartPulse, Play, Square, Tags, Tras
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
+import { publicErrorText } from "../lib/errorDisplay";
 
 const DEFAULT_BULK_TAG_COLOR = "#6366f1";
 
@@ -80,6 +81,7 @@ export function BulkActionBar({
         : "Delete selected stopped profiles"
     : "Bulk delete is disabled in this console";
   const deleteConfirmReady = deleteConfirmText === "DELETE";
+  const feedbackMessage = feedback ? publicErrorText(feedback.message) || "Profile operation updated" : null;
 
   useEffect(() => {
     if (!deleteConfirmOpen || stoppedCount > 0) return;
@@ -176,7 +178,7 @@ export function BulkActionBar({
                     : "border-emerald-200 bg-emerald-50 text-emerald-700"
                 }`}
               >
-                {feedback.message}
+                {feedbackMessage}
               </span>
             )}
           </div>

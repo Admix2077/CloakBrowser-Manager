@@ -6301,3 +6301,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 proxy/provider preset API schema、proxy asset persistence、provider preset persistence、CSV parsing, CSV import payload、proxy URL credential redaction、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Bulk profile feedback UI evidence guardrail
+
+背景：
+
+- BulkActionBar 的 health/export 等批量操作 feedback 属于 Profile operations release smoke 可见 UI evidence。
+- App 当前大多传固定计数摘要，但组件边界仍会原样渲染调用方传入的 `feedback.message`。
+- 如果异常/历史调用方把 Authorization/Bearer、`token=`、本地路径或 IP 字面量写入 bulk feedback，会进入可见 evidence；这是 Manager 可控 UI 展示边界，不是底层 fingerprint 检测问题。
+
+已覆盖：
+
+- BulkActionBar feedback message 现在使用共享 `publicErrorText()`，空结果回退为固定低敏文案。
+- Success/warning role、aria-label、bulk health/export 操作入口和选择栏行为保持不变。
+- 正常 `Health checked for ...`、`Health check finished ...`、`Export finished ...` 这类低敏计数摘要保持原样。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts bulk operation feedback"
+# RED: 旧实现把污染 feedback.message 原样写入 bulk feedback；GREEN: 1 passed, 39 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
+# 40 passed
+```
+
+边界：
+
+- 这是 BulkActionBar/Profile operations UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 bulk action API 调用、profile health check/export/tag/delete semantics、ProfileTable selection behavior、profile API schema、profile persistence、profile lifecycle、runtime session behavior、viewer behavior、Automation API、profile launch backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

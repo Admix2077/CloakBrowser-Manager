@@ -5983,3 +5983,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、proxy/provider preset persistence、CSV parsing、CSV import payload、proxy assignment/random assignment 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CSV import provider preset selector UI release-evidence 边界。
+
+## 2026-06-04 Bulk profile feedback UI release-evidence guardrail
+
+背景：
+
+- Profile operations bulk action bar 的 health/export feedback 是批量回归路径上的可见 release evidence。
+- 旧组件直接渲染调用方传入的 `feedback.message`，虽然当前 App 通常传固定计数摘要，但组件边界没有防御异常/历史 raw error text。
+- 如果 bulk feedback 含 Authorization/Bearer、`token=`、本地路径或 IP 字面量，会进入 Profile operations evidence。
+
+已覆盖：
+
+- BulkActionBar feedback text 使用共享 public error text boundary。
+- Warning/success role、aria-label、bulk health/export 操作入口和选择栏行为保持不变。
+- 正常低敏计数反馈文案保持原样；空 redaction 结果回退为固定低敏文案。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx -t "redacts bulk operation feedback"
+# RED then GREEN；旧实现把污染 feedback.message 原样写入 bulk feedback evidence
+
+npm --prefix frontend test -- --run src/components/ProfileTable.test.tsx
+# 40 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、bulk action API semantics、profile health/export/tag/delete semantics、ProfileTable selection behavior、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、GeoIP lookup provider 行为、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 BulkActionBar feedback UI release-evidence 边界。
