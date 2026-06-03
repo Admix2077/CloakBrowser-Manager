@@ -53,6 +53,7 @@ _SAFE_PROXY_ERROR_DETAILS = (
     ("Proxy URL missing port", "Proxy URL missing port"),
 )
 _PUBLIC_RUNTIME_STATUSES = {"running", "stopped"}
+_PUBLIC_PROFILE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _PUBLIC_AUTOMATION_URL_RE = re.compile(r"^/api/profiles/[A-Za-z0-9][A-Za-z0-9._-]{0,127}/automation$")
 _SENSITIVE_RUNTIME_TEXT_RE = re.compile(
     r"https?://|socks[45]://|@|\b(authorization|bearer)\b|"
@@ -184,6 +185,19 @@ def _public_runtime_status(value: object) -> str:
     return "unknown"
 
 
+def _public_profile_id(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    text = value.strip()
+    if not text:
+        return "unknown"
+    if not _PUBLIC_PROFILE_ID_RE.fullmatch(text):
+        return "unknown"
+    if _SENSITIVE_RUNTIME_TEXT_RE.search(text):
+        return "unknown"
+    return text
+
+
 def _public_runtime_vnc_ws_port(value: object) -> int | None:
     if isinstance(value, bool):
         return None
@@ -308,7 +322,7 @@ def compute_profile_health(
             )
 
     return ProfileHealthResponse(
-        profile_id=str(profile.get("id")),
+        profile_id=_public_profile_id(profile.get("id")),
         status=_status_from_warnings(warnings, geoip),
         geoip=geoip,
         manual_overrides={

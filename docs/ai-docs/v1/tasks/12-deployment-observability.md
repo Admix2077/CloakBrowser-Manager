@@ -5906,3 +5906,42 @@ npm --prefix frontend run build
 - 这是 Profile health response observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 GeoIP lookup、profile health warning catalog、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Health response profile id public-value guardrail
+
+背景：
+
+- Profile health response 的 `profile_id` 会进入 API/UI release evidence。
+- Health check audit/log 已经对污染 profile id 做了保护，但 response 层此前仍直接使用 `profile.id`。
+- 异常历史 row 或手工污染 profile id 可能包含 Authorization/Bearer、`token=`、空格或其他非公开文本。
+
+已覆盖：
+
+- `compute_profile_health()` 现在对 response `profile_id` 使用公开值边界。
+- 只保留短 ASCII id 字符集；空值、非字符串、包含空格、URL/header/token/password/secret/cookie/viewer-token 文本的 profile id 统一显示为 `unknown`。
+- 现有 audit/log profile id redaction 保持不变；response、audit、log 三处一起覆盖污染 profile id。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -k "persisted_profile_id" -q
+# RED: 旧实现把污染 profile id 写入 health response；GREEN: 1 passed, 25 deselected
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 26 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 649 passed in 38.88s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.06s
+```
+
+边界：
+
+- 这是 Profile health response observability/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 GeoIP lookup、profile health warning catalog、profile launch/stop、VNC/runtime viewer、Automation API、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

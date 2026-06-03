@@ -5588,3 +5588,42 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
 - 不改变 backend health response schema、GeoIP lookup provider 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health response runtime release-evidence 边界。
+
+## 2026-06-04 Health response profile id release-evidence guardrail
+
+背景：
+
+- Release regression 的 Profile health API evidence 会包含 `profile_id`。
+- Health check audit/log 边界已经隐藏污染 profile id，但 response 仍直接来自 persisted `profile.id`。
+- 历史/手工污染 row 可能把 Authorization/Bearer、`token=`、URL 或空格文本放入 profile id，导致 health response evidence 泄漏。
+
+已覆盖：
+
+- Health response `profile_id` 增加公开值边界。
+- 正常短 ASCII id 保留；非字符串、空值、包含空格、URL/header/token/password/secret/cookie/viewer-token 文本的 id 折叠为 `unknown`。
+- 既有 health check audit/log profile id redaction 继续生效；本轮补齐 response 层。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -k "persisted_profile_id" -q
+# RED then GREEN；旧实现把污染 profile id 写入 health response
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 26 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 649 passed in 38.88s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 242 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.06s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 不改变 backend health response schema、GeoIP lookup provider 行为、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health response profile id release-evidence 边界。

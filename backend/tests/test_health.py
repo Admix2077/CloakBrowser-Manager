@@ -797,12 +797,16 @@ def test_health_check_audit_and_logs_sanitize_persisted_profile_id(
         )
 
     assert resp.status_code == 200
+    assert resp.json()["profile_id"] == "unknown"
     events = _health_audit_events()
     assert len(events) == 1
     assert events[0]["profile_id"] is None
     assert "action=profile.health_geoip_lookup_failed profile_id=unknown" in caplog.text
 
-    serialized = json.dumps({"event": events[0], "logs": caplog.text}, sort_keys=True)
+    serialized = json.dumps(
+        {"response": resp.json(), "event": events[0], "logs": caplog.text},
+        sort_keys=True,
+    )
     for leaked in (
         leak_marker,
         "Authorization",
