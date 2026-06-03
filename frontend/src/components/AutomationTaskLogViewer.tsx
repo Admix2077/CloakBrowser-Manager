@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, Clock, ListChecks, RefreshCw, Search, X, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type AutomationTask, type AutomationTaskResultStep, type AutomationTaskStep } from "../lib/api";
+import { publicErrorText } from "../lib/errorDisplay";
 import { formatTimestamp } from "../lib/profileDisplay";
 
 const DEFAULT_TASK_LIMIT = 50;
@@ -228,7 +229,7 @@ export function AutomationTaskLogViewer() {
                     <ResultList steps={task.result?.steps ?? []} />
                   </BodyCell>
                   <BodyCell>
-                    <span className="line-clamp-2 text-slate-600">{task.error ?? "-"}</span>
+                    <span className="line-clamp-2 text-slate-600">{taskErrorText(task.error) ?? "-"}</span>
                   </BodyCell>
                   <BodyCell>
                     <span className="text-slate-500">{formatTimestamp(task.created_at)}</span>
@@ -382,6 +383,8 @@ function ResultList({ steps, maxItems = 4 }: { steps: AutomationTaskResultStep[]
 }
 
 function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: () => void }) {
+  const safeTaskError = taskErrorText(task.error);
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/20" role="presentation">
       <aside
@@ -415,9 +418,9 @@ function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: ()
             <DetailField label="Finished" value={formatTimestamp(task.finished_at)} />
           </div>
 
-          {task.error && (
+          {safeTaskError && (
             <div className="mt-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {task.error}
+              {safeTaskError}
             </div>
           )}
 
@@ -458,6 +461,11 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
       <div className="mt-2">{children}</div>
     </section>
   );
+}
+
+function taskErrorText(error: string | null): string | null {
+  if (!error) return null;
+  return publicErrorText(error) || "Task failed";
 }
 
 function stepSummary(step: AutomationTaskStep): string[] {

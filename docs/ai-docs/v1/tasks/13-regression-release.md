@@ -5237,3 +5237,43 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 backend API response schemas、proxy CRUD/check backend、profile assignment/random assignment、GeoIP lookup、audit event schema、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager persisted text release-evidence 边界。
+
+## 2026-06-04 Automation task error UI release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 Automation task table 和 task detail drawer。
+- 后端 response 已有 task error redaction，但前端此前直接渲染 `task.error`。
+- 历史/手工污染 task row 或异常 response 可能把 Authorization/Bearer、token=、本地路径或 IP literal 带到 UI。
+
+已覆盖：
+
+- Automation Task Log Viewer 的 table error column 使用 `publicErrorText()`。
+- Task detail drawer 的 task error alert 使用同一公共错误边界。
+- 低敏错误摘要保留；header/token/path/IP literal 不再进入可见 evidence。
+- Step/result summary、状态筛选、task/profile id 搜索、readonly 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# RED then GREEN；旧实现保留 Authorization/Bearer、token=、/data|/tmp path、IPv4 和 IPv6 task.error
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.34s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 234 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.01s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 backend API response schemas、automation task persistence/worker execution、task lifecycle statuses、profile launch backend、proxy、GeoIP lookup、runtime session behavior、viewer behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task error UI release-evidence 边界。

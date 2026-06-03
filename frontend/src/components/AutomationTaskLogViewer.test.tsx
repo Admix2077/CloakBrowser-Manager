@@ -36,6 +36,7 @@ beforeEach(() => {
 
 describe("AutomationTaskLogViewer", () => {
   it("renders a read-only task log with redacted step and result summaries", async () => {
+    const errorLeakMarker = "task-error-token-secret";
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [
         task({
@@ -86,7 +87,10 @@ describe("AutomationTaskLogViewer", () => {
               },
             ] as AutomationTask["result"]["steps"],
           },
-          error: "Fill step failed",
+          error:
+            "Fill step failed " +
+            `Authorization=Bearer ${errorLeakMarker} token=${errorLeakMarker} ` +
+            `/data/tasks/${errorLeakMarker} from 203.0.113.45`,
         }),
       ],
     });
@@ -104,9 +108,15 @@ describe("AutomationTaskLogViewer", () => {
     expect(within(page).getAllByText("timeout 30000ms").length).toBeGreaterThan(0);
     expect(within(page).getByText("0 open_url succeeded")).toBeTruthy();
     expect(within(page).getByText("1 fill failed")).toBeTruthy();
+    expect(within(page).getByText(/Fill step failed/)).toBeTruthy();
 
     expect(page.textContent).not.toContain("https://example.com/account");
     expect(page.textContent).not.toContain("token");
+    expect(page.textContent).not.toContain(errorLeakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("/data/tasks");
+    expect(page.textContent).not.toContain("203.0.113.45");
     expect(page.textContent).not.toContain("super-secret");
     expect(page.textContent).not.toContain("#password");
     expect(page.textContent).not.toContain("input-secret");
@@ -235,6 +245,7 @@ describe("AutomationTaskLogViewer", () => {
   });
 
   it("opens a read-only task detail drawer without rendering sensitive payloads", async () => {
+    const errorLeakMarker = "drawer-task-error-secret";
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [
         task({
@@ -290,7 +301,10 @@ describe("AutomationTaskLogViewer", () => {
             ] as AutomationTask["result"]["steps"],
             raw_url: "https://example.com/result?token=result-secret",
           },
-          error: "Open URL step failed",
+          error:
+            "Open URL step failed " +
+            `Authorization=Bearer ${errorLeakMarker} token=${errorLeakMarker} ` +
+            `/tmp/tasks/${errorLeakMarker} from [2001:db8::46]:443`,
           started_at: "2026-05-27T00:00:01Z",
           finished_at: "2026-05-27T00:00:02Z",
         }),
@@ -316,12 +330,17 @@ describe("AutomationTaskLogViewer", () => {
     expect(within(drawer).getByText("scroll")).toBeTruthy();
     expect(within(drawer).getByText("2 click cancelled")).toBeTruthy();
     expect(within(drawer).getByText("4 scroll succeeded")).toBeTruthy();
-    expect(within(drawer).getByText("Open URL step failed")).toBeTruthy();
+    expect(within(drawer).getByText(/Open URL step failed/)).toBeTruthy();
     expect(within(drawer).queryByText("+1 more steps")).toBeNull();
     expect(within(drawer).queryByText("+1 more results")).toBeNull();
 
     expect(drawer.textContent).not.toContain("https://example.com");
     expect(drawer.textContent).not.toContain("token");
+    expect(drawer.textContent).not.toContain(errorLeakMarker);
+    expect(drawer.textContent).not.toContain("Authorization");
+    expect(drawer.textContent).not.toContain("Bearer");
+    expect(drawer.textContent).not.toContain("/tmp/tasks");
+    expect(drawer.textContent).not.toContain("2001:db8::46");
     expect(drawer.textContent).not.toContain("super-secret");
     expect(drawer.textContent).not.toContain("result-secret");
     expect(drawer.textContent).not.toContain("#danger");
