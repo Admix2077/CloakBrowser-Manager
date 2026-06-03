@@ -1221,6 +1221,31 @@ def _public_ws_close_code(value: object) -> int | None:
     return None
 
 
+_PUBLIC_WS_MESSAGE_TYPES = {"websocket.receive", "websocket.disconnect"}
+_PUBLIC_WS_MESSAGE_KEYS = {"type", "bytes", "text", "code", "reason"}
+
+
+def _public_ws_message_type(value: object) -> str:
+    if isinstance(value, str) and value in _PUBLIC_WS_MESSAGE_TYPES:
+        return value
+    return "unknown"
+
+
+def _public_ws_message_keys(message: object) -> list[str]:
+    if not isinstance(message, dict):
+        return []
+    public_keys: list[str] = []
+    has_unknown = False
+    for key in message:
+        if key in _PUBLIC_WS_MESSAGE_KEYS:
+            public_keys.append(key)
+        else:
+            has_unknown = True
+    if has_unknown:
+        public_keys.append("unknown")
+    return sorted(set(public_keys))
+
+
 def _public_runtime_viewer_subprotocol(value: object) -> str | None:
     return "binary" if value == "binary" else None
 
@@ -4581,7 +4606,11 @@ async def _proxy_running_vnc(
                             logger.warning("VNC proxy [c->v]: DROPPING text frame len=%d (noVNC should only send binary)", len(msg["text"]))
                             dropped += 1
                         else:
-                            logger.warning("VNC proxy [c->v]: unhandled msg keys=%s type=%s", list(msg.keys()), msg_type)
+                            logger.warning(
+                                "VNC proxy [c->v]: unhandled msg keys=%s type=%s",
+                                _public_ws_message_keys(msg),
+                                _public_ws_message_type(msg_type),
+                            )
                 except WebSocketDisconnect as exc:
                     close_code = _public_ws_close_code(exc.code)
                     disconnect_metadata["close_code"] = close_code

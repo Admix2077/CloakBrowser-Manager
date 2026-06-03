@@ -4557,3 +4557,46 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 现在按底层/第三方检测站 blocker 管理。
 - 不改变 VNC proxy forwarding、RFB filtering、viewer token validation、runtime session state machine、profile launch、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；后续可以继续关闭 Manager 可控的 release stability/redaction/observability 缺口。
+
+## 2026-06-03 VNC unhandled message release-evidence guardrail
+
+背景：
+
+- Release smoke 和远程 viewer triage 需要保留 VNC proxy 的低敏异常信号。
+- VNC client-to-backend loop 对未处理 websocket message 会记录 message `keys` 和 `type`。
+- 原实现信任 raw transport dict；异常 adapter 如果把 token/header/URL 风格文本放进 key 或 type，会进入 VNC release logs。
+
+已覆盖：
+
+- VNC proxy unhandled message 日志现在通过 public allowlist 输出 key/type。
+- Public type 只允许 `websocket.receive` / `websocket.disconnect`；其它 type 折叠为 `unknown`。
+- Public key 只允许 `type`、`bytes`、`text`、`code`、`reason`；其它 key 合并为 `unknown`。
+- 正常 VNC connect、disconnect、Xvnc log availability、connect failure profile-id redaction、runtime viewer close-code audit 测试保持通过。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_unhandled_message_log_uses_public_keys_and_type -q
+# RED then GREEN；旧实现泄露 Authorization/Bearer/token 风格 raw key/type，最终 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc or runtime_viewer" -q
+# 9 passed, 246 deselected in 1.09s
+
+.venv/bin/python -m pytest backend/tests -q
+# 646 passed in 37.66s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.67s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 VNC proxy forwarding、RFB filtering、clipboard handling、viewer token validation、runtime session state machine、profile launch、Automation API、Proxy Manager、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC release evidence 日志边界。

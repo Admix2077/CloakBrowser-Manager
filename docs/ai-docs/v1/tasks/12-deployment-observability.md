@@ -4864,3 +4864,45 @@ git diff --check
 - 这是 VNC/runtime viewer release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变底层 `invisible_playwright`、stealth prefs、Firefox identity、WebGL、WebRTC、UA、locale/timezone、proxy、profile launch 或 Docker runtime 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 VNC proxy unhandled-message log guardrail
+
+背景：
+
+- VNC proxy client-to-backend loop 会在遇到未识别 websocket message shape 时记录 `keys` 和 `type`。
+- 正常 Starlette transport 只会产生固定低敏 key/type，但异常测试 transport 或未来 adapter 不应被信任。
+- 原实现会把 raw message key 和 raw type 写入日志；如果其中包含 URL/query token/header 文本，会进入 release evidence。
+
+已覆盖：
+
+- 新增 `_public_ws_message_type()`，只保留 `websocket.receive` / `websocket.disconnect`，其它值折叠为 `unknown`。
+- 新增 `_public_ws_message_keys()`，只保留 `type`、`bytes`、`text`、`code`、`reason`，其它 key 合并为 `unknown`。
+- VNC proxy unhandled message 日志现在只记录 public keys/type。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_unhandled_message_log_uses_public_keys_and_type -q
+# RED: 旧实现泄露 Authorization/Bearer/token 风格 raw key/type；GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc or runtime_viewer" -q
+# 9 passed, 246 deselected in 1.09s
+
+.venv/bin/python -m pytest backend/tests -q
+# 646 passed in 37.66s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.67s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 VNC proxy log/release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 WebSocket accept、VNC forwarding、RFB filtering、clipboard bridge、viewer token、runtime session、profile launch 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。

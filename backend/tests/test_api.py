@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import io
 import json
@@ -7695,6 +7696,77 @@ async def test_vnc_proxy_disconnect_close_code_is_public_in_logs_and_metadata(
 
     assert len(disconnected) == 1
     assert disconnected[0]["close_code"] in (None, 1000)
+    assert leak_marker not in caplog.text
+    assert "Authorization" not in caplog.text
+    assert "Bearer" not in caplog.text
+    assert "token=" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_vnc_proxy_unhandled_message_log_uses_public_keys_and_type(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "vnc-unhandled-message-secret"
+    running = MagicMock(spec=RunningProfile)
+    running.display = 100
+    running.ws_port = 6100
+    running.profile_id = "vnc-unhandled-message-profile"
+
+    class FakeClientWebSocket:
+        scope = {"subprotocols": ["binary"]}
+
+        def __init__(self):
+            self._messages = [
+                {
+                    "type": f"websocket.receive Authorization=Bearer {leak_marker}",
+                    f"token={leak_marker}": "ignored",
+                },
+                {"type": "websocket.disconnect", "code": 1000},
+            ]
+
+        async def accept(self, subprotocol=None):
+            pass
+
+        async def receive(self):
+            return self._messages.pop(0)
+
+        async def close(self):
+            pass
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            await asyncio.sleep(0.05)
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    await main._proxy_running_vnc(
+        FakeClientWebSocket(),
+        "vnc-unhandled-message-profile",
+        running,
+    )
+
+    assert "VNC proxy [c->v]: unhandled msg" in caplog.text
     assert leak_marker not in caplog.text
     assert "Authorization" not in caplog.text
     assert "Bearer" not in caplog.text
