@@ -3731,3 +3731,45 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 audit event reader guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 Automation task timestamp guardrail
+
+背景：
+
+- Automation task list/detail/cancel/retry/run response 是 release smoke 和 worker observability 的常用证据面。
+- 之前已经清洗 task id、profile id、status、error、steps 和 result，但历史/手工 DB row 的 `created_at`、`started_at`、`finished_at` 仍直接进入 response。
+- 如果 automation task timestamp 字段被污染为 URL/header/token 风格文本，会进入低敏 release evidence。
+
+已覆盖：
+
+- AutomationTaskResponse `created_at` 现在只保留可解析 ISO timestamp；非公开/污染值折叠为 `unknown`。
+- `started_at` 和 `finished_at` 现在只保留可解析 ISO timestamp；非公开/污染值折叠为 `null`。
+- DB 内部 task ordering、lease handling、worker/run/cancel/retry 状态更新不变，只在 response 输出侧过滤。
+- 正常 automation task create/list/detail/cancel/retry/run、worker terminal audit、task id/profile/status/error/step/result redaction 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_response_sanitizes_persisted_timestamp_fields -q
+# RED: 1 failed；created_at 直接保留 token-like timestamp text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_automation_task_response_sanitizes_persisted_timestamp_fields -q
+# 1 passed in 0.87s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "automation_task"
+# 41 passed, 198 deselected in 5.05s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 615 passed in 40.58s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.86s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 automation task timestamp guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。

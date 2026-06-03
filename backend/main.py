@@ -3087,6 +3087,26 @@ def _automation_task_public_error(value: object) -> str | None:
     return value if value in _AUTOMATION_TASK_PUBLIC_ERRORS else _AUTOMATION_UNKNOWN_TASK_ERROR
 
 
+def _automation_task_public_required_timestamp(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    text = value.strip()
+    if not text or _parse_datetime(text) is None:
+        return "unknown"
+    return text
+
+
+def _automation_task_public_optional_timestamp(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text or _parse_datetime(text) is None:
+        return None
+    return text
+
+
 def _automation_task_public_result_index(value: object) -> int | None:
     if not isinstance(value, int) or isinstance(value, bool):
         return None
@@ -3169,6 +3189,9 @@ def _automation_task_response(task: dict) -> AutomationTaskResponse:
         "profile_id": _public_profile_identifier(task.get("profile_id")),
         "status": _automation_task_public_status(task.get("status")),
         "error": _automation_task_public_error(task.get("error")),
+        "created_at": _automation_task_public_required_timestamp(task.get("created_at")),
+        "started_at": _automation_task_public_optional_timestamp(task.get("started_at")),
+        "finished_at": _automation_task_public_optional_timestamp(task.get("finished_at")),
         "steps": _automation_task_redacted_steps(task.get("steps") or []),
         "result": _automation_task_redacted_result(task.get("result")),
     }

@@ -5081,6 +5081,46 @@ def test_automation_task_response_sanitizes_persisted_status_and_error_fields(ap
         assert leaked not in serialized
 
 
+def test_automation_task_response_sanitizes_persisted_timestamp_fields(app_client: TestClient):
+    profile_id = app_client.post("/api/profiles", json={"name": "TaskTimestampSanitizeProfile"}).json()["id"]
+    create_resp = app_client.post(
+        "/api/tasks",
+        json={"profile_id": profile_id, "steps": [{"type": "wait", "ms": 1}]},
+    )
+    task_id = create_resp.json()["id"]
+    leak_marker = "task-timestamp-secret"
+    with main.db.get_db() as conn:
+        conn.execute(
+            """UPDATE automation_tasks
+               SET created_at = ?, started_at = ?, finished_at = ?
+               WHERE id = ?""",
+            (
+                f"2026-06-03T00:00:00+00:00 token={leak_marker}",
+                f"started Authorization=Bearer {leak_marker}",
+                f"https://finished.example/?token={leak_marker}",
+                task_id,
+            ),
+        )
+        conn.commit()
+
+    get_resp = app_client.get(f"/api/tasks/{task_id}")
+    list_resp = app_client.get("/api/tasks")
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    listed_task = next(task for task in list_resp.json()["tasks"] if task["id"] == task_id)
+    for task in (get_resp.json(), listed_task):
+        assert task["created_at"] == "unknown"
+        assert task["started_at"] is None
+        assert task["finished_at"] is None
+
+    serialized = json.dumps({"get": get_resp.json(), "list": list_resp.json()}, sort_keys=True)
+    assert leak_marker not in serialized
+    assert "Authorization" not in serialized
+    assert "Bearer" not in serialized
+    assert "finished.example" not in serialized
+
+
 def test_get_automation_task_returns_persisted_task(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskGetProfile"})
     pid = create.json()["id"]
