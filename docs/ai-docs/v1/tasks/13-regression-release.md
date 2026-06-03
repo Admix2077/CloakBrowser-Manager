@@ -2055,3 +2055,46 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation navigation target URL、console/network capture internals 或 audit event schema。
 - Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。
+
+## 2026-06-03 VNC proxy Xvnc log dump redaction guardrail
+
+背景：
+
+- Release VNC/runtime viewer smoke 会走 `_proxy_running_vnc()`，该路径在 disconnect 后仍会 dump `/tmp/xvnc-{display}.log` raw lines。
+- Xvnc log 来自外部进程，不适合进入 manager logs；其中可能包含 backend URL、viewer token、Authorization/Bearer、profile path 或内部路径文本。
+
+已覆盖：
+
+- VNC proxy disconnect 只记录固定低敏 `action=vnc.xvnc_log_available` 事件和 display/profile_id。
+- 不再读取或输出 raw Xvnc log line。
+- 普通 VNC proxy、runtime viewer VNC proxy、connect/disconnect audit、backend failure audit、RFB filter、clipboard bridge 和 subprotocol behavior 保持不变。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.86s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'vnc_proxy or vnc_ws or ws_allows'
+# 6 passed, 212 deselected in 1.21s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q -k 'runtime_vnc'
+# 7 passed, 23 deselected in 1.59s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 568 passed in 32.37s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.12s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering 或 audit event schema。
+- Pixelscan/IPhey gate 仍未标记完成；`cbim-23h.6` 继续保持 blocker，`cbim-23h.1` 仍被阻塞。

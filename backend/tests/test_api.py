@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import io
 import json
 from pathlib import Path
 import sys
@@ -6029,6 +6030,66 @@ def test_vnc_proxy_connects_websockify_path(app_client: TestClient, monkeypatch:
     assert kwargs["subprotocols"] == ["binary"]
     assert kwargs["compression"] is None
     assert kwargs["ping_interval"] is None
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "VncXvncLogRedaction"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+    original_exists = main.os.path.exists
+    monkeypatch.setattr(
+        main.os.path,
+        "exists",
+        lambda path: path == "/tmp/xvnc-100.log" or original_exists(path),
+    )
+    xvnc_log = (
+        "viewer_token=xvnc-viewer-secret ws://127.0.0.1:6100/websockify\n"
+        "Authorization: Bearer xvnc-bearer-secret /tmp/profile-secret"
+    )
+    caplog.set_level("INFO", logger="invisible_browser.manager")
+
+    with patch("builtins.open", return_value=io.StringIO(xvnc_log)):
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": "http://testserver"},
+            subprotocols=["binary"],
+        ):
+            pass
+
+    assert "action=vnc.xvnc_log_available profile_id=" in caplog.text
+    assert "xvnc-viewer-secret" not in caplog.text
+    assert "xvnc-bearer-secret" not in caplog.text
+    assert "127.0.0.1:6100" not in caplog.text
+    assert "/tmp/profile-secret" not in caplog.text
     main.browser_mgr.running.pop(pid, None)
 
 

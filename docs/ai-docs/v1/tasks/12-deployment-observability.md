@@ -2223,3 +2223,49 @@ git diff --check
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC、viewer token、runtime session 行为、automation navigation target URL、console/network capture internals 或 audit event schema。
 - 不在 automation page titles 或 console log text 中公开 URL userinfo/query/fragment token、Authorization/Bearer/Basic credential、Cookie/Set-Cookie credential、token assignments、headers、local storage、viewer token、runtime service token、automation payload、profile dir 或截图内容。
+
+## 2026-06-03 VNC proxy Xvnc log dump redaction guardrail
+
+背景：
+
+- `_proxy_running_vnc()` 在 VNC proxy disconnect 后会检查 `/tmp/xvnc-{display}.log` 并把最后 20 行原样写入 manager logger。
+- Xvnc/KasmVNC log line 属于外部进程输出，可能包含 backend WebSocket URL、viewer token、Authorization/Bearer、profile path 或内部路径文本。此前 VNCManager start 阶段已避免输出 raw Xvnc log path/content，但 proxy disconnect dump 仍未覆盖。
+
+已覆盖：
+
+- VNC proxy disconnect 现在只记录固定低敏事件：`action=vnc.xvnc_log_available profile_id=... display=:...`。
+- 不再读取或输出 Xvnc log raw lines。
+- VNC backend connect、client/backend stream、runtime viewer audit、close_code audit、RFB filtering、clipboard bridge 和 WebSocket subprotocol behavior 保持不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log -q
+# RED: 1 failed；caplog 原样包含 xvnc-viewer-secret、xvnc-bearer-secret、127.0.0.1:6100 和 /tmp/profile-secret
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py::test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log -q
+# 1 passed in 0.86s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k 'vnc_proxy or vnc_ws or ws_allows'
+# 6 passed, 212 deselected in 1.21s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q -k 'runtime_vnc'
+# 7 passed, 23 deselected in 1.59s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 568 passed in 32.37s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.12s
+
+git diff --check
+# clean
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、VNC viewer token validation、runtime session state machine、RFB filtering 或 audit event schema。
+- 不在 VNC proxy disconnect logs 中公开 Xvnc raw log line、backend URL/port path、viewer token、Authorization/Bearer credential、profile dir、headers、cookies、local storage、automation payload 或页面内容。

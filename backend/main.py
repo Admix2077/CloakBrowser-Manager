@@ -4128,15 +4128,16 @@ async def _proxy_running_vnc(
                 finished, still_running, xvnc_alive, running.display, profile_id,
             )
 
-            # Dump Xvnc log on disconnect
+            # Xvnc logs can include backend URLs, profile paths, or token-like
+            # text. Keep a low-sensitive signal without dumping raw log lines.
             import os
             xvnc_log = f"/tmp/xvnc-{running.display}.log"
             if os.path.exists(xvnc_log):
-                with open(xvnc_log) as f:
-                    log_content = f.read()
-                if log_content.strip():
-                    for line in log_content.strip().split("\n")[-20:]:
-                        logger.info("Xvnc[:%d] %s", running.display, line)
+                logger.info(
+                    "action=vnc.xvnc_log_available profile_id=%s display=:%d",
+                    profile_id,
+                    running.display,
+                )
 
             for task in pending:
                 task.cancel()
