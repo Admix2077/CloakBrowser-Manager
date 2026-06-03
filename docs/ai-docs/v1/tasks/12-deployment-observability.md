@@ -4244,3 +4244,45 @@ git diff --check
 
 - 这是 GeoIP/WebRTC launch env 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw audit metadata 或外站页面原文。
+
+## 2026-06-03 VNC start failure exception redaction guardrail
+
+背景：
+
+- KasmVNC/Xvnc 启动失败时，`VNCManager.start_vnc()` 会读取 `/tmp/xvnc-<display>.log` 辅助排障。
+- 旧实现把整个 Xvnc log 内容拼进 `RuntimeError`。
+- 即使上层 API/log 多数只记录 `error_type`，异常对象本身仍可能携带 viewer token、URL、websockify path 或其它原始 VNC/Xvnc 文本，进入测试输出、调试终端或 release evidence。
+
+已覆盖：
+
+- Xvnc 退出时仍尝试读取 log，以保留 log-read failure 的低敏 `error_type` 调试行为。
+- 抛出的 `RuntimeError` 只保留固定 `Xvnc failed to start on :<display>`。
+- raw Xvnc log 内容不再进入异常 message。
+- VNC start request 低敏日志、allocation、cleanup_stale 和 active display 行为不变。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_start_vnc_failure_exception_omits_raw_xvnc_log -q
+# RED: RuntimeError 包含 viewer_token/xvnc log；GREEN: 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py -q
+# 16 passed in 0.05s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 632 passed in 39.66s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.79s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 VNC startup failure exception 和 release evidence 脱敏硬化，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不记录真实 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw VNC/Xvnc logs、raw audit metadata 或外站页面原文。

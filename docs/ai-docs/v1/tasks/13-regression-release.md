@@ -2612,6 +2612,47 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 VNC start failure exception guardrail
+
+背景：
+
+- Release Docker/profile/VNC smoke 可能遇到 Xvnc 启动失败。
+- 旧 `VNCManager.start_vnc()` 会把 Xvnc log 内容拼进 `RuntimeError`；如果 log 中出现 viewer token、websockify URL/path 或其它 raw runtime text，异常输出会成为敏感 release evidence。
+
+已覆盖：
+
+- Xvnc start failure 仍抛出可定位 display 的固定异常：`Xvnc failed to start on :<display>`。
+- raw Xvnc log 内容不再进入 exception message。
+- log read failure 继续只记录 `action=vnc.start_log_read_failed` 和 `error_type`。
+- VNC allocation、start request 低敏日志、cleanup_stale 和全量后端/前端门禁保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py::test_start_vnc_failure_exception_omits_raw_xvnc_log -q
+# RED then GREEN；初始 1 failed，最终 1 passed
+
+. .venv/bin/activate && python -m pytest backend/tests/test_vnc_manager.py -q
+# 16 passed in 0.05s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 632 passed in 39.66s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.79s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 GeoIP WebRTC env IP guardrail
 
 背景：

@@ -108,15 +108,14 @@ class VNCManager:
         if proc.poll() is not None:
             try:
                 with open(log_path) as f:
-                    err = f.read()
+                    f.read()
             except Exception as exc:
                 logger.debug(
                     "action=vnc.start_log_read_failed display=:%d error_type=%s",
                     display,
                     type(exc).__name__,
                 )
-                err = ""
-            raise RuntimeError(f"Xvnc failed to start on :{display}: {err}")
+            raise RuntimeError(f"Xvnc failed to start on :{display}")
 
         async with self._lock:
             if display in self._allocated:

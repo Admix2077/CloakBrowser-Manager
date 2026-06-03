@@ -175,6 +175,53 @@ async def test_start_vnc_log_read_failure_logs_error_type_without_raw_exception(
     assert "/tmp/xvnc-100.log" not in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_start_vnc_failure_exception_omits_raw_xvnc_log(
+    vnc: VNCManager,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class FakeLogFile:
+        def __init__(self, text: str = ""):
+            self.text = text
+
+        def read(self) -> str:
+            return self.text
+
+        def close(self) -> None:
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+    def fake_open(path: str, mode: str = "r", *args, **kwargs):
+        if mode == "w":
+            return FakeLogFile()
+        return FakeLogFile(
+            "viewer_token=xvnc-super-secret http://127.0.0.1:6100/websockify"
+        )
+
+    proc = SimpleNamespace(poll=lambda: 1)
+
+    async def fake_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(vm.shutil, "which", lambda _name: "/usr/bin/Xvnc")
+    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(vm.subprocess, "Popen", lambda *args, **kwargs: proc)
+    monkeypatch.setattr(vm.asyncio, "sleep", fake_sleep)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        await vnc.start_vnc(100, 6100)
+
+    message = str(exc_info.value)
+    assert message == "Xvnc failed to start on :100"
+    assert "xvnc-super-secret" not in message
+    assert "websockify" not in message
+
+
 # ── cleanup_stale ────────────────────────────────────────────────────────────
 
 
