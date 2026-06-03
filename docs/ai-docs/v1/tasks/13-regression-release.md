@@ -4987,3 +4987,45 @@ git diff --check
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API backend、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata Windows path value release-evidence 边界。
+
+## 2026-06-03 Frontend visible error Windows path release-evidence guardrail
+
+背景：
+
+- Release smoke 会查看前端可见错误和警告区域。
+- 共享 `publicErrorText()` 已清理 URL credentials、Authorization/Bearer、token/password/secret/cookie assignments 和 `/data`、`/tmp`、`/home` 路径。
+- Windows drive path 仍可能通过 API/transport/manual error text 进入 Proxy Manager、Profile CSV import、HealthBadge 或 profile hook 可见错误。
+
+已覆盖：
+
+- 前端共享 public error helper 现在会把 `C:\Users\...` 和 `D:/profiles/...` 替换为 `[redacted-path]`。
+- 新增 direct helper regression test，避免只依赖组件侧间接覆盖。
+- `http://example.test:8080/check` 这类低敏 URL redaction 结果保持可见，不会被 Windows drive regex 误伤。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# RED then GREEN；旧实现保留 C:\Users\... 和 D:/profiles/... visible error text
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/ProfileCsvPreviewDialog.test.tsx src/components/ProxyManagerPage.test.tsx src/components/HealthBadge.test.tsx src/hooks/useProfiles.test.ts
+# Test Files 5 passed；Tests 61 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.28s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 233 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.13s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理。
+- 不改变 API response schema、backend audit sanitizer、profile/proxy business rules、VNC viewer、Automation API backend、profile launch backend、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend visible error Windows path release-evidence 边界。

@@ -5302,3 +5302,45 @@ git diff --check
 - 这是 audit metadata Windows path release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 audit event schema、public event_type/actor/runtime/profile id rules、runtime session behavior、viewer behavior、Automation API、profile launch backend、proxy、fingerprint seed、WebGL、WebRTC、UA、locale/timezone 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-03 Frontend public error Windows path redaction guardrail
+
+背景：
+
+- 前端 `publicErrorText()` 是 Proxy Manager、Profile CSV import、HealthBadge 和 profile hook 等可见错误的共享低敏边界。
+- 该 helper 已清理 URL credentials、Authorization/Bearer、token/password/secret/cookie assignments 和 `/data`、`/tmp`、`/home` 路径。
+- Windows drive path 仍可能来自 API/transport/manual error text，并进入 UI release evidence。
+
+已覆盖：
+
+- `frontend/src/lib/errorDisplay.ts` 的本地路径 redaction 现在覆盖 `C:\Users\...` 和 `D:/profiles/...`。
+- 新增 `frontend/src/lib/errorDisplay.test.ts`，直接覆盖 Windows path redaction。
+- 测试同时锁住 `http://example.test:8080/check` 这类低敏 URL host/port/path 不会被误伤。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# RED: 旧实现保留 C:\Users\... 和 D:/profiles/... visible error text；GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/ProfileCsvPreviewDialog.test.tsx src/components/ProxyManagerPage.test.tsx src/components/HealthBadge.test.tsx src/hooks/useProfiles.test.ts
+# Test Files 5 passed；Tests 61 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 647 passed in 39.28s
+
+npm --prefix frontend test -- --run
+# Test Files 20 passed；Tests 233 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.13s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 frontend visible error release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 API response schema、backend audit sanitizer、profile/proxy business rules、VNC viewer、Automation API、browser launch、stealth prefs、seed、WebGL、WebRTC、UA、locale/timezone 或 proxy 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

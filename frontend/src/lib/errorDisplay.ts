@@ -4,7 +4,7 @@ const ERROR_AUTH_HEADER_RE = /\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest
 const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
 const ERROR_SENSITIVE_ASSIGNMENT_RE =
   /\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
-const ERROR_LOCAL_PATH_RE = /\/(?:data|tmp|home)\/[^\s"'<>)]*/gi;
+const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 
 export function publicErrorText(value: string): string {
   return redactUrlCredentials(value)
