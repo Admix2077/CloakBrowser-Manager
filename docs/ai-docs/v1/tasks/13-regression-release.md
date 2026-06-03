@@ -2612,6 +2612,50 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Runtime session timestamp guardrail
+
+背景：
+
+- Release runtime/VNC smoke 会创建 runtime session、读取 session、续租/终止 session，并签发 viewer token。
+- RuntimeSessionResponse 的 `lease_expires_at`、`created_at`、`updated_at` 是 release evidence 中常见的时间字段；此前如果历史/手工 DB row 里存在 URL/query token/header 风格 timestamp text，response 会直接回显。
+
+已覆盖：
+
+- RuntimeSessionResponse `lease_expires_at`、`created_at`、`updated_at` 现在只保留可解析 ISO timestamp。
+- 污染的 timestamp 字段会折叠为 `unknown`，不会把 token、Authorization/Bearer 或 URL host/path context 带进 runtime response evidence。
+- 内部 DB row、lease/live 判断、create/get/renew/terminate、viewer token 和 audit flow 不改，只在 response DTO 前做输出侧过滤。
+- 正常 runtime session broker、runtime id/profile id/external id/status guardrails 和 session broker 相邻路径保持通过。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_timestamp_fields -q
+# RED: 1 failed；lease_expires_at 直接保留 token-like timestamp text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_timestamp_fields -q
+# 1 passed in 0.78s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 43 passed in 4.49s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 616 passed in 38.24s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.43s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Automation task timestamp guardrail
 
 背景：

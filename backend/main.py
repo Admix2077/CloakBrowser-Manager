@@ -1049,6 +1049,15 @@ def _public_runtime_external_session_id(value: object) -> str | None:
     return external_session_id
 
 
+def _public_runtime_session_timestamp(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    text = value.strip()
+    if not text or _parse_datetime(text) is None:
+        return "unknown"
+    return text
+
+
 def _public_uuid_identifier(value: object) -> str | None:
     if not isinstance(value, str):
         return None
@@ -1110,6 +1119,9 @@ def _runtime_session_response(session: dict) -> RuntimeSessionResponse:
     safe["external_session_id"] = _public_runtime_external_session_id(
         safe.get("external_session_id")
     ) or "unknown"
+    safe["lease_expires_at"] = _public_runtime_session_timestamp(safe.get("lease_expires_at"))
+    safe["created_at"] = _public_runtime_session_timestamp(safe.get("created_at"))
+    safe["updated_at"] = _public_runtime_session_timestamp(safe.get("updated_at"))
     return RuntimeSessionResponse(**safe)
 
 

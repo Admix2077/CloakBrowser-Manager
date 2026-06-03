@@ -165,6 +165,48 @@ def test_runtime_session_response_sanitizes_persisted_status(
     assert leak_marker not in json.dumps(data, sort_keys=True)
 
 
+def test_runtime_session_response_sanitizes_persisted_timestamp_fields(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    leak_marker = "runtime-timestamp-secret"
+    session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm-session-persisted-timestamps",
+        lease_seconds=900,
+    )
+    with db.get_db() as conn:
+        conn.execute(
+            """UPDATE runtime_sessions
+               SET lease_expires_at = ?, created_at = ?, updated_at = ?
+               WHERE id = ?""",
+            (
+                f"2026-06-03T00:00:00+00:00 token={leak_marker}",
+                f"created Authorization=Bearer {leak_marker}",
+                f"https://runtime.example/updated?token={leak_marker}",
+                session["id"],
+            ),
+        )
+        conn.commit()
+
+    resp = app_client.get(
+        f"/api/runtime/sessions/{session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["lease_expires_at"] == "unknown"
+    assert data["created_at"] == "unknown"
+    assert data["updated_at"] == "unknown"
+    serialized = json.dumps(data, sort_keys=True)
+    assert leak_marker not in serialized
+    assert "Authorization" not in serialized
+    assert "Bearer" not in serialized
+    assert "runtime.example" not in serialized
+
+
 def test_runtime_session_response_sanitizes_persisted_external_session_id(
     app_client: TestClient,
     runtime_headers: dict[str, str],

@@ -3773,3 +3773,48 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 automation task timestamp guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 Runtime session timestamp guardrail
+
+背景：
+
+- Runtime session detail/create/renew/terminate response 是 Project Mileage session broker、VNC viewer token flow 和 release smoke 的常用低敏证据面。
+- 之前已经清洗 runtime session id、profile id、external_session_id 和 status，但历史/手工 DB row 的 `lease_expires_at`、`created_at`、`updated_at` 仍直接进入 response。
+- 如果 runtime session timestamp 字段被污染为 URL/header/token 风格文本，会进入低敏 release evidence。
+
+已覆盖：
+
+- RuntimeSessionResponse `lease_expires_at`、`created_at`、`updated_at` 现在只保留可解析 ISO timestamp。
+- 非公开/污染 timestamp 文本折叠为 `unknown`，不会回显 token、Authorization/Bearer 或 URL host/path context。
+- DB 内部 lease/live 判断、runtime session create/get/renew/terminate、viewer token、runtime service token 和 audit 语义不变，只在 response 输出侧过滤。
+- 正常 runtime session broker 相邻路径和既有 runtime id/profile id/external id/status guardrails 保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_timestamp_fields -q
+# RED: 1 failed；lease_expires_at 直接保留 token-like timestamp text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_timestamp_fields -q
+# 1 passed in 0.78s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 43 passed in 4.49s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 616 passed in 38.24s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.43s
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 runtime session timestamp guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
