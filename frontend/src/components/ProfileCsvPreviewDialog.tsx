@@ -271,6 +271,11 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
   const timezone = profile?.timezone ?? row.source.timezone ?? "-";
   const tags = profile?.tags ?? [];
   const templateId = profile && "template_id" in profile ? profile.template_id : null;
+  const safeName = publicProfileCsvPreviewLabel(name);
+  const safePlatform = publicProfileCsvPreviewLabel(platform);
+  const safeLocale = publicProfileCsvPreviewLabel(locale);
+  const safeTimezone = publicProfileCsvPreviewLabel(timezone);
+  const safeTemplateId = templateId ? publicProfileCsvPreviewLabel(templateId) : null;
 
   return (
     <tr className={`shadow-[inset_0_-1px_0_rgba(226,232,240,0.8)] transition-colors ${
@@ -280,23 +285,23 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
         Row {row.line_number}
       </td>
       <td className="px-3 py-2 align-top">
-        <span className="block truncate text-sm font-semibold text-slate-900" title={redactUrlCredentials(name)}>
-          {redactUrlCredentials(name)}
+        <span className="block truncate text-sm font-semibold text-slate-900" title={safeName}>
+          {safeName}
         </span>
-        {templateId && (
-          <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500" title={templateId}>
-            {templateId}
+        {safeTemplateId && (
+          <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500" title={safeTemplateId}>
+            {safeTemplateId}
           </span>
         )}
       </td>
       <td className="px-3 py-2 align-top">
         <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
-          {platform}
+          {safePlatform}
         </span>
       </td>
       <td className="px-3 py-2 align-top text-xs text-slate-600">
-        <div className="truncate" title={locale}>{locale}</div>
-        <div className="mt-0.5 truncate font-mono text-[11px] text-slate-500" title={timezone}>{timezone}</div>
+        <div className="truncate" title={safeLocale}>{safeLocale}</div>
+        <div className="mt-0.5 truncate font-mono text-[11px] text-slate-500" title={safeTimezone}>{safeTimezone}</div>
       </td>
       <td className="px-3 py-2 align-top">
         <span className="block truncate font-mono text-[11px] text-slate-600" title={safeProxy}>
@@ -341,6 +346,10 @@ function publicProfileCsvVisibleText(value: string): string {
     .split(/\r?\n/)
     .map((line) => publicErrorText(line))
     .join("\n");
+}
+
+function publicProfileCsvPreviewLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
 }
 
 function HeaderCell({ children, className = "" }: { children: ReactNode; className?: string }) {
