@@ -1596,3 +1596,70 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events
     assert "session-cookie" not in serialized_events
+
+
+def test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata(tmp_db):
+    leak_marker = "audit-reader-secret"
+    polluted_event_id = (
+        f"audit-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    polluted_runtime_session_id = (
+        f"runtime-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    polluted_profile_id = (
+        f"profile-id {leak_marker} "
+        f"token={leak_marker} Authorization=Bearer {leak_marker}"
+    )
+    polluted_external_session_id = f"https://external.example/session?token={leak_marker}"
+    polluted_created_at = f"2026-06-03T00:00:00+00:00 token={leak_marker}"
+    with db.get_db() as conn:
+        conn.execute(
+            """INSERT INTO audit_events (
+                id, event_type, actor_type, runtime_session_id, profile_id,
+                external_session_id, metadata, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                polluted_event_id,
+                f"runtime.test token={leak_marker}",
+                f"runtime_service token={leak_marker}",
+                polluted_runtime_session_id,
+                polluted_profile_id,
+                polluted_external_session_id,
+                json.dumps(
+                    {
+                        "safe": "kept",
+                        "viewer_token": f"viewer-{leak_marker}",
+                        "message": f"token={leak_marker} Bearer {leak_marker}",
+                    }
+                ),
+                polluted_created_at,
+            ),
+        )
+        conn.commit()
+
+    listed = db.list_audit_events()
+    fetched = db.get_audit_event(polluted_event_id)
+
+    assert len(listed) == 1
+    for event in (listed[0], fetched):
+        assert event is not None
+        assert event["id"] == "unknown"
+        assert event["event_type"] == "unknown"
+        assert event["actor_type"] == "unknown"
+        assert event["runtime_session_id"] is None
+        assert event["profile_id"] is None
+        assert event["external_session_id"] is None
+        assert event["created_at"] == "unknown"
+        assert event["metadata"] == {
+            "safe": "kept",
+            "message": "token=[redacted] Bearer [redacted]",
+        }
+
+    serialized_events = json.dumps({"listed": listed, "fetched": fetched}, sort_keys=True)
+    assert leak_marker not in serialized_events
+    assert "viewer-" not in serialized_events
+    assert "external.example" not in serialized_events
+    assert "runtime-id" not in serialized_events
+    assert "profile-id" not in serialized_events

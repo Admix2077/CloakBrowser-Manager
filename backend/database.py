@@ -964,6 +964,14 @@ _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
+_PUBLIC_AUDIT_EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){0,8}$")
+_PUBLIC_AUDIT_ACTOR_TYPES = frozenset({"local_admin", "runtime_service", "runtime_viewer"})
+_PUBLIC_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(
+    r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer)\b|"
+    r"\b(auth_token|password|cookie|secret|token|viewer_token)\s*=",
+    re.IGNORECASE,
+)
 
 
 def _is_sensitive_audit_key(key: str) -> bool:
@@ -1000,6 +1008,57 @@ def _sanitize_audit_metadata(value: Any) -> Any:
         )
         return _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
     return value
+
+
+def _public_uuid_identifier(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        parsed = uuid.UUID(text)
+    except ValueError:
+        return None
+    return str(parsed)
+
+
+def _public_audit_event_type(value: object) -> str:
+    if isinstance(value, str) and _PUBLIC_AUDIT_EVENT_TYPE_RE.fullmatch(value):
+        return value
+    return "unknown"
+
+
+def _public_audit_actor_type(value: object) -> str:
+    if isinstance(value, str) and value in _PUBLIC_AUDIT_ACTOR_TYPES:
+        return value
+    return "unknown"
+
+
+def _public_audit_external_session_id(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if not _PUBLIC_AUDIT_EXTERNAL_SESSION_ID_RE.fullmatch(text):
+        return None
+    if _SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE.search(text):
+        return None
+    return text
+
+
+def _public_audit_created_at(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    text = value.strip()
+    if not text:
+        return "unknown"
+    try:
+        datetime.datetime.fromisoformat(text)
+    except ValueError:
+        return "unknown"
+    return text
 
 
 def create_audit_event(
@@ -1044,7 +1103,14 @@ def _audit_event_from_row(row: sqlite3.Row) -> dict[str, Any]:
         metadata = json.loads(event.get("metadata") or "{}")
     except (TypeError, ValueError):
         metadata = {}
-    event["metadata"] = metadata if isinstance(metadata, dict) else {}
+    event["id"] = _public_uuid_identifier(event.get("id")) or "unknown"
+    event["event_type"] = _public_audit_event_type(event.get("event_type"))
+    event["actor_type"] = _public_audit_actor_type(event.get("actor_type"))
+    event["runtime_session_id"] = _public_uuid_identifier(event.get("runtime_session_id"))
+    event["profile_id"] = _public_uuid_identifier(event.get("profile_id"))
+    event["external_session_id"] = _public_audit_external_session_id(event.get("external_session_id"))
+    event["created_at"] = _public_audit_created_at(event.get("created_at"))
+    event["metadata"] = _sanitize_audit_metadata(metadata if isinstance(metadata, dict) else {})
     return event
 
 

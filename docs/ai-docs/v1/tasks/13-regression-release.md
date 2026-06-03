@@ -2612,6 +2612,46 @@ npm --prefix frontend run build
 - 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
 - Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
 
+## 2026-06-03 Audit event reader guardrail
+
+背景：
+
+- Release smoke 会使用 audit event 作为低敏证据面。
+- 旧实现只在写入 audit event 时清洗 metadata，读取历史/手工 DB row 时仍可能回显污染的顶层字段和原始 metadata。
+
+已覆盖：
+
+- Audit event reader 输出侧现在清洗 `id`、`runtime_session_id`、`profile_id`、`external_session_id`、`event_type`、`actor_type` 和 `created_at`。
+- 历史 metadata 读出时也会再次经过 audit metadata sanitizer。
+- 正常 runtime viewer/session audit、profile/proxy/cookie/bundle audit 和 automation task audit 保持既有低敏格式。
+
+验证：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# RED then GREEN；初始 1 failed，最终 1 passed in 0.77s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 42 passed in 5.90s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "audit or automation_task"
+# 53 passed, 185 deselected in 7.89s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 614 passed in 39.49s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.85s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 仍未完成外部验收。
+- Pixelscan/IPhey 和 US/JP/DE proxy-country gates 仍保持打开；`cbim-23h.6` 继续作为 blocker，`cbim-23h.1` 仍被阻塞。
+
 ## 2026-06-03 Profile template id guardrail
 
 背景：

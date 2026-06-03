@@ -3683,3 +3683,51 @@ npm --prefix frontend run build
 
 - 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
 - 不在 profile template id guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
+
+## 2026-06-03 Audit event reader guardrail
+
+背景：
+
+- Release smoke 和 regression tests 会直接读取 audit event 列表作为低敏 evidence。
+- `create_audit_event()` 已经清洗 metadata，但历史/手工 DB row 通过 `get_audit_event()` / `list_audit_events()` 读出时仍可能回显污染的顶层字段和原始 metadata。
+- 如果 audit row 含有 URL/header/token 风格 `id`、`runtime_session_id`、`profile_id`、`external_session_id`、`event_type`、`actor_type` 或 `created_at`，这些字段会进入 release evidence。
+
+已覆盖：
+
+- Audit reader 现在对 event `id` 使用 UUID-only 输出；非 UUID 折叠为 `unknown`。
+- `runtime_session_id` 和 `profile_id` 现在只保留 canonical UUID；非 UUID 输出为 `null`。
+- `external_session_id` 只保留普通低敏 external id；URL/query/header/token 风格值输出为 `null`。
+- `event_type` 只保留 dotted lowercase audit labels；`actor_type` 只保留 `local_admin`、`runtime_service`、`runtime_viewer`；非公开值折叠为 `unknown`。
+- `created_at` 只保留可解析 ISO timestamp；污染值折叠为 `unknown`。
+- 历史 metadata 读出时会再次经过既有 audit metadata sanitizer，去掉 token/hash/cookie/password/secret 类 key 并 redacts token/Bearer/proxy credential text。
+- 正常 runtime session/viewer audit、profile/proxy/cookie/bundle audit、automation task audit 和 diagnostics 读数保持通过。
+
+验证记录：
+
+```bash
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# RED: 1 failed；audit event id 直接保留非 UUID token/header-like text
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 1 passed in 0.77s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_session_broker.py -q
+# 42 passed in 5.90s
+
+. .venv/bin/activate && python -m pytest backend/tests/test_api.py -q -k "audit or automation_task"
+# 53 passed, 185 deselected in 7.89s
+
+. .venv/bin/activate && python -m pytest backend/tests -q
+# 614 passed in 39.49s
+
+npm --prefix frontend test -- --run
+# Test Files 16 passed；Tests 221 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded；built in 5.85s
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；没有改变 stealth prefs、seed、WebGL、WebRTC、UA、profile launch manager、runtime session storage、viewer token generation、VNC proxying 或 external smoke scripts。
+- 不在 audit event reader guardrail 中读取或公开 screenshots、cookies、local storage、headers、tokens、IP values、profile dirs、full page text、full URL params、font lists、WebRTC candidates、automation payloads 或 raw browser artifacts。
