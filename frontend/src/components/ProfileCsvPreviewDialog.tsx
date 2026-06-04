@@ -335,7 +335,7 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
                 className="inline-flex w-fit items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
               >
                 <AlertCircle className="h-3 w-3" />
-                {publicErrorText(error)}
+                {publicProfileCsvPreviewLabel(error)}
               </span>
             ))}
           </div>

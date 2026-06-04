@@ -154,6 +154,48 @@ describe("ProfileCsvPreviewDialog", () => {
     expect(rendered).not.toContain("hiddenpass");
   });
 
+  it("folds marker-bearing row validation errors before rendering evidence", async () => {
+    mockPreviewProfileImport.mockResolvedValueOnce({
+      total: 1,
+      valid: 0,
+      invalid: 1,
+      rows: [
+        {
+          line_number: 2,
+          ok: false,
+          errors: [
+            "api_key-profile-row-error-marker client_secret-profile-row-error-marker private_key-profile-row-error-marker",
+          ],
+          source: {
+            name: "Imported Profile",
+            proxy: "http://user:hiddenpass@proxy.example:8080",
+          },
+          profile: null,
+        },
+      ],
+    });
+
+    render(<ProfileCsvPreviewDialog onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Profile CSV content"), {
+      target: { value: "name,proxy\nImported,http://user:hiddenpass@proxy.example:8080" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview CSV" }));
+
+    const table = await screen.findByRole("table", { name: "Profile CSV preview" });
+    expect(within(table).getByText("unknown")).toBeTruthy();
+
+    const renderedEvidence = table.textContent ?? "";
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+      "hiddenpass",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts preview textarea evidence without changing submitted import CSV", async () => {
     const leakMarker = "profile-csv-textarea-secret";
     const rawCsv = [
