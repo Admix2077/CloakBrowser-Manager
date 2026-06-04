@@ -941,24 +941,35 @@ def finish_claimed_automation_task(
 
 
 _AUDIT_SENSITIVE_KEYS = {
+    "access-token",
     "access_token",
+    "api-key",
     "api_key",
     "authorization",
+    "auth-token",
     "auth_token",
+    "client-secret",
     "client_secret",
     "cookie",
     "cookies",
+    "private-key",
     "private_key",
     "proxy_url",
+    "refresh-token",
     "refresh_token",
+    "runtime-service-token",
     "runtime_service_token",
+    "service-token",
     "service_token",
+    "session-id",
     "session_id",
     "token",
+    "viewer-token",
     "viewer_token",
     "viewer_token_hash",
     "viewer_url",
     "x-api-key",
+    "x_api_key",
 }
 
 _AUDIT_SENSITIVE_KEY_PARTS = ("cookie", "password", "secret")
@@ -968,8 +979,9 @@ _AUDIT_AUTHORIZATION_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"\b(access_token|api_key|auth_token|client_secret|cookie|password|private_key|refresh_token|"
-    r"runtime_service_token|secret|service_token|session_id|token|viewer_token|x-api-key)"
+    r"\b(access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|cookie|password|"
+    r"private[_-]?key|refresh[_-]?token|runtime[_-]?service[_-]?token|secret|"
+    r"service[_-]?token|session[_-]?id|token|viewer[_-]?token|x[_-]?api[_-]?key)"
     r"\s*[:=]\s*([^\s&#,;]+)",
     re.IGNORECASE,
 )
@@ -992,9 +1004,10 @@ _AUDIT_IPV6_RE = re.compile(
 _AUDIT_SENSITIVE_KEY_RE = re.compile(
     r"https?://|socks[45]://|[/\\?&#@]|"
     r"\b(?:authorization|bearer)\b|"
-    r"\b(?:access_token|api_key|auth_token|client_secret|cookie|password|passwd|private_key|"
-    r"refresh_token|runtime_service_token|secret|service_token|session_id|token|viewer_token|"
-    r"x-api-key)\s*[:=]",
+    r"\b(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|cookie|"
+    r"password|passwd|private[_-]?key|refresh[_-]?token|runtime[_-]?service[_-]?token|"
+    r"secret|service[_-]?token|session[_-]?id|token|viewer[_-]?token|"
+    r"x[_-]?api[_-]?key)\s*[:=]",
     re.IGNORECASE,
 )
 _PUBLIC_AUDIT_EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){0,8}$")

@@ -1854,9 +1854,11 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
                 "proxy http://user:message-pass@example.test:8080 failed "
                 "token=message-secret Authorization=Bearer bearer-secret "
                 "api_key=message-api-key x-api-key: message-header-api-key "
+                "api-key=message-hyphen-api-key client-secret=message-hyphen-client-secret "
                 "access_token=message-access-token refresh_token=message-refresh-token "
-                "session_id=message-session-id client_secret=message-client-secret "
-                "private_key=message-private-key "
+                "session_id=message-session-id session-id=message-hyphen-session-id "
+                "client_secret=message-client-secret private_key=message-private-key "
+                "private-key=message-hyphen-private-key "
                 "api_key-audit-message-marker x-api-key-audit-message-marker "
                 "session_id-audit-message-marker private_key-audit-message-marker "
                 "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret "
@@ -1881,9 +1883,13 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             f"Authorization: Bearer {leak_marker}": "header-key",
             f"token={leak_marker}": "token-key",
             f"api_key={leak_marker}": "top-level-api-value",
+            f"api-key={leak_marker}": "top-level-hyphen-api-value",
             f"x-api-key: {leak_marker}": "top-level-header-value",
             f"session_id={leak_marker}": "top-level-session-value",
+            f"session-id={leak_marker}": "top-level-hyphen-session-value",
+            f"client-secret={leak_marker}": "top-level-hyphen-client-value",
             f"private_key={leak_marker}": "top-level-private-value",
+            f"private-key={leak_marker}": "top-level-hyphen-private-value",
             f"/data/audit/{leak_marker}": "path-key",
             "203.0.113.99": "ipv4-key",
             "client_2001:db8::99": "ipv6-key",
@@ -1906,9 +1912,11 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "proxy http://example.test:8080 failed "
             "token=[redacted] Authorization=[redacted] "
             "api_key=[redacted] x-api-key=[redacted] "
+            "api-key=[redacted] client-secret=[redacted] "
             "access_token=[redacted] refresh_token=[redacted] "
-            "session_id=[redacted] client_secret=[redacted] "
-            "private_key=[redacted] "
+            "session_id=[redacted] session-id=[redacted] "
+            "client_secret=[redacted] private_key=[redacted] "
+            "private-key=[redacted] "
             "[redacted] [redacted] [redacted] [redacted] "
             "[redacted-path] [redacted-path] [redacted-path] "
             "[redacted-path]"
@@ -1946,11 +1954,15 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "bearer-secret" not in serialized_events
     assert "message-api-key" not in serialized_events
     assert "message-header-api-key" not in serialized_events
+    assert "message-hyphen-api-key" not in serialized_events
+    assert "message-hyphen-client-secret" not in serialized_events
     assert "message-access-token" not in serialized_events
     assert "message-refresh-token" not in serialized_events
     assert "message-session-id" not in serialized_events
+    assert "message-hyphen-session-id" not in serialized_events
     assert "message-client-secret" not in serialized_events
     assert "message-private-key" not in serialized_events
+    assert "message-hyphen-private-key" not in serialized_events
     assert "api_key-audit-message-marker" not in serialized_events
     assert "x-api-key-audit-message-marker" not in serialized_events
     assert "session_id-audit-message-marker" not in serialized_events
@@ -1959,9 +1971,13 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "header-key" not in serialized_events
     assert "token-key" not in serialized_events
     assert "top-level-api-value" not in serialized_events
+    assert "top-level-hyphen-api-value" not in serialized_events
     assert "top-level-header-value" not in serialized_events
     assert "top-level-session-value" not in serialized_events
+    assert "top-level-hyphen-session-value" not in serialized_events
+    assert "top-level-hyphen-client-value" not in serialized_events
     assert "top-level-private-value" not in serialized_events
+    assert "top-level-hyphen-private-value" not in serialized_events
     assert "path-key" not in serialized_events
     assert "nested-header-key" not in serialized_events
     assert "ipv4-key" not in serialized_events

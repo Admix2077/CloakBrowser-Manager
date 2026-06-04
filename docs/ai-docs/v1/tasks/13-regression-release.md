@@ -8030,3 +8030,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 CSV 原始输入、profile persistence、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV source hyphen-marker release boundary。
+
+## 2026-06-04 Audit metadata hyphen assignment release guardrail
+
+背景：
+
+- Release convergence 继续检查 audit metadata，因为这些 JSON 会进入回归证据、runtime/viewer triage 和本地长期记录。
+- 旧 audit metadata sanitizer 已覆盖 `api_key=...`、`session_id=...`、`private_key=...` 等下划线赋值，但 `api-key=...`、`client-secret=...`、`session-id=...`、`private-key=...` 这类短横线赋值仍可能作为普通文本。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 audit release-evidence 边界。
+
+已覆盖：
+
+- Audit metadata value 中的敏感赋值 sanitizer 现在同时覆盖 `_` 和 `-` 分隔形式。
+- Audit metadata key 名中的短横线敏感 key/assignment key 也会被整体丢弃。
+- 原有 URL credential、Authorization/Bearer、local path、IP literal、underscore assignment 和 marker-only redaction 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k audit_metadata_sanitizer_removes_sensitive_fields
+# RED then GREEN；旧 audit metadata evidence 保留 api-key/client-secret/session-id/private-key 短横线赋值；GREEN 1 passed, 48 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer or audit_event_reader_omits_sensitive or audit_allows_only_public_metadata_shapes or runtime_viewer_connected_audit"
+# 5 passed, 44 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Audit metadata hyphen-assignment release boundary。
