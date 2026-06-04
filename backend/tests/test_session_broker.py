@@ -241,6 +241,56 @@ def test_runtime_session_response_sanitizes_persisted_external_session_id(
         assert leaked not in serialized
 
 
+def test_runtime_session_response_omits_sensitive_external_session_id_markers(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    sensitive_ids = [
+        "api_key-runtime-external-marker",
+        "x-api-key-runtime-external-marker",
+        "access_token-runtime-external-marker",
+        "refresh_token-runtime-external-marker",
+        "session_id-runtime-external-marker",
+        "client_secret-runtime-external-marker",
+        "private_key-runtime-external-marker",
+    ]
+    sensitive_sessions = [
+        db.create_runtime_session(
+            profile_id=profile_id,
+            external_session_id=external_session_id,
+            lease_seconds=900,
+        )
+        for external_session_id in sensitive_ids
+    ]
+    public_session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm-session-runtime-public-marker",
+        lease_seconds=900,
+    )
+
+    sensitive_responses = []
+    for session in sensitive_sessions:
+        resp = app_client.get(
+            f"/api/runtime/sessions/{session['id']}",
+            headers=runtime_headers,
+        )
+        assert resp.status_code == 200
+        sensitive_responses.append(resp.json())
+
+    public_resp = app_client.get(
+        f"/api/runtime/sessions/{public_session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert [data["external_session_id"] for data in sensitive_responses] == ["unknown"] * 7
+    assert public_resp.status_code == 200
+    assert public_resp.json()["external_session_id"] == "pm-session-runtime-public-marker"
+    serialized_responses = json.dumps(sensitive_responses, sort_keys=True)
+    for external_session_id in sensitive_ids:
+        assert external_session_id not in serialized_responses
+
+
 def test_runtime_session_response_sanitizes_persisted_profile_id(
     app_client: TestClient,
     runtime_headers: dict[str, str],

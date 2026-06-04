@@ -7330,3 +7330,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Runtime session response external id marker guardrail
+
+背景：
+
+- `/api/runtime/sessions/{id}` 的 `external_session_id` 是 runtime service 可见的 response evidence，区别于上一轮 audit event top-level evidence。
+- 旧 runtime public external session id 边界会拒绝 URL、Authorization/Bearer、`token=` 等明显敏感格式，但仍允许符合公开 ID 字符集的 `api_key-*`、`access_token-*`、`session_id-*` 等 marker。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 runtime API response evidence 边界。
+
+已覆盖：
+
+- Runtime session response sanitizer 现在会把含 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker 的 persisted `external_session_id` 显示为 `unknown`。
+- 普通低敏 external session id 例如 `pm-session-runtime-public-marker` 仍可见，便于 runtime service 对账。
+- Runtime session 原始存储、create request payload、viewer session 行为、audit metadata 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "runtime_session_response_omits_sensitive_external_session_id_markers"
+# RED: 旧 runtime session response 暴露 api_key/access_token/session_id/client_secret/private_key marker external_session_id；GREEN: focused test passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id or audit_event_reader"
+# 5 passed, 43 deselected
+```
+
+边界：
+
+- 这是 backend runtime API response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
