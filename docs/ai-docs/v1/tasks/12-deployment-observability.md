@@ -7268,3 +7268,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Backend audit API key metadata redaction guardrail
+
+背景：
+
+- Runtime/audit evidence 会从 backend `audit_events.metadata` 读取结构化 metadata，也会读取历史持久化的 metadata JSON。
+- 旧 backend audit sanitizer 已覆盖 proxy URL、Authorization/Bearer、token/password/secret/cookie、本地路径和 IP literal，但没有覆盖所有常见 API/provider assignment 名称。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 backend audit evidence 边界。
+
+已覆盖：
+
+- `_sanitize_audit_metadata()` 现在会删除 metadata dict 里的 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` 等敏感 key。
+- 字符串 metadata 中的 `api_key=...`、`x-api-key: ...`、`access_token=...`、`refresh_token=...`、`session_id=...`、`client_secret=...`、`private_key=...` 会统一折叠为 `[redacted]`。
+- 既有 proxy URL label、Authorization/Bearer、path/IP/query/fragment redaction 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer"
+# RED: 旧 backend audit metadata 暴露 api_key/access_token/refresh_token/session_id/client_secret/private_key/x-api-key values；GREEN: focused test passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata"
+# 1 passed, 45 deselected
+```
+
+边界：
+
+- 这是 backend audit metadata evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

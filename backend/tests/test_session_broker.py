@@ -1793,9 +1793,20 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "viewer_token_hash": "hashed-viewer-token",
             "runtime_service_token": "runtime-secret",
             "proxy_url": "http://user:proxy-pass@example.test:8080",
+            "api_key": "plain-api-key",
+            "x-api-key": "plain-header-api-key",
+            "access_token": "plain-access-token",
+            "refresh_token": "plain-refresh-token",
+            "session_id": "plain-session-id",
+            "client_secret": "plain-client-secret",
+            "private_key": "plain-private-key",
             "message": (
                 "proxy http://user:message-pass@example.test:8080 failed "
                 "token=message-secret Authorization=Bearer bearer-secret "
+                "api_key=message-api-key x-api-key: message-header-api-key "
+                "access_token=message-access-token refresh_token=message-refresh-token "
+                "session_id=message-session-id client_secret=message-client-secret "
+                "private_key=message-private-key "
                 "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret "
                 r"C:\Users\Jeff\AppData\Local\CloakBrowser\profile-secret"
             ),
@@ -1817,6 +1828,10 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             ],
             f"Authorization: Bearer {leak_marker}": "header-key",
             f"token={leak_marker}": "token-key",
+            f"api_key={leak_marker}": "top-level-api-value",
+            f"x-api-key: {leak_marker}": "top-level-header-value",
+            f"session_id={leak_marker}": "top-level-session-value",
+            f"private_key={leak_marker}": "top-level-private-value",
             f"/data/audit/{leak_marker}": "path-key",
             "203.0.113.99": "ipv4-key",
             "client_2001:db8::99": "ipv6-key",
@@ -1838,6 +1853,10 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
         "message": (
             "proxy http://example.test:8080 failed "
             "token=[redacted] Authorization=[redacted] "
+            "api_key=[redacted] x-api-key=[redacted] "
+            "access_token=[redacted] refresh_token=[redacted] "
+            "session_id=[redacted] client_secret=[redacted] "
+            "private_key=[redacted] "
             "[redacted-path] [redacted-path] [redacted-path] "
             "[redacted-path]"
         ),
@@ -1863,11 +1882,29 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "plain-viewer-token" not in serialized_events
     assert "hashed-viewer-token" not in serialized_events
     assert "runtime-secret" not in serialized_events
+    assert "plain-api-key" not in serialized_events
+    assert "plain-header-api-key" not in serialized_events
+    assert "plain-access-token" not in serialized_events
+    assert "plain-refresh-token" not in serialized_events
+    assert "plain-session-id" not in serialized_events
+    assert "plain-client-secret" not in serialized_events
+    assert "plain-private-key" not in serialized_events
     assert "message-secret" not in serialized_events
     assert "bearer-secret" not in serialized_events
+    assert "message-api-key" not in serialized_events
+    assert "message-header-api-key" not in serialized_events
+    assert "message-access-token" not in serialized_events
+    assert "message-refresh-token" not in serialized_events
+    assert "message-session-id" not in serialized_events
+    assert "message-client-secret" not in serialized_events
+    assert "message-private-key" not in serialized_events
     assert leak_marker not in serialized_events
     assert "header-key" not in serialized_events
     assert "token-key" not in serialized_events
+    assert "top-level-api-value" not in serialized_events
+    assert "top-level-header-value" not in serialized_events
+    assert "top-level-session-value" not in serialized_events
+    assert "top-level-private-value" not in serialized_events
     assert "path-key" not in serialized_events
     assert "nested-header-key" not in serialized_events
     assert "ipv4-key" not in serialized_events
@@ -1899,7 +1936,7 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events
     assert "audit-query-secret" not in serialized_events
-    assert "session_id=" not in serialized_events
+    assert "session_id=audit-query-secret" not in serialized_events
     assert "?token" not in serialized_events
     assert "#private" not in serialized_events
     assert "#frag" not in serialized_events

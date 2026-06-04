@@ -6952,3 +6952,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared frontend error assignment release-evidence 边界。
+
+## 2026-06-04 Backend audit API key metadata release-evidence guardrail
+
+背景：
+
+- Release regression 会读取 runtime/audit evidence；这些事件的 metadata 可能来自 runtime service、viewer/session failure path 或历史持久化 JSON。
+- 旧 backend audit sanitizer 已覆盖 proxy URL、Authorization/Bearer、token/password/secret/cookie、path/IP/query/fragment，但常见 provider/API assignment 名称如 `api_key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` 仍可能出现在 audit metadata evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 backend audit evidence 边界。
+
+已覆盖：
+
+- Backend audit metadata sanitizer 会删除 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` dict keys。
+- Backend audit metadata string redaction 会处理 `api_key=...`、`x-api-key: ...`、`access_token=...`、`refresh_token=...`、`session_id=...`、`client_secret=...`、`private_key=...`。
+- 历史 audit event reader 继续在读取时重新 sanitize metadata，避免旧 JSON 污染 release evidence。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer"
+# RED then GREEN；旧 backend audit metadata 暴露 api_key/access_token/session_id/client_secret/private_key/x-api-key values
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata"
+# 1 passed, 45 deselected
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 backend audit API key metadata release-evidence 边界。

@@ -941,17 +941,24 @@ def finish_claimed_automation_task(
 
 
 _AUDIT_SENSITIVE_KEYS = {
+    "access_token",
+    "api_key",
     "authorization",
     "auth_token",
+    "client_secret",
     "cookie",
     "cookies",
+    "private_key",
     "proxy_url",
+    "refresh_token",
     "runtime_service_token",
     "service_token",
+    "session_id",
     "token",
     "viewer_token",
     "viewer_token_hash",
     "viewer_url",
+    "x-api-key",
 }
 
 _AUDIT_SENSITIVE_KEY_PARTS = ("cookie", "password", "secret")
@@ -961,8 +968,9 @@ _AUDIT_AUTHORIZATION_RE = re.compile(
     re.IGNORECASE,
 )
 _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"\b(auth_token|cookie|password|runtime_service_token|secret|service_token|token|viewer_token)"
-    r"\s*=\s*([^\s&#,;]+)",
+    r"\b(access_token|api_key|auth_token|client_secret|cookie|password|private_key|refresh_token|"
+    r"runtime_service_token|secret|service_token|session_id|token|viewer_token|x-api-key)"
+    r"\s*[:=]\s*([^\s&#,;]+)",
     re.IGNORECASE,
 )
 _AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
@@ -978,7 +986,9 @@ _AUDIT_IPV6_RE = re.compile(
 _AUDIT_SENSITIVE_KEY_RE = re.compile(
     r"https?://|socks[45]://|[/\\?&#@]|"
     r"\b(?:authorization|bearer)\b|"
-    r"\b(?:auth_token|cookie|password|passwd|runtime_service_token|secret|service_token|token|viewer_token)\s*[:=]",
+    r"\b(?:access_token|api_key|auth_token|client_secret|cookie|password|passwd|private_key|"
+    r"refresh_token|runtime_service_token|secret|service_token|session_id|token|viewer_token|"
+    r"x-api-key)\s*[:=]",
     re.IGNORECASE,
 )
 _PUBLIC_AUDIT_EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){0,8}$")
