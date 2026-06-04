@@ -998,6 +998,13 @@ _AUDIT_SENSITIVE_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 _PUBLIC_AUDIT_EVENT_TYPE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){0,8}$")
+_SENSITIVE_AUDIT_EVENT_TYPE_SEGMENT_RE = re.compile(
+    r"(?:^|\.)(?:access_?token|api_?key|auth_?token|client_?secret|private_?key|"
+    r"refresh_?token|runtime_?service_?token|service_?token|session_?id|viewer_?token|"
+    r"x_?api_?key)(?:\.|$)",
+    re.IGNORECASE,
+)
+_PUBLIC_AUDIT_EVENT_TYPE_EXCEPTIONS = frozenset({"runtime.viewer_token.created"})
 _PUBLIC_AUDIT_ACTOR_TYPES = frozenset({"local_admin", "runtime_service", "runtime_viewer"})
 _PUBLIC_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(
@@ -1107,9 +1114,14 @@ def _public_uuid_identifier(value: object) -> str | None:
 
 
 def _public_audit_event_type(value: object) -> str:
-    if isinstance(value, str) and _PUBLIC_AUDIT_EVENT_TYPE_RE.fullmatch(value):
-        return value
-    return "unknown"
+    if not isinstance(value, str) or not _PUBLIC_AUDIT_EVENT_TYPE_RE.fullmatch(value):
+        return "unknown"
+    if (
+        value not in _PUBLIC_AUDIT_EVENT_TYPE_EXCEPTIONS
+        and _SENSITIVE_AUDIT_EVENT_TYPE_SEGMENT_RE.search(value)
+    ):
+        return "unknown"
+    return value
 
 
 def _public_audit_actor_type(value: object) -> str:

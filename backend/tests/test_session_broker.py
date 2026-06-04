@@ -2034,6 +2034,62 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
         assert external_session_id not in serialized_events
 
 
+def test_audit_event_reader_omits_sensitive_event_type_markers(tmp_db):
+    sensitive_event_types = [
+        "api_key.audit",
+        "access_token.audit",
+        "session_id.audit",
+        "private_key.audit",
+        "x_api_key.audit",
+        "runtime.api_key",
+        "viewer_token.audit",
+    ]
+    with db.get_db() as conn:
+        for index, event_type in enumerate(sensitive_event_types, start=1):
+            conn.execute(
+                """INSERT INTO audit_events (
+                    id, event_type, actor_type, runtime_session_id, profile_id,
+                    external_session_id, metadata, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    f"00000000-0000-4000-8000-0000000000{index:02d}",
+                    event_type,
+                    "runtime_service",
+                    None,
+                    None,
+                    None,
+                    json.dumps({"safe": "kept"}),
+                    f"2026-06-04T00:00:0{index}+00:00",
+                ),
+            )
+        conn.execute(
+            """INSERT INTO audit_events (
+                id, event_type, actor_type, runtime_session_id, profile_id,
+                external_session_id, metadata, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "00000000-0000-4000-8000-000000000099",
+                "runtime.test",
+                "runtime_service",
+                None,
+                None,
+                None,
+                json.dumps({"safe": "kept"}),
+                "2026-06-04T00:00:09+00:00",
+            ),
+        )
+        conn.commit()
+
+    events = db.list_audit_events()
+
+    assert len(events) == 8
+    assert [event["event_type"] for event in events[:-1]] == ["unknown"] * 7
+    assert events[-1]["event_type"] == "runtime.test"
+    serialized_events = json.dumps(events, sort_keys=True)
+    for event_type in sensitive_event_types:
+        assert event_type not in serialized_events
+
+
 def test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata(tmp_db):
     leak_marker = "audit-reader-secret"
     polluted_event_id = (

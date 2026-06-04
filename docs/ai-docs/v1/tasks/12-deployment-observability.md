@@ -8176,3 +8176,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 audit schema、runtime session storage、profile/proxy persistence、automation worker behavior、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Audit event type marker guardrail
+
+背景：
+
+- Audit event 顶层 `event_type` 会进入 release triage、audit API 和低敏 evidence。
+- 旧 `_public_audit_event_type()` 只检查 dotted lowercase 格式，因此 `api_key.audit`、`runtime.api_key`、`viewer_token.audit` 这类格式合法但语义敏感的 historical/manual event type 仍可能原样输出。
+- 当前策略下，底层/第三方 fingerprint 检测失败继续标阻塞；本轮继续收 Manager 自己可控的 audit top-level evidence 边界。
+
+已覆盖：
+
+- `_public_audit_event_type()` 现在拒绝 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 event-type segment。
+- 正常低敏 audit event type 继续保留；现有 `runtime.viewer_token.created` 明确作为业务事件名保留，避免误伤 viewer token 生命周期审计。
+- 非公开 event type 统一返回 `unknown`，metadata sanitizer、actor、runtime/profile UUID、external session id 和 created_at 清洗逻辑保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k audit_event_reader_omits_sensitive_event_type_markers
+# RED: 旧 audit event reader 原样返回 api_key.audit / runtime.api_key / viewer_token.audit；GREEN: 1 passed, 48 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_event_reader or runtime_service_actions_write_redacted_audit_events or viewer_token_created"
+# 4 passed, 45 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 audit event top-level response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 audit schema、audit write call sites、runtime session storage、profile/proxy persistence、automation worker behavior、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
