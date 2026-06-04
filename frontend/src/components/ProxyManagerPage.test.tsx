@@ -158,6 +158,61 @@ describe("ProxyManagerPage", () => {
     expect(within(page).queryByRole("button", { name: /delete/i })).toBeNull();
   });
 
+  it("redacts persisted proxy endpoint urls from rendered and search evidence", async () => {
+    const leakMarker = "proxy-url-token-super-secret";
+    const rawUrl =
+      "http://user:hiddenpass@polluted.proxy.example:8080 " +
+      `Authorization=Bearer ${leakMarker} token=${leakMarker} /data/proxy-url 203.0.113.128`;
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-polluted-url",
+        name: "Polluted Endpoint",
+        url: rawUrl,
+      }),
+    ]);
+
+    render(<ProxyManagerPage profiles={[
+      profile({ id: "alpha", name: "Alpha Good" }),
+    ]} />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    const table = within(page).getByRole("table", { name: "Proxy assets" });
+    expect(within(table).getByText("http://polluted.proxy.example:8080 [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const search = within(page).getByLabelText("Search proxy assets");
+    fireEvent.change(search, { target: { value: leakMarker } });
+    expect(within(page).getByRole("status", { name: "No proxy assets match filters" })).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "polluted.proxy.example" } });
+    expect(within(table).getByText("Polluted Endpoint")).toBeTruthy();
+
+    fireEvent.click(within(page).getByLabelText("Select Polluted Endpoint"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    expect(within(dialog).getByText("http://polluted.proxy.example:8080 [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedEvidence = [
+      page.textContent,
+      dialog.textContent,
+      ...Array.from(document.body.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.body.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "hiddenpass",
+      "user:",
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/proxy-url",
+      "203.0.113.128",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("shows a non-destructive empty state when no proxy assets exist", async () => {
     mockListProxies.mockResolvedValue([]);
 

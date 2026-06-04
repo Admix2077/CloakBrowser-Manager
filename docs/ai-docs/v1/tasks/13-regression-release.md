@@ -6591,3 +6591,36 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy CSV import textarea release-evidence 边界。
+
+## 2026-06-04 Proxy asset endpoint URL release-evidence guardrail
+
+背景：
+
+- Proxy Manager asset table、CSV import preview row、assign dialog header 和本地搜索都会使用 proxy endpoint，是 release regression 截图/文本 evidence 面。
+- 正常 endpoint scheme/host/port 仍需要展示和搜索；但污染 proxy URL 不应把 URL credentials、Authorization/Bearer、`token=`、path 或 IP-style 文本带入 visible/title/search evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Proxy asset table endpoint 使用 public endpoint label。
+- Proxy CSV import preview row endpoint 使用同一 public endpoint label。
+- Proxy assign dialog header endpoint 使用同一 public endpoint label。
+- Search corpus 使用 public endpoint label；敏感 marker 不命中，普通 endpoint host 仍可命中。
+- Raw proxy URL 继续用于 persistence、CSV parse/import、`createProxy` payload、assignment/random-assignment payload 和 backend API contract。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted proxy endpoint urls"
+# RED then GREEN；旧实现把污染 proxy.url 写入 table/header/search evidence
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/lib/errorDisplay.test.ts src/lib/profileDisplay.test.ts
+# 2 files passed, 40 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw proxy URL persistence、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy asset endpoint URL release-evidence 边界。

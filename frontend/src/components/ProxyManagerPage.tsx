@@ -2,7 +2,7 @@ import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, 
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyProviderPresetCreateData, type ProxyRandomAssignRequestData } from "../lib/api";
 import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
-import { formatTimestamp, publicRuntimeStatus, redactUrlCredentials } from "../lib/profileDisplay";
+import { formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
 const FILTER_ALL = "__all_proxy_filter__";
@@ -1577,7 +1577,7 @@ function ImportCountPill({
 function ProxyCsvPreviewRow({ row }: { row: ProxyCsvImportRow }) {
   const hasIssues = row.issues.length > 0;
   const safeName = row.data.name ? publicProxyCsvPreviewLabel(row.data.name) : "-";
-  const safeUrl = row.data.url ? redactUrlCredentials(row.data.url) : "-";
+  const safeUrl = row.data.url ? publicProxyEndpointLabel(row.data.url) : "-";
   const safeProvider = row.data.provider ? publicProxyCsvPreviewLabel(row.data.provider) : "-";
   const tags = row.data.tags?.map((tag) => publicProxyCsvPreviewLabel(tag.tag)).join(", ") || "-";
 
@@ -1845,7 +1845,7 @@ function ProxyAssignDialog({
   onAssign: () => void;
   onClose: () => void;
 }) {
-  const safeProxyUrl = redactUrlCredentials(proxy.url);
+  const safeProxyUrl = publicProxyEndpointLabel(proxy.url);
   const safeProxyName = publicProxyAssetLabel(proxy.name);
   const selectedCount = selectedProfileIds.size;
 
@@ -2042,7 +2042,7 @@ function ProxyRow({
   onToggleSelection: (proxyId: string) => void;
 }) {
   const safeName = publicProxyAssetLabel(proxy.name);
-  const safeUrl = redactUrlCredentials(proxy.url);
+  const safeUrl = publicProxyEndpointLabel(proxy.url);
   const safeCheckError = proxy.last_check_error
     ? publicErrorText(proxy.last_check_error)
     : null;
@@ -2288,6 +2288,10 @@ function publicProxyMetadataLabel(value: string): string {
 }
 
 function publicProxyAssetLabel(value: string): string {
+  return publicErrorText(value) || "unknown";
+}
+
+function publicProxyEndpointLabel(value: string): string {
   return publicErrorText(value) || "unknown";
 }
 
@@ -2567,7 +2571,7 @@ function normalizeFilterValue(value: string | null | undefined): string {
 function getProxySearchText(proxy: ProxyAsset): string {
   return [
     publicProxyAssetLabel(proxy.name),
-    redactUrlCredentials(proxy.url),
+    publicProxyEndpointLabel(proxy.url),
     proxy.country_code ? publicProxyMetadataLabel(proxy.country_code) : null,
     proxy.city ? publicProxyMetadataLabel(proxy.city) : null,
     proxy.asn ? publicProxyMetadataLabel(proxy.asn) : null,

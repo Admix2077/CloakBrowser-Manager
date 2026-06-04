@@ -6908,3 +6908,36 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy asset endpoint URL evidence guardrail
+
+背景：
+
+- Proxy Manager asset table、assign dialog header、本地搜索和 CSV import preview row 都会展示 proxy endpoint，是 proxy release evidence 的高频可见面。
+- 之前 endpoint 展示只移除 URL credentials；如果异常 response、历史/手工污染 row 或测试桩把 Authorization/Bearer、`token=`、本地路径或 IP 字面量拼进 URL 字段，这些片段仍可能进入 text/title/search evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Proxy asset table endpoint text/title 使用 public endpoint label，保留普通 scheme/host/port。
+- Proxy assign dialog header endpoint 使用同一 public endpoint label。
+- Proxy asset local search 使用 public endpoint label；敏感 marker 不命中，普通 host 仍可命中。
+- Proxy CSV import preview row endpoint 使用 public endpoint label，和 proxy table/assignment header 保持一致。
+- Raw proxy URL persistence、CSV parse/import source、`createProxy` payload、proxy assignment/random assignment payload 和 backend proxy API contract 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "redacts persisted proxy endpoint urls"
+# RED: 旧实现把污染 proxy.url 写入 table/header/search evidence；GREEN: 1 passed, 36 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src/lib/errorDisplay.test.ts src/lib/profileDisplay.test.ts
+# 2 files passed, 40 tests passed
+```
+
+边界：
+
+- 这是 Proxy asset endpoint URL UI/search release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw proxy URL persistence、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
