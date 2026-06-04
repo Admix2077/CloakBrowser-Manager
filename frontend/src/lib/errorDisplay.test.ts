@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicErrorText, publicProfileGeoipLabel } from "./errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel } from "./errorDisplay";
 
 describe("publicErrorText", () => {
   it("redacts Windows drive paths without redacting public URL host and port", () => {
@@ -81,5 +81,19 @@ describe("publicProfileGeoipLabel", () => {
     expect(publicProfileGeoipLabel(
       "US Authorization=Bearer geoip-secret token=geoip-secret /data/geoip 203.0.113.104",
     )).toBe("US [redacted] [redacted] [redacted-path] [redacted-ip]");
+  });
+});
+
+describe("publicProfileIdLabel", () => {
+  it("redacts marker-bearing profile ids while preserving public id labels", () => {
+    expect(publicProfileIdLabel("profile-123456")).toBe("profile-");
+
+    for (const polluted of [
+      "x-api-key-profile-marker",
+      "client_secret-profile-marker",
+      "private_key-profile-marker",
+    ]) {
+      expect(publicProfileIdLabel(polluted)).toBe("unknown");
+    }
   });
 });

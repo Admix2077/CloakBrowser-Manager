@@ -7594,3 +7594,31 @@ npm --prefix frontend test -- --run ProxyManagerPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Shared profile id marker guardrail
+
+背景：
+
+- `publicProfileIdLabel` 是 ProfileTable、ProfileSummaryPanel 等通用 profile id UI evidence 的共享边界。
+- 旧 profile id filter 已覆盖 URL、Authorization/Bearer、api_key、access_token、refresh_token、session_id、viewer_token、token/password/secret/cookie marker，但 `client_secret-*`、`private_key-*` 等 filename-safe/profile-id-safe marker 仍可能被截断后渲染为 `client_s` / `private_`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared UI evidence 边界。
+
+已覆盖：
+
+- `publicProfileIdLabel` 现在会拒绝 `x-api-key`、`auth_token`、`viewer-token`、`client_secret`、`private_key` marker，并继续覆盖原有 URL/header/token/path-style profile id。
+- 污染 profile id 在共享 UI evidence 中折叠为 `unknown`；普通公开 profile id 仍保持原有 8 字符短 label 语义。
+- ProfileTable/ProfileSummaryPanel 等调用方继承该共享边界。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run errorDisplay.test.ts
+# RED: 旧 publicProfileIdLabel 将 client_secret-profile-marker 渲染为 client_s；GREEN: 6 passed
+```
+
+边界：
+
+- 这是 frontend shared profile id visible/title/aria evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
