@@ -9,7 +9,7 @@ const FILTER_ALL = "__all_proxy_filter__";
 const CSV_SAMPLE = "name,url,country_code,city,asn,provider,tags,notes";
 const PUBLIC_ASSIGNMENT_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_ASSIGNMENT_PROFILE_ID_RE =
-  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\s)/i;
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];

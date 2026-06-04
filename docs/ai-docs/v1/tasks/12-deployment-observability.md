@@ -7566,3 +7566,31 @@ npm --prefix frontend test -- --run ProfileCookieManager.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy Manager assignment profile id marker guardrail
+
+背景：
+
+- Proxy Manager assignment dialog 会显示 profile name、runtime status、profile id、current proxy，并把这些低敏 label 纳入搜索、title 和 aria evidence。
+- 旧 assignment profile id filter 已覆盖 URL、Authorization/Bearer、viewer_token、token/password/secret/cookie marker，但 `x-api-key-*`、`session-id-*`、`private-key-*` 等 filename/path-safe marker 仍可能作为 profile id label 被渲染。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Proxy Manager UI evidence 边界。
+
+已覆盖：
+
+- `ProxyManagerPage` 的 assignment profile id label filter 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker。
+- 污染 profile id 在 assignment dialog 可见文本、title、aria 和搜索 evidence 中折叠为 `unknown`。
+- Checkbox selection 和 `assignProxyToProfiles` payload 继续使用原始 profile id，避免把 UI evidence redaction 误变成业务语义改写。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run ProxyManagerPage.test.tsx
+# RED: 旧 assignment profile id label 暴露 x-api-key/session-id/private-key marker；GREEN: 38 passed
+```
+
+边界：
+
+- 这是 frontend Proxy Manager assignment UI/search/aria evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

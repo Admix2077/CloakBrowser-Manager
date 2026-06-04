@@ -1031,6 +1031,64 @@ describe("ProxyManagerPage", () => {
     }
   });
 
+  it("redacts marker-bearing assignment profile ids while assigning the raw id", async () => {
+    const rawProfileId = "x-api-key-session-id-private-key";
+    mockListProxies.mockResolvedValue([
+      proxy({ id: "proxy-1", name: "Credential Pool" }),
+    ]);
+    mockAssignProxyToProfiles.mockResolvedValue({
+      proxy_id: "proxy-1",
+      proxy: proxy({ id: "proxy-1", name: "Credential Pool" }),
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [{ profile_id: rawProfileId, ok: true, error: null }],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({
+          id: rawProfileId,
+          name: "Marker Profile",
+        }),
+      ]}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByLabelText("Select Credential Pool"));
+    fireEvent.click(within(page).getByRole("button", { name: "Assign to profiles" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Assign proxy to profiles" });
+    expect(within(dialog).getByText("unknown")).toBeTruthy();
+    expect(within(dialog).getByText("Marker Profile")).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: "x-api-key" },
+    });
+    expect(within(dialog).queryByText("Marker Profile")).toBeNull();
+    expect(within(dialog).getByRole("status", { name: "No assignment profiles match search" })).toBeTruthy();
+
+    fireEvent.change(within(dialog).getByLabelText("Search profiles for assignment"), {
+      target: { value: "unknown" },
+    });
+    expect(within(dialog).getByText("Marker Profile")).toBeTruthy();
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of ["x-api-key", "session-id", "private-key"]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.click(within(dialog).getByLabelText("Assign Marker Profile"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign proxy" }));
+
+    await waitFor(() => expect(mockAssignProxyToProfiles).toHaveBeenCalledWith("proxy-1", [rawProfileId]));
+  });
+
   it("does not turn a successful assignment into an assign failure when refresh fails", async () => {
     const onProfilesAssigned = vi.fn().mockRejectedValue(new Error("refresh failed"));
     mockListProxies.mockResolvedValue([
