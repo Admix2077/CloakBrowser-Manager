@@ -3,13 +3,13 @@ import { redactUrlCredentials } from "./profileDisplay";
 const ERROR_AUTH_HEADER_RE = /\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest)\s+)?[^\s;,]+/gi;
 const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
 const ERROR_SENSITIVE_ASSIGNMENT_RE =
-  /\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 const PROFILE_GEOIP_SENSITIVE_RE =
   /\bAuthorization\b|\bBearer\b|\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
 const PUBLIC_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_PROFILE_ID_RE =
-  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bapi[_-]?key\b|\baccess[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
 const ERROR_IPV4_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
 const ERROR_BRACKETED_IPV6_RE = /\[([0-9a-fA-F:.]{2,})\]/g;
 const ERROR_BARE_IPV6_RE = /(?<![A-Za-z0-9_.:[\]-])(?:[0-9a-fA-F]{1,4}:){2,}[0-9a-fA-F:.]*(?![A-Za-z0-9_.:[\]-])/g;

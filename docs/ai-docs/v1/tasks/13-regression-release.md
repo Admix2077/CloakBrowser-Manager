@@ -6921,3 +6921,34 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend diagnostics schema、diagnostics count-query behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 diagnostics scalar release-evidence 边界。
+
+## 2026-06-04 Shared frontend error assignment release-evidence guardrail
+
+背景：
+
+- Release regression 会经过 Profile operations、Proxy Manager、Profile CSV import、Automation task viewer、health labels 等多个前端错误/提示出口。
+- 这些出口复用 `publicErrorText()`，旧边界已覆盖 URL query、Authorization/Bearer、token/password/secret/cookie、本地路径和 IP literal，但常见 provider/API assignment 名称如 `api_key`、`access_token`、`refresh_token`、`session_id`、`client_secret` 仍可能原样进入 visible/aria evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared frontend error evidence 边界。
+
+已覆盖：
+
+- `publicErrorText()` 现在 redacts `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` assignment/header-style text。
+- `publicProfileIdLabel()` 同步把含有这些 marker 的异常 id label 折叠为 `unknown`。
+- 既有 URL/path/IP/header redaction 和正常低敏错误上下文展示保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "redacts common API key and session assignment names"
+# RED then GREEN；旧 shared error text 暴露 api_key/access_token/session_id/client_secret/x-api-key values
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 1 file passed, 5 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared frontend error assignment release-evidence 边界。

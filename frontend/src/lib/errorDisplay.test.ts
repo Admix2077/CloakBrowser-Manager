@@ -51,6 +51,24 @@ describe("publicErrorText", () => {
     expect(text).not.toContain("opaque=secret");
     expect(text).not.toContain("hiddenpass");
   });
+
+  it("redacts common API key and session assignment names from visible error text", () => {
+    const text = publicErrorText(
+      "Provider rejected api_key=key-super-secret access_token=access-super-secret " +
+        "refresh_token=refresh-super-secret session_id=session-super-secret " +
+        "client_secret=client-super-secret x-api-key: header-super-secret",
+    );
+
+    expect(text).toBe(
+      "Provider rejected [redacted] [redacted] [redacted] [redacted] [redacted] [redacted]",
+    );
+    expect(text).not.toContain("key-super-secret");
+    expect(text).not.toContain("access-super-secret");
+    expect(text).not.toContain("refresh-super-secret");
+    expect(text).not.toContain("session-super-secret");
+    expect(text).not.toContain("client-super-secret");
+    expect(text).not.toContain("header-super-secret");
+  });
 });
 
 describe("publicProfileGeoipLabel", () => {

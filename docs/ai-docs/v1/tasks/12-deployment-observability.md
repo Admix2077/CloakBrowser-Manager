@@ -7237,3 +7237,34 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend diagnostics schema、diagnostics count queries、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Shared frontend error assignment redaction guardrail
+
+背景：
+
+- `publicErrorText()` 是 Profile operations、Proxy Manager、Profile CSV import、Automation task viewer、health/error labels 等 UI evidence 的共享错误文本边界。
+- 旧 redaction 覆盖 Authorization/Bearer/token/password/secret/cookie/path/IP/URL query，但没有覆盖常见 assignment 名称如 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared frontend error evidence 边界。
+
+已覆盖：
+
+- `publicErrorText()` 现在会把 `api_key=...`、`x-api-key: ...`、`access_token=...`、`refresh_token=...`、`session_id=...`、`client_secret=...`、`private_key=...` 这类错误文本折叠为 `[redacted]`。
+- `publicProfileIdLabel()` 同步把含有这些 key/token/session marker 的异常 id label 折叠为 `unknown`。
+- 既有 URL credential/query/fragment、IP literal、本地路径、Authorization/Bearer redaction 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "redacts common API key and session assignment names"
+# RED: 旧 publicErrorText 暴露 api_key/access_token/refresh_token/session_id/client_secret/x-api-key；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 1 file passed, 5 tests passed
+```
+
+边界：
+
+- 这是 frontend shared error evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
