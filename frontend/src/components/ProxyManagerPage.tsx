@@ -12,6 +12,8 @@ const SENSITIVE_ASSIGNMENT_PROFILE_ID_RE =
   /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\s)/i;
 const PROXY_MANAGER_LABEL_SENSITIVE_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+const PROXY_MANAGER_CSV_SENSITIVE_FIELD_RE =
+  /"?[^,\r\n"]*\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b[^,\r\n"]*"?/gi;
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];
@@ -2289,7 +2291,7 @@ function publicProxyCsvPreviewLabel(value: string): string {
 function publicProxyCsvVisibleText(value: string): string {
   return value
     .split(/\r?\n/)
-    .map((line) => publicErrorText(line))
+    .map((line) => publicErrorText(line).replace(PROXY_MANAGER_CSV_SENSITIVE_FIELD_RE, "unknown"))
     .join("\n");
 }
 

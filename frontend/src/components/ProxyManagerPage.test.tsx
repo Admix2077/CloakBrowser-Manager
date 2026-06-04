@@ -1926,6 +1926,54 @@ describe("ProxyManagerPage", () => {
     }));
   });
 
+  it("folds marker-bearing proxy CSV textarea evidence without changing the import payload", async () => {
+    const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
+    const importedProxy = proxy({ id: "proxy-imported", name: "Imported Safe" });
+    mockListProxies
+      .mockResolvedValueOnce([existingProxy])
+      .mockResolvedValueOnce([existingProxy, importedProxy]);
+    mockCreateProxy.mockResolvedValue(importedProxy);
+
+    const rawName = "api_key-proxy-csv-name-marker";
+    const rawProvider = "client_secret-proxy-csv-provider-marker";
+    const rawTag = "private_key-proxy-csv-tag-marker";
+    const rawCsv = [
+      "name,url,provider,tags",
+      `"${rawName}",http://user:hiddenpass@marker.proxy.example:8080,"${rawProvider}","${rawTag}"`,
+    ].join("\n");
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Import CSV" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Import proxy CSV" });
+    const textarea = within(dialog).getByLabelText("Proxy CSV content") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: rawCsv } });
+
+    expect(textarea.value).toContain("unknown");
+    expect(textarea.value).toContain("http://marker.proxy.example:8080");
+
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+      "hiddenpass",
+      "user:",
+    ]) {
+      expect(textarea.value).not.toContain(leaked);
+    }
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Import valid rows" }));
+
+    await waitFor(() => expect(mockCreateProxy).toHaveBeenCalledWith({
+      name: rawName,
+      url: "http://user:hiddenpass@marker.proxy.example:8080",
+      provider: rawProvider,
+      tags: [{ tag: rawTag, color: null }],
+    }));
+  });
+
   it("applies proxy provider preset defaults to CSV import rows", async () => {
     const existingProxy = proxy({ id: "proxy-existing", name: "Existing Pool" });
     const importedProxy = proxy({
