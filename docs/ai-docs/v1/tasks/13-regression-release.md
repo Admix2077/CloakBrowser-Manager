@@ -7306,3 +7306,31 @@ npm --prefix frontend test -- --run errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared profile id marker release boundary。
+
+## 2026-06-04 Shared GeoIP label marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 ProfileTable、ProfileSummaryPanel 和 health/filter 的 GeoIP visible/title/search evidence。
+- 旧 shared GeoIP label boundary 已覆盖 Authorization/Bearer、token/password/secret/cookie assignment、path 和 URL credential 情况，但 `api_key-geoip-marker`、`client_secret-geoip-marker`、`private_key-geoip-marker` 这类 marker-only 字符串仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared GeoIP release-evidence 边界。
+
+已覆盖：
+
+- `publicProfileGeoipLabel` 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only GeoIP labels。
+- 污染 marker-only GeoIP label 显示为 `unknown`；已有 path/IP/header/URL credential redaction 继续保留。
+- 普通 IP、country code、timezone、locale 等低敏 GeoIP evidence 继续显示。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run errorDisplay.test.ts
+# RED then GREEN；旧 publicProfileGeoipLabel 原样返回 api_key-geoip-marker；GREEN 7 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared GeoIP label marker release boundary。

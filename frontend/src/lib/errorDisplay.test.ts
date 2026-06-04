@@ -82,6 +82,17 @@ describe("publicProfileGeoipLabel", () => {
       "US Authorization=Bearer geoip-secret token=geoip-secret /data/geoip 203.0.113.104",
     )).toBe("US [redacted] [redacted] [redacted-path] [redacted-ip]");
   });
+
+  it("redacts marker-bearing geoip labels without assignment syntax", () => {
+    for (const polluted of [
+      "api_key-geoip-marker",
+      "access_token-geoip-marker",
+      "client_secret-geoip-marker",
+      "private_key-geoip-marker",
+    ]) {
+      expect(publicProfileGeoipLabel(polluted)).toBe("unknown");
+    }
+  });
 });
 
 describe("publicProfileIdLabel", () => {

@@ -7622,3 +7622,31 @@ npm --prefix frontend test -- --run errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Shared GeoIP label marker guardrail
+
+背景：
+
+- `publicProfileGeoipLabel` 是 ProfileTable、ProfileSummaryPanel、health summary/filter 等 GeoIP visible/title/search evidence 的共享边界。
+- 旧 GeoIP label filter 已覆盖 Authorization/Bearer、token/password/secret/cookie assignment、path 和 URL credential 情况，但 `api_key-geoip-marker`、`client_secret-geoip-marker`、`private_key-geoip-marker` 这类 marker-only 字符串仍可能作为 IP/country/timezone/locale label 原样渲染。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared GeoIP UI evidence 边界。
+
+已覆盖：
+
+- `publicProfileGeoipLabel` 现在会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only GeoIP labels。
+- marker-only GeoIP 污染值折叠为 `unknown`；带 path/IP/header/URL credential 的污染值继续走现有低敏替换。
+- 正常 IP、country code、timezone、locale 等低敏 GeoIP 值继续保持原样。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run errorDisplay.test.ts
+# RED: 旧 publicProfileGeoipLabel 原样返回 api_key-geoip-marker；GREEN: 7 passed
+```
+
+边界：
+
+- 这是 frontend shared GeoIP visible/title/search evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

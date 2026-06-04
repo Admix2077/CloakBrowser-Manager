@@ -6,7 +6,7 @@ const ERROR_SENSITIVE_ASSIGNMENT_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 const PROFILE_GEOIP_SENSITIVE_RE =
-  /\bAuthorization\b|\bBearer\b|\b(?:auth_token|viewer_token|token|password|passwd|secret|cookie|set-cookie)\s*[:=]|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
+  /\bAuthorization\b|\bBearer\b|\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
 const PUBLIC_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_PROFILE_ID_RE =
   /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bviewer[_-]?token\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
@@ -92,7 +92,8 @@ export function publicProfileGeoipLabel(value: string): string {
   if (!PROFILE_GEOIP_SENSITIVE_RE.test(trimmed) && redactUrlCredentials(trimmed) === trimmed) {
     return trimmed;
   }
-  return publicErrorText(trimmed) || "unknown";
+  const publicText = publicErrorText(trimmed);
+  return publicText && publicText !== trimmed ? publicText : "unknown";
 }
 
 export function publicErrorMessage(err: unknown, fallback: string): string {
