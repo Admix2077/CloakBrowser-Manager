@@ -1943,6 +1943,40 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "session-cookie" not in serialized_events
 
 
+def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
+    sensitive_ids = [
+        "api_key-audit-external-marker",
+        "x-api-key-audit-external-marker",
+        "access_token-audit-external-marker",
+        "refresh_token-audit-external-marker",
+        "session_id-audit-external-marker",
+        "client_secret-audit-external-marker",
+        "private_key-audit-external-marker",
+    ]
+    for external_session_id in sensitive_ids:
+        db.create_audit_event(
+            event_type="runtime.test",
+            actor_type="runtime_service",
+            external_session_id=external_session_id,
+            metadata={"safe": "kept"},
+        )
+    db.create_audit_event(
+        event_type="runtime.test",
+        actor_type="runtime_service",
+        external_session_id="pm-session-public-marker",
+        metadata={"safe": "kept"},
+    )
+
+    events = db.list_audit_events()
+
+    assert len(events) == 8
+    assert [event["external_session_id"] for event in events[:-1]] == [None] * 7
+    assert events[-1]["external_session_id"] == "pm-session-public-marker"
+    serialized_events = json.dumps(events, sort_keys=True)
+    for external_session_id in sensitive_ids:
+        assert external_session_id not in serialized_events
+
+
 def test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata(tmp_db):
     leak_marker = "audit-reader-secret"
     polluted_event_id = (

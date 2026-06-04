@@ -6983,3 +6983,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 backend audit API key metadata release-evidence 边界。
+
+## 2026-06-04 Backend audit external session id release-evidence guardrail
+
+背景：
+
+- Release regression 会读取 audit event top-level `external_session_id`，用于 runtime/session evidence 对账。
+- 旧 public external session id 边界能挡 URL/query/header/token-assignment，但常见 API/provider marker 如 `api_key-*`、`access_token-*`、`session_id-*`、`client_secret-*` 仍可能作为符合字符集的 ID 出现在 evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 backend audit release-evidence 边界。
+
+已覆盖：
+
+- Audit event reader 对 top-level `external_session_id` 增加 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker 防护。
+- 含这些 marker 的 external session id 在 list/get audit evidence 中显示为 `None`，不会进入序列化 release evidence。
+- 普通 `pm-session-*` 低敏 external session id 继续保留；runtime session 原始存储、viewer behavior、API payload 和 browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "sensitive_external_session_id_markers"
+# RED then GREEN；旧 audit event reader 暴露 api_key/access_token/session_id/client_secret/private_key marker external_session_id
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id or audit_event_reader"
+# 4 passed, 43 deselected
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 backend audit external session id release-evidence 边界。

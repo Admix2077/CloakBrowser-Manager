@@ -996,6 +996,7 @@ _PUBLIC_AUDIT_ACTOR_TYPES = frozenset({"local_admin", "runtime_service", "runtim
 _PUBLIC_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(
     r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer)\b|"
+    r"\b(access_token|api_key|client_secret|private_key|refresh_token|session_id|x-api-key)\b|"
     r"\b(auth_token|password|cookie|secret|token|viewer_token)\s*=",
     re.IGNORECASE,
 )

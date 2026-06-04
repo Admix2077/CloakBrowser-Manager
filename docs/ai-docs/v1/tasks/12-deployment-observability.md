@@ -7299,3 +7299,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Backend audit external session id marker guardrail
+
+背景：
+
+- Audit event top-level `external_session_id` 是 release/runtime evidence 的可见字段，读取历史事件时会经过 `_public_audit_external_session_id()`。
+- 旧边界会拒绝 URL、Authorization/Bearer、`token=` 等明显敏感格式，但仍会允许符合公开 ID 字符集的 `api_key-*`、`access_token-*`、`session_id-*` 等 marker。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 backend audit top-level evidence 边界。
+
+已覆盖：
+
+- Audit event reader 现在会把 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker 出现在 top-level `external_session_id` 的事件折叠为 `None`。
+- 普通低敏 external session id 例如 `pm-session-public-marker` 仍可见，便于 release/session evidence 对账。
+- Runtime session 原始存储、API payload、viewer session 行为和 audit metadata sanitizer 语义保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "sensitive_external_session_id_markers"
+# RED: 旧 audit event reader 暴露 api_key/access_token/session_id/client_secret/private_key marker external_session_id；GREEN: focused test passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id or audit_event_reader"
+# 4 passed, 43 deselected
+```
+
+边界：
+
+- 这是 backend audit top-level evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
