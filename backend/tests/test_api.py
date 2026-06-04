@@ -4367,6 +4367,46 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_console_logs_redacts_hyphen_sensitive_assignments(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleHyphenRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    _, callback = page.on.call_args.args
+    message = MagicMock()
+    message.type = "warning"
+    message.text = (
+        "provider api-key=hyphen-api-secret client-secret=hyphen-client-secret "
+        "session-id=hyphen-session-secret private-key=hyphen-private-secret"
+    )
+    message.location = {}
+    callback(message)
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    assert resp.json()["logs"] == [
+        {
+            "type": "warning",
+            "text": (
+                "provider api-key=[redacted] client-secret=[redacted] "
+                "session-id=[redacted] private-key=[redacted]"
+            ),
+            "location": {},
+        }
+    ]
+    serialized = str(resp.json())
+    assert "hyphen-api-secret" not in serialized
+    assert "hyphen-client-secret" not in serialized
+    assert "hyphen-session-secret" not in serialized
+    assert "hyphen-private-secret" not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_network_summary_redacts_urls_and_returns_recent_events(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationNetworkSummary"})
     pid = create.json()["id"]

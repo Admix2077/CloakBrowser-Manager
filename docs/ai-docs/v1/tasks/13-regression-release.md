@@ -8202,3 +8202,47 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Health runtime hyphen-marker release boundary。
+
+## 2026-06-04 Automation console hyphen assignment release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation console log response，因为 console text 会进入 Automation API、UI task/debug evidence 和 release triage。
+- 旧 Automation console text sanitizer 已覆盖 URL、Authorization/Bearer、Cookie 和下划线 assignment，例如 `api_key=...`、`session_id=...`。
+- 短横线 assignment 例如 `api-key=...`、`client-secret=...`、`session-id=...`、`private-key=...` 仍可能在 response text 中保留真实值。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Automation response evidence 边界。
+
+已覆盖：
+
+- Automation console text assignment sanitizer 现在统一支持 `_` 和 `-` 分隔的 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 字段。
+- Console log response 对 `api-key`、`client-secret`、`session-id`、`private-key` assignment 返回 `[redacted]`。
+- 现有 URL/Auth/Cookie、underscore assignment、marker-only console text、location URL 和 console type redaction 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k automation_console_logs_redacts_hyphen_sensitive_assignments
+# RED: 旧 Automation console response 保留 api-key/session-id/private-key 短横线 assignment secret；GREEN: 1 passed, 259 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs"
+# 5 passed, 255 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 659 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation console hyphen-assignment release boundary。

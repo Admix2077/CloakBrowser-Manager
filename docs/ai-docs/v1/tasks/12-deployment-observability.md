@@ -8521,3 +8521,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 profile health 计算语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation console hyphen assignment guardrail
+
+背景：
+
+- Automation console logs 是 runtime/debug observability 的低敏证据面，会通过 `/api/profiles/{id}/automation/pages/{page}/console-logs` 返回。
+- 旧 sanitizer 已处理 URL、Authorization/Bearer、Cookie、下划线 assignment 和 marker-only text。
+- 短横线 assignment 例如 `api-key=...`、`client-secret=...`、`session-id=...`、`private-key=...` 仍可能作为普通 console text 保留。
+
+已覆盖：
+
+- `_AUTOMATION_SENSITIVE_ASSIGNMENT_RE` 现在统一支持 `_` 和 `-` 分隔的 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 字段。
+- Automation console response 会将短横线 sensitive assignment 的 value 替换为 `[redacted]`。
+- URL credential stripping、Authorization/Bearer、Cookie、underscore assignment、marker-only text、location URL 和 console type sanitizer 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k automation_console_logs_redacts_hyphen_sensitive_assignments
+# RED: 旧 Automation console response 保留 api-key/session-id/private-key 短横线 assignment secret；GREEN: 1 passed, 259 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs"
+# 5 passed, 255 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 659 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 Automation console response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

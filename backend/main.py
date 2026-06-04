@@ -194,8 +194,9 @@ _AUTOMATION_COOKIE_HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 _AUTOMATION_SENSITIVE_ASSIGNMENT_RE = re.compile(
-    r"\b(access_token|api_key|authorization|auth_token|client_secret|cookie|password|private_key|"
-    r"refresh_token|runtime_service_token|secret|service_token|session_id|token|viewer_token|x-api-key)"
+    r"\b(access[_-]?token|api[_-]?key|authorization|auth[_-]?token|client[_-]?secret|cookie|"
+    r"password|private[_-]?key|refresh[_-]?token|runtime[_-]?service[_-]?token|secret|"
+    r"service[_-]?token|session[_-]?id|token|viewer[_-]?token|x[_-]?api[_-]?key)"
     r"\s*[:=]\s*([^\s&#,;]+)",
     re.IGNORECASE,
 )
