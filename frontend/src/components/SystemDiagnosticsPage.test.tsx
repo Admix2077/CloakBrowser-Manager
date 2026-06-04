@@ -188,6 +188,50 @@ describe("SystemDiagnosticsPage", () => {
     expect(page.textContent).not.toContain("203.0.113.88");
   });
 
+  it("folds provider and session marker diagnostics labels before rendering", async () => {
+    const base = diagnostics();
+    mockGetDiagnostics.mockResolvedValueOnce(diagnostics({
+      counts: {
+        ...base.counts,
+        automation_task_counts: {
+          queued: 5,
+          "api_key-diagnostics-marker": 1,
+        },
+      },
+      runtime: {
+        ...base.runtime,
+        launch_failure_stage_counts: {
+          "x-api-key-diagnostics-marker": 1,
+          "session_id-diagnostics-marker": 1,
+        },
+        stealth_pref_categories: [
+          "canvas",
+          "private_key-diagnostics-marker",
+        ],
+      },
+      runtime_sessions: {
+        ...base.runtime_sessions,
+        status_counts: {
+          active: 1,
+          "session_id-runtime-marker": 2,
+        },
+      },
+    }));
+
+    render(<SystemDiagnosticsPage />);
+
+    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    expect(within(page).getByRole("group", { name: "Launch failure stages: unknown (2)" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Stealth categories: canvas, unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Runtime session statuses: active (1), unknown (2)" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "unknown: 1" })).toBeTruthy();
+
+    expect(page.textContent).not.toContain("api_key");
+    expect(page.textContent).not.toContain("x-api-key");
+    expect(page.textContent).not.toContain("session_id");
+    expect(page.textContent).not.toContain("private_key");
+  });
+
   it("folds non-public diagnostics scalar identity fields before rendering", async () => {
     const leakMarker = "diagnostics-scalar-token-secret";
     const base = diagnostics();
