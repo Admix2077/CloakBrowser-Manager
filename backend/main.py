@@ -1127,8 +1127,9 @@ _PUBLIC_RUNTIME_SESSION_STATUSES = {"active", "terminated"}
 _PUBLIC_RUNTIME_EXTERNAL_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _SENSITIVE_RUNTIME_EXTERNAL_SESSION_ID_RE = re.compile(
     r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer)\b|"
-    r"\b(access_token|api_key|client_secret|private_key|refresh_token|session_id|x-api-key)\b|"
-    r"\b(auth_token|password|cookie|secret|token|viewer_token)\s*=",
+    r"\b(access[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|session[_-]?id|x[_-]?api[_-]?key)\b|"
+    r"\b(auth[_-]?token|password|cookie|secret|token|viewer[_-]?token)\s*=",
     re.IGNORECASE,
 )
 

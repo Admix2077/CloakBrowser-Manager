@@ -254,6 +254,10 @@ def test_runtime_session_response_omits_sensitive_external_session_id_markers(
         "session_id-runtime-external-marker",
         "client_secret-runtime-external-marker",
         "private_key-runtime-external-marker",
+        "api-key-runtime-external-marker",
+        "client-secret-runtime-external-marker",
+        "session-id-runtime-external-marker",
+        "private-key-runtime-external-marker",
     ]
     sensitive_sessions = [
         db.create_runtime_session(
@@ -283,7 +287,7 @@ def test_runtime_session_response_omits_sensitive_external_session_id_markers(
         headers=runtime_headers,
     )
 
-    assert [data["external_session_id"] for data in sensitive_responses] == ["unknown"] * 7
+    assert [data["external_session_id"] for data in sensitive_responses] == ["unknown"] * 11
     assert public_resp.status_code == 200
     assert public_resp.json()["external_session_id"] == "pm-session-runtime-public-marker"
     serialized_responses = json.dumps(sensitive_responses, sort_keys=True)
@@ -2035,6 +2039,10 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
         "session_id-audit-external-marker",
         "client_secret-audit-external-marker",
         "private_key-audit-external-marker",
+        "api-key-audit-external-marker",
+        "client-secret-audit-external-marker",
+        "session-id-audit-external-marker",
+        "private-key-audit-external-marker",
     ]
     for external_session_id in sensitive_ids:
         db.create_audit_event(
@@ -2052,8 +2060,8 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
 
     events = db.list_audit_events()
 
-    assert len(events) == 8
-    assert [event["external_session_id"] for event in events[:-1]] == [None] * 7
+    assert len(events) == 12
+    assert [event["external_session_id"] for event in events[:-1]] == [None] * 11
     assert events[-1]["external_session_id"] == "pm-session-public-marker"
     serialized_events = json.dumps(events, sort_keys=True)
     for external_session_id in sensitive_ids:

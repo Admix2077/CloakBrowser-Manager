@@ -8434,3 +8434,47 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 audit event 写入语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Runtime external session hyphen marker guardrail
+
+背景：
+
+- Runtime session response 和 audit 顶层 `external_session_id` 会进入 runtime/viewer triage 与低敏 evidence。
+- 旧 public filter 已覆盖 URL/query/Auth 以及 `api_key`、`session_id`、`private_key` 等下划线 marker。
+- 短横线 marker 例如 `api-key-runtime-external-marker`、`session-id-audit-external-marker` 仍符合 public id 字符集，可能作为普通 external session id 返回或进入 audit 顶层字段。
+
+已覆盖：
+
+- `_SENSITIVE_RUNTIME_EXTERNAL_SESSION_ID_RE` 和 `_SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE` 现在统一支持 `_` 和 `-` 分隔的 access/api/client/private/refresh/session/x-api-key marker。
+- Runtime session get response 会把短横线敏感 `external_session_id` 折叠为 `unknown`。
+- Audit event reader 会把短横线敏感顶层 `external_session_id` 折叠为 `None`。
+- 普通 `pm-session-*` public id、URL/Auth 过滤、下划线 marker 过滤保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id_markers"
+# RED: 旧 runtime/audit external_session_id 保留 api-key/session-id/private-key 短横线 marker；GREEN: 2 passed, 47 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id or runtime_viewer_failure_audit or runtime_viewer_origin_failure_audit or audit_event_reader_omits_sensitive_external"
+# 6 passed, 43 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 runtime/audit `external_session_id` evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 runtime session create/lookup 语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
