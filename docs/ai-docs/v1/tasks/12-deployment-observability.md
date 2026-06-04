@@ -7482,3 +7482,31 @@ npm --prefix frontend test -- --run SystemDiagnosticsPage.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation task viewer marker label guardrail
+
+背景：
+
+- Automation task viewer 会渲染 task id、profile id、step type、page_ref、wait_until/state 和 result step summary，用于只读任务日志与 release evidence。
+- 旧 viewer public-label filter 已覆盖 URL、Authorization/Bearer、token/password/secret/cookie marker，但 `api_key-*`、`x-api-key-*`、`session_id-*`、`private_key-*` 等符合公开字符集的 label 仍可能进入可见/aria evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Automation UI evidence 边界。
+
+已覆盖：
+
+- `AutomationTaskLogViewer` 的 public label filter 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker。
+- 污染 task/profile id、step labels、result labels 和 task-detail button aria label 会折叠为 `unknown`。
+- Automation task payload execution、stored steps、worker lease、backend task API、runtime/viewer 和 browser fingerprint behavior 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run AutomationTaskLogViewer.test.tsx
+# RED: 旧 Automation task viewer label 暴露 api_key/x-api-key/session_id/private_key marker；GREEN: 11 passed
+```
+
+边界：
+
+- 这是 frontend Automation UI evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

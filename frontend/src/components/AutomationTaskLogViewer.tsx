@@ -25,7 +25,8 @@ const PUBLIC_TASK_STATUSES = new Set([
   "succeeded",
 ]);
 const PUBLIC_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,79}$/;
-const SENSITIVE_PUBLIC_TEXT_RE = /authorization|bearer|auth[_-]?token|viewer[_-]?token|token|password|passwd|secret|cookie|set-cookie/i;
+const SENSITIVE_PUBLIC_TEXT_RE =
+  /authorization|bearer|api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|session[_-]?id|viewer[_-]?token|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie/i;
 const IPV4_LITERAL_RE = /^\d{1,3}(?:\.\d{1,3}){3}$/;
 
 export function AutomationTaskLogViewer() {

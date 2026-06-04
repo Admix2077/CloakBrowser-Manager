@@ -129,6 +129,61 @@ describe("AutomationTaskLogViewer", () => {
     expect(within(page).queryByRole("button", { name: /^retry task$/i })).toBeNull();
   });
 
+  it("folds provider and session marker task labels before rendering", async () => {
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({
+          id: "api_key-task-marker",
+          profile_id: "session_id-profile-marker",
+          status: "queued",
+          steps: [
+            {
+              type: "x-api-key-step-marker",
+              page_ref: "private_key-page-marker",
+              wait_until: "access_token-wait-marker",
+              state: "client_secret-state-marker",
+            },
+          ] as AutomationTask["steps"],
+          result: {
+            steps: [
+              {
+                index: 0,
+                type: "refresh_token-result-marker",
+                status: "session_id-result-status-marker",
+              },
+            ] as AutomationTask["result"]["steps"],
+          },
+        }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getAllByText("unknown").length).toBeGreaterThan(0);
+    expect(within(page).getByText("page unknown")).toBeTruthy();
+    expect(within(page).getByText("wait_until unknown")).toBeTruthy();
+    expect(within(page).getByText("state unknown")).toBeTruthy();
+    expect(within(page).getByText("0 unknown unknown")).toBeTruthy();
+
+    fireEvent.click(within(page).getByRole("button", { name: "View task details for unknown" }));
+    const drawer = await screen.findByRole("dialog", { name: "Automation task details" });
+    expect(within(drawer).getAllByText("unknown").length).toBeGreaterThan(0);
+    expect(within(drawer).getByText("page unknown")).toBeTruthy();
+    expect(within(drawer).getByText("wait_until unknown")).toBeTruthy();
+    expect(within(drawer).getByText("state unknown")).toBeTruthy();
+    expect(within(drawer).getByText("0 unknown unknown")).toBeTruthy();
+
+    const renderedText = `${page.textContent ?? ""} ${drawer.textContent ?? ""}`;
+    expect(renderedText).not.toContain("api_key");
+    expect(renderedText).not.toContain("x-api-key");
+    expect(renderedText).not.toContain("access_token");
+    expect(renderedText).not.toContain("refresh_token");
+    expect(renderedText).not.toContain("session_id");
+    expect(renderedText).not.toContain("client_secret");
+    expect(renderedText).not.toContain("private_key");
+  });
+
   it("refreshes the read-only task list on demand", async () => {
     mockListAutomationTasks
       .mockResolvedValueOnce({ tasks: [task({ id: "task-first-123456" })] })

@@ -7166,3 +7166,31 @@ npm --prefix frontend test -- --run SystemDiagnosticsPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics marker label release boundary。
+
+## 2026-06-04 Automation task viewer marker label release guardrail
+
+背景：
+
+- Release convergence 会继续读取 Automation task viewer 作为任务执行、结果和错误的低敏 UI evidence。
+- 旧 Automation task viewer label boundary 已覆盖 URL、Authorization/Bearer、token/password/secret/cookie marker，但 `api_key-*`、`x-api-key-*`、`session_id-*`、`private_key-*` 等 marker 仍可能作为 task/profile/step/result label 被渲染。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Automation release-evidence 边界。
+
+已覆盖：
+
+- Automation task viewer task/profile id、step labels、result labels 和 detail button aria label 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker。
+- 污染 label 显示为 `unknown`，普通低敏 task id、profile id、step type/status、page index 和 wait/state label 继续显示。
+- Backend task API、stored task payloads、Automation worker lease、runtime/viewer 和 browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run AutomationTaskLogViewer.test.tsx
+# RED then GREEN；旧 Automation task viewer label 暴露 api_key/x-api-key/session_id/private_key marker
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task viewer marker label release boundary。
