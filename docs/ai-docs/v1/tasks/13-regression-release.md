@@ -7390,3 +7390,31 @@ npm --prefix frontend test -- --run errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw profile names、form inputs、filter values、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared profile name marker release boundary。
+
+## 2026-06-04 ProfileSummary device label marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 ProfileSummaryPanel 的 Device section，因为 platform、screen、hardware concurrency、GPU label 会进入 visible/title evidence。
+- 旧设备标签 boundary 已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 `api_key-device-platform-marker`、`client_secret-device-screen-width-marker`、`private_key-device-screen-height-marker` 这类 marker-only 字符串仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 ProfileSummary release-evidence 边界。
+
+已覆盖：
+
+- ProfileSummary device label 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only device labels。
+- 污染 marker-only 设备值显示为 `unknown`；screen 显示为 `unknown x unknown`，cores 显示为 `unknown cores`。
+- 既有带 Authorization/token/path/IP 的设备字段 redaction 继续保留，普通平台、屏幕、核心数和 GPU label 继续显示。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run ProfileSummaryPanel.test.tsx
+# RED then GREEN；旧 ProfileSummary Device section 暴露 api_key/client_secret/private_key/x-api-key/access_token marker；GREEN 9 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw profile device values、form inputs、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileSummary device label marker release boundary。

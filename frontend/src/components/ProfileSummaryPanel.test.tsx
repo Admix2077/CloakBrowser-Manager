@@ -381,4 +381,43 @@ describe("ProfileSummaryPanel", () => {
       expect(renderedEvidence).not.toContain(leaked);
     }
   });
+
+  it("folds marker-bearing device labels before rendering summary evidence", () => {
+    const pollutedProfile = profile({
+      platform: "api_key-device-platform-marker",
+      screen_width: "client_secret-device-screen-width-marker" as unknown as number,
+      screen_height: "private_key-device-screen-height-marker" as unknown as number,
+      hardware_concurrency: "x-api-key-device-cores-marker" as unknown as number,
+      gpu_renderer: "access_token-device-gpu-marker",
+    });
+
+    render(
+      <ProfileSummaryPanel
+        profile={pollutedProfile}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    const device = within(screen.getByRole("complementary", { name: "Profile summary" }))
+      .getByRole("region", { name: "Device" });
+    expect(within(device).getAllByText("unknown").length).toBeGreaterThan(0);
+    expect(within(device).getByText("unknown x unknown")).toBeTruthy();
+    expect(within(device).getByText("unknown cores")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+      "x-api-key",
+      "access_token",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
 });

@@ -9,6 +9,9 @@ import { HealthBadge } from "./HealthBadge";
 import { ProfileCookieManager } from "./ProfileCookieManager";
 import { StatusIndicator } from "./StatusIndicator";
 
+const DEVICE_LABEL_SENSITIVE_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+
 interface ProfileSummaryPanelProps {
   profile: Profile | null;
   health?: ProfileHealthResponse;
@@ -175,7 +178,9 @@ export function ProfileSummaryPanel({
 function publicProfileDeviceLabel(value: unknown): string {
   const text = String(value ?? "").trim();
   if (!text) return "-";
-  return publicErrorText(text) || "unknown";
+  const publicText = publicErrorText(text);
+  if (DEVICE_LABEL_SENSITIVE_RE.test(text) && publicText === text) return "unknown";
+  return publicText || "unknown";
 }
 
 function publicVncPortLabel(value: unknown): string {

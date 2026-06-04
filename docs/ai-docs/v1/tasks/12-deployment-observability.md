@@ -7706,3 +7706,31 @@ npm --prefix frontend test -- --run errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw profile names、form inputs、filter values、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 ProfileSummary device label marker guardrail
+
+背景：
+
+- ProfileSummaryPanel 的 Device section 会把 platform、screen、hardware concurrency、GPU label 渲染到 visible/title evidence。
+- 旧设备标签过滤已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 `api_key-device-platform-marker`、`client_secret-device-screen-width-marker`、`private_key-device-screen-height-marker` 这类 marker-only 字符串仍可能原样渲染。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 ProfileSummary UI evidence 边界。
+
+已覆盖：
+
+- `publicProfileDeviceLabel` 现在会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only device labels。
+- marker-only 设备污染值折叠为 `unknown`；screen 渲染为 `unknown x unknown`，cores 渲染为 `unknown cores`。
+- 既有带 Authorization/token/path/IP 的设备字段 redaction 保持不变，普通平台、屏幕、核心数和 GPU label 继续显示。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run ProfileSummaryPanel.test.tsx
+# RED: 旧 ProfileSummary Device section 原样渲染 api_key/client_secret/private_key/x-api-key/access_token marker；GREEN: 9 passed
+```
+
+边界：
+
+- 这是 frontend ProfileSummary device visible/title evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw profile device values、form inputs、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
