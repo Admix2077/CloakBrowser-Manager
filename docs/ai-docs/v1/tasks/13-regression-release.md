@@ -7815,3 +7815,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 proxy asset persistence、proxy URL、proxy check behavior、GeoIP provider 请求、profile persistence、automation worker behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy metadata marker release boundary。
+
+## 2026-06-04 Audit metadata marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 audit metadata evidence，因为 runtime/profile/proxy/automation 事件会被用于排查 release smoke 和回归。
+- 旧 audit metadata sanitizer 已覆盖 URL、Authorization/Bearer、赋值型 sensitive fields、path 和 IP，但 `api_key-audit-message-marker`、`x-api-key-audit-message-marker`、`session_id-audit-message-marker`、`private_key-audit-message-marker` 这类 marker-only message text 仍可能进入 audit event JSON。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 audit release-evidence 边界。
+
+已覆盖：
+
+- Audit metadata message 现在会把 marker-only sensitive text token 折叠为 `[redacted]`。
+- marker 词覆盖 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 token。
+- 赋值型 `api_key=...`、`x-api-key: ...`、URL、Authorization/Bearer、path 和 IP redaction 输出保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k audit_metadata_sanitizer_removes_sensitive_fields
+# RED then GREEN；旧 audit metadata message 暴露 api_key-audit-message-marker / x-api-key-audit-message-marker / session_id-audit-message-marker / private_key-audit-message-marker；GREEN 1 passed, 47 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer or audit_event_reader"
+# 3 passed, 45 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 657 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 audit schema、runtime session/profile/proxy persistence、automation worker behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata marker release boundary。

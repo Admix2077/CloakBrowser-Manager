@@ -973,6 +973,12 @@ _AUDIT_SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\s*[:=]\s*([^\s&#,;]+)",
     re.IGNORECASE,
 )
+_AUDIT_SENSITIVE_MARKER_RE = re.compile(
+    r"\b(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|session[_-]?id|"
+    r"viewer[_-]?token|x[_-]?api[_-]?key)(?!\s*[:=])[A-Za-z0-9_.-]*\b",
+    re.IGNORECASE,
+)
 _AUDIT_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
 _AUDIT_LOCAL_PATH_RE = re.compile(
     r"(?:/(?:data|tmp|home)/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s\"'<>),;]+",
@@ -1057,6 +1063,7 @@ def _sanitize_audit_metadata(value: Any) -> Any:
             lambda match: f"{match.group(1)}=[redacted]",
             sanitized,
         )
+        sanitized = _AUDIT_SENSITIVE_MARKER_RE.sub("[redacted]", sanitized)
         sanitized = _AUDIT_BEARER_TOKEN_RE.sub("Bearer [redacted]", sanitized)
         sanitized = _AUDIT_LOCAL_PATH_RE.sub("[redacted-path]", sanitized)
         return _redact_audit_ip_literals(sanitized)

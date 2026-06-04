@@ -8133,3 +8133,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 proxy asset persistence、proxy URL、proxy check behavior、GeoIP provider 请求、profile persistence、automation worker behavior、runtime session storage、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Audit metadata marker guardrail
+
+背景：
+
+- Audit metadata 会进入 release triage 和低敏 evidence，尤其 runtime/profile/proxy/automation 相关事件会长期保存在本地数据库中。
+- 旧 `_sanitize_audit_metadata()` 已覆盖 URL、Authorization/Bearer、赋值型 `api_key=...` / `x-api-key: ...`、local path 和 IP literal，但 `api_key-audit-message-marker`、`x-api-key-audit-message-marker`、`session_id-audit-message-marker`、`private_key-audit-message-marker` 这类 marker-only 字符串仍可能作为普通 message text 保留。
+- 当前策略下，底层/第三方 fingerprint 检测失败继续标阻塞；本轮继续收 Manager 自己可控的 audit evidence 边界。
+
+已覆盖：
+
+- `_sanitize_audit_metadata()` 新增非赋值型 marker token redaction，覆盖 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 marker。
+- marker redaction 放在 assignment redaction 后面，保留现有 `api_key=[redacted]`、`x-api-key=[redacted]` 输出语义。
+- audit metadata message 中 marker-only sensitive token 返回 `[redacted]`；URL、Authorization/Bearer、assignment、path 和 IP redaction 保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k audit_metadata_sanitizer_removes_sensitive_fields
+# RED: 旧 audit metadata message 原样返回 api_key-audit-message-marker / x-api-key-audit-message-marker / session_id-audit-message-marker / private_key-audit-message-marker；GREEN: 1 passed, 47 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer or audit_event_reader"
+# 3 passed, 45 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 657 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 audit metadata response/storage evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 audit schema、runtime session storage、profile/proxy persistence、automation worker behavior、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

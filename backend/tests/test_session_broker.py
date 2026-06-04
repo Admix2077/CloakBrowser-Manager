@@ -1857,6 +1857,8 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
                 "access_token=message-access-token refresh_token=message-refresh-token "
                 "session_id=message-session-id client_secret=message-client-secret "
                 "private_key=message-private-key "
+                "api_key-audit-message-marker x-api-key-audit-message-marker "
+                "session_id-audit-message-marker private_key-audit-message-marker "
                 "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret "
                 r"C:\Users\Jeff\AppData\Local\CloakBrowser\profile-secret"
             ),
@@ -1907,6 +1909,7 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "access_token=[redacted] refresh_token=[redacted] "
             "session_id=[redacted] client_secret=[redacted] "
             "private_key=[redacted] "
+            "[redacted] [redacted] [redacted] [redacted] "
             "[redacted-path] [redacted-path] [redacted-path] "
             "[redacted-path]"
         ),
@@ -1948,6 +1951,10 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "message-session-id" not in serialized_events
     assert "message-client-secret" not in serialized_events
     assert "message-private-key" not in serialized_events
+    assert "api_key-audit-message-marker" not in serialized_events
+    assert "x-api-key-audit-message-marker" not in serialized_events
+    assert "session_id-audit-message-marker" not in serialized_events
+    assert "private_key-audit-message-marker" not in serialized_events
     assert leak_marker not in serialized_events
     assert "header-key" not in serialized_events
     assert "token-key" not in serialized_events
