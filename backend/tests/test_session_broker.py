@@ -1799,6 +1799,10 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
                 "/data/profiles/profile-secret /tmp/xvnc-secret.log /home/jeff/profile-secret "
                 r"C:\Users\Jeff\AppData\Local\CloakBrowser\profile-secret"
             ),
+            "url_message": (
+                "opened https://audit.example.test/account/check?session_id=audit-query-secret#private "
+                "through socks5://user:pass@proxy.example:1080/path?token=audit-query-secret#frag"
+            ),
             "ip_message": (
                 "exit ip 203.0.113.45 via 198.51.100.20:8080 "
                 "and ipv6 2001:db8::45 via [2001:db8::46]:443"
@@ -1836,6 +1840,10 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "token=[redacted] Authorization=[redacted] "
             "[redacted-path] [redacted-path] [redacted-path] "
             "[redacted-path]"
+        ),
+        "url_message": (
+            "opened https://audit.example.test/account/check "
+            "through socks5://proxy.example:1080/path"
         ),
         "ip_message": (
             "exit ip [redacted-ip] via [redacted-ip]:8080 "
@@ -1890,6 +1898,11 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "proxy-pass" not in serialized_events
     assert "user:" not in serialized_events
     assert "message-pass" not in serialized_events
+    assert "audit-query-secret" not in serialized_events
+    assert "session_id=" not in serialized_events
+    assert "?token" not in serialized_events
+    assert "#private" not in serialized_events
+    assert "#frag" not in serialized_events
     assert "session-cookie" not in serialized_events
 
 

@@ -6720,3 +6720,32 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw API payload、proxy/profile/task persistence、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared public error URL release-evidence 边界。
+
+## 2026-06-04 Audit metadata URL release-evidence guardrail
+
+背景：
+
+- Release regression 中会查询 audit events 来证明 profile、runtime、viewer、automation、proxy 等流程被正确审计。
+- 正常 URL host/path 对定位问题有用；但 URL credentials、query string 和 fragment 常携带 session、viewer、auth 或业务 token，不应进入 audit metadata evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 backend evidence 边界。
+
+已覆盖：
+
+- Audit metadata string 中的 `http`、`https`、`socks5` URL 只保留 scheme/host/port/path。
+- URL username/password、query string 和 fragment 不进入 persisted/read-back audit metadata。
+- Authorization/Bearer、token assignment、本地路径和 IP literal redaction 继续保留。
+- 写入和读取 audit event 时都会执行同一 sanitizer。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k "audit_metadata_sanitizer" -q
+# RED then GREEN；旧 audit URL label 不符合保留低敏 path 的 evidence policy
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw API payload、proxy/profile/task persistence、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 backend audit metadata URL release-evidence 边界。

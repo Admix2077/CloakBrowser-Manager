@@ -12,8 +12,9 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
-from .proxies import normalize_proxy_asset_url, redact_proxy_asset_url
+from .proxies import normalize_proxy_asset_url
 
 DATA_DIR = Path("/data")
 DB_PATH = DATA_DIR / "profiles.db"
@@ -1004,6 +1005,27 @@ def _is_sensitive_audit_key(key: str) -> bool:
     )
 
 
+def _public_audit_url_label(url: str) -> str:
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return url
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https", "socks5"} or not parsed.netloc:
+        return url
+    host = parsed.hostname or ""
+    if not host:
+        return f"{scheme}://unknown"
+    host_part = f"[{host}]" if ":" in host and not host.startswith("[") else host
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    port_part = f":{port}" if port else ""
+    path_part = "" if parsed.path == "/" else parsed.path
+    return f"{scheme}://{host_part}{port_part}{path_part}"
+
+
 def _sanitize_audit_metadata(value: Any) -> Any:
     if isinstance(value, dict):
         sanitized = {}
@@ -1016,7 +1038,7 @@ def _sanitize_audit_metadata(value: Any) -> Any:
         return [_sanitize_audit_metadata(item) for item in value]
     if isinstance(value, str):
         sanitized = _AUDIT_PROXY_URL_RE.sub(
-            lambda match: redact_proxy_asset_url(match.group(0)),
+            lambda match: _public_audit_url_label(match.group(0)),
             value,
         )
         sanitized = _AUDIT_AUTHORIZATION_RE.sub("Authorization=[redacted]", sanitized)
