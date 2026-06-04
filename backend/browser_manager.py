@@ -60,7 +60,9 @@ PUBLIC_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2,8}|\d{3})){0,2}$
 PUBLIC_TIMEZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+){0,3}$")
 PUBLIC_GPU_TEXT_RE = re.compile(r"^[A-Za-z0-9 .,_()+:/\\-]{1,160}$")
 SENSITIVE_TEXT_RE = re.compile(
-    r"(?:https?://|[?&#]|authorization:|bearer\s+|token=|password=|secret=|cookie=)",
+    r"(?:https?://|[?&#]|authorization:|bearer\s+|"
+    r"(?:access_token|api_key|auth_token|client_secret|cookie|password|private_key|"
+    r"refresh_token|secret|session_id|token|viewer_token|x-api-key)\b)",
     re.IGNORECASE,
 )
 PUBLIC_PROFILE_LOG_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")

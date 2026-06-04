@@ -186,13 +186,15 @@ def test_build_invisible_pin_drops_corrupted_screen_and_hardware_text():
 
 def test_build_invisible_pin_drops_non_public_gpu_text():
     pin = bm._build_invisible_pin({
-        "gpu_vendor": "Google Inc. (NVIDIA)\nAuthorization: Bearer gpu-super-secret",
-        "gpu_renderer": "ANGLE (NVIDIA)\nhttps://example.test/?token=gpu-super-secret",
+        "gpu_vendor": "Google Inc. api_key-gpu-super-secret",
+        "gpu_renderer": "ANGLE session_id-gpu-super-secret",
     })
 
     assert "gpu.vendor" not in pin
     assert "gpu.renderer" not in pin
     assert "gpu-super-secret" not in repr(pin)
+    assert "api_key" not in repr(pin)
+    assert "session_id" not in repr(pin)
 
 
 def test_build_invisible_pin_light_theme():

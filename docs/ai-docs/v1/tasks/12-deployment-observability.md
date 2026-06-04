@@ -7423,3 +7423,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Browser launch identity marker guardrail
+
+背景：
+
+- BrowserManager 会把 profile 中的低敏 GPU/WebGL 文本写入 invisible_playwright fingerprint pin 和 coherent WebGL renderer bucket。
+- 旧 launch identity sensitive-text filter 会拒绝 URL、Authorization/Bearer、`token`/`password`/`secret`/`cookie` marker，但仍允许 `api_key-*`、`session_id-*` 等符合 GPU 文本字符集的 marker。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 launch identity input 边界。
+
+已覆盖：
+
+- BrowserManager launch identity sensitive-text filter 现在会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker。
+- 含这些 marker 的 GPU vendor/renderer text 不再进入 invisible fingerprint pin 或 coherent renderer override。
+- 正常低敏 GPU/WebGL 文本、screen/hardware pin、locale/timezone、profile dir validation、launch lifecycle 和 browser fingerprint engine 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "build_invisible_pin_drops_non_public_gpu_text"
+# RED: 旧 launch pin 接受 api_key/session_id marker GPU text；GREEN: focused test passed
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q
+# 74 passed
+```
+
+边界：
+
+- 这是 backend BrowserManager launch identity input 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
