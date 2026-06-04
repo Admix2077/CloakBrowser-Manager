@@ -9,6 +9,8 @@ const PROFILE_GEOIP_SENSITIVE_RE =
   /\bAuthorization\b|\bBearer\b|\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
 const PROFILE_TAG_SENSITIVE_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+const PROFILE_NAME_SENSITIVE_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 const PUBLIC_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_PROFILE_ID_RE =
   /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bviewer[_-]?token\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
@@ -74,7 +76,11 @@ export function publicErrorText(value: string): string {
 }
 
 export function publicProfileName(value: string): string {
-  return publicErrorText(value) || "unknown";
+  const trimmed = value.trim();
+  if (!trimmed) return "unknown";
+  const publicText = publicErrorText(trimmed);
+  if (PROFILE_NAME_SENSITIVE_RE.test(trimmed) && publicText === trimmed) return "unknown";
+  return publicText || "unknown";
 }
 
 export function publicProfileIdLabel(value: string): string {

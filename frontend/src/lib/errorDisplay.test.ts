@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileTagLabel } from "./errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileName, publicProfileTagLabel } from "./errorDisplay";
 
 describe("publicErrorText", () => {
   it("redacts Windows drive paths without redacting public URL host and port", () => {
@@ -91,6 +91,21 @@ describe("publicProfileGeoipLabel", () => {
       "private_key-geoip-marker",
     ]) {
       expect(publicProfileGeoipLabel(polluted)).toBe("unknown");
+    }
+  });
+});
+
+describe("publicProfileName", () => {
+  it("redacts marker-bearing profile names while preserving public names", () => {
+    expect(publicProfileName("Alpha Good")).toBe("Alpha Good");
+
+    for (const polluted of [
+      "api_key-profile-name-marker",
+      "access_token-profile-name-marker",
+      "client_secret-profile-name-marker",
+      "private_key-profile-name-marker",
+    ]) {
+      expect(publicProfileName(polluted)).toBe("unknown");
     }
   });
 });
