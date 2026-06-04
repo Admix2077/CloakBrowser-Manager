@@ -268,6 +268,24 @@ describe("api.getDiagnostics", () => {
   });
 });
 
+describe("api path parameters", () => {
+  it("encodes path ids so delimiters cannot inject path, query, or fragment evidence", async () => {
+    const rawId = "profile/alpha?viewer_token=secret#fragment";
+    const encodedId = encodeURIComponent(rawId);
+    mockFetch.mockResolvedValueOnce(jsonResponse({ id: rawId, name: "Encoded" }));
+
+    await api.getProfile(rawId);
+
+    expect(mockFetch).toHaveBeenCalledWith(`/api/profiles/${encodedId}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    const requestedUrl = String(mockFetch.mock.calls[0][0]);
+    expect(requestedUrl).not.toContain("/alpha?");
+    expect(requestedUrl).not.toContain("viewer_token=secret");
+    expect(requestedUrl).not.toContain("#fragment");
+  });
+});
+
 // ── updateProfile ───────────────────────────────────────────────────────────
 
 describe("api.updateProfile", () => {

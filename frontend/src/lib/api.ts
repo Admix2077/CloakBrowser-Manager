@@ -541,6 +541,10 @@ async function request<T>(
   return res.json();
 }
 
+function pathSegment(value: string): string {
+  return encodeURIComponent(value);
+}
+
 function buildAutomationTasksPath(params: AutomationTaskListParams = {}): string {
   const query = new URLSearchParams();
   if (params.profileId) query.set("profile_id", params.profileId);
@@ -565,7 +569,7 @@ export const api = {
 
   listProfiles: () => request<Profile[]>("/api/profiles"),
 
-  getProfile: (id: string) => request<Profile>(`/api/profiles/${id}`),
+  getProfile: (id: string) => request<Profile>(`/api/profiles/${pathSegment(id)}`),
 
   createProfile: (data: ProfileCreateData) =>
     request<Profile>("/api/profiles", {
@@ -600,37 +604,37 @@ export const api = {
     }),
 
   importProfileCookies: (profileId: string, document: CookieJsonDocument) =>
-    request<CookieImportResponse>(`/api/profiles/${profileId}/cookies/import`, {
+    request<CookieImportResponse>(`/api/profiles/${pathSegment(profileId)}/cookies/import`, {
       method: "POST",
       body: JSON.stringify({ ...document, confirm_import: true }),
     }),
 
   exportProfileCookies: (profileId: string) =>
-    request<CookieExportResponse>(`/api/profiles/${profileId}/cookies/export`, {
+    request<CookieExportResponse>(`/api/profiles/${pathSegment(profileId)}/cookies/export`, {
       method: "POST",
       body: JSON.stringify({ confirm_export: true }),
     }),
 
   importProfileCookiesNetscape: (profileId: string, text: string) =>
-    request<CookieImportResponse>(`/api/profiles/${profileId}/cookies/import/netscape`, {
+    request<CookieImportResponse>(`/api/profiles/${pathSegment(profileId)}/cookies/import/netscape`, {
       method: "POST",
       body: JSON.stringify({ text, confirm_import: true }),
     }),
 
   exportProfileCookiesNetscape: (profileId: string) =>
-    request<NetscapeCookieExportResponse>(`/api/profiles/${profileId}/cookies/export/netscape`, {
+    request<NetscapeCookieExportResponse>(`/api/profiles/${pathSegment(profileId)}/cookies/export/netscape`, {
       method: "POST",
       body: JSON.stringify({ confirm_export: true }),
     }),
 
   updateProfile: (id: string, data: Partial<ProfileCreateData>) =>
-    request<Profile>(`/api/profiles/${id}`, {
+    request<Profile>(`/api/profiles/${pathSegment(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteProfile: (id: string) =>
-    request<{ ok: boolean }>(`/api/profiles/${id}`, {
+    request<{ ok: boolean }>(`/api/profiles/${pathSegment(id)}`, {
       method: "DELETE",
       body: JSON.stringify({ confirm_delete: true }),
     }),
@@ -645,40 +649,40 @@ export const api = {
     }),
 
   updateProfileTemplate: (id: string, data: ProfileTemplateUpdateData) =>
-    request<ProfileTemplate>(`/api/profile-templates/${id}`, {
+    request<ProfileTemplate>(`/api/profile-templates/${pathSegment(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteProfileTemplate: (id: string) =>
-    request<{ ok: boolean }>(`/api/profile-templates/${id}`, {
+    request<{ ok: boolean }>(`/api/profile-templates/${pathSegment(id)}`, {
       method: "DELETE",
       body: JSON.stringify({ confirm_delete: true }),
     }),
 
   launchProfile: (id: string) =>
-    request<LaunchResult>(`/api/profiles/${id}/launch`, {
+    request<LaunchResult>(`/api/profiles/${pathSegment(id)}/launch`, {
       method: "POST",
       body: JSON.stringify({ confirm_launch: true }),
     }),
 
   stopProfile: (id: string) =>
-    request<{ ok: boolean }>(`/api/profiles/${id}/stop`, {
+    request<{ ok: boolean }>(`/api/profiles/${pathSegment(id)}/stop`, {
       method: "POST",
       body: JSON.stringify({ confirm_stop: true }),
     }),
 
   getProfileHealth: (id: string) =>
-    request<ProfileHealthResponse>(`/api/profiles/${id}/health`),
+    request<ProfileHealthResponse>(`/api/profiles/${pathSegment(id)}/health`),
 
   checkProfileHealth: (id: string) =>
-    request<ProfileHealthResponse>(`/api/profiles/${id}/health/check`, {
+    request<ProfileHealthResponse>(`/api/profiles/${pathSegment(id)}/health/check`, {
       method: "POST",
     }),
 
   listProxies: () => request<ProxyAsset[]>("/api/proxies"),
 
-  getProxy: (id: string) => request<ProxyAsset>(`/api/proxies/${id}`),
+  getProxy: (id: string) => request<ProxyAsset>(`/api/proxies/${pathSegment(id)}`),
 
   listProxyProviderPresets: () =>
     request<ProxyProviderPreset[]>("/api/proxy-provider-presets"),
@@ -690,13 +694,13 @@ export const api = {
     }),
 
   updateProxyProviderPreset: (id: string, data: ProxyProviderPresetUpdateData) =>
-    request<ProxyProviderPreset>(`/api/proxy-provider-presets/${id}`, {
+    request<ProxyProviderPreset>(`/api/proxy-provider-presets/${pathSegment(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteProxyProviderPreset: (id: string) =>
-    request<{ ok: boolean }>(`/api/proxy-provider-presets/${id}`, {
+    request<{ ok: boolean }>(`/api/proxy-provider-presets/${pathSegment(id)}`, {
       method: "DELETE",
       body: JSON.stringify({ confirm_delete: true }),
     }),
@@ -708,19 +712,19 @@ export const api = {
     }),
 
   updateProxy: (id: string, data: ProxyUpdateData) =>
-    request<ProxyAsset>(`/api/proxies/${id}`, {
+    request<ProxyAsset>(`/api/proxies/${pathSegment(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   deleteProxy: (id: string) =>
-    request<{ ok: boolean }>(`/api/proxies/${id}`, {
+    request<{ ok: boolean }>(`/api/proxies/${pathSegment(id)}`, {
       method: "DELETE",
       body: JSON.stringify({ confirm_delete: true }),
     }),
 
   checkProxy: (id: string) =>
-    request<ProxyAsset>(`/api/proxies/${id}/check`, { method: "POST" }),
+    request<ProxyAsset>(`/api/proxies/${pathSegment(id)}/check`, { method: "POST" }),
 
   bulkCheckProxies: (proxyIds: string[]) =>
     request<ProxyBulkCheckResponse>("/api/proxies/bulk/check", {
@@ -729,7 +733,7 @@ export const api = {
     }),
 
   assignProxyToProfiles: (id: string, profileIds: string[]) =>
-    request<ProxyAssignResponse>(`/api/proxies/${id}/assign`, {
+    request<ProxyAssignResponse>(`/api/proxies/${pathSegment(id)}/assign`, {
       method: "POST",
       body: JSON.stringify({ profile_ids: profileIds, confirm_assign: true }),
     }),
@@ -744,7 +748,7 @@ export const api = {
     request<AutomationTasksResponse>(buildAutomationTasksPath(params)),
 
   saveProfileProxyAsAsset: (profileId: string, data: ProxyFromProfileCreateData) =>
-    request<ProxyAsset>(`/api/profiles/${profileId}/proxy-asset`, {
+    request<ProxyAsset>(`/api/profiles/${pathSegment(profileId)}/proxy-asset`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -754,11 +758,11 @@ export const api = {
   getDiagnostics: () => request<SystemDiagnostics>("/api/diagnostics"),
 
   setClipboard: (id: string, text: string) =>
-    request<{ ok: boolean }>(`/api/profiles/${id}/clipboard`, {
+    request<{ ok: boolean }>(`/api/profiles/${pathSegment(id)}/clipboard`, {
       method: "POST",
       body: JSON.stringify({ text }),
     }),
 
   getClipboard: (id: string) =>
-    request<{ text: string }>(`/api/profiles/${id}/clipboard`),
+    request<{ text: string }>(`/api/profiles/${pathSegment(id)}/clipboard`),
 };

@@ -6848,3 +6848,43 @@ npm --prefix frontend test -- --run src/components/ProfileList.test.tsx src/comp
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、GeoIP lookup/provider behavior、profile persistence、profile health API、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CountryBadge release-evidence 边界。
+
+## 2026-06-04 Frontend path parameter release-evidence guardrail
+
+背景：
+
+- Release regression 会经过 profile CRUD、cookie import/export、profile health、launch/stop、proxy assignment、provider preset 管理、clipboard sync 和 regular VNC viewer 等前端 API adapter 路径。
+- 旧 adapter 把 path id 直接拼进 URL；异常 id 里的 `/`、`?`、`#` 会成为额外 path/query/fragment，污染 request URL evidence 并可能改变路由。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 frontend request URL 边界。
+
+已覆盖：
+
+- `api.ts` 对 profile/proxy/template/provider preset 相关 path params 统一编码为单个 URL segment。
+- Cookie JSON/Netscape import/export、clipboard set/get、health check、launch/stop、proxy check/assign、save profile proxy asset 等路径继承同一编码边界。
+- `ProfileViewer` regular profile VNC websocket URL 对 profile id 做 path segment 编码。
+- 已使用 `URLSearchParams` 的 automation task list query 保持原逻辑。
+- Raw id 业务语义不变；只防止 URL delimiter 被浏览器解释为请求结构。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/api.test.ts -t "encodes path ids"
+# RED then GREEN；旧 api request URL 暴露 raw / ? #
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx -t "encodes regular profile ids"
+# RED then GREEN；旧 noVNC wsUrl 暴露 raw / ? #
+
+npm --prefix frontend test -- --run src/lib/api.test.ts
+# 1 file passed, 40 tests passed
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# 1 file passed, 19 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 这不是 raw id 脱敏；异常 id 仍作为 URL-encoded path segment 传给 backend。
+- 不改变 backend request/response schema、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend path parameter release-evidence 边界。

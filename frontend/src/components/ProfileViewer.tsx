@@ -98,7 +98,7 @@ export function ProfileViewer({
         if (cancelled) return;
 
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = vncUrl ?? `${protocol}//${window.location.host}/api/profiles/${profileId}/vnc`;
+        const wsUrl = vncUrl ?? `${protocol}//${window.location.host}/api/profiles/${encodeURIComponent(profileId)}/vnc`;
 
         rfb = new RFB(containerRef.current!, wsUrl, {
           wsProtocols: ["binary"],

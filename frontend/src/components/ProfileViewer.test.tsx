@@ -90,6 +90,27 @@ describe("ProfileViewer VNC connection", () => {
     expect(rfbInstances[0].showDotCursor).toBe(true);
   });
 
+  it("encodes regular profile ids in the VNC websocket URL path", async () => {
+    const rawProfileId = "profile/alpha?viewer_token=secret#fragment";
+    const encodedProfileId = encodeURIComponent(rawProfileId);
+    render(
+      <ProfileViewer
+        profileId={rawProfileId}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(MockRFB).toHaveBeenCalledTimes(1));
+
+    const [, wsUrl] = MockRFB.mock.calls[0];
+    expect(wsUrl).toBe(`ws://${window.location.host}/api/profiles/${encodedProfileId}/vnc`);
+    expect(String(wsUrl)).not.toContain("/alpha?");
+    expect(String(wsUrl)).not.toContain("viewer_token=secret");
+    expect(String(wsUrl)).not.toContain("#fragment");
+  });
+
   it("notifies the operations console when noVNC disconnects", async () => {
     const onDisconnect = vi.fn();
     render(

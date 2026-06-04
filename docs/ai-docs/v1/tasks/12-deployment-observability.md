@@ -7165,3 +7165,42 @@ npm --prefix frontend test -- --run src/components/ProfileList.test.tsx src/comp
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、GeoIP lookup/provider behavior、profile persistence、profile health API、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Frontend path parameter delimiter guardrail
+
+背景：
+
+- 前端 API adapter 和 regular ProfileViewer VNC URL 会把 profile/proxy/template/preset id 放进 URL path。
+- 旧实现直接拼接 path params；异常 id 中的 `/`、`?`、`#` 会被浏览器解释为额外 path/query/fragment，污染请求 evidence，也可能改变路由语义。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 frontend request URL 边界。
+
+已覆盖：
+
+- `frontend/src/lib/api.ts` 对 profile、profile template、proxy、provider preset、clipboard、cookie、health、launch/stop、proxy assignment 等 path id 统一使用 `encodeURIComponent()`。
+- `ProfileViewer` regular `/api/profiles/{id}/vnc` websocket path 对 profile id 使用 `encodeURIComponent()`。
+- `URLSearchParams` 已覆盖的 automation task query filter 保持不变。
+- Raw id 业务语义不变：仍发送同一个 id，只是作为单个 path segment 传输，避免分隔符被解释为 URL 结构。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/api.test.ts -t "encodes path ids"
+# RED: 旧 api.getProfile URL 包含 raw / ? #；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx -t "encodes regular profile ids"
+# RED: 旧 noVNC wsUrl 包含 raw / ? #；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/lib/api.test.ts
+# 1 file passed, 40 tests passed
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# 1 file passed, 19 tests passed
+```
+
+边界：
+
+- 这是 frontend request URL delimiter/evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 这不是 raw id 脱敏，也不改变 backend request/response schema；异常 id 仍以 URL-encoded path segment 传给 backend。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer token URL behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
