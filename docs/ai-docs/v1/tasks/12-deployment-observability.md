@@ -7098,3 +7098,35 @@ npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw API payload、profile persistence、tag persistence、launch arg persistence、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Cookie export download filename evidence guardrail
+
+背景：
+
+- Cookie export 的下载文件名属于部署/回归交接时容易被复制到日志、issue 或人工证据里的 metadata。
+- 旧逻辑只检查 profile id 是否符合文件名安全字符；`viewer_token-cookie-secret` 这类污染 id 仍会进入下载名。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Cookie export evidence 边界。
+
+已覆盖：
+
+- `publicDownloadProfileId()` 继续允许普通文件名安全 profile id。
+- 含 Authorization/Bearer、auth token、viewer token、token、password、secret、cookie、set-cookie 等敏感词的 profile id 折叠为 `unknown`。
+- 非文件名安全 profile id 继续折叠为 `unknown`。
+- Raw profile id 仍用于 API 调用；Cookie JSON/Netscape import/export payload 和 summary counts 不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx -t "does not use sensitive filename-safe profile ids"
+# RED: 旧下载名包含 viewer_token-cookie-secret；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
+# 1 file passed, 8 tests passed
+```
+
+边界：
+
+- 这是 Cookie export download metadata evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw API payload、profile persistence、cookie payload、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

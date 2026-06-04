@@ -6781,3 +6781,35 @@ npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw API payload、profile persistence、tag persistence、launch arg persistence、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileForm chip action label release-evidence 边界。
+
+## 2026-06-04 Cookie export download filename release-evidence guardrail
+
+背景：
+
+- Cookie JSON/Netscape export 是 release regression 中需要人工确认的高敏操作，下载文件名也可能进入浏览器下载记录、测试日志或人工交接 evidence。
+- 旧下载名只检查 profile id 是否由文件名安全字符组成；`viewer_token-cookie-secret` 这类字符串虽然可作为文件名片段，但仍是敏感/污染 id，不应进入 export metadata。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Cookie export evidence 边界。
+
+已覆盖：
+
+- Cookie export 下载名继续保留普通文件名安全 profile id。
+- 含 Authorization/Bearer、auth token、viewer token、token、password、secret、cookie、set-cookie 等敏感词的 profile id 折叠为 `unknown`。
+- 非文件名安全的 profile id 继续折叠为 `unknown`。
+- Raw profile id、cookie import/export API 调用、Cookie JSON/Netscape payload、summary counts、profile persistence 和 browser behavior 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx -t "does not use sensitive filename-safe profile ids"
+# RED then GREEN；旧下载名包含 viewer_token-cookie-secret
+
+npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
+# 1 file passed, 8 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw API payload、profile persistence、cookie payload、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Cookie export download filename release-evidence 边界。

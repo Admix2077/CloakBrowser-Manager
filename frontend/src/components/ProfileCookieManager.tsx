@@ -9,6 +9,8 @@ const INVALID_NETSCAPE_MESSAGE = "Invalid Netscape cookie document";
 const IMPORT_FAILED_MESSAGE = "Cookie import failed";
 const EXPORT_FAILED_MESSAGE = "Cookie export failed";
 const PUBLIC_DOWNLOAD_ID_RE = /^[A-Za-z0-9._-]{1,80}$/;
+const SENSITIVE_DOWNLOAD_ID_RE =
+  /authorization|bearer|auth[_-]?token|viewer[_-]?token|token|password|passwd|secret|cookie|set-cookie/i;
 
 type CookieFormatMode = "json" | "netscape";
 
@@ -314,5 +316,7 @@ function downloadCookieText(
 }
 
 function publicDownloadProfileId(profileId: string): string {
-  return PUBLIC_DOWNLOAD_ID_RE.test(profileId) ? profileId : "unknown";
+  if (!PUBLIC_DOWNLOAD_ID_RE.test(profileId)) return "unknown";
+  if (SENSITIVE_DOWNLOAD_ID_RE.test(profileId)) return "unknown";
+  return profileId;
 }
