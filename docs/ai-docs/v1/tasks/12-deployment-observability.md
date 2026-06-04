@@ -7902,3 +7902,39 @@ npm --prefix frontend test -- --run ProfileCsvPreviewDialog.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw CSV source、CSV parser、backend preview/import payload、profile persistence、provider/proxy/template persistence、raw API payload、backend schemas、database persistence、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 ProfileForm tag / launch arg marker guardrail
+
+背景：
+
+- ProfileForm Advanced section 会渲染 persisted tags 和 Firefox launch args 到 chip visible text 与 remove button aria evidence。
+- 旧测试只保护 remove button aria label，不保护 chip visible text；`api_key-profile-form-tag-marker`、`client_secret-profile-form-launch-marker` 这类 marker-only 值仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 ProfileForm UI evidence 边界。
+
+已覆盖：
+
+- ProfileForm persisted tag chip 现在复用 `publicProfileTagLabel()`，marker-only tag 显示为 `unknown`。
+- ProfileForm persisted launch arg chip 现在通过 `publicProfileLaunchArgLabel()`，marker-only launch arg 显示为 `unknown`。
+- remove button aria label 与 visible chip 使用同一安全文本，普通带 URL credential、Authorization、token、path、IP 的 tag / launch arg 继续显示 redacted 摘要。
+- raw tag、raw launch arg、remove action 和 save payload 不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run ProfileForm.test.tsx -t "folds marker-bearing persisted tags"
+# RED: 旧 ProfileForm chip visible text 没有 unknown，仍渲染 marker-only tag / launch arg
+# GREEN: 1 passed, 12 skipped
+
+npm --prefix frontend test -- --run ProfileForm.test.tsx
+# 13 passed
+
+npm --prefix frontend test -- --run errorDisplay.test.ts ProfileForm.test.tsx
+# 2 files passed, 22 tests passed
+```
+
+边界：
+
+- 这是 frontend ProfileForm tag / launch arg visible/aria evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw form state、profile tags、launch args、template application、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileForm } from "./ProfileForm";
 import type { Profile, ProfileTemplate } from "../lib/api";
-import { publicErrorText } from "../lib/errorDisplay";
+import { publicProfileLaunchArgLabel, publicProfileTagLabel } from "../lib/errorDisplay";
 
 const humanizedProfile: Profile = {
   id: "profile-1",
@@ -80,7 +80,7 @@ describe("ProfileForm launch arguments", () => {
       "--proxy-server=http://user:pass@launch-arg.example/path?token=launch-arg-secret#frag " +
       "Authorization=Bearer launch-arg-secret /data/launch-arg 203.0.113.94"
     );
-    const safeArg = publicErrorText(rawArg);
+    const safeArg = publicProfileLaunchArgLabel(rawArg);
 
     render(
       <ProfileForm
@@ -92,7 +92,8 @@ describe("ProfileForm launch arguments", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
 
-    expect(screen.getByText(rawArg)).toBeTruthy();
+    expect(screen.getByText(safeArg)).toBeTruthy();
+    expect(screen.queryByText(rawArg)).toBeNull();
     expect(screen.getByRole("button", { name: `Remove launch argument ${safeArg}` })).toBeTruthy();
     expect(screen.queryByRole("button", { name: `Remove launch argument ${rawArg}` })).toBeNull();
   });
@@ -233,7 +234,7 @@ describe("ProfileForm accessibility and control polish", () => {
   it("redacts remove button labels for persisted tags", () => {
     const rawTag =
       "ops Authorization=Bearer tag-secret token=tag-secret /data/tag-secret 203.0.113.95";
-    const safeTag = publicErrorText(rawTag);
+    const safeTag = publicProfileTagLabel(rawTag);
 
     render(
       <ProfileForm
@@ -245,9 +246,53 @@ describe("ProfileForm accessibility and control polish", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
 
-    expect(screen.getByText(rawTag)).toBeTruthy();
+    expect(screen.getByText(safeTag)).toBeTruthy();
+    expect(screen.queryByText(rawTag)).toBeNull();
     expect(screen.getByRole("button", { name: `Remove tag ${safeTag}` })).toBeTruthy();
     expect(screen.queryByRole("button", { name: `Remove tag ${rawTag}` })).toBeNull();
+  });
+
+  it("folds marker-bearing persisted tags and launch args before rendering evidence without changing save payload", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const rawTag = "api_key-profile-form-tag-marker";
+    const rawArg = "--private-window=client_secret-profile-form-launch-marker";
+
+    render(
+      <ProfileForm
+        profile={{
+          ...humanizedProfile,
+          tags: [{ tag: rawTag, color: "#6366f1" }],
+          launch_args: [rawArg],
+        }}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+
+    expect(screen.getAllByText("unknown").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("button", { name: "Remove tag unknown" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Remove launch argument unknown" })).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.body.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(document.body.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of ["api_key", "client_secret", rawTag, rawArg]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        tags: [{ tag: rawTag, color: "#6366f1" }],
+        launch_args: [rawArg],
+      }));
+    });
   });
 
   it("uses an in-app confirmation dialog before deleting a profile", async () => {

@@ -1,7 +1,7 @@
 import { Dices, Fingerprint, Monitor, MousePointer2, Network, Save, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Profile, ProfileCreateData, ProfileTemplate } from "../lib/api";
-import { publicErrorText, publicProfileName } from "../lib/errorDisplay";
+import { publicProfileLaunchArgLabel, publicProfileName, publicProfileTagLabel } from "../lib/errorDisplay";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface ProfileFormProps {
@@ -556,23 +556,26 @@ export function ProfileForm({ profile, templates = [], onSave, onDelete, onCance
           <h4 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Tags</h4>
           {(form.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {(form.tags ?? []).map((t) => (
-                <span
-                  key={t.tag}
-                  className="token-chip"
-                  style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
-                >
-                  {t.tag}
-                  <button
-                    type="button"
-                    onClick={() => removeTag(t.tag)}
-                    className="icon-action"
-                    aria-label={`Remove tag ${publicErrorText(t.tag) || "unknown"}`}
+              {(form.tags ?? []).map((t) => {
+                const publicTag = publicProfileTagLabel(t.tag);
+                return (
+                  <span
+                    key={t.tag}
+                    className="token-chip"
+                    style={t.color ? { backgroundColor: `${t.color}20`, color: t.color } : undefined}
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
+                    {publicTag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(t.tag)}
+                      className="icon-action"
+                      aria-label={`Remove tag ${publicTag}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -614,22 +617,25 @@ export function ProfileForm({ profile, templates = [], onSave, onDelete, onCance
           </p>
           {(form.launch_args ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-3">
-              {(form.launch_args ?? []).map((arg, idx) => (
-                <span
-                  key={idx}
-                  className="token-chip font-mono"
-                >
-                  {arg}
-                  <button
-                    type="button"
-                    onClick={() => removeLaunchArg(idx)}
-                    className="icon-action"
-                    aria-label={`Remove launch argument ${publicErrorText(arg) || "unknown"}`}
+              {(form.launch_args ?? []).map((arg, idx) => {
+                const publicArg = publicProfileLaunchArgLabel(arg);
+                return (
+                  <span
+                    key={idx}
+                    className="token-chip font-mono"
                   >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
+                    {publicArg}
+                    <button
+                      type="button"
+                      onClick={() => removeLaunchArg(idx)}
+                      className="icon-action"
+                      aria-label={`Remove launch argument ${publicArg}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           )}
           <div className="flex gap-2">

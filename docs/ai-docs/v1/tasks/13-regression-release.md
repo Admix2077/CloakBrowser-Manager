@@ -7586,3 +7586,38 @@ npm --prefix frontend test -- --run ProfileCsvPreviewDialog.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw CSV source、CSV parser、backend preview/import payload、profile persistence、provider/proxy/template persistence、raw API payload、backend schemas、database persistence、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV validation error marker release boundary。
+
+## 2026-06-04 ProfileForm tag / launch arg marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 ProfileForm Advanced section，因为 persisted tags 和 Firefox launch args 会进入 chip visible text 与 remove button aria evidence。
+- 旧 remove button boundary 已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 chip visible text 仍使用 raw tag / launch arg；`api_key-profile-form-tag-marker`、`client_secret-profile-form-launch-marker` 这类 marker-only 值可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 ProfileForm release-evidence 边界。
+
+已覆盖：
+
+- ProfileForm persisted tag chip 复用 `publicProfileTagLabel()`，marker-only tag 显示为 `unknown`。
+- ProfileForm persisted launch arg chip 通过 `publicProfileLaunchArgLabel()`，marker-only launch arg 显示为 `unknown`。
+- chip visible text 与 remove button aria label 使用同一安全文本；普通含 URL credential、Authorization、token、path、IP 的 tag / launch arg 继续显示 redacted 摘要。
+- raw tag、raw launch arg、remove action 和 save payload 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run ProfileForm.test.tsx -t "folds marker-bearing persisted tags"
+# RED then GREEN；旧 ProfileForm chip visible text 暴露 api_key/client_secret marker；GREEN 1 passed, 12 skipped
+
+npm --prefix frontend test -- --run ProfileForm.test.tsx
+# 13 passed
+
+npm --prefix frontend test -- --run errorDisplay.test.ts ProfileForm.test.tsx
+# 2 files passed, 22 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw form state、profile tags、launch args、template application、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileForm tag / launch arg marker release boundary。
