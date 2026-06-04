@@ -7621,3 +7621,34 @@ npm --prefix frontend test -- --run errorDisplay.test.ts ProfileForm.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw form state、profile tags、launch args、template application、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileForm tag / launch arg marker release boundary。
+
+## 2026-06-04 Bulk feedback marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 ProfileTable / BulkActionBar bulk operation feedback，因为 bulk health/export/launch/stop/tag/delete 汇总错误会进入 visible/aria evidence。
+- 旧 shared error text boundary 已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 `api_key-bulk-feedback-marker`、`client_secret-bulk-feedback-marker`、`private_key-bulk-feedback-marker` 这类 marker-only error token 仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 bulk feedback release-evidence 边界。
+
+已覆盖：
+
+- `publicErrorText()` 会把 provider/session/private-key 风格 marker-only error tokens 替换为 `[redacted]`。
+- ProfileTable / BulkActionBar feedback 保留低敏上下文，例如 `Export failed`，但不显示 marker token。
+- profile name/tag/GeoIP/launch arg 等 label helper 继续把纯 marker label 折叠为 `unknown`，不会因为共享 error redaction 变成 `[redacted]`。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run ProfileTable.test.tsx -t "redacts marker-bearing bulk operation feedback"
+# RED then GREEN；旧 bulk feedback 暴露 api_key/client_secret/private_key marker；GREEN 1 passed, 43 skipped
+
+npm --prefix frontend test -- --run errorDisplay.test.ts ProfileTable.test.tsx
+# 2 files passed, 54 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw operation errors、profile/proxy/task API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 bulk feedback marker release boundary。

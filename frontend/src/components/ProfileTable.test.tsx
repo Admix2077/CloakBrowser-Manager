@@ -644,6 +644,36 @@ describe("ProfileTable", () => {
     }
   });
 
+  it("redacts marker-bearing bulk operation feedback before rendering release evidence", () => {
+    render(
+      <ProfileTable
+        profiles={profiles}
+        healthByProfileId={healthByProfileId}
+        onSelect={vi.fn()}
+        selectedProfileIds={new Set(["good", "error"])}
+        bulkFeedback={{
+          tone: "warning",
+          message:
+            "Export failed api_key-bulk-feedback-marker " +
+            "client_secret-bulk-feedback-marker private_key-bulk-feedback-marker",
+        }}
+      />,
+    );
+
+    const feedback = screen.getByRole("alert", { name: "Profile operation feedback" });
+    expect(feedback.textContent).toBe("Export failed [redacted] [redacted] [redacted]");
+
+    const renderedEvidence = [
+      feedback.textContent,
+      ...Array.from(feedback.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(feedback.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of ["api_key", "client_secret", "private_key"]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("clears selected profiles from the bulk action bar with Escape", () => {
     const onClearSelection = vi.fn();
 

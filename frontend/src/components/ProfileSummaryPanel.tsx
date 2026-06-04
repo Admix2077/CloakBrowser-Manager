@@ -1,7 +1,7 @@
 import { ArrowRight, Cookie, Cpu, Globe2, Monitor, Network, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Profile, ProfileHealthResponse } from "../lib/api";
-import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileName } from "../lib/errorDisplay";
+import { isOnlyRedactedText, publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileName } from "../lib/errorDisplay";
 import { formatProxyLabel, formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 import { getHealthWarningSummary } from "../lib/health";
 import { Badge, CountryBadge } from "./Badge";
@@ -179,7 +179,7 @@ function publicProfileDeviceLabel(value: unknown): string {
   const text = String(value ?? "").trim();
   if (!text) return "-";
   const publicText = publicErrorText(text);
-  if (DEVICE_LABEL_SENSITIVE_RE.test(text) && publicText === text) return "unknown";
+  if (DEVICE_LABEL_SENSITIVE_RE.test(text) && (publicText === text || isOnlyRedactedText(publicText))) return "unknown";
   return publicText || "unknown";
 }
 

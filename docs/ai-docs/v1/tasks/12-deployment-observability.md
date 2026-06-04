@@ -7938,3 +7938,35 @@ npm --prefix frontend test -- --run errorDisplay.test.ts ProfileForm.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw form state、profile tags、launch args、template application、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Bulk feedback marker error guardrail
+
+背景：
+
+- ProfileTable / BulkActionBar bulk operation feedback 复用 `publicErrorText()` 展示 operation error。
+- 旧错误文本脱敏只覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential；`api_key-bulk-feedback-marker`、`client_secret-bulk-feedback-marker`、`private_key-bulk-feedback-marker` 这类 marker-only 错误片段仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 bulk feedback UI evidence 边界。
+
+已覆盖：
+
+- `publicErrorText()` 现在会把 provider/session/private-key 风格的 marker-only error tokens 替换为 `[redacted]`。
+- bulk operation feedback 可保留低敏上下文，例如 `Export failed`，但不显示 marker token。
+- label 语义保持原样：profile name/tag/GeoIP/launch arg 这类纯 marker label 仍折叠为 `unknown`，不会变成 `[redacted]`。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run ProfileTable.test.tsx -t "redacts marker-bearing bulk operation feedback"
+# RED: 旧 bulk feedback 原样渲染 api_key/client_secret/private_key marker
+# GREEN: 1 passed, 43 skipped
+
+npm --prefix frontend test -- --run errorDisplay.test.ts ProfileTable.test.tsx
+# 2 files passed, 54 tests passed
+```
+
+边界：
+
+- 这是 frontend shared error text / bulk feedback visible evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw operation errors、profile/proxy/task API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

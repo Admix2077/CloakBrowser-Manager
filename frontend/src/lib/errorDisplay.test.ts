@@ -69,6 +69,25 @@ describe("publicErrorText", () => {
     expect(text).not.toContain("client-super-secret");
     expect(text).not.toContain("header-super-secret");
   });
+
+  it("redacts provider and session marker tokens without assignment syntax", () => {
+    const text = publicErrorText(
+      "Export failed api_key-bulk-feedback-marker " +
+        "x-api-key-bulk-feedback-marker access_token-bulk-feedback-marker " +
+        "session_id-bulk-feedback-marker client_secret-bulk-feedback-marker " +
+        "private_key-bulk-feedback-marker",
+    );
+
+    expect(text).toBe(
+      "Export failed [redacted] [redacted] [redacted] [redacted] [redacted] [redacted]",
+    );
+    expect(text).not.toContain("api_key");
+    expect(text).not.toContain("x-api-key");
+    expect(text).not.toContain("access_token");
+    expect(text).not.toContain("session_id");
+    expect(text).not.toContain("client_secret");
+    expect(text).not.toContain("private_key");
+  });
 });
 
 describe("publicProfileGeoipLabel", () => {

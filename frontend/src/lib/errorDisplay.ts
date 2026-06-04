@@ -4,6 +4,10 @@ const ERROR_AUTH_HEADER_RE = /\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest
 const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
 const ERROR_SENSITIVE_ASSIGNMENT_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
+const ERROR_SENSITIVE_MARKER_TOKEN_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/i;
+const ERROR_SENSITIVE_MARKER_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/gi;
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 const PROFILE_GEOIP_SENSITIVE_RE =
   /\bAuthorization\b|\bBearer\b|\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
@@ -72,16 +76,28 @@ export function publicErrorText(value: string): string {
     .replace(ERROR_AUTH_HEADER_RE, "[redacted]")
     .replace(ERROR_BEARER_RE, "[redacted]")
     .replace(ERROR_SENSITIVE_ASSIGNMENT_RE, "[redacted]")
+    .replace(ERROR_SENSITIVE_MARKER_RE, "[redacted]")
     .replace(ERROR_LOCAL_PATH_RE, "[redacted-path]")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function isOnlyRedactedText(value: string): boolean {
+  return /^(?:\[redacted\](?:\s+|$))+$/i.test(value.trim());
+}
+
+export function hasSensitiveMarkerText(value: string): boolean {
+  return ERROR_SENSITIVE_MARKER_TOKEN_RE.test(value);
 }
 
 export function publicProfileName(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "unknown";
   const publicText = publicErrorText(trimmed);
-  if (PROFILE_NAME_SENSITIVE_RE.test(trimmed) && publicText === trimmed) return "unknown";
+  if (
+    PROFILE_NAME_SENSITIVE_RE.test(trimmed) &&
+    (publicText === trimmed || isOnlyRedactedText(publicText) || hasSensitiveMarkerText(trimmed))
+  ) return "unknown";
   return publicText || "unknown";
 }
 
@@ -96,7 +112,10 @@ export function publicProfileTagLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "unknown";
   const publicText = publicErrorText(trimmed);
-  if (PROFILE_TAG_SENSITIVE_RE.test(trimmed) && publicText === trimmed) return "unknown";
+  if (
+    PROFILE_TAG_SENSITIVE_RE.test(trimmed) &&
+    (publicText === trimmed || isOnlyRedactedText(publicText) || hasSensitiveMarkerText(trimmed))
+  ) return "unknown";
   return publicText || "unknown";
 }
 
@@ -104,7 +123,10 @@ export function publicProfileLaunchArgLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return "unknown";
   const publicText = publicErrorText(trimmed);
-  if (PROFILE_LAUNCH_ARG_SENSITIVE_RE.test(trimmed) && publicText === trimmed) return "unknown";
+  if (
+    PROFILE_LAUNCH_ARG_SENSITIVE_RE.test(trimmed) &&
+    (publicText === trimmed || isOnlyRedactedText(publicText) || hasSensitiveMarkerText(trimmed))
+  ) return "unknown";
   return publicText || "unknown";
 }
 
@@ -115,6 +137,7 @@ export function publicProfileGeoipLabel(value: string): string {
     return trimmed;
   }
   const publicText = publicErrorText(trimmed);
+  if (isOnlyRedactedText(publicText) || hasSensitiveMarkerText(trimmed)) return "unknown";
   return publicText && publicText !== trimmed ? publicText : "unknown";
 }
 

@@ -8,12 +8,12 @@ import {
   type ProfileImportPreviewResponse,
   type ProfileImportPreviewRow,
 } from "../lib/api";
-import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
+import { isOnlyRedactedText, publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
 import { TagBadge } from "./Badge";
 
 const PROFILE_CSV_SAMPLE = "name,proxy,tags,notes,template,platform,locale,timezone";
 const PROFILE_CSV_SENSITIVE_FIELD_RE =
-  /"?[^,\r\n"]*\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b[^,\r\n"]*"?/gi;
+  /(^|,)(?:"(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+"|(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+)(?=,|$)/gi;
 const PROFILE_CSV_LABEL_SENSITIVE_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 
@@ -348,7 +348,7 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
 function publicProfileCsvVisibleText(value: string): string {
   return value
     .split(/\r?\n/)
-    .map((line) => publicErrorText(line).replace(PROFILE_CSV_SENSITIVE_FIELD_RE, "unknown"))
+    .map((line) => publicErrorText(line.replace(PROFILE_CSV_SENSITIVE_FIELD_RE, "$1unknown")))
     .join("\n");
 }
 
@@ -356,7 +356,7 @@ function publicProfileCsvPreviewLabel(value: string): string {
   const text = value.trim();
   if (!text) return "unknown";
   const publicText = publicErrorText(text);
-  if (PROFILE_CSV_LABEL_SENSITIVE_RE.test(text) && publicText === text) return "unknown";
+  if (PROFILE_CSV_LABEL_SENSITIVE_RE.test(text) && (publicText === text || isOnlyRedactedText(publicText))) return "unknown";
   return publicText || "unknown";
 }
 

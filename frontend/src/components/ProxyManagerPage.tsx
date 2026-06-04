@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, Database, FileSpreadsheet, Globe2, Network, Pencil, RefreshCw, Search, Settings2, Shuffle, Trash2, Upload, UserPlus, X } from "lucide-react";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { api, type Profile, type ProxyAsset, type ProxyCreateData, type ProxyProviderPreset, type ProxyProviderPresetCreateData, type ProxyRandomAssignRequestData } from "../lib/api";
-import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
+import { isOnlyRedactedText, publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
 import { formatTimestamp, publicRuntimeStatus } from "../lib/profileDisplay";
 
 type ProxyStatusTone = "good" | "warning" | "error" | "unknown";
@@ -13,7 +13,7 @@ const SENSITIVE_ASSIGNMENT_PROFILE_ID_RE =
 const PROXY_MANAGER_LABEL_SENSITIVE_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 const PROXY_MANAGER_CSV_SENSITIVE_FIELD_RE =
-  /"?[^,\r\n"]*\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b[^,\r\n"]*"?/gi;
+  /(^|,)(?:"(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+"|(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+)(?=,|$)/gi;
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];
@@ -2272,7 +2272,7 @@ function publicProxyManagerLabel(value: string): string {
   const text = value.trim();
   if (!text) return "unknown";
   const publicText = publicErrorText(text);
-  if (PROXY_MANAGER_LABEL_SENSITIVE_RE.test(text) && publicText === text) return "unknown";
+  if (PROXY_MANAGER_LABEL_SENSITIVE_RE.test(text) && (publicText === text || isOnlyRedactedText(publicText))) return "unknown";
   return publicText || "unknown";
 }
 
@@ -2291,7 +2291,7 @@ function publicProxyCsvPreviewLabel(value: string): string {
 function publicProxyCsvVisibleText(value: string): string {
   return value
     .split(/\r?\n/)
-    .map((line) => publicErrorText(line).replace(PROXY_MANAGER_CSV_SENSITIVE_FIELD_RE, "unknown"))
+    .map((line) => publicErrorText(line.replace(PROXY_MANAGER_CSV_SENSITIVE_FIELD_RE, "$1unknown")))
     .join("\n");
 }
 
