@@ -6656,3 +6656,35 @@ npm --prefix frontend test -- --run src/lib/profileDisplay.test.ts src/component
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、profile/proxy/task persistence、有效 timestamp 格式化、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared timestamp release-evidence 边界。
+
+## 2026-06-04 Viewer Automation endpoint copy release-evidence guardrail
+
+背景：
+
+- VNC/ProfileViewer toolbar 的 Automation copy action 是 release regression 中常用的手工操作。
+- 正常 `/api/profiles/{id}/automation` endpoint 仍需要复制；但污染 `automationUrl` 不应把 `viewer_token`、query、fragment 或 token-like profile id 写入剪贴板。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 viewer/evidence 边界。
+
+已覆盖：
+
+- Copy action 只写入同源 `/api/profiles/{public-profile-id}/automation`。
+- Query string、fragment 和 token-like/path-like profile id 会被丢弃或折叠为 unavailable。
+- Automation ready/unavailable button state 现在以 public copy endpoint 为准。
+- runtime viewer token URL、noVNC connection、clipboard sync payload 和 Automation API backend 行为不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx -t "copies only the public Automation API endpoint path"
+# RED then GREEN；旧实现把 query/fragment token 写入 clipboard
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# 1 file passed, 18 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、runtime viewer URL 使用、VNC websocket path、clipboard sync payload、profile persistence、profile lifecycle、runtime session/viewer token schema、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Viewer Automation endpoint copy release-evidence 边界。

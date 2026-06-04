@@ -35,6 +35,32 @@ function publicViewerHandle(value: string) {
   return formatProfileHandle(trimmed);
 }
 
+function publicAutomationEndpointUrl(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+
+    const parts = url.pathname.split("/");
+    if (parts.length !== 5 || parts[1] !== "api" || parts[2] !== "profiles" || parts[4] !== "automation") {
+      return null;
+    }
+
+    const profilePart = parts[3];
+    if (!profilePart) return null;
+
+    const profileHandle = decodeURIComponent(profilePart);
+    if (!PUBLIC_VIEWER_HANDLE_RE.test(profileHandle) || SENSITIVE_VIEWER_HANDLE_RE.test(profileHandle)) {
+      return null;
+    }
+
+    return `${window.location.protocol}//${window.location.host}${url.pathname}`;
+  } catch {
+    return null;
+  }
+}
+
 export function ProfileViewer({
   profileId,
   externalSessionId = null,
@@ -57,6 +83,7 @@ export function ProfileViewer({
     ? publicViewerHandle(externalSessionId)
     : null;
   const isRuntimeViewer = Boolean(vncUrl);
+  const publicAutomationUrl = publicAutomationEndpointUrl(automationUrl);
 
   useEffect(() => {
     let rfb: any = null;
@@ -302,11 +329,11 @@ export function ProfileViewer({
             </button>
           ) : null}
           <span className={`shrink-0 rounded-[999px] border px-2 py-1 text-[11px] font-semibold transition-colors ${
-            automationUrl
+            publicAutomationUrl
               ? "border-blue-200 bg-blue-50 text-blue-700"
               : "border-slate-200 bg-white text-slate-500"
           }`}>
-            {automationUrl ? "Automation ready" : "Automation unavailable"}
+            {publicAutomationUrl ? "Automation ready" : "Automation unavailable"}
           </span>
           <span className={`shrink-0 rounded-[999px] border px-2 py-1 text-[11px] font-semibold transition-colors ${
             clipboardSync
@@ -319,32 +346,31 @@ export function ProfileViewer({
         <div role="toolbar" aria-label="Viewer actions" className="flex shrink-0 flex-nowrap items-center gap-1">
           <button
             onClick={() => {
-              if (automationUrl) {
-                const base = `${window.location.protocol}//${window.location.host}${automationUrl}`;
-                navigator.clipboard?.writeText(base).then(() => {
+              if (publicAutomationUrl) {
+                navigator.clipboard?.writeText(publicAutomationUrl).then(() => {
                   setAutomationCopied(true);
                   setTimeout(() => setAutomationCopied(false), 2000);
                 }).catch(() => undefined);
               }
             }}
             className={`inline-flex h-8 w-8 items-center justify-center rounded-[7px] border transition-[background-color,border-color,color,box-shadow,transform] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 ${
-              automationUrl
+              publicAutomationUrl
                 ? automationCopied
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                 : "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-300"
             }`}
             title={
-              automationUrl
+              publicAutomationUrl
                 ? automationCopied ? "Automation API endpoint copied" : "Copy Automation API endpoint URL"
                 : AUTOMATION_UNAVAILABLE_TITLE
             }
             aria-label={
-              automationUrl
+              publicAutomationUrl
                 ? automationCopied ? "Automation API endpoint copied" : "Copy Automation API endpoint URL"
                 : AUTOMATION_UNAVAILABLE_LABEL
             }
-            disabled={!automationUrl}
+            disabled={!publicAutomationUrl}
           >
             <Code2 className="h-3.5 w-3.5" />
           </button>

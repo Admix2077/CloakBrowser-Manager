@@ -503,6 +503,33 @@ describe("ProfileViewer Automation API toolbar action", () => {
       screen.getByRole("button", { name: "Automation API endpoint copied" }).getAttribute("title"),
     ).toBe("Automation API endpoint copied");
   });
+
+  it("copies only the public Automation API endpoint path", async () => {
+    const writeText = vi.mocked(navigator.clipboard.writeText);
+    const leakMarker = "automation-copy-token-secret";
+
+    render(
+      <ProfileViewer
+        profileId="profile-copy-redaction"
+        automationUrl={`/api/profiles/profile-copy-redaction/automation?viewer_token=${leakMarker}#${leakMarker}`}
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Automation API endpoint URL" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        `${window.location.protocol}//${window.location.host}/api/profiles/profile-copy-redaction/automation`,
+      );
+    });
+
+    const copiedText = String(writeText.mock.calls[0]?.[0] ?? "");
+    expect(copiedText).not.toContain(leakMarker);
+    expect(copiedText).not.toContain("viewer_token");
+    expect(copiedText).not.toContain("#");
+  });
 });
 
 describe("ProfileViewer clipboard sync", () => {

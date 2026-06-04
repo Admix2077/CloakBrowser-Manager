@@ -6973,3 +6973,35 @@ npm --prefix frontend test -- --run src/lib/profileDisplay.test.ts src/component
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、profile/proxy/task persistence、有效 timestamp 格式化、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Viewer Automation endpoint copy guardrail
+
+背景：
+
+- ProfileViewer toolbar 的 Automation copy action 会把当前 Automation API endpoint 写入浏览器剪贴板，是 VNC/viewer release smoke 中常用的操作证据。
+- 正常 endpoint 仍需要可复制；但异常 response、历史/手工污染 row 或测试桩如果把 `viewer_token`、query、fragment 或 token-like profile id 混进 `automationUrl`，旧实现会把原始 URL 直接写进剪贴板。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 viewer/evidence 边界。
+
+已覆盖：
+
+- Automation copy action 只复制同源 `/api/profiles/{public-profile-id}/automation` endpoint。
+- Query、fragment、`viewer_token` 和 token-like/path-like profile id 不进入复制结果。
+- 非同源或非公开 Automation path 会被视为 unavailable，不触发 copy。
+- noVNC 连接 URL、runtime viewer token URL、clipboard sync payload、Automation API backend 和 profile lifecycle 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx -t "copies only the public Automation API endpoint path"
+# RED: 旧实现把 query/fragment token 写入 clipboard；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# 1 file passed, 18 tests passed
+```
+
+边界：
+
+- 这是 ProfileViewer Automation endpoint copy release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、runtime viewer URL 使用、VNC websocket path、clipboard sync payload、profile persistence、profile lifecycle、runtime session behavior、Automation API backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
