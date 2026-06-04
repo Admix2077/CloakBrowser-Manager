@@ -270,6 +270,34 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(`${strip.textContent} ${titleText}`).not.toContain(leakMarker);
   });
 
+  it("folds provider and session marker handles before rendering viewer evidence", () => {
+    render(
+      <ProfileViewer
+        profileId="api_key-profile-viewer-marker"
+        externalSessionId="session_id-runtime-viewer-marker"
+        automationUrl="/api/profiles/private_key-profile-viewer-marker/automation"
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    const strip = screen.getByRole("region", { name: "Viewer environment" });
+    expect(within(strip).getByText("Profile unknown")).toBeTruthy();
+    expect(within(strip).getByText("Session unknown")).toBeTruthy();
+    expect(within(strip).getByText("Automation unavailable")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Automation API unavailable until profile is running" }).hasAttribute("disabled"),
+    ).toBe(true);
+
+    const titleText = Array.from(strip.querySelectorAll("[title]"))
+      .map((element) => element.getAttribute("title") ?? "")
+      .join(" ");
+    const renderedText = `${strip.textContent} ${titleText}`;
+    expect(renderedText).not.toContain("api_key");
+    expect(renderedText).not.toContain("session_id");
+    expect(renderedText).not.toContain("private_key");
+  });
+
   it("omits the business session chip for regular profile viewers", () => {
     render(
       <ProfileViewer

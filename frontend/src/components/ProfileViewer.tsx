@@ -21,7 +21,7 @@ const RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE =
   "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.";
 const PUBLIC_VIEWER_HANDLE_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_VIEWER_HANDLE_RE =
-  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bviewer[_-]?token\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
 
 function formatProfileHandle(profileId: string) {
   if (profileId.length <= 13) return profileId;
