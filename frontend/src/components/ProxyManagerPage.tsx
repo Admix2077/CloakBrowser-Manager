@@ -10,6 +10,8 @@ const CSV_SAMPLE = "name,url,country_code,city,asn,provider,tags,notes";
 const PUBLIC_ASSIGNMENT_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_ASSIGNMENT_PROFILE_ID_RE =
   /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer_token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\s)/i;
+const PROXY_MANAGER_LABEL_SENSITIVE_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];
@@ -2264,16 +2266,24 @@ function emptyProviderPresetForm(): ProviderPresetFormState {
   };
 }
 
+function publicProxyManagerLabel(value: string): string {
+  const text = value.trim();
+  if (!text) return "unknown";
+  const publicText = publicErrorText(text);
+  if (PROXY_MANAGER_LABEL_SENSITIVE_RE.test(text) && publicText === text) return "unknown";
+  return publicText || "unknown";
+}
+
 function publicProviderPresetLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicProviderPresetMetadataLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicProxyCsvPreviewLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicProxyCsvVisibleText(value: string): string {
@@ -2284,15 +2294,15 @@ function publicProxyCsvVisibleText(value: string): string {
 }
 
 function publicProxyMetadataLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicProxyAssetLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicProxyEndpointLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicRandomAssignFilterLabel(value: string | null | undefined): string {
@@ -2300,11 +2310,11 @@ function publicRandomAssignFilterLabel(value: string | null | undefined): string
 }
 
 function publicAssignmentProfileLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  return publicProxyManagerLabel(value);
 }
 
 function publicAssignmentProfileProxyLabel(value: string | null | undefined): string {
-  return value ? publicErrorText(value) || "unknown" : "No proxy";
+  return value ? publicProxyManagerLabel(value) : "No proxy";
 }
 
 function publicAssignmentProfileIdLabel(value: string): string {

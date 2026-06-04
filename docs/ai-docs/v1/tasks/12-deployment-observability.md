@@ -7762,3 +7762,31 @@ npm --prefix frontend test -- --run HealthBadge.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw health response、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy Manager label marker guardrail
+
+背景：
+
+- Proxy Manager 的 provider preset、proxy asset、CSV preview、assignment profile/proxy label 都会进入 visible/title/search/aria evidence。
+- 旧 Proxy Manager label filter 已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 `api_key-provider-marker`、`client_secret-country-marker`、`private_key-tag-marker` 这类 marker-only 字符串仍可能作为 provider/country/tag metadata 原样渲染。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Proxy Manager UI evidence 边界。
+
+已覆盖：
+
+- Proxy Manager shared public label sanitizer 现在会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only labels。
+- provider preset provider/country/tag marker-only 污染值折叠为 `unknown`，并覆盖 dialog visible text、summary、token chip、`title` 和 aria evidence。
+- 既有带 Authorization/token/path/IP 的 proxy/provider redaction 保持不变，普通低敏 proxy/provider metadata 继续显示。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run ProxyManagerPage.test.tsx
+# RED: 旧 provider preset metadata 原样渲染 api_key/client_secret/private_key marker；GREEN: 39 passed
+```
+
+边界：
+
+- 这是 frontend Proxy Manager label visible/title/search/aria evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw proxy assets、provider presets、CSV import payload、profile assignment payload、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

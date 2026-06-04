@@ -1511,6 +1511,48 @@ describe("ProxyManagerPage", () => {
     }
   });
 
+  it("folds marker-bearing provider preset metadata before rendering evidence", async () => {
+    mockListProxies.mockResolvedValue([]);
+    mockListProxyProviderPresets.mockResolvedValue([
+      {
+        id: "preset-marker-metadata",
+        name: "Japan default",
+        provider: "api_key-provider-marker",
+        country_code: "client_secret-country-marker",
+        tags: [{
+          tag: "private_key-tag-marker",
+          color: "#0ea5e9",
+        }],
+        notes: null,
+        created_at: "2026-05-26T00:00:00Z",
+        updated_at: "2026-05-26T00:00:00Z",
+      },
+    ]);
+
+    render(<ProxyManagerPage />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    fireEvent.click(within(page).getByRole("button", { name: "Manage presets" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Manage provider presets" });
+    expect(within(dialog).getByText("unknown / unknown / unknown")).toBeTruthy();
+    expect(within(dialog).getAllByText("unknown").length).toBeGreaterThanOrEqual(3);
+
+    const renderedEvidence = [
+      dialog.textContent,
+      ...Array.from(dialog.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(dialog.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts provider preset names in the CSV import selector", async () => {
     const leakMarker = "preset-select-token-super-secret";
     mockListProxies.mockResolvedValue([]);
