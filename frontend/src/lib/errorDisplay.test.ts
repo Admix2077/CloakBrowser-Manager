@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel } from "./errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileTagLabel } from "./errorDisplay";
 
 describe("publicErrorText", () => {
   it("redacts Windows drive paths without redacting public URL host and port", () => {
@@ -105,6 +105,21 @@ describe("publicProfileIdLabel", () => {
       "private_key-profile-marker",
     ]) {
       expect(publicProfileIdLabel(polluted)).toBe("unknown");
+    }
+  });
+});
+
+describe("publicProfileTagLabel", () => {
+  it("redacts marker-bearing tag labels while preserving public tag labels", () => {
+    expect(publicProfileTagLabel("stable-pool")).toBe("stable-pool");
+
+    for (const polluted of [
+      "api_key-tag-marker",
+      "x-api-key-tag-marker",
+      "client_secret-tag-marker",
+      "private_key-tag-marker",
+    ]) {
+      expect(publicProfileTagLabel(polluted)).toBe("unknown");
     }
   });
 });
