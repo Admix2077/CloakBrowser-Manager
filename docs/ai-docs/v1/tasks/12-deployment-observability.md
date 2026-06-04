@@ -7361,3 +7361,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation console assignment redaction guardrail
+
+背景：
+
+- Automation console log 和 network summary 是 release/debug evidence 的高频出口，会把页面 console text、location URL、request metadata 折叠成低敏摘要。
+- 旧 automation text redaction 已覆盖 URL credential/query/fragment、Authorization/Bearer、Cookie 和旧 token/password/secret assignment，但没有覆盖 `api_key`、`access_token`、`session_id`、`client_secret` 等常见 provider/API marker。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 automation evidence 边界。
+
+已覆盖：
+
+- `_automation_redact_text()` 现在会 redacts `api_key=...`、`x-api-key: ...`、`access_token=...`、`refresh_token=...`、`session_id=...`、`client_secret=...`、`private_key=...`。
+- 既有 URL host/path 保留、query/fragment/credential stripping、Authorization/Bearer/Cookie redaction 行为保持不变。
+- Automation task payload 执行语义、step persistence、worker lease 行为、runtime session/viewer behavior 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs_redacts_sensitive_text_and_location_urls"
+# RED: 旧 automation console text 暴露 api_key/access_token/session_id/client_secret/private_key assignment values；GREEN: focused test passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs or automation_network_summary"
+# 7 passed, 252 deselected
+```
+
+边界：
+
+- 这是 backend automation visible/debug evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw API payload、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -7045,3 +7045,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw API payload、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 runtime session response external id release-evidence 边界。
+
+## 2026-06-04 Automation console assignment release-evidence guardrail
+
+背景：
+
+- Release regression 可能读取 automation console logs 和 network summary 作为 debug evidence。
+- 旧 automation redaction 已覆盖 URL query/fragment/credential、Authorization/Bearer、Cookie 和旧 token/password/secret assignment，但常见 API/provider assignment 名称如 `api_key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` 仍可能进入 console text evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Automation release-evidence 边界。
+
+已覆盖：
+
+- Automation text redaction 会处理 `api_key=...`、`x-api-key: ...`、`access_token=...`、`refresh_token=...`、`session_id=...`、`client_secret=...`、`private_key=...`。
+- Automation console log response 继续保留低敏 URL scheme/host/path context，同时剥离 credentials/query/fragment。
+- Automation task payload execution、stored steps、worker lease, runtime session/viewer token schema 和 browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs_redacts_sensitive_text_and_location_urls"
+# RED then GREEN；旧 automation console text 暴露 api_key/access_token/session_id/client_secret/private_key assignment values
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs or automation_network_summary"
+# 7 passed, 252 deselected
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 automation console assignment release-evidence 边界。
