@@ -6624,3 +6624,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw proxy URL persistence、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy asset endpoint URL release-evidence 边界。
+
+## 2026-06-04 Timestamp release-evidence guardrail
+
+背景：
+
+- Profile operations、Profile summary、Proxy Manager 和 Automation task viewer 会展示多类 timestamp，是 release regression 截图/文本 evidence 面。
+- 正常 timestamp 仍需要格式化展示；但无效或污染 timestamp 不应把 Authorization/Bearer、`token=`、path 或 IP-style 文本带入 visible/title evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- Shared `formatTimestamp()` 对空值继续返回 `-`。
+- 有效 timestamp 继续按原来的短日期时间格式显示。
+- 无效/污染 timestamp 统一折叠为 `Invalid timestamp`。
+- Profile table/card、Profile summary、Proxy Manager last-check time 和 Automation task viewer 共用这一低敏 fallback。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/profileDisplay.test.ts
+# RED then GREEN；旧实现把污染 timestamp 原样返回
+
+npm --prefix frontend test -- --run src/lib/profileDisplay.test.ts src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProxyManagerPage.test.tsx src/components/AutomationTaskLogViewer.test.tsx
+# 5 files passed, 99 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、profile/proxy/task persistence、有效 timestamp 格式化、profile lifecycle、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared timestamp release-evidence 边界。

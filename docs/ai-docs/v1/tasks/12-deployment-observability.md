@@ -6941,3 +6941,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx src
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw proxy URL persistence、raw CSV import payload、proxy/provider preset persistence、proxy assignment/random assignment payload、GeoIP lookup、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Timestamp evidence guardrail
+
+背景：
+
+- Profile table/card、Profile summary、Proxy Manager 和 Automation task viewer 都通过 shared `formatTimestamp()` 展示 last checked、check time、created/started/finished 等时间字段。
+- 有效 ISO timestamp 仍是低敏运行证据；但异常 response、历史/手工污染 row 或测试桩如果把 Authorization/Bearer、`token=`、本地路径或 IP 字面量写进 timestamp 字段，旧 invalid-date fallback 会把原始字符串直接渲染到 UI evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 evidence 边界。
+
+已覆盖：
+
+- `formatTimestamp()` 对空值继续返回 `-`。
+- 有效 timestamp 继续按原来的本地短时间格式显示。
+- 无效/污染 timestamp 统一显示 `Invalid timestamp`，不回显 raw timestamp 字段内容。
+- Profile operations、Profile summary、Proxy Manager last-check time 和 Automation task viewer 自动继承同一低敏 timestamp fallback。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/profileDisplay.test.ts
+# RED: 旧实现把污染 timestamp 原样返回；GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/lib/profileDisplay.test.ts src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProxyManagerPage.test.tsx src/components/AutomationTaskLogViewer.test.tsx
+# 5 files passed, 99 tests passed
+```
+
+边界：
+
+- 这是 shared timestamp UI release evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、profile/proxy/task persistence、有效 timestamp 格式化、profile lifecycle、runtime session behavior、viewer behavior、Automation API、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

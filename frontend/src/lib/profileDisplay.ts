@@ -38,7 +38,7 @@ export function redactUrlCredentials(value: string): string {
 export function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return "Invalid timestamp";
   return date.toLocaleString(undefined, {
     month: "short",
     day: "2-digit",
