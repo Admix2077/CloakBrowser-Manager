@@ -1030,14 +1030,16 @@ _SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE = re.compile(
 
 def _is_sensitive_audit_key(key: str) -> bool:
     normalized = key.lower()
+    normalized_alias = normalized.replace("-", "_")
     return (
         normalized in _AUDIT_SENSITIVE_KEYS
-        or normalized.endswith("_token")
-        or normalized.endswith("_token_hash")
+        or normalized_alias in _AUDIT_SENSITIVE_KEYS
+        or normalized_alias.endswith("_token")
+        or normalized_alias.endswith("_token_hash")
         or _AUDIT_SENSITIVE_KEY_RE.search(key) is not None
         or _redact_audit_ip_literals(key) != key
         or any(
-            part in normalized for part in _AUDIT_SENSITIVE_KEY_PARTS
+            part in normalized_alias for part in _AUDIT_SENSITIVE_KEY_PARTS
         )
     )
 

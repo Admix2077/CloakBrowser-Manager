@@ -8391,3 +8391,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 audit event 写入语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Audit metadata hyphen key alias guardrail
+
+背景：
+
+- Audit metadata key 名本身也会进入 release triage 和低敏 evidence。
+- 前一轮已覆盖短横线赋值形式，但 key-only alias 仍有边界差异：`proxy-url`、`viewer-url`、`viewer-token-hash` 这类 key 不一定会按 `proxy_url`、`viewer_url`、`viewer_token_hash` 同等处理。
+- 这些字段即使 value 已被 URL credential sanitizer 处理，key/value 组合仍不应作为低敏 evidence 保留。
+
+已覆盖：
+
+- `_is_sensitive_audit_key()` 现在把 metadata key 的 `-` 归一为 `_` 后再套现有敏感 key、`*_token`、`*_token_hash` 和敏感词规则。
+- `proxy-url`、`viewer-url`、`viewer-token-hash` 这类短横线 key alias 会整体丢弃。
+- 保留普通低敏 key、嵌套 metadata、URL credential、Authorization/Bearer、local path、IP literal、assignment 和 marker-only sanitizer 行为。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k audit_metadata_sanitizer_removes_sensitive_fields
+# RED: 旧 audit metadata sanitizer 保留 proxy-url/viewer-url/viewer-token-hash key alias；GREEN: 1 passed, 48 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer or audit_event_reader_omits_sensitive or audit_allows_only_public_metadata_shapes or runtime_viewer_connected_audit"
+# 5 passed, 44 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 audit metadata evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 audit event 写入语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

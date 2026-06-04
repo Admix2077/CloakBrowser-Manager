@@ -1841,8 +1841,13 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
             "safe": "kept",
             "viewer_token": "plain-viewer-token",
             "viewer_token_hash": "hashed-viewer-token",
+            "viewer-token-hash": "hashed-hyphen-viewer-token",
+            "viewer-url": "http://viewer-user:viewer-pass@viewer.example.test/vnc",
             "runtime_service_token": "runtime-secret",
+            "runtime-service-token": "runtime-hyphen-secret",
+            "service-token": "service-hyphen-secret",
             "proxy_url": "http://user:proxy-pass@example.test:8080",
+            "proxy-url": "http://hyphen-user:hyphen-proxy-pass@example.test:8080",
             "api_key": "plain-api-key",
             "x-api-key": "plain-header-api-key",
             "access_token": "plain-access-token",
@@ -1942,7 +1947,12 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     serialized_events = json.dumps(events, sort_keys=True)
     assert "plain-viewer-token" not in serialized_events
     assert "hashed-viewer-token" not in serialized_events
+    assert "hashed-hyphen-viewer-token" not in serialized_events
+    assert "viewer-pass" not in serialized_events
     assert "runtime-secret" not in serialized_events
+    assert "runtime-hyphen-secret" not in serialized_events
+    assert "service-hyphen-secret" not in serialized_events
+    assert "hyphen-proxy-pass" not in serialized_events
     assert "plain-api-key" not in serialized_events
     assert "plain-header-api-key" not in serialized_events
     assert "plain-access-token" not in serialized_events

@@ -8073,3 +8073,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Audit metadata hyphen-assignment release boundary。
+
+## 2026-06-04 Audit metadata hyphen key alias release guardrail
+
+背景：
+
+- Release convergence 继续检查 audit metadata key 名，因为 key/value JSON 会进入回归证据、runtime/viewer triage 和本地长期记录。
+- 前一轮已覆盖短横线赋值，但 `proxy-url`、`viewer-url`、`viewer-token-hash` 这类 key-only alias 仍可能作为普通 metadata key 留下。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 audit release-evidence 边界。
+
+已覆盖：
+
+- Audit metadata key 判断现在将 `-` 归一为 `_` 后复用现有敏感 key 和 token/hash 后缀规则。
+- `proxy-url`、`viewer-url`、`viewer-token-hash` 等短横线 alias 会整体丢弃。
+- 原有普通低敏 key、URL credential、Authorization/Bearer、local path、IP literal、assignment 和 marker-only redaction 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k audit_metadata_sanitizer_removes_sensitive_fields
+# RED then GREEN；旧 audit metadata evidence 保留 proxy-url/viewer-url/viewer-token-hash key alias；GREEN 1 passed, 48 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "audit_metadata_sanitizer or audit_event_reader_omits_sensitive or audit_allows_only_public_metadata_shapes or runtime_viewer_connected_audit"
+# 5 passed, 44 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Audit metadata hyphen-key-alias release boundary。
