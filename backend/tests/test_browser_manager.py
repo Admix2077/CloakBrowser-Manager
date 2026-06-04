@@ -196,6 +196,16 @@ def test_build_invisible_pin_drops_non_public_gpu_text():
     assert "api_key" not in repr(pin)
     assert "session_id" not in repr(pin)
 
+    marker_pin = bm._build_invisible_pin({
+        "gpu_vendor": "Google Inc. api-key-gpu-marker",
+        "gpu_renderer": "ANGLE private-key-gpu-marker",
+    })
+
+    assert "gpu.vendor" not in marker_pin
+    assert "gpu.renderer" not in marker_pin
+    assert "api-key-gpu-marker" not in repr(marker_pin)
+    assert "private-key-gpu-marker" not in repr(marker_pin)
+
 
 def test_build_invisible_pin_light_theme():
     assert bm._build_invisible_pin({"color_scheme": "light"})["dark_theme"] is False
@@ -786,6 +796,8 @@ def test_build_invisible_kwargs_drops_non_public_launch_args(tmp_path: Path):
             f"--proxy-server=https://proxy.example/?token={leak_marker}",
             f"--custom-header=Authorization: Bearer {leak_marker}",
             f"--note=password={leak_marker}",
+            "--note=api-key-launch-marker",
+            "--title=private-key-launch-marker",
             "--safe-mode\nCookie: launch-arg-super-secret",
             123,
         ],
@@ -796,6 +808,8 @@ def test_build_invisible_kwargs_drops_non_public_launch_args(tmp_path: Path):
     assert "proxy.example" not in repr(kwargs)
     assert "Authorization" not in repr(kwargs)
     assert "Cookie" not in repr(kwargs)
+    assert "api-key-launch-marker" not in repr(kwargs)
+    assert "private-key-launch-marker" not in repr(kwargs)
 
     polluted_scalar = bm._build_invisible_kwargs({
         "fingerprint_seed": 7,
@@ -1297,7 +1311,11 @@ async def test_launch_does_not_block_on_existing_page_init_script_timeout(
         self.context.pages = [HangingPage()]
         return self.context
 
+    async def fake_resolve(profile: dict):
+        return dict(profile)
+
     monkeypatch.setattr(mock_invisible_playwright, "__aenter__", fake_enter)
+    monkeypatch.setattr(bm, "resolve_profile_network_fingerprint", fake_resolve)
     monkeypatch.setattr(bm, "EXISTING_PAGE_INIT_TIMEOUT_SECONDS", 0.01, raising=False)
 
     mgr = BrowserManager()

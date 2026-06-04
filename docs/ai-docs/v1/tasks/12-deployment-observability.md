@@ -8219,3 +8219,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 audit schema、audit write call sites、runtime session storage、profile/proxy persistence、automation worker behavior、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Browser launch hyphen marker guardrail
+
+背景：
+
+- BrowserManager launch identity 边界会把 GPU/WebGL text 和 Firefox launch args 传给 `invisible_playwright`。
+- 旧 `SENSITIVE_TEXT_RE` 已覆盖 URL、Authorization/Bearer、query 和 `api_key` / `session_id` / `private_key` 等下划线形式，但 `api-key-gpu-marker`、`private-key-gpu-marker`、`api-key-launch-marker`、`private-key-launch-marker` 这类短横线 marker 仍可能通过 GPU/WebGL pin 或 extra launch args。
+- 相邻验证还发现 `test_launch_does_not_block_on_existing_page_init_script_timeout` 未隔离 `resolve_profile_network_fingerprint()`，会先触发外部 GeoIP/network fingerprint 解析，导致测试目标之外的 timeout 风险。
+
+已覆盖：
+
+- `SENSITIVE_TEXT_RE` 现在对 access/api/auth/client/private/refresh/session/viewer/x-api-key 相关 token 同时识别 `_` 和 `-` 分隔。
+- GPU/WebGL launch pin 和 Firefox launch args 会丢弃短横线 marker-only sensitive text；正常 `--private-window`、`--lang=en-US`、普通 GPU/WebGL text 保持不变。
+- existing page init timeout 测试现在 monkeypatch `resolve_profile_network_fingerprint()`，只验证页面 init timeout 行为，不依赖外部 GeoIP。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "non_public_gpu_text or drops_non_public_launch_args"
+# RED: 旧 launch identity 允许 api-key/private-key marker 进入 GPU pin 和 extra_args；GREEN: 2 passed, 72 deselected
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "gpu_text or launch_args or coherent_webgl or locale or timezone or init_script"
+# 16 passed, 58 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 BrowserManager launch identity/input evidence 防御和测试隔离稳定性修复，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 `invisible_playwright` 包、stealth prefs、fingerprint seed 生成、WebGL coherence bucket、UA、locale/timezone、WebRTC behavior、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

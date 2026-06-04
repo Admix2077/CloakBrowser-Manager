@@ -7901,3 +7901,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 audit schema、audit write call sites、runtime session/profile/proxy persistence、automation worker behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit event type marker release boundary。
+
+## 2026-06-04 Browser launch hyphen marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 BrowserManager launch identity 输入，因为 GPU/WebGL pin 和 Firefox launch args 会直接进入 managed browser 启动边界。
+- 旧 launch sensitive-text filter 已覆盖 URL、Authorization/Bearer、query、下划线形式 `api_key` / `session_id` / `private_key`，但 `api-key-gpu-marker`、`private-key-gpu-marker`、`api-key-launch-marker`、`private-key-launch-marker` 这类短横线 marker 仍可能通过。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 launch identity release-evidence 边界。
+
+已覆盖：
+
+- BrowserManager shared sensitive text regex 现在识别 `_` 和 `-` 两种 marker 分隔形式。
+- GPU/WebGL pin、Firefox extra launch args、profile dir/log id 等复用该过滤器的 launch 边界会拒绝短横线 sensitive marker。
+- `test_launch_does_not_block_on_existing_page_init_script_timeout` 隔离 GeoIP/network fingerprint 解析，避免测试在页面 init timeout 之前被外部网络卡住。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "non_public_gpu_text or drops_non_public_launch_args"
+# RED then GREEN；旧 launch identity 暴露 api-key/private-key marker 到 GPU pin 和 extra_args；GREEN 2 passed, 72 deselected
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "gpu_text or launch_args or coherent_webgl or locale or timezone or init_script"
+# 16 passed, 58 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 `invisible_playwright` 包、stealth prefs、fingerprint seed 生成、WebGL coherence bucket、UA、locale/timezone、WebRTC behavior、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 BrowserManager launch hyphen-marker release boundary。
