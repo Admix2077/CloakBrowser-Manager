@@ -70,7 +70,11 @@ export function SystemDiagnosticsPage() {
           <div className="min-w-0 space-y-4">
             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <DiagnosticTile label="Status" value={diagnostics.status} tone="success" />
+                <DiagnosticTile
+                  label="Status"
+                  value={formatDiagnosticStatus(diagnostics.status)}
+                  tone={formatDiagnosticStatus(diagnostics.status) === "ok" ? "success" : "warning"}
+                />
                 <DiagnosticTile label="Profiles" value={diagnostics.counts.profiles_total} />
                 <DiagnosticTile label="Running" value={diagnostics.counts.running} tone="success" />
                 <DiagnosticTile label="Launching" value={diagnostics.counts.launching} />
@@ -93,14 +97,14 @@ export function SystemDiagnosticsPage() {
                 />
                 <InfoRow
                   label="Managed UA"
-                  value={diagnostics.runtime.managed_user_agent_version ? `Firefox ${diagnostics.runtime.managed_user_agent_version}` : "unknown"}
+                  value={formatManagedUserAgentVersion(diagnostics.runtime.managed_user_agent_version)}
                 />
                 <InfoRow
                   label="Engine package"
-                  value={diagnostics.runtime.invisible_playwright_version ? `invisible_playwright ${diagnostics.runtime.invisible_playwright_version}` : "unknown"}
+                  value={formatEnginePackageVersion(diagnostics.runtime.invisible_playwright_version)}
                 />
-                <InfoRow label="Firefox binary" value={diagnostics.runtime.firefox_binary_version ?? "unknown"} />
-                <InfoRow label="Firefox BuildID" value={diagnostics.runtime.firefox_binary_build_id ?? "unknown"} />
+                <InfoRow label="Firefox binary" value={formatFirefoxVersion(diagnostics.runtime.firefox_binary_version)} />
+                <InfoRow label="Firefox BuildID" value={formatFirefoxBuildId(diagnostics.runtime.firefox_binary_build_id)} />
                 <InfoRow
                   label="Firefox major match"
                   value={formatMajorVersionMatch(diagnostics.runtime.firefox_identity_major_version_match)}
@@ -129,7 +133,7 @@ export function SystemDiagnosticsPage() {
               <div className="mt-3 space-y-2">
                 <InfoRow label="Data directory" value={diagnostics.storage.data_dir_exists ? "available" : "missing"} />
                 <InfoRow label="Database" value={diagnostics.storage.db_exists ? "available" : "missing"} />
-                <InfoRow label="Binary" value={diagnostics.binary_version} />
+                <InfoRow label="Binary" value={formatBinaryVersion(diagnostics.binary_version)} />
               </div>
             </section>
 
@@ -230,6 +234,40 @@ function formatMajorVersionMatch(value: boolean | null): string {
     return "mismatch";
   }
   return "unknown";
+}
+
+function formatDiagnosticStatus(value: string): string {
+  return value === "ok" ? "ok" : "unknown";
+}
+
+function formatBinaryVersion(value: string): string {
+  return value === "invisible-playwright" ? value : "unknown";
+}
+
+function formatManagedUserAgentVersion(value: string | null): string {
+  const version = publicVersion(value);
+  return version ? `Firefox ${version}` : "unknown";
+}
+
+function formatEnginePackageVersion(value: string | null): string {
+  const version = publicVersion(value);
+  return version ? `invisible_playwright ${version}` : "unknown";
+}
+
+function formatFirefoxVersion(value: string | null): string {
+  return publicVersion(value) ?? "unknown";
+}
+
+function formatFirefoxBuildId(value: string | null): string {
+  if (typeof value !== "string") return "unknown";
+  const trimmed = value.trim();
+  return /^\d{8,20}$/.test(trimmed) ? trimmed : "unknown";
+}
+
+function publicVersion(value: string | null): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^\d+(?:\.\d+){0,3}$/.test(trimmed) ? trimmed : null;
 }
 
 function formatStringList(values: string[]): string {

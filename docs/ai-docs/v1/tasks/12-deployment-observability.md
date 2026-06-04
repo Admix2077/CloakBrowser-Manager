@@ -7204,3 +7204,36 @@ npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session behavior、viewer token URL behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Diagnostics scalar identity evidence guardrail
+
+背景：
+
+- System diagnostics 页面会显示 protected diagnostics API 返回的 Manager 状态、binary label、managed Firefox version、engine package version、Firefox binary version 和 BuildID。
+- 后端正常路径已固定/白名单这些值，但 frontend 旧实现直接渲染这些 scalar identity 字段；如果历史、测试替身或代理层返回污染字符串，token/header/path text 会进入 UI/aria release evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 diagnostics UI evidence 边界。
+
+已覆盖：
+
+- `SystemDiagnosticsPage` 对 status 只允许 `ok`，否则显示 `unknown`。
+- Binary label 只允许固定 `invisible-playwright`，否则显示 `unknown`。
+- Managed UA、engine package、Firefox binary version 只允许简单数字版本格式。
+- Firefox BuildID 只允许 8-20 位数字。
+- 正常 diagnostics snapshot 仍显示 `ok`、`invisible-playwright`、`Firefox 149.0`、`invisible_playwright 0.1.8`、`150.0.1` 和数字 BuildID。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds non-public diagnostics scalar identity fields"
+# RED: 旧 UI/aria 渲染 token/header/path 污染 scalar fields；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 1 file passed, 5 tests passed
+```
+
+边界：
+
+- 这是 frontend diagnostics scalar UI evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend diagnostics schema、diagnostics count queries、runtime session behavior、viewer behavior、Automation API backend、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

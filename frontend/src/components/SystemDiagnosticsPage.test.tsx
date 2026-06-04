@@ -188,6 +188,38 @@ describe("SystemDiagnosticsPage", () => {
     expect(page.textContent).not.toContain("203.0.113.88");
   });
 
+  it("folds non-public diagnostics scalar identity fields before rendering", async () => {
+    const leakMarker = "diagnostics-scalar-token-secret";
+    const base = diagnostics();
+    mockGetDiagnostics.mockResolvedValueOnce(diagnostics({
+      status: `ok token=${leakMarker}`,
+      binary_version: `invisible-playwright Authorization=Bearer ${leakMarker}`,
+      runtime: {
+        ...base.runtime,
+        managed_user_agent_version: `149.0 token=${leakMarker}`,
+        invisible_playwright_version: `0.1.8 /data/${leakMarker}`,
+        firefox_binary_version: `150.0.1 Authorization=Bearer ${leakMarker}`,
+        firefox_binary_build_id: `20260521160037 token=${leakMarker}`,
+      },
+    }));
+
+    render(<SystemDiagnosticsPage />);
+
+    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    expect(within(page).getByRole("group", { name: "Status: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Binary: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Managed UA: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Engine package: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Firefox binary: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Firefox BuildID: unknown" })).toBeTruthy();
+
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/");
+  });
+
   it("uses a fixed error message without rendering backend details", async () => {
     mockGetDiagnostics.mockRejectedValueOnce(new Error("secret token at /data/profiles/profile-1"));
 

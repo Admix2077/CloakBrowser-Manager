@@ -6888,3 +6888,36 @@ npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
 - 这不是 raw id 脱敏；异常 id 仍作为 URL-encoded path segment 传给 backend。
 - 不改变 backend request/response schema、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend path parameter release-evidence 边界。
+
+## 2026-06-04 Diagnostics scalar identity release-evidence guardrail
+
+背景：
+
+- Release regression 的 System diagnostics 页面会展示 Manager status、binary label、managed UA version、engine package version、Firefox binary version 和 BuildID。
+- 旧 frontend 直接渲染这些 scalar identity fields；正常后端值是低敏的，但异常 diagnostics payload 可能把 token/header/path text 带进 visible/aria evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 diagnostics evidence 边界。
+
+已覆盖：
+
+- Diagnostics status 仅 `ok` 可见，其他值显示 `unknown`。
+- Binary label 仅固定 `invisible-playwright` 可见。
+- Managed UA、engine package、Firefox binary version 只保留数字版本格式。
+- Firefox BuildID 只保留 8-20 位数字。
+- 正常 release diagnostics evidence 仍能展示 Manager/Firefox identity 对比所需的低敏版本信息。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds non-public diagnostics scalar identity fields"
+# RED then GREEN；旧 UI/aria 暴露污染 diagnostics scalar text
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 1 file passed, 5 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend diagnostics schema、diagnostics count-query behavior、runtime session/viewer token schema、VNC forwarding、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 diagnostics scalar release-evidence 边界。
