@@ -7066,3 +7066,35 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw API payload、proxy/profile/task persistence、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 ProfileForm chip action label evidence guardrail
+
+背景：
+
+- ProfileForm Advanced 面板的 tag chip 和 Firefox launch argument chip 是 profile 编辑时的可见/可访问性证据面。
+- 输入框和 chip 文本需要保持 raw 编辑语义；但 remove 按钮的 `aria-label` 不应把历史/污染 tag 或 launch arg 中的 Authorization/Bearer、`token=`、本地路径、URL credential/query/fragment 或 IP literal 带入 release evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 UI evidence 边界。
+
+已覆盖：
+
+- ProfileForm tag remove button `aria-label` 使用 public error-text boundary。
+- ProfileForm launch argument remove button `aria-label` 使用 public error-text boundary。
+- 普通 tag 和普通 launch arg 的 remove button label 保持可读。
+- Raw tag/launch arg 输入、chip visible text、save payload、profile persistence、browser launch behavior 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx -t "redacts remove button labels"
+# RED then GREEN；旧 remove button aria-label 暴露 raw tag/launch arg
+
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx
+# 1 file passed, 12 tests passed
+```
+
+边界：
+
+- 这是 ProfileForm UI accessibility evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw API payload、profile persistence、tag persistence、launch arg persistence、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

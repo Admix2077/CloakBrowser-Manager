@@ -6749,3 +6749,35 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw API payload、proxy/profile/task persistence、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 backend audit metadata URL release-evidence 边界。
+
+## 2026-06-04 ProfileForm chip action label release-evidence guardrail
+
+背景：
+
+- Release regression 中会操作 ProfileForm Advanced 面板，tag chip 和 Firefox launch argument chip 的 remove 按钮会进入可访问性/文本 evidence。
+- Chip visible text 和输入框仍需要保留 raw 编辑语义；但 remove action label 不应暴露 Authorization/Bearer、`token=`、本地路径、URL credential/query/fragment 或 IP literal。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 frontend evidence 边界。
+
+已覆盖：
+
+- ProfileForm tag remove button `aria-label` 使用 public error-text boundary。
+- ProfileForm launch argument remove button `aria-label` 使用 public error-text boundary。
+- 普通 tag/launch arg action label 仍保持可读。
+- Raw edit text、save payload、profile persistence、launch args runtime input、browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx -t "redacts remove button labels"
+# RED then GREEN；旧 remove action label 暴露 raw tag/launch arg
+
+npm --prefix frontend test -- --run src/components/ProfileForm.test.tsx
+# 1 file passed, 12 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw API payload、profile persistence、tag persistence、launch arg persistence、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileForm chip action label release-evidence 边界。

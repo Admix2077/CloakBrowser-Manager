@@ -1,7 +1,7 @@
 import { Dices, Fingerprint, Monitor, MousePointer2, Network, Save, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Profile, ProfileCreateData, ProfileTemplate } from "../lib/api";
-import { publicProfileName } from "../lib/errorDisplay";
+import { publicErrorText, publicProfileName } from "../lib/errorDisplay";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 interface ProfileFormProps {
@@ -567,7 +567,7 @@ export function ProfileForm({ profile, templates = [], onSave, onDelete, onCance
                     type="button"
                     onClick={() => removeTag(t.tag)}
                     className="icon-action"
-                    aria-label={`Remove tag ${t.tag}`}
+                    aria-label={`Remove tag ${publicErrorText(t.tag) || "unknown"}`}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -624,7 +624,7 @@ export function ProfileForm({ profile, templates = [], onSave, onDelete, onCance
                     type="button"
                     onClick={() => removeLaunchArg(idx)}
                     className="icon-action"
-                    aria-label={`Remove launch argument ${arg}`}
+                    aria-label={`Remove launch argument ${publicErrorText(arg) || "unknown"}`}
                   >
                     <X className="h-3 w-3" />
                   </button>

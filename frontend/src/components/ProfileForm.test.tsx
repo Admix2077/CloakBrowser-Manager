@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileForm } from "./ProfileForm";
 import type { Profile, ProfileTemplate } from "../lib/api";
+import { publicErrorText } from "../lib/errorDisplay";
 
 const humanizedProfile: Profile = {
   id: "profile-1",
@@ -72,6 +73,28 @@ describe("ProfileForm launch arguments", () => {
     expect(screen.getByText(/Custom Firefox arguments passed to the browser engine/)).toBeTruthy();
     expect(screen.getByText(/Only Firefox-compatible launch arguments are applied/)).toBeTruthy();
     expect(screen.getByPlaceholderText("--private-window")).toBeTruthy();
+  });
+
+  it("redacts remove button labels for persisted launch args", () => {
+    const rawArg = (
+      "--proxy-server=http://user:pass@launch-arg.example/path?token=launch-arg-secret#frag " +
+      "Authorization=Bearer launch-arg-secret /data/launch-arg 203.0.113.94"
+    );
+    const safeArg = publicErrorText(rawArg);
+
+    render(
+      <ProfileForm
+        profile={{ ...humanizedProfile, launch_args: [rawArg] }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+
+    expect(screen.getByText(rawArg)).toBeTruthy();
+    expect(screen.getByRole("button", { name: `Remove launch argument ${safeArg}` })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: `Remove launch argument ${rawArg}` })).toBeNull();
   });
 });
 
@@ -205,6 +228,26 @@ describe("ProfileForm accessibility and control polish", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add tag" }));
 
     expect(screen.getByRole("button", { name: "Remove tag ops" })).toBeTruthy();
+  });
+
+  it("redacts remove button labels for persisted tags", () => {
+    const rawTag =
+      "ops Authorization=Bearer tag-secret token=tag-secret /data/tag-secret 203.0.113.95";
+    const safeTag = publicErrorText(rawTag);
+
+    render(
+      <ProfileForm
+        profile={{ ...humanizedProfile, tags: [{ tag: rawTag, color: null }] }}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
+
+    expect(screen.getByText(rawTag)).toBeTruthy();
+    expect(screen.getByRole("button", { name: `Remove tag ${safeTag}` })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: `Remove tag ${rawTag}` })).toBeNull();
   });
 
   it("uses an in-app confirmation dialog before deleting a profile", async () => {
