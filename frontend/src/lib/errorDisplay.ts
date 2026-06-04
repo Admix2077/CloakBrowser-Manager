@@ -13,6 +13,7 @@ const SENSITIVE_PROFILE_ID_RE =
 const ERROR_IPV4_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
 const ERROR_BRACKETED_IPV6_RE = /\[([0-9a-fA-F:.]{2,})\]/g;
 const ERROR_BARE_IPV6_RE = /(?<![A-Za-z0-9_.:[\]-])(?:[0-9a-fA-F]{1,4}:){2,}[0-9a-fA-F:.]*(?![A-Za-z0-9_.:[\]-])/g;
+const ERROR_URL_RE = /\b(?:https?|socks5):\/\/[^\s"'<>]+/gi;
 
 function isValidIpv4Candidate(candidate: string): boolean {
   const parts = candidate.split(".");
@@ -46,8 +47,22 @@ function redactIpLiterals(text: string): string {
     ));
 }
 
+function publicUrlText(value: string): string {
+  try {
+    const url = new URL(value);
+    const path = url.pathname === "/" ? "" : url.pathname;
+    return `${url.protocol}//${url.host}${path}`;
+  } catch {
+    return value.replace(/([?#]).*$/u, "");
+  }
+}
+
+function redactUrlEvidence(text: string): string {
+  return text.replace(ERROR_URL_RE, (match) => publicUrlText(match));
+}
+
 export function publicErrorText(value: string): string {
-  return redactIpLiterals(redactUrlCredentials(value))
+  return redactIpLiterals(redactUrlEvidence(redactUrlCredentials(value)))
     .replace(ERROR_AUTH_HEADER_RE, "[redacted]")
     .replace(ERROR_BEARER_RE, "[redacted]")
     .replace(ERROR_SENSITIVE_ASSIGNMENT_RE, "[redacted]")

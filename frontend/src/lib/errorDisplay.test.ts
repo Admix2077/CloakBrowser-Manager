@@ -35,6 +35,22 @@ describe("publicErrorText", () => {
     expect(text).not.toContain("2001:db8::45");
     expect(text).not.toContain("2001:db8::46");
   });
+
+  it("removes URL query strings and fragments from visible error text", () => {
+    const text = publicErrorText(
+      "Automation failed at https://example.test/account/check?session_id=secret-session#private-fragment " +
+        "after proxy http://user:hiddenpass@proxy.example:8080/path?opaque=secret#secret",
+    );
+
+    expect(text).toBe(
+      "Automation failed at https://example.test/account/check " +
+        "after proxy http://proxy.example:8080/path",
+    );
+    expect(text).not.toContain("session_id=secret-session");
+    expect(text).not.toContain("private-fragment");
+    expect(text).not.toContain("opaque=secret");
+    expect(text).not.toContain("hiddenpass");
+  });
 });
 
 describe("publicProfileGeoipLabel", () => {

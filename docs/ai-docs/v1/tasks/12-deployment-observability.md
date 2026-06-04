@@ -7005,3 +7005,35 @@ npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、runtime viewer URL 使用、VNC websocket path、clipboard sync payload、profile persistence、profile lifecycle、runtime session behavior、Automation API backend、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Shared public error URL evidence guardrail
+
+背景：
+
+- `publicErrorText()` 是前端多处错误、notice、metadata fallback 的 shared UI evidence boundary。
+- 之前该 helper 会移除 URL credentials 并 redacts token assignments，但普通 URL query string 和 fragment 仍可能保留，例如 `?session_id=...#...`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 UI evidence 边界。
+
+已覆盖：
+
+- `publicErrorText()` 现在会把 `http`、`https` 和 `socks5` URL 归一化为 scheme/host/port/path。
+- URL username/password、query string 和 fragment 不进入 visible/title/aria/search error evidence。
+- 既有 Authorization/Bearer、token assignment、本地路径和 IP literal redaction 继续保留。
+- Proxy Manager、Profile CSV preview、Profile operations、Automation task viewer、ProfileViewer 等复用 public error text 的前端面自动继承。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "removes URL query strings"
+# RED: 旧实现保留 query/fragment；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/ProxyManagerPage.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx src/components/ProfileViewer.test.tsx src/components/AutomationTaskLogViewer.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 7 files passed, 126 tests passed
+```
+
+边界：
+
+- 这是 shared frontend UI error evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、raw API payload、proxy/profile/task persistence、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

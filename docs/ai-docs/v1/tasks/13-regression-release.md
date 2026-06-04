@@ -6688,3 +6688,35 @@ npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、runtime viewer URL 使用、VNC websocket path、clipboard sync payload、profile persistence、profile lifecycle、runtime session/viewer token schema、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Viewer Automation endpoint copy release-evidence 边界。
+
+## 2026-06-04 Shared public error URL release-evidence guardrail
+
+背景：
+
+- 前端 release regression 中，错误、notice、fallback metadata 经常通过 shared `publicErrorText()` 出现在截图/文本 evidence 里。
+- 正常 URL host/path 仍有排障价值；但 query string 和 fragment 常携带 session、viewer、auth 或业务 token，不应进入 visible/title/aria/search evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 UI evidence 边界。
+
+已覆盖：
+
+- `publicErrorText()` 对 `http`、`https`、`socks5` URL 只保留 scheme/host/port/path。
+- URL credentials、query string 和 fragment 会被移除。
+- Authorization/Bearer、token assignment、本地路径和 IP literal redaction 行为继续保留。
+- 复用该 helper 的 Proxy Manager、Profile CSV preview、Profile operations、Automation task viewer 和 ProfileViewer 自动继承。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "removes URL query strings"
+# RED then GREEN；旧实现保留 query/fragment
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/ProxyManagerPage.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx src/components/ProfileViewer.test.tsx src/components/AutomationTaskLogViewer.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx
+# 7 files passed, 126 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、raw API payload、proxy/profile/task persistence、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared public error URL release-evidence 边界。
