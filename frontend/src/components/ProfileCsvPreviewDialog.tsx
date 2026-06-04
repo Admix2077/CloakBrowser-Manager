@@ -14,6 +14,8 @@ import { TagBadge } from "./Badge";
 const PROFILE_CSV_SAMPLE = "name,proxy,tags,notes,template,platform,locale,timezone";
 const PROFILE_CSV_SENSITIVE_FIELD_RE =
   /"?[^,\r\n"]*\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b[^,\r\n"]*"?/gi;
+const PROFILE_CSV_LABEL_SENSITIVE_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 
 interface ProfileCsvPreviewDialogProps {
   onClose: () => void;
@@ -351,7 +353,11 @@ function publicProfileCsvVisibleText(value: string): string {
 }
 
 function publicProfileCsvPreviewLabel(value: string): string {
-  return publicErrorText(value) || "unknown";
+  const text = value.trim();
+  if (!text) return "unknown";
+  const publicText = publicErrorText(text);
+  if (PROFILE_CSV_LABEL_SENSITIVE_RE.test(text) && publicText === text) return "unknown";
+  return publicText || "unknown";
 }
 
 function HeaderCell({ children, className = "" }: { children: ReactNode; className?: string }) {

@@ -309,6 +309,62 @@ describe("ProfileCsvPreviewDialog", () => {
     }
   });
 
+  it("folds marker-bearing preview row metadata before rendering evidence", async () => {
+    mockPreviewProfileImport.mockResolvedValueOnce({
+      total: 1,
+      valid: 1,
+      invalid: 0,
+      rows: [
+        {
+          line_number: 2,
+          ok: true,
+          errors: [],
+          source: {
+            name: "Imported Profile",
+            proxy: "http://user:hiddenpass@proxy.example:8080",
+          },
+          profile: {
+            ...validPreview.rows[0].profile!,
+            name: "api_key-profile-row-name-marker",
+            template_id: "client_secret-profile-row-template-marker",
+            platform: "private_key-profile-row-platform-marker",
+            locale: "x-api-key-profile-row-locale-marker",
+            timezone: "access_token-profile-row-timezone-marker",
+            proxy: "session_id-profile-row-proxy-marker",
+          },
+        },
+      ],
+    });
+
+    render(<ProfileCsvPreviewDialog onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Profile CSV content"), {
+      target: { value: "name,proxy\nImported,http://user:hiddenpass@proxy.example:8080" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview CSV" }));
+
+    const table = await screen.findByRole("table", { name: "Profile CSV preview" });
+    expect(within(table).getAllByText("unknown").length).toBeGreaterThanOrEqual(6);
+
+    const renderedEvidence = [
+      table.textContent,
+      ...Array.from(table.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+      "x-api-key",
+      "access_token",
+      "session_id",
+      "hiddenpass",
+      "user:",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("redacts preview row proxy evidence without changing submitted import CSV", async () => {
     const leakMarker = "profile-csv-proxy-secret";
     const rawProxy =
