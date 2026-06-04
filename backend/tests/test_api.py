@@ -4307,7 +4307,9 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
         "api_key=api-key-secret x-api-key: header-key-secret "
         "access_token=access-token-secret refresh_token=refresh-token-secret "
         "session_id=session-id-secret client_secret=client-secret-value "
-        "private_key=private-key-secret"
+        "private_key=private-key-secret "
+        "api_key-console-marker x-api-key-console-marker "
+        "session_id-console-marker private_key-console-marker"
     )
     message.location = {
         "url": "https://user:pass@example.com/static/app.js?authorization=super-secret#frag",
@@ -4328,7 +4330,8 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
                 "Authorization=[redacted] Authorization=[redacted] Cookie=[redacted] "
                 "api_key=[redacted] x-api-key=[redacted] "
                 "access_token=[redacted] refresh_token=[redacted] "
-                "session_id=[redacted] client_secret=[redacted] private_key=[redacted]"
+                "session_id=[redacted] client_secret=[redacted] private_key=[redacted] "
+                "[redacted] [redacted] [redacted] [redacted]"
             ),
             "location": {
                 "url": "https://example.com/static/app.js",
@@ -4350,6 +4353,10 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
     assert "session-id-secret" not in str(resp.json())
     assert "client-secret-value" not in str(resp.json())
     assert "private-key-secret" not in str(resp.json())
+    assert "api_key-console-marker" not in str(resp.json())
+    assert "x-api-key-console-marker" not in str(resp.json())
+    assert "session_id-console-marker" not in str(resp.json())
+    assert "private_key-console-marker" not in str(resp.json())
     assert "user:pass" not in str(resp.json())
     assert "?token" not in str(resp.json())
     assert "#frag" not in str(resp.json())

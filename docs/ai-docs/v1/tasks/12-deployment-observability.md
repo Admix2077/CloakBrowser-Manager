@@ -8010,3 +8010,43 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw CSV source、CSV parser、backend import request payload、profile persistence、provider/proxy/template persistence、raw API payload schemas、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Automation console marker text guardrail
+
+背景：
+
+- Automation console logs API 会返回最近 page console message 作为 runtime/worker release evidence。
+- 旧 `_automation_redact_text()` 已覆盖 URL、Authorization/Bearer、Cookie 和赋值型 `api_key=...` / `session_id=...` / `private_key=...`，但 `api_key-console-marker`、`x-api-key-console-marker`、`session_id-console-marker`、`private_key-console-marker` 这类 marker-only console text 仍可能进入 response JSON。
+- 当前策略下，底层/第三方 fingerprint 检测失败继续标阻塞；本轮继续收 Manager 自己可控的 Automation API evidence 边界。
+
+已覆盖：
+
+- `_automation_redact_text()` 新增非赋值型 marker token redaction，覆盖 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 marker。
+- 正则避开后面紧跟 `:` 或 `=` 的 key，因此保留现有 `api_key=[redacted]`、`x-api-key=[redacted]` 等赋值型输出语义。
+- console log response 中 marker-only token 返回 `[redacted]`；URL/Authorization/Cookie/assignment redaction 保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs_redacts_sensitive_text"
+# RED: 旧 console log response 原样返回 api_key-console-marker / x-api-key-console-marker / session_id-console-marker / private_key-console-marker；GREEN: 1 passed, 258 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs or automation_network_summary or run_"
+# 55 passed, 204 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 655 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 Automation console log response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw page console storage、automation task storage、automation worker lease/run behavior、profile/proxy/template persistence、runtime session storage、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

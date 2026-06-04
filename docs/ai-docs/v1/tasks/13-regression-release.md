@@ -7692,3 +7692,43 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw CSV source、CSV parser、backend import request payload、profile persistence、provider/proxy/template persistence、raw API payload schemas、database persistence、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV source marker release boundary。
+
+## 2026-06-04 Automation console marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation console logs API，因为 page console message 会作为 automation worker/runtime 的低敏 evidence。
+- 旧 console text redaction 已覆盖 URL、Authorization/Bearer、Cookie 和赋值型 sensitive fields，但 `api_key-console-marker`、`x-api-key-console-marker`、`session_id-console-marker`、`private_key-console-marker` 这类 marker-only 文本仍可能进入 response JSON。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Automation API release-evidence 边界。
+
+已覆盖：
+
+- Automation console log response 现在会把 marker-only sensitive text token 折叠为 `[redacted]`。
+- marker 词覆盖 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 token。
+- 赋值型 `api_key=...`、`x-api-key: ...`、URL、Authorization/Bearer 和 Cookie redaction 输出保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs_redacts_sensitive_text"
+# RED then GREEN；旧 console log response 暴露 api_key-console-marker / x-api-key-console-marker / session_id-console-marker / private_key-console-marker；GREEN 1 passed, 258 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k "automation_console_logs or automation_network_summary or run_"
+# 55 passed, 204 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 655 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw page console storage、automation task storage、automation worker lease/run behavior、profile/proxy/template persistence、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation console marker release boundary。

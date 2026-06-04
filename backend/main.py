@@ -199,6 +199,12 @@ _AUTOMATION_SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"\s*[:=]\s*([^\s&#,;]+)",
     re.IGNORECASE,
 )
+_AUTOMATION_SENSITIVE_MARKER_RE = re.compile(
+    r"\b(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|session[_-]?id|"
+    r"viewer[_-]?token|x[_-]?api[_-]?key)(?!\s*[:=])[A-Za-z0-9_.-]*\b",
+    re.IGNORECASE,
+)
 _AUTOMATION_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
 _AUTOMATION_INVALID_PAGE_REF = "invalid"
 
@@ -4968,6 +4974,7 @@ def _automation_redact_text(text: str) -> str:
         lambda match: f"{match.group(1)}=[redacted]",
         redacted,
     )
+    redacted = _AUTOMATION_SENSITIVE_MARKER_RE.sub("[redacted]", redacted)
     return _AUTOMATION_BEARER_TOKEN_RE.sub("Bearer [redacted]", redacted)
 
 
