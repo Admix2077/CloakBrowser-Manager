@@ -192,6 +192,46 @@ describe("ProfileCsvPreviewDialog", () => {
     await waitFor(() => expect(mockImportProfiles).toHaveBeenCalledWith(rawCsv));
   });
 
+  it("folds marker-bearing preview textarea evidence without changing submitted import CSV", async () => {
+    const rawName = "api_key-profile-csv-name-marker";
+    const rawTag = "client_secret-profile-csv-tag-marker";
+    const rawNotes = "private_key-profile-csv-notes-marker";
+    const rawCsv = [
+      "name,proxy,tags,notes",
+      `"${rawName}",http://user:hiddenpass@marker.proxy.example:8080,"${rawTag}","${rawNotes}"`,
+    ].join("\n");
+    mockPreviewProfileImport.mockResolvedValueOnce(validPreview);
+    mockImportProfiles.mockResolvedValueOnce({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+    });
+
+    render(<ProfileCsvPreviewDialog onClose={vi.fn()} />);
+
+    const textarea = screen.getByLabelText("Profile CSV content") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: rawCsv } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview CSV" }));
+
+    await waitFor(() => expect(mockPreviewProfileImport).toHaveBeenCalledWith(rawCsv));
+    expect(textarea.value).toContain("unknown");
+    expect(textarea.value).toContain("http://marker.proxy.example:8080");
+
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+      "hiddenpass",
+      "user:",
+    ]) {
+      expect(textarea.value).not.toContain(leaked);
+    }
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create valid profiles" }));
+    await waitFor(() => expect(mockImportProfiles).toHaveBeenCalledWith(rawCsv));
+  });
+
   it("redacts preview row profile metadata from rendered evidence", async () => {
     const leakMarker = "profile-csv-row-secret";
     mockPreviewProfileImport.mockResolvedValueOnce({

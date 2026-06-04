@@ -12,6 +12,8 @@ import { publicErrorMessage, publicErrorText } from "../lib/errorDisplay";
 import { TagBadge } from "./Badge";
 
 const PROFILE_CSV_SAMPLE = "name,proxy,tags,notes,template,platform,locale,timezone";
+const PROFILE_CSV_SENSITIVE_FIELD_RE =
+  /"?[^,\r\n"]*\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b[^,\r\n"]*"?/gi;
 
 interface ProfileCsvPreviewDialogProps {
   onClose: () => void;
@@ -344,7 +346,7 @@ function ProfileCsvPreviewRowView({ row }: { row: ProfileImportPreviewRow | Prof
 function publicProfileCsvVisibleText(value: string): string {
   return value
     .split(/\r?\n/)
-    .map((line) => publicErrorText(line))
+    .map((line) => publicErrorText(line).replace(PROFILE_CSV_SENSITIVE_FIELD_RE, "unknown"))
     .join("\n");
 }
 

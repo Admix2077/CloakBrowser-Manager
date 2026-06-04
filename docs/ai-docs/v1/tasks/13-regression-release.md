@@ -7502,3 +7502,31 @@ npm --prefix frontend test -- --run ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw CSV source、CSV parser、CSV import payload、proxy asset persistence、provider presets、profile assignment payload、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy CSV textarea marker release boundary。
+
+## 2026-06-04 Profile CSV textarea marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 Profile CSV import preview dialog，因为 backend preview/import raw CSV 与 textarea visible evidence 是分离路径。
+- 旧 textarea visible boundary 已覆盖 URL credentials、Authorization/Bearer、assignment-style token/password/secret/cookie、path 和 IP，但 `api_key-profile-csv-name-marker`、`client_secret-profile-csv-tag-marker`、`private_key-profile-csv-notes-marker` 这类 marker-only CSV 字段仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Profile CSV release-evidence 边界。
+
+已覆盖：
+
+- Profile CSV textarea visible text 会把含 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only 的 CSV 字段折叠为 `unknown`。
+- URL credential redaction 继续隐藏 username/password，同时保留低敏 endpoint host/port。
+- `lastPreviewCsvText`、backend preview request 和 import payload 继续使用 raw CSV source；redaction 只影响 textarea visible evidence。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run ProfileCsvPreviewDialog.test.tsx
+# RED then GREEN；旧 Profile CSV textarea visible value 暴露 api_key/client_secret/private_key marker；GREEN 7 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw CSV source、CSV parser、backend preview/import payload、profile persistence、provider/proxy/template persistence、raw API payload、backend schemas、database persistence、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV textarea marker release boundary。
