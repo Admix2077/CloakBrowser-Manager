@@ -8305,3 +8305,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw profile launch arg persistence、profile create/update request contract、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile CSV source hyphen marker guardrail
+
+背景：
+
+- Profile CSV preview/import response 会把每行 `source` 字段返回给 API/UI/release evidence。
+- 旧 `_redact_csv_source_text()` 已覆盖 URL/path/Auth、`token`/`secret`/`password`/`cookie` 和下划线 marker，例如 `api_key-profile-csv-source-marker`、`session_id-profile-csv-source-marker`。
+- 短横线形式 `api-key-profile-csv-source-marker`、`session-id-profile-csv-source-marker`、`private-key-profile-csv-source-marker` 仍可能作为 CSV source evidence 原样返回。
+
+已覆盖：
+
+- `_SENSITIVE_CSV_SOURCE_MARKERS` 新增 `api-key`、`session-id`、`private-key`、`x_api_key` 兼容 marker。
+- CSV preview/import response 的 supported source fields 会折叠短横线 marker 为 `[redacted]`。
+- CSV parser、raw request、profile create data、import confirmation、proxy redaction 和 bulk audit 语义不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q -k profile_csv_import_responses_redact_marker_source_fields
+# RED: 旧 CSV source response 原样返回 api-key-profile-csv-source-marker；GREEN: 1 passed, 20 deselected
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q -k "source_fields or marker_source_fields or missing_template_ref or proxy_error_detail or import_writes_redacted_bulk_audit_event"
+# 9 passed, 12 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 Profile CSV preview/import response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 CSV 原始输入、profile persistence、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

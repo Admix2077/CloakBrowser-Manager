@@ -199,18 +199,27 @@ def test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers(
 def test_profile_csv_import_responses_redact_marker_source_fields(
     app_client: TestClient,
 ):
-    marker_values = [
-        "api_key-profile-csv-source-marker",
-        "x-api-key-profile-csv-source-marker",
-        "session_id-profile-csv-source-marker",
-        "private_key-profile-csv-source-marker",
+    marker_rows = [
+        [
+            "api_key-profile-csv-source-marker",
+            "x-api-key-profile-csv-source-marker",
+            "session_id-profile-csv-source-marker",
+            "private_key-profile-csv-source-marker",
+        ],
+        [
+            "api-key-profile-csv-source-marker",
+            "client-secret-profile-csv-source-marker",
+            "session-id-profile-csv-source-marker",
+            "private-key-profile-csv-source-marker",
+        ],
     ]
     csv_text = "\n".join(
         [
             "name,tags,notes,template,platform",
-            ",".join(marker_values + ["linux"]),
+            *[",".join(marker_values + ["linux"]) for marker_values in marker_rows],
         ]
     )
+    marker_values = [marker for row in marker_rows for marker in row]
 
     endpoints = [
         ("/api/profiles/import/preview", {"csv_text": csv_text}, "rows"),
@@ -220,12 +229,14 @@ def test_profile_csv_import_responses_redact_marker_source_fields(
         resp = app_client.post(endpoint, json=payload)
 
         assert resp.status_code == 200
-        row = resp.json()[rows_key][0]
-        assert row["ok"] is False
-        assert row["source"]["name"] == "[redacted]"
-        assert row["source"]["tags"] == "[redacted]"
-        assert row["source"]["notes"] == "[redacted]"
-        assert row["source"]["template"] == "[redacted]"
+        rows = resp.json()[rows_key]
+        assert len(rows) == 2
+        for row in rows:
+            assert row["ok"] is False
+            assert row["source"]["name"] == "[redacted]"
+            assert row["source"]["tags"] == "[redacted]"
+            assert row["source"]["notes"] == "[redacted]"
+            assert row["source"]["template"] == "[redacted]"
         for marker in marker_values:
             assert marker not in resp.text
 

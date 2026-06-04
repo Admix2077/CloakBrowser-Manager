@@ -7987,3 +7987,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw profile launch arg persistence、profile create/update request contract、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile response launch arg marker release boundary。
+
+## 2026-06-04 Profile CSV source hyphen marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 Profile CSV preview/import response，因为 row `source` 会进入 API/UI 和回归证据。
+- 旧 CSV source sanitizer 已覆盖 URL/path/Auth、token/secret/password/cookie 以及下划线 marker，但 `api-key-profile-csv-source-marker`、`session-id-profile-csv-source-marker`、`private-key-profile-csv-source-marker` 这类短横线 marker 仍可能作为普通 source text。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 CSV response release-evidence 边界。
+
+已覆盖：
+
+- Profile CSV source sanitizer 现在拒绝 key/id 型短横线 marker。
+- Preview 和 import responses 的 supported source fields 对同类 marker 返回 `[redacted]`。
+- 原始 CSV request、parser、profile create data、proxy URL redaction、confirmation 和 bulk audit 语义保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q -k profile_csv_import_responses_redact_marker_source_fields
+# RED then GREEN；旧 CSV source response 暴露 api-key-profile-csv-source-marker；GREEN 1 passed, 20 deselected
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q -k "source_fields or marker_source_fields or missing_template_ref or proxy_error_detail or import_writes_redacted_bulk_audit_event"
+# 9 passed, 12 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 CSV 原始输入、profile persistence、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV source hyphen-marker release boundary。

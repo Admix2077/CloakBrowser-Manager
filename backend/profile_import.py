@@ -103,14 +103,18 @@ _SENSITIVE_TEMPLATE_ARG_RE = re.compile(
 _SENSITIVE_CSV_SOURCE_MARKERS = (
     "access_token",
     "api_key",
+    "api-key",
     "auth_token",
     "client_secret",
     "private_key",
+    "private-key",
     "refresh_token",
     "runtime_service_token",
     "session_id",
+    "session-id",
     "service_token",
     "viewer_token",
+    "x_api_key",
     "x-api-key",
 )
 
