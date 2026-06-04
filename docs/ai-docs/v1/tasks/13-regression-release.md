@@ -7732,3 +7732,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw page console storage、automation task storage、automation worker lease/run behavior、profile/proxy/template persistence、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation console marker release boundary。
+
+## 2026-06-04 GeoIP source marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 GeoIP/proxy source evidence，因为 `last_geoip_source`、`last_check_source` 会进入 profile/proxy response、health 和 diagnostics。
+- 旧 GeoIP source boundary 已覆盖 URL/path/query/Auth/token/secret/password/cookie，但 `api_key-geoip-source-marker`、`x-api-key-geoip-source-marker`、`session_id-geoip-source-marker`、`private_key-geoip-source-marker` 这类 marker-only source label 仍可能被当成公开 source。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 GeoIP/proxy release-evidence 边界。
+
+已覆盖：
+
+- `public_geoip_source()` 现在会把 marker-only sensitive source label 折叠为 `unknown`。
+- marker 词覆盖 access/api/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 source。
+- `ip-api`、`ipapi.co`、`ipwho.is`、`qa` 等低敏 source 继续保留。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q -k marker_only_sensitive_sources
+# RED then GREEN；旧 public_geoip_source 暴露 api_key-geoip-source-marker；GREEN 1 passed, 15 deselected
+
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q
+# 16 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_proxies.py -q -k "source or geoip_source or last_check_source or success_source"
+# 3 passed, 65 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 656 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 GeoIP provider 请求、proxy URL、profile/proxy persistence、automation worker behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 GeoIP source marker release boundary。

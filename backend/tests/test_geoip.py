@@ -147,6 +147,27 @@ def test_geoip_result_as_dict_filters_sensitive_public_fields():
         assert leaked not in serialized
 
 
+def test_public_geoip_source_filters_marker_only_sensitive_sources():
+    sensitive_sources = [
+        "api_key-geoip-source-marker",
+        "x-api-key-geoip-source-marker",
+        "session_id-geoip-source-marker",
+        "private_key-geoip-source-marker",
+    ]
+
+    assert geoip.public_geoip_source("ip-api") == "ip-api"
+    assert geoip.public_geoip_source("qa") == "qa"
+    for source in sensitive_sources:
+        assert geoip.public_geoip_source(source) == "unknown"
+
+    serialized = json.dumps(
+        [geoip.GeoIPResult(None, None, None, None, source).as_dict() for source in sensitive_sources],
+        sort_keys=True,
+    )
+    for source in sensitive_sources:
+        assert source not in serialized
+
+
 @pytest.mark.asyncio
 async def test_resolve_network_geo_warning_does_not_log_raw_lookup_exception(
     monkeypatch: pytest.MonkeyPatch,

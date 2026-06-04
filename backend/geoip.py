@@ -49,7 +49,11 @@ _PUBLIC_GEOIP_LOCALE_RE = re.compile(r"^[A-Za-z]{2,3}(?:-(?:[A-Za-z]{2,8}|\d{3})
 _PUBLIC_GEOIP_TIMEZONE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._+-]*(?:/[A-Za-z0-9._+-]+){0,3}$")
 _PUBLIC_GEOIP_SOURCE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
 _SENSITIVE_GEOIP_SOURCE_RE = re.compile(
-    r"https?://|socks5://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
+    r"https?://|socks5://|@|[/?#=]|"
+    r"\b(authorization|bearer|token|secret|password|cookie|auth|"
+    r"access[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|"
+    r"session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)\b",
     re.IGNORECASE,
 )
 

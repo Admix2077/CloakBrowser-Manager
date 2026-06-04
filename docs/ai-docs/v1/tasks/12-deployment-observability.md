@@ -8050,3 +8050,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw page console storage、automation task storage、automation worker lease/run behavior、profile/proxy/template persistence、runtime session storage、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 GeoIP source marker guardrail
+
+背景：
+
+- GeoIP source 会进入 profile `last_geoip_source`、proxy `last_check_source`、health/diagnostics/release evidence。
+- 旧 `public_geoip_source()` 已拒绝 URL、path、query、Authorization/Bearer、token、secret、password、cookie、auth，但 `api_key-geoip-source-marker`、`x-api-key-geoip-source-marker`、`session_id-geoip-source-marker`、`private_key-geoip-source-marker` 这类 marker-only source 仍可能作为公开 source label 返回。
+- 当前策略下，底层/第三方 fingerprint 检测失败继续标阻塞；本轮继续收 Manager 自己可控的 GeoIP/proxy evidence 边界。
+
+已覆盖：
+
+- `_SENSITIVE_GEOIP_SOURCE_RE` 现在识别 access/api/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 marker。
+- `public_geoip_source()` 对 marker-only source 返回 `unknown`，同时保留 `ip-api`、`ipapi.co`、`ipwho.is`、`qa` 这类低敏 source。
+- GeoIP lookup/provider fallback、proxy check 行为、profile persistence 和 browser fingerprint 行为不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q -k marker_only_sensitive_sources
+# RED: 旧 public_geoip_source 原样返回 api_key-geoip-source-marker；GREEN: 1 passed, 15 deselected
+
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q
+# 16 passed
+
+.venv/bin/python -m pytest backend/tests/test_health.py backend/tests/test_proxies.py -q -k "source or geoip_source or last_check_source or success_source"
+# 3 passed, 65 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 656 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 GeoIP/proxy source response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 GeoIP provider 请求、proxy URL、profile/proxy persistence、automation worker behavior、runtime session storage、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
