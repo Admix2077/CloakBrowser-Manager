@@ -411,6 +411,41 @@ def test_proxy_api_responses_redact_persisted_sensitive_selection_fields(app_cli
             assert leaked not in serialized
 
 
+def test_proxy_api_responses_redact_marker_only_provider_and_city_labels(app_client: TestClient):
+    create = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Marker proxy metadata",
+            "url": "http://user:hiddenpass@marker-metadata.example:8080",
+            "provider": "ProxyCo",
+            "city": "Tokyo",
+        },
+    )
+    assert create.status_code == 201
+    proxy_id = create.json()["id"]
+    provider_marker = "api_key-proxy-provider-marker"
+    city_marker = "session_id-proxy-city-marker"
+
+    updated = db.update_proxy(
+        proxy_id,
+        provider=provider_marker,
+        city=city_marker,
+    )
+    assert updated is not None
+
+    detail = app_client.get(f"/api/proxies/{proxy_id}")
+    listed = app_client.get("/api/proxies")
+
+    assert detail.status_code == 200
+    assert listed.status_code == 200
+    for data in (detail.json(), listed.json()[0]):
+        assert data["provider"] is None
+        assert data["city"] is None
+        serialized = json.dumps(data, sort_keys=True)
+        assert provider_marker not in serialized
+        assert city_marker not in serialized
+
+
 def test_proxy_api_responses_redact_persisted_sensitive_location_labels(app_client: TestClient):
     create = app_client.post(
         "/api/proxies",

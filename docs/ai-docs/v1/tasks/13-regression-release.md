@@ -7775,3 +7775,43 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 GeoIP provider 请求、proxy URL、profile/proxy persistence、automation worker behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 GeoIP source marker release boundary。
+
+## 2026-06-04 Proxy metadata marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 Proxy Manager/proxy-country evidence，因为 provider/city metadata 会进入 proxy list/detail response、assignment UI 和 smoke 记录。
+- 旧 backend proxy metadata boundary 已覆盖 URL/path/query/Auth/token/secret/password/cookie，但 `api_key-proxy-provider-marker`、`session_id-proxy-city-marker` 这类 marker-only provider/city label 仍可能被当成公开 metadata。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 proxy release-evidence 边界。
+
+已覆盖：
+
+- Proxy provider/city sanitizer 现在会把 marker-only sensitive metadata 折叠为 `null`。
+- audit name sanitizer 同步拒绝同类 marker-only name。
+- 低敏 provider/city/audit name 继续保留，proxy URL、proxy check、GeoIP 和 persistence 行为不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q -k marker_only_provider_and_city_labels
+# RED then GREEN；旧 proxy detail/list response 暴露 api_key-proxy-provider-marker；GREEN 1 passed, 42 deselected
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q -k "provider or location_labels or selection_fields or proxy_crud_api or audit_name"
+# 9 passed, 34 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 657 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 proxy asset persistence、proxy URL、proxy check behavior、GeoIP provider 请求、profile persistence、automation worker behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy metadata marker release boundary。

@@ -724,14 +724,22 @@ _PROXY_CHECK_ERROR_DETAIL = "Proxy check failed"
 _PUBLIC_PROXY_CHECK_STATUSES = {"good", "error"}
 _PUBLIC_PROXY_PROVIDER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
 _SENSITIVE_PROXY_PROVIDER_RE = re.compile(
-    r"https?://|socks[45]://|@|[/?#=]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
+    r"https?://|socks[45]://|@|[/?#=]|"
+    r"\b(authorization|bearer|token|secret|password|cookie|auth|"
+    r"access[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|"
+    r"session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)\b",
     re.IGNORECASE,
 )
 _PUBLIC_PROXY_CITY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._(),-]{0,79}$")
 _PUBLIC_PROXY_ASN_RE = re.compile(r"^AS([0-9]{1,10})$", re.IGNORECASE)
 _PUBLIC_AUDIT_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()[\]-]{0,79}$")
 _SENSITIVE_AUDIT_NAME_RE = re.compile(
-    r"https?://|socks[45]://|@|[/?#=:]|\b(authorization|bearer|token|secret|password|cookie|auth)\b",
+    r"https?://|socks[45]://|@|[/?#=:]|"
+    r"\b(authorization|bearer|token|secret|password|cookie|auth|"
+    r"access[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|"
+    r"session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)\b",
     re.IGNORECASE,
 )
 _PUBLIC_PROFILE_RUNTIME_STATUSES = {"running", "stopped"}

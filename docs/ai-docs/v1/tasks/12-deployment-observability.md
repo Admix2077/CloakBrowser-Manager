@@ -8093,3 +8093,43 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 GeoIP provider 请求、proxy URL、profile/proxy persistence、automation worker behavior、runtime session storage、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Proxy metadata marker guardrail
+
+背景：
+
+- Proxy provider/city metadata 会进入 proxy list/detail response、assignment UI、proxy-country smoke 和 release evidence。
+- 旧 backend proxy metadata sanitizer 已拒绝 URL、path、query、Authorization/Bearer、token、secret、password、cookie、auth，但 `api_key-proxy-provider-marker`、`session_id-proxy-city-marker` 这类 marker-only provider/city 仍可能作为公开 metadata 返回。
+- 当前策略下，底层/第三方 fingerprint 检测失败继续标阻塞；本轮继续收 Manager 自己可控的 proxy response/audit evidence 边界。
+
+已覆盖：
+
+- `_SENSITIVE_PROXY_PROVIDER_RE` 现在识别 access/api/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 marker，覆盖 provider 和 city sanitizer。
+- `_SENSITIVE_AUDIT_NAME_RE` 同步加入相同 marker 词，避免 proxy/profile audit name evidence 出现同类 marker。
+- Proxy list/detail response 中 marker-only provider/city 返回 `null`；普通 `MobileProxy`、`Tokyo`、`ProxyCo` 等低敏 metadata 保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q -k marker_only_provider_and_city_labels
+# RED: 旧 proxy detail/list response 原样返回 api_key-proxy-provider-marker；GREEN: 1 passed, 42 deselected
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py -q -k "provider or location_labels or selection_fields or proxy_crud_api or audit_name"
+# 9 passed, 34 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 657 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 proxy metadata response/audit evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 proxy asset persistence、proxy URL、proxy check behavior、GeoIP provider 请求、profile persistence、automation worker behavior、runtime session storage、viewer token schema、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
