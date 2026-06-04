@@ -7418,3 +7418,31 @@ npm --prefix frontend test -- --run ProfileSummaryPanel.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw profile device values、form inputs、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileSummary device label marker release boundary。
+
+## 2026-06-04 Health warning summary marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 HealthBadge、ProfileList、ProfileSummaryPanel 等健康 warning visible/title evidence。
+- 旧 shared health warning boundary 已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 `api_key-health-warning-marker`、`client_secret-health-warning-marker`、`private_key-health-warning-marker` 这类 marker-only 字符串仍可能原样显示。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 health warning release-evidence 边界。
+
+已覆盖：
+
+- `getHealthWarningSummary` 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only warning summaries。
+- 污染 marker-only warning summary 显示为 `unknown`，并覆盖 HealthBadge visible/title evidence。
+- 既有带 Authorization/token/path/IP 的 warning summary redaction 继续保留，普通健康 warning 继续显示。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run HealthBadge.test.tsx
+# RED then GREEN；旧 HealthBadge warning summary 暴露 api_key/client_secret/private_key marker；GREEN 7 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw health response、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 shared health warning summary marker release boundary。

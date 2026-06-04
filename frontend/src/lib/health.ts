@@ -1,6 +1,9 @@
 import type { HealthStatus, ProfileHealthResponse } from "./api";
 import { publicErrorText, publicProfileGeoipLabel } from "./errorDisplay";
 
+const HEALTH_WARNING_SENSITIVE_RE =
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+
 export function getHealthLabel(status: HealthStatus | undefined): string {
   switch (status) {
     case "good":
@@ -67,7 +70,10 @@ export function getHealthWarningSummary(
   health: ProfileHealthResponse | null | undefined,
 ): string | null {
   const message = health?.warnings.find((warning) => warning.message.trim())?.message;
-  return message ? publicErrorText(message) : null;
+  if (!message) return null;
+  const publicText = publicErrorText(message);
+  if (HEALTH_WARNING_SENSITIVE_RE.test(message) && publicText === message) return "unknown";
+  return publicText || "unknown";
 }
 
 export function getHealthGeoipParts(

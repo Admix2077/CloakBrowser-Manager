@@ -7734,3 +7734,31 @@ npm --prefix frontend test -- --run ProfileSummaryPanel.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw profile device values、form inputs、raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Health warning summary marker guardrail
+
+背景：
+
+- `getHealthWarningSummary` 是 HealthBadge、ProfileList、ProfileSummaryPanel 等健康 warning visible/title evidence 的共享边界。
+- 旧 warning summary filter 已覆盖 Authorization/Bearer、assignment-style token/password/secret/cookie、path、IP 和 URL credential 情况，但 `api_key-health-warning-marker`、`client_secret-health-warning-marker`、`private_key-health-warning-marker` 这类 marker-only 字符串仍可能原样渲染。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 health warning UI evidence 边界。
+
+已覆盖：
+
+- `getHealthWarningSummary` 现在会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker-only warning summaries。
+- marker-only 健康 warning 污染值折叠为 `unknown`，同时覆盖 visible text 和 `title` evidence。
+- 既有带 Authorization/token/path/IP 的 warning summary redaction 保持不变，普通健康 warning 继续显示。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run HealthBadge.test.tsx
+# RED: 旧 HealthBadge warning summary 原样渲染 api_key/client_secret/private_key marker；GREEN: 7 passed
+```
+
+边界：
+
+- 这是 frontend health warning visible/title evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw health response、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

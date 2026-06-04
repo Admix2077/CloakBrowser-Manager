@@ -67,6 +67,36 @@ describe("HealthBadge", () => {
     expect(rendered).not.toContain("/data/profiles/profile-1");
   });
 
+  it("folds marker-bearing warning summaries before rendering evidence", () => {
+    render(
+      <HealthBadge
+        health={health("warning", [
+          {
+            code: "proxy_check_failed",
+            message: "api_key-health-warning-marker client_secret-health-warning-marker private_key-health-warning-marker",
+            severity: "warning",
+            action: "检查代理。",
+          },
+        ])}
+      />,
+    );
+
+    expect(screen.getAllByText("unknown").length).toBeGreaterThan(0);
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      "api_key",
+      "client_secret",
+      "private_key",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("renders error status as unavailable", () => {
     render(<HealthBadge health={health("error")} />);
 
