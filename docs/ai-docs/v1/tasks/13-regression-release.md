@@ -7652,3 +7652,43 @@ npm --prefix frontend test -- --run errorDisplay.test.ts ProfileTable.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw operation errors、profile/proxy/task API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 bulk feedback marker release boundary。
+
+## 2026-06-04 Profile CSV source marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 Profile CSV preview/import API response，因为 `row.source` 会作为低敏 release evidence 进入调试和回归记录。
+- 旧后端 source redaction 已覆盖 URL/path/Auth/token/secret/password/cookie，但 `api_key-profile-csv-source-marker`、`x-api-key-profile-csv-source-marker`、`session_id-profile-csv-source-marker`、`private_key-profile-csv-source-marker` 这类 marker-only 字段仍可能出现在 response JSON。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 API release-evidence 边界。
+
+已覆盖：
+
+- Profile CSV preview 和正式 import response 的 `row.source` 现在会把 marker-only name/tags/notes/template 字段折叠为 `[redacted]`。
+- marker 词覆盖 `access_token`、`api_key`、`auth_token`、`client_secret`、`private_key`、`refresh_token`、`runtime_service_token`、`session_id`、`service_token`、`viewer_token`、`x-api-key`。
+- raw CSV request、CSV parser、profile create data、database persistence、frontend textarea/table visible redaction 和 browser fingerprint 行为不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q -k marker_source_fields
+# RED then GREEN；旧 row.source.name 暴露 api_key-profile-csv-source-marker；GREEN 1 passed, 20 deselected
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 21 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 655 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw CSV source、CSV parser、backend import request payload、profile persistence、provider/proxy/template persistence、raw API payload schemas、database persistence、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV source marker release boundary。

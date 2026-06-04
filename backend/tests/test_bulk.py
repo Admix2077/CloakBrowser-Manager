@@ -196,6 +196,40 @@ def test_profile_csv_import_preview_redacts_sensitive_source_fields_and_headers(
     assert "authorization=Bearer-super-secret" not in serialized
 
 
+def test_profile_csv_import_responses_redact_marker_source_fields(
+    app_client: TestClient,
+):
+    marker_values = [
+        "api_key-profile-csv-source-marker",
+        "x-api-key-profile-csv-source-marker",
+        "session_id-profile-csv-source-marker",
+        "private_key-profile-csv-source-marker",
+    ]
+    csv_text = "\n".join(
+        [
+            "name,tags,notes,template,platform",
+            ",".join(marker_values + ["linux"]),
+        ]
+    )
+
+    endpoints = [
+        ("/api/profiles/import/preview", {"csv_text": csv_text}, "rows"),
+        ("/api/profiles/import", {"csv_text": csv_text, "confirm_import": True}, "results"),
+    ]
+    for endpoint, payload, rows_key in endpoints:
+        resp = app_client.post(endpoint, json=payload)
+
+        assert resp.status_code == 200
+        row = resp.json()[rows_key][0]
+        assert row["ok"] is False
+        assert row["source"]["name"] == "[redacted]"
+        assert row["source"]["tags"] == "[redacted]"
+        assert row["source"]["notes"] == "[redacted]"
+        assert row["source"]["template"] == "[redacted]"
+        for marker in marker_values:
+            assert marker not in resp.text
+
+
 def test_profile_csv_import_preview_redacts_sensitive_proxy_error_detail(
     app_client: TestClient,
 ):

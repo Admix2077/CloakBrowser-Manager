@@ -97,6 +97,19 @@ _SENSITIVE_TEMPLATE_ARG_RE = re.compile(
     r"(?:https?://|[?&#]|\bauthorization\b|\bbearer\b|\btoken=|\bpassword=|\bsecret=|\bcookie=)",
     re.IGNORECASE,
 )
+_SENSITIVE_CSV_SOURCE_MARKERS = (
+    "access_token",
+    "api_key",
+    "auth_token",
+    "client_secret",
+    "private_key",
+    "refresh_token",
+    "runtime_service_token",
+    "session_id",
+    "service_token",
+    "viewer_token",
+    "x-api-key",
+)
 
 
 @dataclass(frozen=True)
@@ -563,6 +576,7 @@ def _redact_csv_source_text(value: str) -> str:
         or "@" in value
         or "?" in value
         or "#" in value
+        or any(marker in lowered for marker in _SENSITIVE_CSV_SOURCE_MARKERS)
         or "token" in lowered
         or "secret" in lowered
         or "password" in lowered

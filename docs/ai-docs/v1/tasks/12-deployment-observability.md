@@ -7970,3 +7970,43 @@ npm --prefix frontend test -- --run errorDisplay.test.ts ProfileTable.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw operation errors、profile/proxy/task API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile CSV source marker API guardrail
+
+背景：
+
+- Profile CSV preview/import API response 的 `row.source` 是 release evidence，会返回经过脱敏的原始行摘要。
+- 旧后端 source redaction 已覆盖 URL、path、Authorization/Bearer、token、secret、password 和 cookie，但 `api_key-profile-csv-source-marker`、`x-api-key-profile-csv-source-marker`、`session_id-profile-csv-source-marker`、`private_key-profile-csv-source-marker` 这类 marker-only 字段仍可能进入 JSON response。
+- 前端 visible evidence 已有 Profile CSV marker 防御；本轮补齐后端 API evidence 边界。
+
+已覆盖：
+
+- `_redact_csv_source_text()` 现在会识别 `access_token`、`api_key`、`auth_token`、`client_secret`、`private_key`、`refresh_token`、`runtime_service_token`、`session_id`、`service_token`、`viewer_token`、`x-api-key` marker。
+- Profile CSV preview 与正式 import response 的 `row.source` 对 marker-only name/tags/notes/template 字段返回 `[redacted]`。
+- raw CSV request、CSV parser、profile create data、database persistence 和前端 visible redaction 逻辑不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q -k marker_source_fields
+# RED: 旧 row.source.name 原样返回 api_key-profile-csv-source-marker；GREEN: 1 passed, 20 deselected
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 21 passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 655 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 Profile CSV preview/import response source evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw CSV source、CSV parser、backend import request payload、profile persistence、provider/proxy/template persistence、raw API payload schemas、automation step execution、cookie payload、GeoIP lookup/provider behavior、runtime session storage behavior、viewer behavior、VNC forwarding、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
