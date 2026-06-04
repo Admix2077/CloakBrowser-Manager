@@ -8159,3 +8159,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Runtime external session hyphen-marker release boundary。
+
+## 2026-06-04 Health runtime hyphen marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile health response，因为 health panel 和 release evidence 会显示 profile/runtime 状态。
+- 旧 health runtime sanitizer 已覆盖下划线 marker，但 `api-key-health-runtime-marker`、`session-id-health-runtime-marker`、`private-key-health-runtime-marker` 这类短横线 marker 仍可能作为 profile id 或 automation URL evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 health release-evidence 边界。
+
+已覆盖：
+
+- Health runtime sensitive text filter 现在拒绝 `_` 和 `-` 两种分隔的敏感 marker。
+- Profile health response 对短横线 marker profile id 返回 `unknown`，runtime `automation_url` 返回 `null`。
+- 普通 public health response、runtime missing warnings、audit metadata、URL/Auth/token 和下划线 marker 过滤保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -q -k health_response_sanitizes_non_public_runtime_evidence
+# RED then GREEN；旧 health runtime evidence 保留 api-key-health-runtime-marker automation_url；GREEN 1 passed, 25 deselected
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q -k "health_response_sanitizes_non_public_runtime_evidence or health_warns_when_running_runtime_urls_are_missing or health_check_audit or runtime_lookup or persisted_profile_id"
+# 3 passed, 23 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Health runtime hyphen-marker release boundary。

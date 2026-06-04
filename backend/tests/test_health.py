@@ -213,42 +213,48 @@ def test_health_warns_when_running_runtime_urls_are_missing():
 
 def test_health_response_sanitizes_non_public_runtime_evidence():
     leak_marker = "health-runtime-secret"
-    marker_profile_id = "api_key-health-runtime-marker"
-    marker_automation_url = f"/api/profiles/{marker_profile_id}/automation"
-    result = compute_profile_health(
-        _profile(
-            id=marker_profile_id,
-            last_geoip_ip="23.144.4.92",
-            last_geoip_country_code="US",
-            last_geoip_timezone="America/Los_Angeles",
-            last_geoip_locale="en-US",
-            last_geoip_source="ip-api",
-            last_geoip_resolved_at="2026-05-25T00:00:00Z",
-        ),
-        _runtime(
-            status=f"running Authorization=Bearer {leak_marker}",
-            vnc_ws_port=f"6100 token={leak_marker}",
-            automation_url=marker_automation_url,
-        ),
-        checked_at="2026-05-25T00:05:00Z",
-    )
+    marker_profile_ids = [
+        "api_key-health-runtime-marker",
+        "api-key-health-runtime-marker",
+        "session-id-health-runtime-marker",
+        "private-key-health-runtime-marker",
+    ]
+    for marker_profile_id in marker_profile_ids:
+        marker_automation_url = f"/api/profiles/{marker_profile_id}/automation"
+        result = compute_profile_health(
+            _profile(
+                id=marker_profile_id,
+                last_geoip_ip="23.144.4.92",
+                last_geoip_country_code="US",
+                last_geoip_timezone="America/Los_Angeles",
+                last_geoip_locale="en-US",
+                last_geoip_source="ip-api",
+                last_geoip_resolved_at="2026-05-25T00:00:00Z",
+            ),
+            _runtime(
+                status=f"running Authorization=Bearer {leak_marker}",
+                vnc_ws_port=f"6100 token={leak_marker}",
+                automation_url=marker_automation_url,
+            ),
+            checked_at="2026-05-25T00:05:00Z",
+        )
 
-    assert result.runtime == {
-        "status": "unknown",
-        "vnc_ws_port": None,
-        "automation_url": None,
-    }
-    serialized = result.model_dump_json()
-    for leaked in (
-        leak_marker,
-        "Authorization",
-        "Bearer",
-        "token=",
-        "manager.example",
-        marker_profile_id,
-        marker_automation_url,
-    ):
-        assert leaked not in serialized
+        assert result.runtime == {
+            "status": "unknown",
+            "vnc_ws_port": None,
+            "automation_url": None,
+        }
+        serialized = result.model_dump_json()
+        for leaked in (
+            leak_marker,
+            "Authorization",
+            "Bearer",
+            "token=",
+            "manager.example",
+            marker_profile_id,
+            marker_automation_url,
+        ):
+            assert leaked not in serialized
 
 
 def test_get_profile_health_does_not_perform_network_lookup(app_client: TestClient):

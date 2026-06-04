@@ -8478,3 +8478,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 runtime session create/lookup 语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Health runtime hyphen marker guardrail
+
+背景：
+
+- Profile health response 会把 `profile_id` 和 runtime summary 暴露给 UI/release evidence。
+- 旧 `_SENSITIVE_RUNTIME_TEXT_RE` 已覆盖 URL/Auth/token 和下划线 marker，例如 `api_key-health-runtime-marker`。
+- 短横线 marker 例如 `api-key-health-runtime-marker`、`session-id-health-runtime-marker`、`private-key-health-runtime-marker` 仍可能匹配 public profile id 和 automation URL 形状。
+
+已覆盖：
+
+- Health runtime/profile id sensitive text filter 现在统一支持 `_` 和 `-` 分隔的 access/api/auth/client/private/refresh/session/viewer/x-api-key marker。
+- Health response 会把短横线 marker profile id 折叠为 `unknown`，并把对应 runtime `automation_url` 折叠为 `null`。
+- 现有 URL/Auth/token、下划线 marker、VNC port、runtime status 和普通 public health 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -q -k health_response_sanitizes_non_public_runtime_evidence
+# RED: 旧 health runtime evidence 保留 api-key-health-runtime-marker automation_url；GREEN: 1 passed, 25 deselected
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q -k "health_response_sanitizes_non_public_runtime_evidence or health_warns_when_running_runtime_urls_are_missing or health_check_audit or runtime_lookup or persisted_profile_id"
+# 3 passed, 23 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 health runtime evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 profile health 计算语义之外的 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
