@@ -6813,3 +6813,38 @@ npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 backend request/response schema、raw API payload、profile persistence、cookie payload、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Cookie export download filename release-evidence 边界。
+
+## 2026-06-04 Country badge release-evidence guardrail
+
+背景：
+
+- Country badge 会出现在 Profile operations、Profile summary、Profile rail 和 profile CSV preview 等 release regression 截图/文本 evidence 中。
+- 旧 `CountryBadge` 信任调用方传入的 country 文本；若历史/异常 GeoIP country value 被污染，shared badge 的 visible text/title 仍可能保留非国家码内容。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared UI evidence 边界。
+
+已覆盖：
+
+- `CountryBadge` 只允许 2 位字母国家码，并规范成大写。
+- 非国家码、污染或历史异常 country 文本在 visible/title evidence 中折叠为 `unknown`。
+- 旧 ProfileTable/ProfileSummary GeoIP redaction 断言更新为确认污染 country 经 badge 层折叠。
+- 普通 country code 展示、Profile health/GeoIP API、profile persistence 和 browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/Badge.test.tsx -t "folds non-public country badge labels"
+# RED then GREEN；旧 CountryBadge 暴露污染 country text/title
+
+npm --prefix frontend test -- --run src/components/Badge.test.tsx
+# 1 file passed, 4 tests passed
+
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx src/components/Badge.test.tsx
+# 5 files passed, 74 tests passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 backend request/response schema、GeoIP lookup/provider behavior、profile persistence、profile health API、runtime session/viewer token schema、VNC websocket path、Automation API backend、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CountryBadge release-evidence 边界。

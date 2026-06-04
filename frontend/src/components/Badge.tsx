@@ -3,6 +3,7 @@ import { publicProfileTagLabel } from "../lib/errorDisplay";
 
 type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger" | "muted";
 type BadgeType = "health" | "runtime" | "proxy" | "country" | "tag";
+const PUBLIC_COUNTRY_CODE_RE = /^[A-Za-z]{2}$/;
 
 const toneClassNames: Record<BadgeTone, string> = {
   neutral: "border-slate-200 bg-white text-slate-600",
@@ -102,9 +103,11 @@ export function TagBadge({ tag, color }: { tag: string; color?: string | null })
 }
 
 export function CountryBadge({ country }: { country: string }) {
+  const safeCountry = publicCountryCodeLabel(country);
+
   return (
-    <Badge type="country" tone="neutral" className="font-semibold uppercase" title={country}>
-      {country}
+    <Badge type="country" tone="neutral" className="font-semibold uppercase" title={safeCountry}>
+      {safeCountry}
     </Badge>
   );
 }
@@ -129,6 +132,11 @@ function getAccessibleTagStyle(color?: string | null): CSSProperties | undefined
     borderColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.28)`,
     color: `rgb(${text.r}, ${text.g}, ${text.b})`,
   };
+}
+
+function publicCountryCodeLabel(country: string): string {
+  const trimmed = country.trim();
+  return PUBLIC_COUNTRY_CODE_RE.test(trimmed) ? trimmed.toUpperCase() : "unknown";
 }
 
 const WHITE = { r: 255, g: 255, b: 255 };

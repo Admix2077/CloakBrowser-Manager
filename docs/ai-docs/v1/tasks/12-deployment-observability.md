@@ -7130,3 +7130,38 @@ npm --prefix frontend test -- --run src/components/ProfileCookieManager.test.tsx
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 backend request/response schema、raw API payload、profile persistence、cookie payload、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Country badge evidence guardrail
+
+背景：
+
+- `CountryBadge` 是 ProfileList、ProfileTable、ProfileSummaryPanel 和 profile CSV preview 共用的 UI evidence 组件。
+- 调用方大多已传入 sanitized GeoIP country label，但共享组件本身仍直接把 `country` 写入 text/title；历史或异常数据可能绕过调用方边界。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 shared UI evidence 边界。
+
+已覆盖：
+
+- `CountryBadge` 只显示 2 位字母国家码，并规范成大写。
+- 非公开、污染或非国家码 country 文本折叠为 `unknown`，同时用于 visible text 和 title。
+- Profile table/summary 旧 GeoIP redaction 测试改为确认污染 country 不再显示长 redacted 字符串，而是经 badge 边界折叠。
+- 普通 `US`、`JP`、`DE` 这类 country code 展示语义不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/Badge.test.tsx -t "folds non-public country badge labels"
+# RED: 旧 CountryBadge 把污染 country 写入 text/title；GREEN: focused test passed
+
+npm --prefix frontend test -- --run src/components/Badge.test.tsx
+# 1 file passed, 4 tests passed
+
+npm --prefix frontend test -- --run src/components/ProfileList.test.tsx src/components/ProfileTable.test.tsx src/components/ProfileSummaryPanel.test.tsx src/components/ProfileCsvPreviewDialog.test.tsx src/components/Badge.test.tsx
+# 5 files passed, 74 tests passed
+```
+
+边界：
+
+- 这是 shared frontend country badge evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 backend request/response schema、GeoIP lookup/provider behavior、profile persistence、profile health API、runtime session behavior、viewer behavior、Automation API backend、VNC websocket path、WebRTC behavior、fingerprint seed、WebGL、UA、locale/timezone、stealth prefs 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、full URL params、font lists、WebRTC candidates、raw errors 或外站页面原文。

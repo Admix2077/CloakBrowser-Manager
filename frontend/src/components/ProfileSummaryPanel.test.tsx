@@ -295,7 +295,7 @@ describe("ProfileSummaryPanel", () => {
     );
 
     expect(screen.getByText("[redacted-ip] [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
-    expect(screen.getByText("US [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+    expect(screen.getAllByText("unknown").length).toBeGreaterThan(0);
     expect(screen.getByText("America/Los_Angeles [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
     expect(screen.getByText("en-US [redacted] [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
 
