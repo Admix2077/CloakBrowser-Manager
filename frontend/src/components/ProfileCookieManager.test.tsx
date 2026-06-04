@@ -299,6 +299,41 @@ describe("ProfileCookieManager", () => {
     expect(downloadName).not.toContain("cookie-secret");
   });
 
+  it("does not use provider and session marker profile ids in cookie export download names", async () => {
+    const pollutedProfileId = "api_key-x-api-key-session_id-private_key";
+    mockExportProfileCookies.mockResolvedValueOnce(exportResponse({ profile_id: pollutedProfileId }));
+    const createObjectURL = vi.fn(() => "blob:cookie-export");
+    const revokeObjectURL = vi.fn();
+    let downloadName = "";
+
+    Object.defineProperty(window.URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(window.URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      downloadName = this.download;
+    });
+
+    render(<ProfileCookieManager profile={profile({ id: pollutedProfileId })} />);
+
+    const manager = screen.getByRole("region", { name: "Cookie management" });
+    fireEvent.click(within(manager).getByLabelText("Confirm cookie export"));
+    fireEvent.click(within(manager).getByRole("button", { name: "Export cookies" }));
+
+    await waitFor(() => expect(mockExportProfileCookies).toHaveBeenCalledWith(pollutedProfileId));
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:cookie-export");
+    expect(downloadName).toBe("cloakbrowser-cookies-unknown.json");
+    expect(downloadName).not.toContain("api_key");
+    expect(downloadName).not.toContain("x-api-key");
+    expect(downloadName).not.toContain("session_id");
+    expect(downloadName).not.toContain("private_key");
+  });
+
   it("imports Netscape cookie text and only renders low-risk summary counts", async () => {
     mockImportProfileCookiesNetscape.mockResolvedValueOnce(importResponse({
       summary: {

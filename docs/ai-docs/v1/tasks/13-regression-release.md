@@ -7222,3 +7222,31 @@ npm --prefix frontend test -- --run ProfileViewer.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 ProfileViewer handle marker release boundary。
+
+## 2026-06-04 Cookie export filename marker release guardrail
+
+背景：
+
+- Release convergence 会继续检查 cookie export download metadata，避免 filename-safe profile ids 把敏感 marker 写进本地下载文件名和 evidence。
+- 旧 cookie export filename boundary 已覆盖 viewer_token、token/password/secret/cookie marker，但 `api_key-*`、`x-api-key-*`、`session_id-*`、`private_key-*` 等 marker 仍可能作为 filename-safe profile id 被使用。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 cookie export release-evidence 边界。
+
+已覆盖：
+
+- Cookie JSON/Netscape export download filenames 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker。
+- 污染 profile id 的下载文件名使用 `unknown`，普通 filename-safe profile id 继续可用。
+- Cookie JSON/Netscape payload、raw profile id API semantics、cookie import/export API calls、summary counts、runtime/viewer 和 browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run ProfileCookieManager.test.tsx
+# RED then GREEN；旧 cookie export filename 暴露 api_key/x-api-key/session_id/private_key marker
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、backend schemas、database persistence、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 cookie export filename marker release boundary。
