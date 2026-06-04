@@ -7076,3 +7076,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 raw API payload、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 automation console assignment release-evidence 边界。
+
+## 2026-06-04 Health runtime evidence release guardrail
+
+背景：
+
+- Release regression 会读取 profile health response，里面包含 runtime status、VNC port 和 Automation URL。
+- 旧 health runtime evidence boundary 已覆盖 URL、Authorization/Bearer、token/password/cookie/secret marker，但 `api_key-*`、`access_token-*`、`session_id-*`、`client_secret-*` 这类符合公开字符集的 marker 仍可能从 runtime profile id/Automation URL 出现在 health response。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 health release-evidence 边界。
+
+已覆盖：
+
+- Health runtime evidence sanitizer 会拒绝 `api_key`、`x-api-key`、`access_token`、`refresh_token`、`session_id`、`client_secret`、`private_key` marker。
+- 含这些 marker 的 Automation URL 在 health response 中折叠为 `None`，不会进入序列化 release evidence。
+- GeoIP lookup/provider behavior、profile health status calculation、runtime session behavior、Automation API backend 和 browser fingerprint behavior 不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -q -k "health_response_sanitizes_non_public_runtime_evidence"
+# RED then GREEN；旧 health runtime evidence 暴露 api_key marker Automation URL
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 26 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw API payload、automation step execution、profile/proxy/template persistence、cookie payload、GeoIP lookup/provider behavior、runtime session/viewer token schema、VNC forwarding、Automation worker lease behavior、WebRTC behavior、stealth prefs、seed、WebGL、UA、locale/timezone 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 health runtime evidence release boundary。
