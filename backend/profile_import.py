@@ -94,7 +94,10 @@ SAFE_PROXY_ERROR_DETAILS = (
     ("Proxy URL missing port", "Proxy URL missing port"),
 )
 _SENSITIVE_TEMPLATE_ARG_RE = re.compile(
-    r"(?:https?://|[?&#]|\bauthorization\b|\bbearer\b|\btoken=|\bpassword=|\bsecret=|\bcookie=)",
+    r"(?:https?://|[?&#]|\bauthorization\b|\bbearer\b|\btoken=|\bpassword=|\bsecret=|\bcookie=|"
+    r"\b(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|session[_-]?id|"
+    r"viewer[_-]?token|x[_-]?api[_-]?key)\b)",
     re.IGNORECASE,
 )
 _SENSITIVE_CSV_SOURCE_MARKERS = (

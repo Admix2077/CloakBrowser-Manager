@@ -230,6 +230,8 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
             "--private-window",
             f"--proxy-server=https://proxy.invalid/?token={leak_marker}",
             f"--user-agent=Bearer {leak_marker}",
+            "--note=api-key-profile-response-marker",
+            "--title=private-key-profile-response-marker",
         ],
     )
 
@@ -268,6 +270,8 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
         "cookie=",
         "gpu.invalid",
         "proxy.invalid",
+        "api-key-profile-response-marker",
+        "private-key-profile-response-marker",
     ):
         assert leaked not in serialized
 

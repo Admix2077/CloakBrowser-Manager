@@ -8262,3 +8262,46 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 `invisible_playwright` 包、stealth prefs、fingerprint seed 生成、WebGL coherence bucket、UA、locale/timezone、WebRTC behavior、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-04 Profile response launch arg marker guardrail
+
+背景：
+
+- Profile list/detail/create/update response 会把 persisted `launch_args` 返回给 API/UI/release evidence。
+- 旧 `_safe_profile_response_launch_args()` 已覆盖 URL、Authorization/Bearer、query、`token=`、`password=`、`secret=`、`cookie=` 等明显敏感格式，但 `--note=api-key-profile-response-marker`、`--title=private-key-profile-response-marker` 这类 marker-only launch arg 仍可能出现在 profile response JSON。
+- BrowserManager launch 边界已拒绝短横线 marker；本轮把同类 response evidence 边界补齐，避免历史/手工污染值进入 API/UI。
+
+已覆盖：
+
+- `_SENSITIVE_TEMPLATE_ARG_RE` 现在识别 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 marker，支持 `_` 和 `-` 两种分隔。
+- Profile response launch args 会丢弃 marker-only sensitive args，同时保留普通 `--private-window`、`--lang=en-US` 等低敏可见参数。
+- 相邻 profile launch args、template response、config/bundle export 相关切片保持通过。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k profile_responses_sanitize_persisted_identity_fields
+# RED: 旧 profile list/detail response 原样返回 --note=api-key-profile-response-marker / --title=private-key-profile-response-marker；GREEN: 1 passed, 258 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py backend/tests/test_templates.py backend/tests/test_bulk.py -q -k "profile_responses_sanitize_persisted_identity_fields or profile_launch_args or launch_args or export_profile_bundle_sanitizes_persisted_identity_fields or bulk_export_profile_configs_sanitizes_persisted_identity_fields or profile_template_api_sanitizes_persisted_identity_fields or create_profile_from_template_sanitizes_persisted_identity_fields"
+# 9 passed, 284 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是后端 profile API response evidence 防御，不是 Pixelscan `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw profile launch arg persistence、profile create/update request contract、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -7944,3 +7944,46 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 `invisible_playwright` 包、stealth prefs、fingerprint seed 生成、WebGL coherence bucket、UA、locale/timezone、WebRTC behavior、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 BrowserManager launch hyphen-marker release boundary。
+
+## 2026-06-04 Profile response launch arg marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile API response evidence，因为 profile list/detail 会把 persisted `launch_args` 显示给 UI 和回归记录。
+- 旧 profile response launch arg sanitizer 已覆盖 URL、Authorization/Bearer、query 和 assignment-style token/password/secret/cookie，但 `--note=api-key-profile-response-marker`、`--title=private-key-profile-response-marker` 这类短横线 marker-only arg 仍可能被当成普通 public launch arg。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 这类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 profile response release-evidence 边界。
+
+已覆盖：
+
+- Profile response launch arg sanitizer 现在拒绝 access/api/auth/client/private/refresh/runtime/service/session/viewer/x-api-key 相关 marker。
+- marker 词同时覆盖 `_` 和 `-` 分隔形式。
+- 普通低敏 launch args 继续保留；raw profile create/update/persistence 语义不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py -q -k profile_responses_sanitize_persisted_identity_fields
+# RED then GREEN；旧 profile list/detail response 暴露 --note=api-key-profile-response-marker / --title=private-key-profile-response-marker；GREEN 1 passed, 258 deselected
+
+.venv/bin/python -m pytest backend/tests/test_api.py backend/tests/test_templates.py backend/tests/test_bulk.py -q -k "profile_responses_sanitize_persisted_identity_fields or profile_launch_args or launch_args or export_profile_bundle_sanitizes_persisted_identity_fields or bulk_export_profile_configs_sanitizes_persisted_identity_fields or profile_template_api_sanitizes_persisted_identity_fields or create_profile_from_template_sanitizes_persisted_identity_fields"
+# 9 passed, 284 deselected
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 658 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 306 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 raw profile launch arg persistence、profile create/update request contract、BrowserManager launch behavior、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile response launch arg marker release boundary。
