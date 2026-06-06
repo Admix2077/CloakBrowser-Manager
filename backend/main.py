@@ -3055,8 +3055,8 @@ async def launch_profile(profile_id: str, request: Request):
     return LaunchResponse(
         profile_id=public_profile_id,
         status="running",
-        vnc_ws_port=running.ws_port,
-        display=f":{running.display}",
+        vnc_ws_port=_public_vnc_ws_port(running.ws_port),
+        display=_public_profile_display(running.display),
         automation_url=_profile_automation_url(public_profile_id),
     )
 

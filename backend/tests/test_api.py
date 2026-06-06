@@ -1398,6 +1398,39 @@ def test_launch_success_response_sanitizes_persisted_profile_id_and_automation_u
         assert leaked not in serialized
 
 
+def test_launch_success_response_sanitizes_runtime_display_and_vnc_port(
+    app_client: TestClient,
+):
+    leak_marker = "launch-runtime-status-secret"
+    create = app_client.post("/api/profiles", json={"name": "LaunchPollutedRuntime"})
+    pid = create.json()["id"]
+    running = RunningProfile(
+        profile_id=pid,
+        context=MagicMock(),
+        display=f"104 token={leak_marker}",
+        ws_port=f"6104 Authorization=Bearer {leak_marker}",
+        engine="invisible_playwright",
+    )
+
+    with patch.object(main.browser_mgr, "launch", new=AsyncMock(return_value=running)):
+        resp = app_client.post(f"/api/profiles/{pid}/launch", json={"confirm_launch": True})
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["profile_id"] == pid
+    assert data["vnc_ws_port"] is None
+    assert data["display"] is None
+    assert data["automation_url"] == f"/api/profiles/{pid}/automation"
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+    ):
+        assert leaked not in serialized
+
+
 def test_launch_persists_resolved_geoip_result(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "LaunchGeoIP"})
     pid = create.json()["id"]

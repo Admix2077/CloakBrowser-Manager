@@ -9385,3 +9385,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled profile bundle localStorage response/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 profile bundle schema、cookie/localStorage value inclusion confirmation semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema 或 Automation worker lease behavior。
+
+## 2026-06-07 Launch response runtime display/VNC port guardrail
+
+背景：
+
+- Profile launch success response 是 Manager-controlled runtime response evidence，会把启动后的 display、VNC WebSocket port 和 Automation URL 交给本地管理台。
+- 旧 launch success path 直接使用 `running.ws_port` 和 `f":{running.display}"`；如果历史/异常 RunningProfile 字段被污染，响应构建会在 Pydantic 校验处崩溃或可能暴露 marker 文本。
+- 该问题属于 Manager 自己的 launch API response stability/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Launch success response 现在复用 `_public_vnc_ws_port()` 和 `_public_profile_display()`。
+- `LaunchResponse.vnc_ws_port` 和 `LaunchResponse.display` 与 profile/status runtime fields 对齐，允许不安全运行态 evidence 折叠为 `null`。
+- 正常 launch 响应仍返回整数 VNC port、`:display` 和低敏 Automation URL。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_launch_success_response_sanitizes_runtime_display_and_vnc_port -q
+# RED: old launch response used raw ws_port/display and raised ValidationError on polluted runtime fields
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_launch_success_response_sanitizes_runtime_display_and_vnc_port backend/tests/test_api.py::test_launch_success_response_exposes_automation_url backend/tests/test_api.py::test_launch_success_response_sanitizes_persisted_profile_id_and_automation_url backend/tests/test_api.py::test_profile_status_and_profile_responses_sanitize_runtime_port_and_display -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled launch API response stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
