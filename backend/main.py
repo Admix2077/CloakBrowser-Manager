@@ -1315,7 +1315,7 @@ def _audit_runtime_event(event_type: str, session: dict, metadata: dict | None =
 
 
 def _runtime_service_audit_metadata(event_type: str, metadata: dict | None) -> dict:
-    raw = metadata or {}
+    raw = metadata if isinstance(metadata, dict) else {}
     if event_type == "runtime.session.created":
         return {
             "profile_source": _public_runtime_profile_source(raw.get("profile_source")),
@@ -1380,7 +1380,7 @@ def _public_runtime_viewer_subprotocol(value: object) -> str | None:
 
 
 def _runtime_viewer_audit_metadata(event_type: str, metadata: dict | None) -> dict:
-    raw = metadata or {}
+    raw = metadata if isinstance(metadata, dict) else {}
     if event_type == "runtime.viewer.connected":
         return {"subprotocol": _public_runtime_viewer_subprotocol(raw.get("subprotocol"))}
     if event_type == "runtime.viewer.disconnected":

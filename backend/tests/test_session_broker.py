@@ -1402,6 +1402,53 @@ def test_runtime_viewer_connected_audit_allows_only_public_subprotocol_metadata(
         assert leaked not in serialized
 
 
+def test_runtime_viewer_audit_handles_non_dict_metadata_without_leaking(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-vnc-non-dict-metadata",
+    )
+    stored_session = db.get_runtime_session(session["id"])
+    assert stored_session is not None
+    leak_marker = "runtime-viewer-non-dict-metadata-secret"
+
+    main._audit_runtime_viewer_event(
+        "runtime.viewer.connected",
+        stored_session,
+        f"subprotocol=binary token={leak_marker} Authorization=Bearer {leak_marker}",
+    )
+    main._audit_runtime_viewer_event(
+        "runtime.viewer.disconnected",
+        stored_session,
+        [f"close_code=1000 token={leak_marker}"],
+    )
+
+    events = [
+        event
+        for event in db.list_audit_events(session["id"])
+        if event["event_type"] in {"runtime.viewer.connected", "runtime.viewer.disconnected"}
+    ]
+    assert [event["metadata"] for event in events] == [
+        {"subprotocol": None},
+        {"close_code": None},
+    ]
+    serialized = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "token=",
+        "Authorization",
+        "Bearer",
+        "subprotocol=binary",
+        "close_code=1000",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_viewer_failure_audit_sanitizes_reason_code_metadata(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -1847,6 +1894,64 @@ def test_runtime_service_audit_allows_only_public_metadata_shapes(
         "billing",
     ):
         assert leaked not in serialized_events
+
+
+def test_runtime_service_audit_handles_non_dict_metadata_without_leaking(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-runtime-non-dict-metadata",
+    )
+    stored_session = db.get_runtime_session(session["id"])
+    assert stored_session is not None
+    leak_marker = "runtime-service-non-dict-metadata-secret"
+
+    main._audit_runtime_event(
+        "runtime.session.created",
+        stored_session,
+        f"profile_source=profile_id token={leak_marker} Authorization=Bearer {leak_marker}",
+    )
+    main._audit_runtime_event(
+        "runtime.viewer_token.created",
+        stored_session,
+        [f"viewer_token_expires_at=2026-06-03T00:00:00+00:00 token={leak_marker}"],
+    )
+    main._audit_runtime_event(
+        "runtime.session.renewed",
+        stored_session,
+        (f"lease_seconds=900 token={leak_marker}",),
+    )
+
+    events = [
+        event
+        for event in db.list_audit_events(session["id"])
+        if event["event_type"] in {
+            "runtime.session.created",
+            "runtime.viewer_token.created",
+            "runtime.session.renewed",
+        }
+    ][-3:]
+    assert [event["metadata"] for event in events] == [
+        {"profile_source": "unknown", "lease_seconds": None},
+        {"ttl_seconds": None, "viewer_token_expires_at": "unknown"},
+        {"lease_seconds": None, "lease_expires_at": "unknown"},
+    ]
+    serialized = json.dumps(events, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "token=",
+        "Authorization",
+        "Bearer",
+        "profile_source=profile_id",
+        "viewer_token_expires_at=",
+        "lease_seconds=900",
+    ):
+        assert leaked not in serialized
 
 
 def test_runtime_audit_ignores_unauthenticated_runtime_requests(

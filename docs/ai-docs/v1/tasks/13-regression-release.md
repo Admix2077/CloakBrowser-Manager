@@ -8999,3 +8999,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation URL host marker release boundary。
+
+## 2026-06-07 Runtime audit non-dict metadata release guardrail
+
+背景：
+
+- Release convergence 继续检查 runtime service/viewer audit evidence，因为这些 event 会进入 diagnostics、triage 和长期 audit history。
+- 旧 runtime audit allowlist helper 已固定 dict metadata 的低敏 shape，但如果内部调用误传 `str`/`list`/`tuple` metadata，会在 `.get()` 处抛 `AttributeError`，导致 Manager-controlled audit 路径不稳定。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 runtime audit evidence 边界。
+
+已覆盖：
+
+- Runtime service/viewer audit metadata helper 现在只接受 dict；非 dict metadata 按空对象处理。
+- `runtime.session.created`、`runtime.viewer_token.created`、`runtime.session.renewed`、`runtime.viewer.connected`、`runtime.viewer.disconnected` 仍输出固定低敏 metadata shape。
+- Runtime session lifecycle、viewer token schema、VNC proxy/audit、runtime/profile/external session top-level sanitization 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_audit_handles_non_dict_metadata_without_leaking backend/tests/test_session_broker.py::test_runtime_service_audit_handles_non_dict_metadata_without_leaking -q
+# RED then GREEN；旧 helper 在 string/list metadata 上 AttributeError；GREEN 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k 'runtime_service_audit or runtime_viewer_connected_audit or runtime_viewer_disconnect_audit or runtime_viewer_failure_audit or runtime_vnc_success_writes_redacted_connect_and_disconnect_audit or runtime_vnc_backend_connect_failure_writes_redacted_failure_audit' -q
+# 9 passed, 44 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled runtime audit stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 runtime session storage、viewer token schema、VNC forwarding、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Runtime audit non-dict metadata release boundary。
