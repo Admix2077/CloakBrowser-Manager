@@ -8947,3 +8947,48 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior、raw profile persistence、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-07 Proxy CSV textarea service token marker guardrail
+
+背景：
+
+- Proxy Manager 的 CSV import textarea 是人工导入和 release triage 时直接可见的 UI evidence。
+- 该 textarea 有双轨语义：显示层必须低敏，提交给 API 的 import payload 仍要保留用户输入的原始 CSV 值。
+- 旧 CSV marker 字段规则已把 `api_key`、`client_secret`、`private_key` 等 marker-only CSV 字段显示为 `unknown`，但 `runtime_service_token` / `service_token` alias 会先被通用 error text sanitizer 变成 `[redacted]`。
+- 当前策略下，Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 和类似底层 fingerprint detector 问题只标 blocker，不在 Manager 前端硬解；本轮继续收 Manager 可控 UI evidence 边界。
+
+已覆盖：
+
+- `ProxyManagerPage` 的 CSV textarea visible text 现在把 runtime/service token marker-only CSV 字段折叠为 `unknown`。
+- CSV preview/textarea 仍保留低敏 endpoint host/port evidence，并隐藏 userinfo credential。
+- `createProxy()` import payload 仍使用原始 CSV 字段值，避免 UI 脱敏破坏实际导入语义。
+- Proxy list、assignment、provider preset、random assignment、CSV import 相邻行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "runtime and service token marker proxy CSV textarea"
+# RED: 旧 textarea 显示 "[redacted]" 字段而不是 "unknown"；GREEN: 1 passed, 40 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 41 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 312 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled Proxy Manager CSV import UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw proxy persistence、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

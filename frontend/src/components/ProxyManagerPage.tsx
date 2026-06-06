@@ -13,7 +13,7 @@ const SENSITIVE_ASSIGNMENT_PROFILE_ID_RE =
 const PROXY_MANAGER_LABEL_SENSITIVE_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 const PROXY_MANAGER_CSV_SENSITIVE_FIELD_RE =
-  /(^|,)(?:"(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+"|(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+)(?=,|$)/gi;
+  /(^|,)(?:"(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+"|(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+)(?=,|$)/gi;
 
 interface ProxyManagerPageProps {
   profiles?: Profile[];
