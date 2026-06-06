@@ -3864,6 +3864,65 @@ def test_automation_pages_redacts_non_http_internal_url_paths(app_client: TestCl
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_url_evidence_redacts_sensitive_http_host_markers(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationHttpHostMarkerUrlRedaction"})
+    pid = create.json()["id"]
+    leak_marker = "runtime_service_token_automation_host_marker"
+    page = _automation_page(
+        f"https://{leak_marker}.example/app?viewer_token=page-secret#frag",
+        "Host marker",
+    )
+    page.automation_console_logs = [
+        {
+            "type": "log",
+            "text": "ready",
+            "location": {
+                "url": f"https://{leak_marker}.example/static/app.js?token=console-secret#frag",
+                "lineNumber": 1,
+            },
+        }
+    ]
+    page.automation_network_events = [
+        {
+            "event": "request",
+            "method": "GET",
+            "url": f"https://{leak_marker}.example/api?token=network-secret#frag",
+            "resource_type": "xhr",
+        }
+    ]
+    _automation_running_profile(pid, [page])
+
+    pages_resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+    console_resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+    network_resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert pages_resp.status_code == 200
+    assert console_resp.status_code == 200
+    assert network_resp.status_code == 200
+    assert pages_resp.json()["pages"][0]["url"] == ""
+    assert console_resp.json()["logs"][0]["location"] == {"lineNumber": 1}
+    assert network_resp.json()["events"][0]["url"] == ""
+    serialized = json.dumps(
+        {
+            "pages": pages_resp.json(),
+            "console": console_resp.json(),
+            "network": network_resp.json(),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "viewer_token",
+        "page-secret",
+        "console-secret",
+        "network-secret",
+        "?token",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_pages_redacts_about_url_query_and_fragment(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationAboutUrlRedaction"})
     pid = create.json()["id"]

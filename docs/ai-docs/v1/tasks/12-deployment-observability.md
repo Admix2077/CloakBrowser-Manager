@@ -9292,3 +9292,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled VNC/WebSocket log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 WebSocket Origin 校验语义、VNC forwarding、viewer token schema、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Automation URL host marker guardrail
+
+背景：
+
+- Automation pages、console location 和 network summary 都会把 URL 作为 Manager-controlled diagnostics evidence 返回。
+- 旧 `_automation_safe_url()` 已限制为 `http`/`https` 并剥离 userinfo/query/fragment，但如果 HTTP hostname 自身包含 `runtime_service_token...` marker，host label 仍会原样进入 API evidence。
+- 该问题属于 Manager 自己的 Automation response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_automation_safe_url()` 现在会把含 token/header/runtime-service marker 的 HTTP hostname 折叠为空字符串。
+- Automation pages URL、console location URL 和 network summary URL 共用该 guardrail。
+- 普通 `http`/`https` URL、non-http URL 拦截、`about:` 专用处理、console text redaction 和 network method/resource/status/failure allowlist 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_url_evidence_redacts_sensitive_http_host_markers -q
+# RED: old Automation pages response preserved https://runtime_service_token_automation_host_marker.example/app
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k 'automation_pages or automation_console_logs or automation_network_summary or automation_page_' -q
+# 20 passed, 246 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation URL response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。

@@ -5028,6 +5028,8 @@ def _automation_safe_url(raw_url: str) -> str:
     parsed = urlparse(str(raw_url))
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
         return ""
+    if _AUTOMATION_SENSITIVE_MARKER_RE.search(parsed.hostname):
+        return ""
     host = parsed.hostname
     if parsed.port:
         host = f"{host}:{parsed.port}"
