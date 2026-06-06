@@ -1402,6 +1402,41 @@ def test_runtime_viewer_connected_audit_allows_only_public_subprotocol_metadata(
         assert leaked not in serialized
 
 
+def test_runtime_viewer_failure_audit_sanitizes_reason_code_metadata(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(
+        app_client,
+        runtime_headers,
+        profile_id,
+        external_session_id="pm-session-vnc-failure-reason",
+    )
+    stored_session = db.get_runtime_session(session["id"])
+    assert stored_session is not None
+    leak_marker = "runtime-viewer-failure-reason-secret"
+
+    main._audit_runtime_viewer_failure(
+        (
+            f"backend_vnc_unavailable token={leak_marker} "
+            f"Authorization=Bearer {leak_marker}"
+        ),
+        session=stored_session,
+    )
+
+    [event] = _viewer_failure_events(session["id"])
+    assert event["metadata"] == {"reason_code": "unknown"}
+    serialized = json.dumps(event, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "token=",
+        "Authorization",
+        "Bearer",
+    ):
+        assert leaked not in serialized
+
+
 def test_runtime_vnc_backend_connect_failure_writes_redacted_failure_audit(
     app_client: TestClient,
     runtime_headers: dict[str, str],

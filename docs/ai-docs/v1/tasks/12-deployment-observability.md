@@ -9166,3 +9166,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Automation pages API evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+
+## 2026-06-07 Runtime viewer failure reason guardrail
+
+背景：
+
+- Runtime VNC viewer failure audit 是 Manager-controlled release evidence，会记录 viewer credential、origin、session/live 状态和 backend VNC 连接失败原因。
+- `runtime.viewer.connected` / `runtime.viewer.disconnected` metadata 已使用固定低敏字段过滤，但 `runtime.viewer.failed` 的 `reason_code` 之前直接进入 metadata。
+- 如果内部调用或未来异常路径传入污染 reason_code，通用 audit sanitizer 会脱敏 token 值，但仍保留整段污染文本作为可见 reason evidence。
+- 该问题属于 Manager 自己的 runtime/VNC audit evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Runtime viewer failure reason 现在只允许固定低敏原因：`viewer_credential_missing`、`viewer_credential_invalid`、`viewer_credential_expired`、`origin_not_allowed`、`runtime_session_not_live`、`profile_not_running`、`backend_vnc_unavailable`。
+- 其它非字符串或污染 reason_code 统一写成 `unknown`。
+- viewer token 校验、origin 检查、VNC backend 连接和 viewer connected/disconnected audit 行为不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_sanitizes_reason_code_metadata -q
+# RED: old audit metadata preserved polluted reason_code text after generic token redaction
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k 'runtime_vnc or runtime_viewer' -q
+# 17 passed, 34 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled runtime/VNC audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 viewer token schema、VNC forwarding、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。

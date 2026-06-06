@@ -1354,6 +1354,23 @@ def _runtime_viewer_audit_metadata(event_type: str, metadata: dict | None) -> di
     return {}
 
 
+_PUBLIC_RUNTIME_VIEWER_FAILURE_REASONS = {
+    "backend_vnc_unavailable",
+    "origin_not_allowed",
+    "profile_not_running",
+    "runtime_session_not_live",
+    "viewer_credential_expired",
+    "viewer_credential_invalid",
+    "viewer_credential_missing",
+}
+
+
+def _public_runtime_viewer_failure_reason(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    return value if value in _PUBLIC_RUNTIME_VIEWER_FAILURE_REASONS else "unknown"
+
+
 def _audit_runtime_viewer_event(event_type: str, session: dict, metadata: dict | None = None) -> None:
     db.create_audit_event(
         event_type=event_type,
@@ -1390,7 +1407,7 @@ def _audit_runtime_viewer_failure(
                 if session
                 else None
             ),
-            metadata={"reason_code": reason_code},
+            metadata={"reason_code": _public_runtime_viewer_failure_reason(reason_code)},
         )
     except Exception as exc:
         logger.warning("Runtime viewer failure audit skipped: %s", type(exc).__name__)

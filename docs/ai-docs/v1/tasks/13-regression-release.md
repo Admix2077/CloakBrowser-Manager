@@ -8842,3 +8842,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation about URL release boundary。
+
+## 2026-06-07 Runtime viewer failure reason release guardrail
+
+背景：
+
+- Release convergence 继续检查 runtime/VNC viewer audit evidence，因为 viewer failures 会在诊断和发布 triage 中说明 VNC 连接失败原因。
+- 旧 `runtime.viewer.failed` audit metadata 直接写入 `reason_code`。
+- 如果内部调用或未来异常路径传入 `reason_code` 污染文本，通用 audit sanitizer 会替换 token 值，但仍会把污染文本保留为可见 reason evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 runtime/VNC audit evidence 边界。
+
+已覆盖：
+
+- `runtime.viewer.failed` reason_code 现在只允许固定低敏原因：`viewer_credential_missing`、`viewer_credential_invalid`、`viewer_credential_expired`、`origin_not_allowed`、`runtime_session_not_live`、`profile_not_running`、`backend_vnc_unavailable`。
+- 污染或未知 reason_code 统一折叠为 `unknown`。
+- viewer token 校验、origin 拒绝、session live 检查、profile running 检查、backend VNC 连接失败和 connected/disconnected audit 语义保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_sanitizes_reason_code_metadata -q
+# RED then GREEN；旧 metadata 保留污染 reason_code 文本；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k 'runtime_vnc or runtime_viewer' -q
+# 17 passed, 34 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled runtime/VNC audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 viewer token schema、VNC forwarding、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Runtime viewer failure reason release boundary。
