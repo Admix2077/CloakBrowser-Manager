@@ -9134,3 +9134,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Automation diagnostics response 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - 同类底层/第三方 fingerprint 检测站失败继续先标阻塞项，再继续 Manager 可控范围。
+
+## 2026-06-07 Automation about URL evidence guardrail
+
+背景：
+
+- Automation pages API 会把当前页面 URL 作为 Manager-controlled diagnostics evidence 返回给 `/api/profiles/{profile_id}/automation/pages` 和页面动作响应。
+- 普通 http/https URL 已剥离 userinfo、query 和 fragment，但 `about:` URL 之前直接原样返回。
+- 如果历史/异常页面对象中出现 `about:blank?token=...#frag`，query/fragment 会进入 API evidence；如果内部页是 `about:newtab?token=...#frag`，旧内部页过滤也不会识别。
+- 该问题属于 Manager 自己的 Automation response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `about:` 页面 URL 现在只返回低敏 `about:<path>`，剥离 query 和 fragment。
+- `about:home`、`about:newtab`、`about:welcome` 内部页过滤现在基于同一低敏 about URL 规范化结果。
+- 普通 `about:blank` 仍可作为页面列表 URL 返回，正常 http/https URL 脱敏规则保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_about_url_query_and_fragment backend/tests/test_api.py::test_automation_pages_filters_internal_about_pages_with_query_or_fragment -q
+# RED: old response exposed about-page-secret/internal-secret query and fragment evidence
+# GREEN: 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k 'automation_pages or automation_console_logs or automation_network_summary or automation_page_' -q
+# 19 passed, 244 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation pages API evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。

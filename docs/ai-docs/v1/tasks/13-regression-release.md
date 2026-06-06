@@ -8810,3 +8810,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation console structured text release boundary。
+
+## 2026-06-07 Automation about URL release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation pages response，因为页面 URL 会进入 API、UI task/debug evidence 和 release triage。
+- 旧 http/https URL helper 会剥离 userinfo、query 和 fragment，但 `about:` URL 直接原样返回。
+- 这会让 `about:blank?token=...#frag` 一类历史/异常 URL 的 query/fragment 出现在 Manager response；`about:newtab?token=...#frag` 也会绕过内部页过滤。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Automation pages evidence 边界。
+
+已覆盖：
+
+- `about:` URL 现在统一规范化为 `about:<path>`，query 和 fragment 不再进入 Automation pages response。
+- 内部页过滤使用同一低敏 about URL 规范化结果，所以带 query/fragment 的 `about:home`、`about:newtab`、`about:welcome` 仍被过滤。
+- 普通 `about:blank`、正常 http/https page URL、title redaction、console/network summary 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_about_url_query_and_fragment backend/tests/test_api.py::test_automation_pages_filters_internal_about_pages_with_query_or_fragment -q
+# RED then GREEN；旧响应暴露 about-page-secret/internal-secret query 和 fragment evidence；GREEN 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k 'automation_pages or automation_console_logs or automation_network_summary or automation_page_' -q
+# 19 passed, 244 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation pages API evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation about URL release boundary。

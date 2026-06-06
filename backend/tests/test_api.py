@@ -3839,6 +3839,58 @@ def test_automation_pages_redacts_sensitive_url_and_title(app_client: TestClient
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_pages_redacts_about_url_query_and_fragment(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationAboutUrlRedaction"})
+    pid = create.json()["id"]
+    secret_url = "about:blank?token=about-page-secret#frag"
+    _automation_running_profile(pid, [_automation_page(secret_url, "Blank")])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    page = resp.json()["pages"][0]
+    assert page["url"] == "about:blank"
+    serialized = resp.text
+    for leaked in (
+        "about-page-secret",
+        "?token",
+        "#frag",
+        secret_url,
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_automation_pages_filters_internal_about_pages_with_query_or_fragment(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationInternalAboutRedaction"})
+    pid = create.json()["id"]
+    _automation_running_profile(pid, [
+        _automation_page("about:newtab?token=internal-secret#frag", "New Tab"),
+        _automation_page("https://example.com/", "Example"),
+    ])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    assert resp.json()["pages"] == [
+        {
+            "index": 0,
+            "url": "https://example.com/",
+            "title": "Example",
+            "page_id": resp.json()["pages"][0]["page_id"],
+        }
+    ]
+    serialized = resp.text
+    for leaked in (
+        "internal-secret",
+        "about:newtab",
+        "?token",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_page_title_failure_logs_error_type_without_raw_exception(
     app_client: TestClient,
     caplog: pytest.LogCaptureFixture,

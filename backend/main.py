@@ -4848,15 +4848,26 @@ def _automation_page_url(page) -> str:
     return str(getattr(page, "url", "") or "")
 
 
+def _automation_public_about_url(raw_url: str) -> str:
+    parsed = urlparse(raw_url)
+    if parsed.scheme.lower() != "about" or not parsed.path:
+        return ""
+    return f"about:{parsed.path}"
+
+
 def _automation_public_page_url(page) -> str:
     url = _automation_page_url(page)
     if url.startswith("about:"):
-        return url
+        return _automation_public_about_url(url)
     return _automation_safe_url(url)
 
 
 def _automation_is_internal_page(page) -> bool:
-    return _automation_page_url(page) in {"about:home", "about:newtab", "about:welcome"}
+    return _automation_public_about_url(_automation_page_url(page)) in {
+        "about:home",
+        "about:newtab",
+        "about:welcome",
+    }
 
 
 def _automation_pages(running) -> list:
