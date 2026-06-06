@@ -58,8 +58,9 @@ _PUBLIC_AUTOMATION_URL_RE = re.compile(r"^/api/profiles/[A-Za-z0-9][A-Za-z0-9._-
 _SENSITIVE_RUNTIME_TEXT_RE = re.compile(
     r"https?://|socks[45]://|@|\b(authorization|bearer)\b|"
     r"\b(access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|cookie|password|"
-    r"private[_-]?key|refresh[_-]?token|secret|session[_-]?id|token|viewer[_-]?token|"
-    r"x[_-]?api[_-]?key)\b",
+    r"private[_-]?key|refresh[_-]?token|runtime[_-]?service[_-]?token|secret|"
+    r"service[_-]?token|session[_-]?id|token|viewer[_-]?token|"
+    r"x[_-]?api[_-]?key)(?=$|[^A-Za-z0-9])",
     re.IGNORECASE,
 )
 

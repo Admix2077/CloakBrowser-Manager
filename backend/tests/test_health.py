@@ -218,6 +218,8 @@ def test_health_response_sanitizes_non_public_runtime_evidence():
         "api-key-health-runtime-marker",
         "session-id-health-runtime-marker",
         "private-key-health-runtime-marker",
+        "runtime_service_token_health_runtime_marker",
+        "service_token_health_runtime_marker",
     ]
     for marker_profile_id in marker_profile_ids:
         marker_automation_url = f"/api/profiles/{marker_profile_id}/automation"

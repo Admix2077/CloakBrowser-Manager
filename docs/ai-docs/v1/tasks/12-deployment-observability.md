@@ -8709,3 +8709,49 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 Backend health runtime service token marker guardrail
+
+背景：
+
+- `compute_profile_health()` 会把 `profile_id` 和 `runtime.automation_url` 返回给 Health API/UI，是 release health evidence 的后端边界。
+- 旧 `_SENSITIVE_RUNTIME_TEXT_RE` 能过滤 URL、Authorization/Bearer、常见 token/key/secret 字段，也能通过 generic `token` 覆盖部分短横线形式。
+- 下划线 marker 例如 `runtime_service_token_health_runtime_marker` 和 `service_token_health_runtime_marker` 不能被旧 `\b` 结尾命中，因为 Python 正则中 `_` 属于 word 字符。
+
+已覆盖：
+
+- `_SENSITIVE_RUNTIME_TEXT_RE` 现在显式覆盖 `runtime[_-]?service[_-]?token` 和 `service[_-]?token`。
+- 敏感字段结尾从单纯 `\b` 调整为 `(?=$|[^A-Za-z0-9])`，让 `_` / `-` marker 分隔都能触发过滤，同时避免误伤普通长词。
+- `compute_profile_health()` 会把 runtime/service token marker profile id 折叠为 `unknown`。
+- 含这类 marker profile id 的 `runtime.automation_url` 会返回 `None`。
+- 普通 runtime status、VNC port、公开 profile id 和正常 automation URL 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_health.py -q -k "runtime_evidence"
+# RED: 旧 backend health response 保留 /api/profiles/runtime_service_token_health_runtime_marker/automation
+# GREEN: 1 passed, 25 deselected
+
+.venv/bin/python -m pytest backend/tests/test_health.py -q
+# 26 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled backend health response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
