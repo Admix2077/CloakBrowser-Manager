@@ -8573,3 +8573,54 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/health/runtime/proxy/profile evidence。
 - 不改变 GeoIP lookup behavior、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 GeoIP source runtime/service token release boundary。
+
+## 2026-06-06 Frontend viewer and summary service token release guardrail
+
+背景：
+
+- Release convergence 继续检查前端 VNC viewer / runtime session / profile summary 的可见 evidence，因为这些字段会进入人工 release triage 和截图前的低敏检查。
+- `ProfileViewer` 的本地 viewer handle 规则已覆盖 URL/Auth/api/session/private/viewer token 形态，但没有显式覆盖 `runtime_service_token` / `service_token` alias。
+- `ProfileSummaryPanel` 的 Device label 本地规则也缺少 runtime/service token alias，导致 marker-only device 字段渲染为 `[redacted]` evidence，而不是更低敏的 `unknown`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 UI evidence 边界。
+
+已覆盖：
+
+- `ProfileViewer` 对 `runtime_service_token-profile-viewer-marker` 和 `service_token-runtime-viewer-marker` 折叠为 `unknown`。
+- `ProfileViewer` 对 runtime/service token marker profile automation path 显示 `Automation unavailable`，不会暴露为可复制 endpoint。
+- `ProfileSummaryPanel` Device 区域对 runtime/service token marker platform/screen/cores/GPU label 折叠为 `unknown`。
+- 普通公开 viewer handle、business session id、device label、VNC connection、Automation toolbar 和 clipboard sync 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx -t "runtime and service token marker handles"
+# RED then GREEN；旧 ProfileViewer 渲染 runtime_...rker / service_...rker，并显示 Automation ready；GREEN 1 passed, 20 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# 21 passed
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "runtime and service token device labels"
+# RED then GREEN；旧 ProfileSummaryPanel Device 区域渲染 [redacted] / [redacted] cores；GREEN 1 passed, 9 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx
+# 10 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 311 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled frontend VNC/viewer/profile summary UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/health/runtime/proxy/profile evidence。
+- 不改变 VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior、raw profile persistence、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 frontend viewer/profile summary runtime/service token release boundary。

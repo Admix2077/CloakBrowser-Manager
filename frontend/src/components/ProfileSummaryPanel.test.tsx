@@ -420,4 +420,37 @@ describe("ProfileSummaryPanel", () => {
       expect(renderedEvidence).not.toContain(leaked);
     }
   });
+
+  it("folds runtime and service token device labels before rendering summary evidence", () => {
+    const pollutedProfile = profile({
+      platform: "runtime_service_token-device-platform-marker",
+      screen_width: "service_token-device-screen-width-marker" as unknown as number,
+      screen_height: "runtime_service_token-device-screen-height-marker" as unknown as number,
+      hardware_concurrency: "service_token-device-cores-marker" as unknown as number,
+      gpu_renderer: "runtime_service_token-device-gpu-marker",
+    });
+
+    render(
+      <ProfileSummaryPanel
+        profile={pollutedProfile}
+        health={health({})}
+        onOpenProfile={vi.fn()}
+      />,
+    );
+
+    const device = within(screen.getByRole("complementary", { name: "Profile summary" }))
+      .getByRole("region", { name: "Device" });
+    expect(within(device).getAllByText("unknown").length).toBeGreaterThan(0);
+    expect(within(device).getByText("unknown x unknown")).toBeTruthy();
+    expect(within(device).getByText("unknown cores")).toBeTruthy();
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    expect(renderedEvidence).not.toContain("runtime_service_token");
+    expect(renderedEvidence).not.toContain("service_token");
+    expect(renderedEvidence).not.toContain("[redacted]");
+  });
 });

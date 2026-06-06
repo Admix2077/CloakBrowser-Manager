@@ -8897,3 +8897,53 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 GeoIP lookup behavior、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 Frontend viewer and summary service token marker guardrail
+
+背景：
+
+- `ProfileViewer` 的环境条会渲染 profile handle、runtime business session handle 和 Automation API availability，release triage 可能直接截取这些 UI 字段。
+- `ProfileSummaryPanel` 的 Device 区域会渲染 platform、screen、cores 和 GPU label，历史/手工污染 profile 字段可能进入这些 UI evidence。
+- 共享 `errorDisplay` helper 已覆盖 runtime/service token alias，但这两个组件还有本地敏感正则；旧正则覆盖 `api_key`、`session_id`、`private_key`、`viewer_token` 等常见 marker，却没有把 `runtime_service_token` / `service_token` 作为一等敏感 alias。
+
+已覆盖：
+
+- `ProfileViewer` 现在把 `runtime_service_token-*` / `service_token-*` viewer handle 折叠为 `unknown`。
+- `ProfileViewer` 不会把包含 runtime/service token marker 的 profile automation path 当作可复制的 Automation API endpoint。
+- `ProfileSummaryPanel` Device label 现在把 runtime/service token marker-only 值折叠为 `unknown`，而不是显示 `[redacted]` 占位 evidence。
+- 普通公开 viewer handle、business session handle、device label、VNC connection 和 Automation toolbar behavior 保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx -t "runtime and service token marker handles"
+# RED: 旧 ProfileViewer 渲染 runtime_...rker / service_...rker，并显示 Automation ready；GREEN: 1 passed, 20 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileViewer.test.tsx
+# 21 passed
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx -t "runtime and service token device labels"
+# RED: 旧 ProfileSummaryPanel Device 区域渲染 [redacted] / [redacted] cores；GREEN: 1 passed, 9 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileSummaryPanel.test.tsx
+# 10 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 311 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled frontend VNC/viewer/profile summary UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior、raw profile persistence、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

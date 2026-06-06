@@ -10,7 +10,7 @@ import { ProfileCookieManager } from "./ProfileCookieManager";
 import { StatusIndicator } from "./StatusIndicator";
 
 const DEVICE_LABEL_SENSITIVE_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 
 interface ProfileSummaryPanelProps {
   profile: Profile | null;

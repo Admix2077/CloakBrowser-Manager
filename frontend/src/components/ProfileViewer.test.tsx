@@ -298,6 +298,30 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(renderedText).not.toContain("private_key");
   });
 
+  it("folds runtime and service token marker handles before rendering viewer evidence", () => {
+    render(
+      <ProfileViewer
+        profileId="runtime_service_token-profile-viewer-marker"
+        externalSessionId="service_token-runtime-viewer-marker"
+        automationUrl="/api/profiles/runtime_service_token-profile-viewer-marker/automation"
+        clipboardSync={false}
+        onDisconnect={vi.fn()}
+      />,
+    );
+
+    const strip = screen.getByRole("region", { name: "Viewer environment" });
+    expect(within(strip).getByText("Profile unknown")).toBeTruthy();
+    expect(within(strip).getByText("Session unknown")).toBeTruthy();
+    expect(within(strip).getByText("Automation unavailable")).toBeTruthy();
+
+    const titleText = Array.from(strip.querySelectorAll("[title]"))
+      .map((element) => element.getAttribute("title") ?? "")
+      .join(" ");
+    const renderedText = `${strip.textContent} ${titleText}`;
+    expect(renderedText).not.toContain("runtime_service_token");
+    expect(renderedText).not.toContain("service_token");
+  });
+
   it("omits the business session chip for regular profile viewers", () => {
     render(
       <ProfileViewer
