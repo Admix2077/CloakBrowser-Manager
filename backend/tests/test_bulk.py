@@ -634,6 +634,8 @@ def test_bulk_export_profile_configs_sanitizes_persisted_identity_fields(app_cli
             "--private-window",
             f"--proxy-server=https://proxy.invalid/?token={leak_marker}",
             f"--user-agent=Bearer {leak_marker}",
+            "--runtime=runtime_service_token_config_export_marker",
+            "--service=service_token_config_export_marker",
         ],
     )
 
@@ -654,6 +656,8 @@ def test_bulk_export_profile_configs_sanitizes_persisted_identity_fields(app_cli
     assert config["human_preset"] == "default"
     assert config["launch_args"] == ["--private-window"]
     assert leak_marker not in resp.text
+    assert "runtime_service_token_config_export_marker" not in resp.text
+    assert "service_token_config_export_marker" not in resp.text
 
 
 def test_bulk_export_profile_configs_requires_at_least_one_profile_id(app_client: TestClient):

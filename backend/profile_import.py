@@ -97,7 +97,7 @@ _SENSITIVE_TEMPLATE_ARG_RE = re.compile(
     r"(?:https?://|[?&#]|\bauthorization\b|\bbearer\b|\btoken=|\bpassword=|\bsecret=|\bcookie=|"
     r"\b(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|private[_-]?key|"
     r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|session[_-]?id|"
-    r"viewer[_-]?token|x[_-]?api[_-]?key)\b)",
+    r"viewer[_-]?token|x[_-]?api[_-]?key)(?=$|[^A-Za-z0-9]))",
     re.IGNORECASE,
 )
 _SENSITIVE_CSV_SOURCE_MARKERS = (

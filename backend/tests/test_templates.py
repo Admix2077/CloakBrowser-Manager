@@ -172,6 +172,8 @@ def test_profile_template_api_sanitizes_persisted_identity_fields(app_client: Te
             "--private-window",
             f"--user-agent={leak_marker}",
             f"Bearer {leak_marker}",
+            "--runtime=runtime_service_token_template_response_marker",
+            "--service=service_token_template_response_marker",
         ],
     )
 
@@ -190,7 +192,10 @@ def test_profile_template_api_sanitizes_persisted_identity_fields(app_client: Te
         assert data["color_scheme"] is None
         assert data["human_preset"] == "default"
         assert data["launch_args"] == ["--private-window"]
-        assert leak_marker not in json.dumps(data, sort_keys=True)
+        serialized = json.dumps(data, sort_keys=True)
+        assert leak_marker not in serialized
+        assert "runtime_service_token_template_response_marker" not in serialized
+        assert "service_token_template_response_marker" not in serialized
 
 
 def test_profile_template_api_and_import_preview_sanitize_persisted_template_id(

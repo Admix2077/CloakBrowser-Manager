@@ -232,6 +232,8 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
             f"--user-agent=Bearer {leak_marker}",
             "--note=api-key-profile-response-marker",
             "--title=private-key-profile-response-marker",
+            "--runtime=runtime_service_token_profile_response_marker",
+            "--service=service_token_profile_response_marker",
         ],
     )
 
@@ -272,6 +274,8 @@ def test_profile_responses_sanitize_persisted_identity_fields(app_client: TestCl
         "proxy.invalid",
         "api-key-profile-response-marker",
         "private-key-profile-response-marker",
+        "runtime_service_token_profile_response_marker",
+        "service_token_profile_response_marker",
     ):
         assert leaked not in serialized
 
@@ -3142,6 +3146,8 @@ def test_export_profile_bundle_sanitizes_persisted_identity_fields(app_client: T
             "--private-window",
             f"--proxy-server=https://proxy.invalid/?token={leak_marker}",
             f"--user-agent=Bearer {leak_marker}",
+            "--runtime=runtime_service_token_bundle_export_marker",
+            "--service=service_token_bundle_export_marker",
         ],
     )
 
@@ -3161,6 +3167,8 @@ def test_export_profile_bundle_sanitizes_persisted_identity_fields(app_client: T
     assert config["human_preset"] == "default"
     assert config["launch_args"] == ["--private-window"]
     assert leak_marker not in resp.text
+    assert "runtime_service_token_bundle_export_marker" not in resp.text
+    assert "service_token_bundle_export_marker" not in resp.text
 
 
 def test_export_profile_bundle_sensitive_proxy_requires_independent_confirmation(
