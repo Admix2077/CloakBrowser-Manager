@@ -8853,3 +8853,47 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw profile persistence、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 GeoIP source service token marker guardrail
+
+背景：
+
+- `public_geoip_source()` 和 `GeoIPResult.as_dict()` 会把 GeoIP provider/source label 暴露到 profile/proxy/health evidence。
+- 旧 `_SENSITIVE_GEOIP_SOURCE_RE` 已覆盖 URL、Auth、常见 token/key/secret marker 和 runtime/service token alias，但敏感 token 分支结尾仍用 `\b`。
+- Python 正则里 `_` 属于 word 字符，因此短 source label 例如 `runtime_service_token_x` / `service_token_x` 仍可能符合 public source 长度和字符集并绕过旧边界。
+
+已覆盖：
+
+- `_SENSITIVE_GEOIP_SOURCE_RE` 的敏感 token 结尾改为 `(?=$|[^A-Za-z0-9])`。
+- `public_geoip_source()` 对短 runtime/service token 下划线 marker source 返回 `unknown`。
+- `GeoIPResult.as_dict()` 不再暴露这些 marker source label。
+- 普通低敏 source 例如 `ip-api` 和 `qa` 继续保留。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q -k "marker_only_sensitive_sources"
+# RED: 旧 public_geoip_source 返回 runtime_service_token_x；GREEN: 1 passed, 15 deselected
+
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q
+# 16 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled GeoIP/proxy source evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 GeoIP lookup behavior、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -153,6 +153,8 @@ def test_public_geoip_source_filters_marker_only_sensitive_sources():
         "x-api-key-geoip-source-marker",
         "session_id-geoip-source-marker",
         "private_key-geoip-source-marker",
+        "runtime_service_token_x",
+        "service_token_x",
     ]
 
     assert geoip.public_geoip_source("ip-api") == "ip-api"

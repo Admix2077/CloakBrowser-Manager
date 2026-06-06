@@ -8528,3 +8528,48 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/health/runtime/proxy/profile evidence。
 - 不改变 raw profile persistence、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile launch arg runtime/service token release boundary。
+
+## 2026-06-06 GeoIP source service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 GeoIP/proxy source label evidence，因为 `GeoIPResult.as_dict()` 会进入 profile/proxy/health API response 和人工 release triage。
+- 旧 `_SENSITIVE_GEOIP_SOURCE_RE` 已覆盖 URL、Auth、常见 token/key/secret marker 和 runtime/service token alias，但敏感 token 分支结尾仍用 `\b`。
+- Python 正则中 `_` 属于 word 字符，所以短 source label 例如 `runtime_service_token_x` / `service_token_x` 会绕过旧边界，并且仍符合 public source 长度和字符集。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 GeoIP/proxy source evidence 边界。
+
+已覆盖：
+
+- GeoIP source sensitive matcher 现在用 `(?=$|[^A-Za-z0-9])` 识别 `_` / `-` marker 边界。
+- `public_geoip_source()` 对短 runtime/service token marker source 返回 `unknown`。
+- `GeoIPResult.as_dict()` 不再暴露这些 marker source label。
+- 普通低敏 source 例如 `ip-api` 和 `qa` 继续保留。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q -k "marker_only_sensitive_sources"
+# RED then GREEN；旧 public_geoip_source 返回 runtime_service_token_x；GREEN 1 passed, 15 deselected
+
+.venv/bin/python -m pytest backend/tests/test_geoip.py -q
+# 16 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled GeoIP/proxy source evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/health/runtime/proxy/profile evidence。
+- 不改变 GeoIP lookup behavior、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 GeoIP source runtime/service token release boundary。

@@ -53,7 +53,7 @@ _SENSITIVE_GEOIP_SOURCE_RE = re.compile(
     r"\b(authorization|bearer|token|secret|password|cookie|auth|"
     r"access[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|"
     r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|"
-    r"session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)\b",
+    r"session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)(?=$|[^A-Za-z0-9])",
     re.IGNORECASE,
 )
 
