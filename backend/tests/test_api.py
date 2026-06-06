@@ -4028,6 +4028,33 @@ def test_automation_pages_redacts_about_url_query_and_fragment(app_client: TestC
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_pages_redacts_about_url_sensitive_marker_path(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "AutomationAboutMarkerRedaction"})
+    pid = create.json()["id"]
+    leak_marker = "runtime_service_token_automation_about_marker"
+    secret_url = f"about:{leak_marker}?token=about-marker-secret#frag"
+    _automation_running_profile(pid, [_automation_page(secret_url, "About marker")])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    page = resp.json()["pages"][0]
+    assert page["url"] == ""
+    serialized = resp.text
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "about-marker-secret",
+        "?token",
+        "#frag",
+        secret_url,
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_pages_filters_internal_about_pages_with_query_or_fragment(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationInternalAboutRedaction"})
     pid = create.json()["id"]

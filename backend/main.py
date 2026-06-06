@@ -4909,6 +4909,8 @@ def _automation_public_about_url(raw_url: str) -> str:
     parsed = urlparse(raw_url)
     if parsed.scheme.lower() != "about" or not parsed.path:
         return ""
+    if _AUTOMATION_SENSITIVE_MARKER_RE.search(parsed.path):
+        return ""
     return f"about:{parsed.path}"
 
 
