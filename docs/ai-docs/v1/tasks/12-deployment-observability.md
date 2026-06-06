@@ -9103,3 +9103,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-07 Automation console structured text guardrail
+
+背景：
+
+- Automation console log cache 是 Manager-controlled diagnostics evidence，会被 `/api/profiles/{profile_id}/automation/pages/{page_ref}/console-logs` 返回。
+- 正常 Playwright console message text 是字符串，但历史/异常内存记录可能把 `text` 存成 dict/list。
+- 旧响应 helper 会对非字符串 `text` 调用 `str(...)` 再脱敏，敏感键名可能被替换，但结构化对象里的敏感值仍可能出现在响应里。
+
+已覆盖：
+
+- `_automation_console_log_response_entry()` 现在只对字符串 text 做文本脱敏。
+- 非字符串 cached console text 统一返回空字符串，避免 dict/list 被字符串化进入 API evidence。
+- 普通字符串 console text、console type、location URL/line/column 脱敏规则保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_console_logs_drops_non_string_cached_text_values -q
+# RED: structured-token-secret / structured-viewer-secret leaked through str(dict/list) console text
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_console_logs_returns_in_memory_page_logs backend/tests/test_api.py::test_automation_console_logs_redacts_existing_in_memory_entries backend/tests/test_api.py::test_automation_console_logs_drops_non_string_cached_text_values backend/tests/test_api.py::test_automation_console_logs_captures_recent_console_messages backend/tests/test_api.py::test_automation_console_logs_redacts_sensitive_text_and_location_urls backend/tests/test_api.py::test_automation_console_logs_redacts_hyphen_sensitive_assignments backend/tests/test_api.py::test_automation_network_summary_redacts_existing_in_memory_events -q
+# 7 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Automation diagnostics response 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+- 同类底层/第三方 fingerprint 检测站失败继续先标阻塞项，再继续 Manager 可控范围。

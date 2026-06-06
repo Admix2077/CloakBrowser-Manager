@@ -4265,6 +4265,55 @@ def test_automation_console_logs_redacts_existing_in_memory_entries(app_client: 
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_console_logs_drops_non_string_cached_text_values(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleStructuredText"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.automation_console_logs = [
+        {
+            "type": "log",
+            "text": {
+                "token": "structured-token-secret",
+                "message": "Authorization=Bearer structured-bearer-secret",
+                "url": "https://user:pass@example.com/app?token=structured-url-secret#frag",
+            },
+            "location": {},
+        },
+        {
+            "type": "warning",
+            "text": [
+                "runtime_service_token_structured_marker",
+                {"viewer_token": "structured-viewer-secret"},
+            ],
+            "location": {},
+        },
+    ]
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "logs": [
+            {"type": "log", "text": "", "location": {}},
+            {"type": "warning", "text": "", "location": {}},
+        ],
+    }
+    serialized = resp.text
+    for leaked in (
+        "structured-token-secret",
+        "structured-bearer-secret",
+        "structured-url-secret",
+        "runtime_service_token_structured_marker",
+        "structured-viewer-secret",
+        "user:pass",
+        "?token",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_console_logs_captures_recent_console_messages(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationConsoleCapture"})
     pid = create.json()["id"]

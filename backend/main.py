@@ -4920,9 +4920,10 @@ def _automation_public_console_location(value: object) -> dict:
 def _automation_console_log_response_entry(entry: object) -> dict:
     if not isinstance(entry, dict):
         return {"type": "unknown", "text": "", "location": {}}
+    text = entry.get("text")
     return {
         "type": _automation_public_console_type(entry.get("type")),
-        "text": _automation_redact_text(str(entry.get("text", ""))),
+        "text": _automation_redact_text(text) if isinstance(text, str) else "",
         "location": _automation_public_console_location(entry.get("location")),
     }
 
