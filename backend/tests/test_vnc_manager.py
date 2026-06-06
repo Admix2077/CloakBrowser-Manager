@@ -222,6 +222,49 @@ async def test_start_vnc_failure_exception_omits_raw_xvnc_log(
     assert "websockify" not in message
 
 
+# ── stop_vnc ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stop_vnc_logs_public_display_when_display_is_polluted(
+    vnc: VNCManager,
+    caplog: pytest.LogCaptureFixture,
+):
+    leak_marker = "runtime_service_token_stop_display_marker"
+    polluted_display = f"100 token={leak_marker}"
+    terminated: list[bool] = []
+    waited: list[int] = []
+
+    class FakeProcess:
+        def terminate(self) -> None:
+            terminated.append(True)
+
+        def wait(self, timeout: int) -> None:
+            waited.append(timeout)
+
+        def kill(self) -> None:
+            raise AssertionError("kill should not be needed")
+
+    vnc._allocated[polluted_display] = VNCInstance(  # type: ignore[index, arg-type]
+        display=polluted_display,  # type: ignore[arg-type]
+        ws_port=6100,
+        process=FakeProcess(),  # type: ignore[arg-type]
+    )
+    caplog.set_level("INFO", logger="invisible_browser.manager.vnc")
+
+    await vnc.stop_vnc(polluted_display)  # type: ignore[arg-type]
+
+    assert terminated == [True]
+    assert waited == [5]
+    assert "action=vnc.stop_requested display=unknown" in caplog.text
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "token=",
+    ):
+        assert leaked not in caplog.text
+
+
 # ── cleanup_stale ────────────────────────────────────────────────────────────
 
 

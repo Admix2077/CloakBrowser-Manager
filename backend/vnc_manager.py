@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import socket
 import shutil
 import subprocess
@@ -11,6 +12,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 logger = logging.getLogger("invisible_browser.manager.vnc")
+PUBLIC_DISPLAY_RE = re.compile(r"^:\d{1,5}$")
+
+
+def _public_display_label(value: object) -> str:
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return f":{value}"
+    if isinstance(value, str):
+        display = value.strip()
+        if PUBLIC_DISPLAY_RE.fullmatch(display):
+            return display
+    return "unknown"
 
 
 @dataclass
@@ -129,7 +141,7 @@ class VNCManager:
             instance = self._allocated.pop(display, None)
 
         if instance and instance.process:
-            logger.info("Stopping Xvnc on :%d", display)
+            logger.info("action=vnc.stop_requested display=%s", _public_display_label(display))
             instance.process.terminate()
             try:
                 await asyncio.get_event_loop().run_in_executor(

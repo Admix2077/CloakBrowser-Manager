@@ -9509,3 +9509,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled VNC proxy log stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
+
+## 2026-06-07 VNC stop display log guardrail
+
+背景：
+
+- `VNCManager.stop_vnc()` 的停止日志属于 Manager-controlled VNC lifecycle diagnostics evidence。
+- 旧停止路径使用 `Stopping Xvnc on :%d` 直接格式化传入的 display；正常分配器会传整数，但异常/历史运行态对象如果把 display 污染成 token/runtime-service marker 字符串，会导致日志格式化 `TypeError`，并可能把 raw marker 带入诊断面。
+- 该问题属于 Manager 自己的 VNC lifecycle log stability/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `stop_vnc()` 停止日志现在使用 public display label：整数 display 记录为 `:100`，污染/非公开 display 折叠为 `unknown`。
+- 新日志形态为 `action=vnc.stop_requested display=...`，避免 `%d` 对 raw runtime display 格式化失败。
+- `_allocated` 查找、process terminate/wait/kill、VNC forwarding、viewer token、runtime session storage 和 browser runtime 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_vnc_manager.py::test_stop_vnc_logs_public_display_when_display_is_polluted -q
+# RED: old stop_vnc logger used %d with polluted display and raised TypeError
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_vnc_manager.py -q
+# 17 passed
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q
+# 77 passed
+```
+
+边界：
+
+- 这是 Manager-controlled VNC stop lifecycle log stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。

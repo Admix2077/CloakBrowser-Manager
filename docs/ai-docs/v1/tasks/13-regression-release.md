@@ -9185,3 +9185,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC proxy runtime display log release boundary。
+
+## 2026-06-07 VNC stop display log release guardrail
+
+背景：
+
+- Release convergence 继续检查 VNC lifecycle diagnostics evidence，因为 stop path 会在 profile stop、browser close cleanup 和 launch teardown 中释放 Xvnc。
+- 旧 `VNCManager.stop_vnc()` 用 `Stopping Xvnc on :%d` 直接格式化传入 display；如果异常/历史 running display 被污染成 token/runtime-service marker 字符串，停止日志会触发 TypeError，或形成 marker evidence 泄漏风险。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 VNC stop display log evidence 边界。
+
+已覆盖：
+
+- VNC stop log 现在使用 public display label，正常 display 输出 `:100`，污染 display 输出 `unknown`。
+- 日志改为 `action=vnc.stop_requested display=...`，不再用 `%d` 格式化 raw display。
+- 停止行为保持原样：仍按原 display key 释放 `_allocated`，仍 terminate/wait process，必要时 kill。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_vnc_manager.py::test_stop_vnc_logs_public_display_when_display_is_polluted -q
+# RED then GREEN；旧 stop_vnc logger 在 polluted display 上 TypeError；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_vnc_manager.py -q
+# 17 passed
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q
+# 77 passed
+```
+
+边界：
+
+- 这是 Manager-controlled VNC stop lifecycle log stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC stop display log release boundary。
