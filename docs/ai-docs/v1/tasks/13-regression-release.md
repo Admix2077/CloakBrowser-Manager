@@ -8246,3 +8246,34 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation console hyphen-assignment release boundary。
+
+## 2026-06-06 Frontend runtime service token error release guardrail
+
+背景：
+
+- Release convergence 继续检查 Manager UI 可见错误文本，因为 runtime/profile/proxy/automation 操作失败时，错误提示会成为人工回归和问题定位 evidence。
+- 旧 `publicErrorText()` 已覆盖多种 secret assignment 和 marker-only 文本，但 `runtime_service_token` / `service_token` alias 还需要显式覆盖。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 和 IPhey 类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 frontend error evidence 边界。
+
+已覆盖：
+
+- Frontend visible error sanitizer 现在覆盖 `runtime_service_token`、`runtime-service-token`、`service_token`、`service-token` assignment。
+- marker-only frontend error evidence 中的 runtime/service token alias 会被折叠为 `[redacted]`。
+- 现有 URL/Auth/path/IP/generic token/secret redaction 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "runtime and service token"
+# RED then GREEN；旧 frontend error evidence 保留 runtime_service_token/service_token alias；GREEN 1 passed, 10 skipped
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 11 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Frontend runtime/service token error release boundary。

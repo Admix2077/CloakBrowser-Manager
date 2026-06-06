@@ -3,11 +3,11 @@ import { redactUrlCredentials } from "./profileDisplay";
 const ERROR_AUTH_HEADER_RE = /\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest)\s+)?[^\s;,]+/gi;
 const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
 const ERROR_SENSITIVE_ASSIGNMENT_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
 const ERROR_SENSITIVE_MARKER_TOKEN_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/i;
 const ERROR_SENSITIVE_MARKER_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/gi;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/gi;
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 const PROFILE_GEOIP_SENSITIVE_RE =
   /\bAuthorization\b|\bBearer\b|\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;

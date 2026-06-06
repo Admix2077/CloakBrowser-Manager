@@ -8564,3 +8564,34 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 Frontend runtime service token error text guardrail
+
+背景：
+
+- Frontend `publicErrorText()` 是 Manager UI 展示错误前的公共脱敏边界，release triage、runtime/session 操作失败和 diagnostics 入口都可能复用它。
+- 旧规则已覆盖 `api_key`、`access_token`、`viewer_token`、`session_id`、`client_secret`、`private_key` 等常见 assignment 和 marker-only 文本。
+- `runtime_service_token`、`runtime-service-token`、`service_token`、`service-token` 这类 runtime service token alias 仍需要作为一等敏感字段处理，避免 UI 错误提示把服务端凭证线索渲染给人看。
+
+已覆盖：
+
+- `publicErrorText()` 的 sensitive assignment 规则现在显式覆盖 `runtime[_-]?service[_-]?token` 和 `service[_-]?token`。
+- marker-only 错误文本规则同步覆盖这些 alias，例如 `runtime_service_token-ui-error-marker` 和 `service_token-ui-error-marker`。
+- 现有 URL credential、Authorization/Bearer、path、IP、generic token 和常见 secret redaction 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "runtime and service token"
+# RED: 旧 publicErrorText 保留 runtime_service_token/service_token visible evidence；GREEN: 1 passed, 10 skipped
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 11 passed
+```
+
+边界：
+
+- 这是 Manager-controlled frontend UI error evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

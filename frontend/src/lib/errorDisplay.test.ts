@@ -88,6 +88,20 @@ describe("publicErrorText", () => {
     expect(text).not.toContain("client_secret");
     expect(text).not.toContain("private_key");
   });
+
+  it("redacts runtime and service token aliases from visible error text", () => {
+    const text = publicErrorText(
+      "Runtime rejected runtime_service_token=runtime-super-secret " +
+        "service-token: service-super-secret " +
+        "runtime_service_token-ui-error-marker service_token-ui-error-marker",
+    );
+
+    expect(text).toBe("Runtime rejected [redacted] [redacted] [redacted] [redacted]");
+    expect(text).not.toContain("runtime-super-secret");
+    expect(text).not.toContain("service-super-secret");
+    expect(text).not.toContain("runtime_service_token");
+    expect(text).not.toContain("service_token");
+  });
 });
 
 describe("publicProfileGeoipLabel", () => {
