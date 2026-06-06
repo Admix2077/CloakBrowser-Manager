@@ -277,6 +277,39 @@ def test_profile_csv_import_preview_redacts_sensitive_proxy_error_detail(
     assert "Proxy URL missing port: http://csv-proxy-secret.example" not in serialized
 
 
+def test_profile_csv_import_redacts_sensitive_proxy_source_host_markers(
+    app_client: TestClient,
+):
+    sensitive_proxy = (
+        "http://user:hiddenpass@runtime_service_token_csv_proxy_marker.example:8080"
+        "?token=super-secret"
+    )
+    csv_text = "\n".join(
+        [
+            "name,proxy,platform",
+            f"Proxy marker source,{sensitive_proxy},ios",
+        ]
+    )
+
+    endpoints = [
+        ("/api/profiles/import/preview", {"csv_text": csv_text}, "rows"),
+        ("/api/profiles/import", {"csv_text": csv_text, "confirm_import": True}, "results"),
+    ]
+    for endpoint, payload, rows_key in endpoints:
+        resp = app_client.post(endpoint, json=payload)
+
+        assert resp.status_code == 200
+        row = resp.json()[rows_key][0]
+        assert row["ok"] is False
+        assert "platform must be one of: windows, macos, linux" in row["errors"]
+        assert row["source"]["proxy"] == "[redacted]"
+        assert "runtime_service_token_csv_proxy_marker" not in resp.text
+        assert "hiddenpass" not in resp.text
+        assert "token=super-secret" not in resp.text
+        assert "user:" not in resp.text
+    assert db.list_profiles() == []
+
+
 def test_profile_csv_import_preview_rejects_empty_or_headerless_csv(app_client: TestClient):
     empty = app_client.post("/api/profiles/import/preview", json={"csv_text": ""})
     assert empty.status_code == 422

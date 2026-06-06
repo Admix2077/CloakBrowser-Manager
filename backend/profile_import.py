@@ -553,7 +553,7 @@ def _redacted_source(row: dict[str, str]) -> dict[str, str]:
             unsupported_count += 1
             continue
         if field == "proxy":
-            source[field] = redact_proxy_asset_url(value) if value else value
+            source[field] = _redact_csv_proxy_source(value) if value else value
         elif field == "template":
             source[field] = _redact_csv_source_text(value)
         else:
@@ -574,6 +574,11 @@ def _redact_optional_proxy(proxy: object) -> str | None:
     return redact_proxy_asset_url(str(proxy)) if proxy else None
 
 
+def _redact_csv_proxy_source(value: str) -> str:
+    redacted = redact_proxy_asset_url(value)
+    return "[redacted]" if _contains_csv_source_marker(redacted) else redacted
+
+
 def _redact_csv_source_text(value: str) -> str:
     lowered = value.casefold()
     if (
@@ -583,7 +588,7 @@ def _redact_csv_source_text(value: str) -> str:
         or "@" in value
         or "?" in value
         or "#" in value
-        or any(marker in lowered for marker in _SENSITIVE_CSV_SOURCE_MARKERS)
+        or _contains_csv_source_marker(lowered)
         or "token" in lowered
         or "secret" in lowered
         or "password" in lowered
@@ -593,6 +598,11 @@ def _redact_csv_source_text(value: str) -> str:
     ):
         return "[redacted]"
     return value
+
+
+def _contains_csv_source_marker(value: str) -> bool:
+    lowered = value.casefold()
+    return any(marker in lowered for marker in _SENSITIVE_CSV_SOURCE_MARKERS)
 
 
 def _validation_errors(exc: ValidationError) -> list[str]:

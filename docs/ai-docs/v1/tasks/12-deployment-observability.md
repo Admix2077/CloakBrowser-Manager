@@ -9543,3 +9543,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled VNC stop lifecycle log stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
+
+## 2026-06-07 CSV import proxy source marker guardrail
+
+背景：
+
+- CSV import preview/import response 的 `source.proxy` 属于 Manager-controlled import diagnostics evidence，会把用户粘贴的 proxy 值以脱敏形态回显给调用方。
+- 旧路径只通过 proxy URL redactor 去掉 userinfo、query 和 fragment；如果 proxy host 自身包含 `runtime_service_token...` 这类内部 marker，脱敏后的 host 仍会进入 `source.proxy`。
+- 该问题属于 Manager 自己的 CSV import response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `source.proxy` 继续保留普通 proxy 的脱敏 host，例如 `http://proxy.example:8080`。
+- 当脱敏后的 proxy host/URL 仍命中 CSV source marker（如 `runtime_service_token`、`api_key`、`session_id`）时，`source.proxy` 折叠为 `[redacted]`。
+- CSV import 解析、proxy normalization、profile 创建 payload、audit event、proxy error detail、browser runtime 和 proxy resolution 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_proxy_source_host_markers -q
+# RED: old import preview/import response returned http://runtime_service_token_csv_proxy_marker.example:8080 in source.proxy
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 22 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

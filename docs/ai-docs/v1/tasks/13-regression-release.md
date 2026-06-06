@@ -9219,3 +9219,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC stop display log release boundary。
+
+## 2026-06-07 CSV import proxy source marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 bulk import evidence，因为 preview/import response 会把 CSV 原始字段以 `source` 形式返回给 Manager UI/调用方。
+- 旧 `source.proxy` 路径只去掉 proxy userinfo、query 和 fragment；如果 proxy host 本身包含 `runtime_service_token...` marker，脱敏后的 host 仍会作为 import source evidence 回显。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 CSV import proxy source evidence 边界。
+
+已覆盖：
+
+- CSV import preview 和 confirmed import 的 `source.proxy` 都会在 proxy URL redaction 后再次检查内部 marker。
+- 普通 proxy host 仍按既有 contract 返回脱敏 host；命中 `runtime_service_token`、`api_key`、`session_id` 等 marker 的 proxy source 折叠为 `[redacted]`。
+- 不改变导入行验证、proxy normalization、profile 创建、audit metadata、error detail、runtime browser 或 proxy resolution 行为。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_proxy_source_host_markers -q
+# RED then GREEN；旧 import preview/import response 在 source.proxy 回显 http://runtime_service_token_csv_proxy_marker.example:8080；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 22 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CSV import proxy source marker release boundary。
