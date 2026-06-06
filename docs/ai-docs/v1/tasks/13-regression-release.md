@@ -8937,3 +8937,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation non-http URL release boundary。
+
+## 2026-06-07 VNC WebSocket origin host marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 VNC/WebSocket log evidence，因为 rejected Origin 会出现在 diagnostics/triage 日志中。
+- 旧 `_websocket_public_host_label()` 会剥离 path/query/fragment，但不会识别 hostname 自身的 marker；`runtime_service_token...example` 会作为 host label 写入日志。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 VNC/WebSocket log evidence 边界。
+
+已覆盖：
+
+- VNC WebSocket Origin mismatch log 中，含 token/header/runtime-service marker 的 origin host 折叠为 `unknown`。
+- 普通 host、missing/malformed host 和非默认端口 host label 行为保持不变。
+- Origin rejection、close code、viewer token handling、backend VNC connect/proxy 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_sensitive_origin_host_marker -q
+# RED then GREEN；旧日志保留 runtime_service_token_origin_marker.example；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k 'vnc_ws_origin or ws_allows or vnc_proxy_' -q
+# 11 passed, 254 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled VNC/WebSocket log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 WebSocket Origin 校验语义、VNC forwarding、viewer token schema、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC WebSocket origin host marker release boundary。

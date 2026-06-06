@@ -7895,6 +7895,37 @@ def test_vnc_ws_origin_rejection_logs_low_sensitive_origin(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_vnc_ws_origin_rejection_redacts_sensitive_origin_host_marker(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "OriginVncMarkerLogRedaction"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+    leak_marker = "runtime_service_token_origin_marker"
+
+    with pytest.raises(Exception):
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": f"http://{leak_marker}.example/path?viewer_token=origin-secret#frag"},
+        ):
+            pass
+
+    assert "WebSocket origin mismatch: origin=unknown host=testserver" in caplog.text
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "origin-secret",
+        "viewer_token",
+        "?viewer_token",
+        "/path",
+        "#frag",
+    ):
+        assert leaked not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_same_origin(app_client: TestClient):
     """WebSocket from same origin should pass Origin check (not get 4403)."""
     create = app_client.post("/api/profiles", json={"name": "OriginOk"})

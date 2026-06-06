@@ -324,6 +324,8 @@ def _websocket_public_host_label(value: str | None) -> str:
         return "malformed"
     if not host:
         return "missing"
+    if _AUTOMATION_SENSITIVE_MARKER_RE.search(host):
+        return "unknown"
     if port and port not in (80, 443):
         return f"{host}:{port}"
     return host

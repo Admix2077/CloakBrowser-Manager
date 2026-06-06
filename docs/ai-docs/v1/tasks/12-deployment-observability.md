@@ -9261,3 +9261,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Automation URL response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding 或 browser fingerprint 行为。
+
+## 2026-06-07 VNC WebSocket origin host marker guardrail
+
+背景：
+
+- VNC WebSocket origin rejection log 是 Manager-controlled diagnostics evidence，会记录 rejected origin/host 的低敏 host label。
+- 旧 host label helper 已剥离 path/query/fragment，但如果 Origin hostname 自身包含 `runtime_service_token...` marker，会把 marker host 原样写进日志。
+- 该问题属于 Manager 自己的 VNC/WebSocket log evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_websocket_public_host_label()` 现在会把含 token/header/runtime-service marker 的 hostname 折叠为 `unknown`。
+- 普通 origin host、missing/malformed host 和非默认端口 host label 行为保持不变。
+- WebSocket Origin 校验、拒绝状态码和 VNC forwarding 行为不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_sensitive_origin_host_marker -q
+# RED: old log preserved runtime_service_token_origin_marker.example
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k 'vnc_ws_origin or ws_allows or vnc_proxy_' -q
+# 11 passed, 254 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled VNC/WebSocket log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 WebSocket Origin 校验语义、VNC forwarding、viewer token schema、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
