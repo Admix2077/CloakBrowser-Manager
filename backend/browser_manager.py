@@ -62,7 +62,8 @@ PUBLIC_GPU_TEXT_RE = re.compile(r"^[A-Za-z0-9 .,_()+:/\\-]{1,160}$")
 SENSITIVE_TEXT_RE = re.compile(
     r"(?:https?://|[?&#]|authorization:|bearer\s+|"
     r"(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|cookie|password|private[_-]?key|"
-    r"refresh[_-]?token|secret|session[_-]?id|token|viewer[_-]?token|x[_-]?api[_-]?key)\b)",
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|secret|session[_-]?id|"
+    r"token|viewer[_-]?token|x[_-]?api[_-]?key)(?=$|[^A-Za-z0-9]))",
     re.IGNORECASE,
 )
 PUBLIC_PROFILE_LOG_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")

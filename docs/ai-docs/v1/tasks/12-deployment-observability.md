@@ -8627,3 +8627,37 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 BrowserManager runtime service token text guardrail
+
+背景：
+
+- BrowserManager 的共享 `SENSITIVE_TEXT_RE` 会保护 launch identity 输入、Firefox `extra_args`、profile log id 和 lifecycle evidence。
+- 旧规则覆盖 `api_key`、`session_id`、`private_key`、`viewer_token` 等常见 marker，也能通过 generic `token` 捕获部分短横线形式。
+- 下划线 marker 例如 `runtime_service_token_gpu_marker`、`service_token_launch_marker` 不能被旧 `\b` 结尾命中，因为 Python 正则中 `_` 属于 word 字符，`token_` 前不会形成 word boundary。
+
+已覆盖：
+
+- `SENSITIVE_TEXT_RE` 现在显式覆盖 `runtime[_-]?service[_-]?token` 和 `service[_-]?token`。
+- 敏感字段结尾从单纯 `\b` 调整为 `(?=$|[^A-Za-z0-9])`，让 `_` / `-` marker 分隔都能触发过滤，同时保留 `tokenizer` 这类普通词。
+- `_build_invisible_pin()` 会丢弃含 runtime/service token alias 的 GPU/WebGL pin 文本。
+- `_build_invisible_kwargs()` 会丢弃含 runtime/service token alias 的 Firefox launch args。
+- `_public_profile_log_id()` 会把含 runtime/service token alias 的 profile id evidence 折叠为 `unknown`。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "runtime_service_token_marker or public_profile_log_id_rejects_runtime_service_token"
+# RED: 3 failed；旧 BrowserManager evidence 保留 runtime_service_token/service_token 下划线 marker
+# GREEN: 3 passed, 74 deselected
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q
+# 77 passed
+```
+
+边界：
+
+- 这是 Manager-controlled BrowserManager launch/log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL coherence、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

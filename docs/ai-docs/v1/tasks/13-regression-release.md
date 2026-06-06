@@ -8308,3 +8308,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Frontend profile label runtime/service token release boundary。
+
+## 2026-06-06 BrowserManager runtime service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 BrowserManager launch/log evidence，因为 GPU/WebGL pin、Firefox launch args 和 profile lifecycle log id 会进入 runtime/profile 回归证据。
+- 旧 `SENSITIVE_TEXT_RE` 覆盖常见 secret marker，但 `runtime_service_token_*` / `service_token_*` 下划线 marker 会绕过旧 word-boundary 结尾。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 和 IPhey 类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 BrowserManager evidence 边界。
+
+已覆盖：
+
+- BrowserManager 共享敏感文本过滤现在覆盖 runtime/service token alias。
+- GPU/WebGL launch pin、Firefox `extra_args` 和 profile log id evidence 会拒绝 runtime/service token 下划线 marker。
+- 普通公开 GPU text、Firefox args 和 profile log id 保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q -k "runtime_service_token_marker or public_profile_log_id_rejects_runtime_service_token"
+# RED then GREEN；旧 BrowserManager evidence 保留 runtime_service_token/service_token 下划线 marker；GREEN 3 passed, 74 deselected
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -q
+# 77 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL coherence、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 BrowserManager runtime/service token release boundary。

@@ -207,6 +207,18 @@ def test_build_invisible_pin_drops_non_public_gpu_text():
     assert "private-key-gpu-marker" not in repr(marker_pin)
 
 
+def test_build_invisible_pin_drops_runtime_service_token_marker_gpu_text():
+    pin = bm._build_invisible_pin({
+        "gpu_vendor": "Google Inc. runtime_service_token_gpu_marker",
+        "gpu_renderer": "ANGLE service_token_gpu_marker",
+    })
+
+    assert "gpu.vendor" not in pin
+    assert "gpu.renderer" not in pin
+    assert "runtime_service_token_gpu_marker" not in repr(pin)
+    assert "service_token_gpu_marker" not in repr(pin)
+
+
 def test_build_invisible_pin_light_theme():
     assert bm._build_invisible_pin({"color_scheme": "light"})["dark_theme"] is False
 
@@ -818,6 +830,33 @@ def test_build_invisible_kwargs_drops_non_public_launch_args(tmp_path: Path):
     })
     assert polluted_scalar["extra_args"] == []
     assert leak_marker not in repr(polluted_scalar)
+
+
+def test_build_invisible_kwargs_drops_runtime_service_token_marker_launch_args(tmp_path: Path):
+    kwargs = bm._build_invisible_kwargs({
+        "fingerprint_seed": 7,
+        "user_data_dir": str(tmp_path / "profile"),
+        "launch_args": [
+            "--private-window",
+            "--lang=en-US",
+            "--note=runtime_service_token_launch_marker",
+            "--title=service_token_launch_marker",
+        ],
+    })
+
+    assert kwargs["extra_args"] == ["--private-window", "--lang=en-US"]
+    assert "runtime_service_token_launch_marker" not in repr(kwargs)
+    assert "service_token_launch_marker" not in repr(kwargs)
+
+
+def test_public_profile_log_id_rejects_runtime_service_token_markers():
+    assert bm._public_profile_log_id("profile-log") == "profile-log"
+
+    for polluted in [
+        "runtime_service_token_profile_marker",
+        "service_token_profile_marker",
+    ]:
+        assert bm._public_profile_log_id(polluted) == "unknown"
 
 
 @pytest.mark.asyncio
