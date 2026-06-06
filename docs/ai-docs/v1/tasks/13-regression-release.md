@@ -8669,3 +8669,48 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 raw proxy persistence、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy CSV textarea runtime/service token release boundary。
+
+## 2026-06-07 Profile CSV runtime service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 Profile CSV import dialog，因为 textarea、preview table 和 row title 经常进入人工 triage evidence。
+- Profile CSV import 保持双轨语义：UI textarea 和 preview table 显示低敏内容，但 import source payload 必须保留原始 CSV，避免把用户要导入的 profile 字段改坏。
+- 旧 Profile CSV marker 字段规则已把 `api_key` / `client_secret` / `private_key` marker-only 字段显示为 `unknown`，但 `runtime_service_token` / `service_token` alias 只会被通用 sanitizer 渲染成 `[redacted]`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Profile CSV UI evidence 边界。
+
+已覆盖：
+
+- Profile CSV textarea visible text 对 `runtime_service_token-*` / `service_token-*` marker-only 字段显示 `unknown`。
+- Profile CSV preview table 的 name/template/platform/locale/timezone/proxy/tag evidence 和 `title` 属性同样折叠这些 marker。
+- endpoint host/port 低敏 evidence 继续保留，URL credential userinfo 继续隐藏。
+- `importProfiles()` 仍收到原始 raw CSV，确认 UI 脱敏不改变 import payload。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx -t "runtime and service token marker profile CSV evidence"
+# RED then GREEN；旧 textarea 显示 "[redacted]" 字段而不是 "unknown"；GREEN 1 passed, 9 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx
+# 10 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed in 41.62s
+
+npm --prefix frontend test -- --run
+# 21 files / 313 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled Profile CSV import UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 raw profile persistence、profile import request contract、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV runtime/service token release boundary。

@@ -13,9 +13,9 @@ import { TagBadge } from "./Badge";
 
 const PROFILE_CSV_SAMPLE = "name,proxy,tags,notes,template,platform,locale,timezone";
 const PROFILE_CSV_SENSITIVE_FIELD_RE =
-  /(^|,)(?:"(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+"|(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+)(?=,|$)/gi;
+  /(^|,)(?:"(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+"|(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+)(?=,|$)/gi;
 const PROFILE_CSV_LABEL_SENSITIVE_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 
 interface ProfileCsvPreviewDialogProps {
   onClose: () => void;

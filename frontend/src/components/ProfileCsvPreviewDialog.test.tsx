@@ -274,6 +274,81 @@ describe("ProfileCsvPreviewDialog", () => {
     await waitFor(() => expect(mockImportProfiles).toHaveBeenCalledWith(rawCsv));
   });
 
+  it("folds runtime and service token marker profile CSV evidence without changing submitted import CSV", async () => {
+    const rawName = "runtime_service_token-profile-csv-name-marker";
+    const rawTag = "service_token-profile-csv-tag-marker";
+    const rawNotes = "runtime_service_token-profile-csv-notes-marker";
+    const rawCsv = [
+      "name,proxy,tags,notes",
+      `"${rawName}",http://user:hiddenpass@marker.proxy.example:8080,"${rawTag}","${rawNotes}"`,
+    ].join("\n");
+    mockPreviewProfileImport.mockResolvedValueOnce({
+      total: 1,
+      valid: 1,
+      invalid: 0,
+      rows: [
+        {
+          line_number: 2,
+          ok: true,
+          errors: [],
+          source: {
+            name: rawName,
+            proxy: "http://user:hiddenpass@marker.proxy.example:8080",
+          },
+          profile: {
+            ...validPreview.rows[0].profile!,
+            name: rawName,
+            template_id: "runtime_service_token-profile-row-template-marker",
+            platform: "service_token-profile-row-platform-marker",
+            locale: "runtime_service_token-profile-row-locale-marker",
+            timezone: "service_token-profile-row-timezone-marker",
+            proxy: "runtime_service_token-profile-row-proxy-marker",
+            tags: [{ tag: rawTag }],
+          },
+        },
+      ],
+    });
+    mockImportProfiles.mockResolvedValueOnce({
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [],
+    });
+
+    render(<ProfileCsvPreviewDialog onClose={vi.fn()} />);
+
+    const textarea = screen.getByLabelText("Profile CSV content") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: rawCsv } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview CSV" }));
+
+    await waitFor(() => expect(mockPreviewProfileImport).toHaveBeenCalledWith(rawCsv));
+    expect(textarea.value).toContain("unknown");
+    expect(textarea.value).toContain("http://marker.proxy.example:8080");
+    expect(textarea.value).not.toContain("[redacted]");
+
+    const table = await screen.findByRole("table", { name: "Profile CSV preview" });
+    expect(within(table).getAllByText("unknown").length).toBeGreaterThanOrEqual(6);
+
+    const renderedEvidence = [
+      textarea.value,
+      table.textContent,
+      ...Array.from(table.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      "runtime_service_token",
+      "service_token",
+      "[redacted]",
+      "hiddenpass",
+      "user:",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.click(await screen.findByRole("button", { name: "Create valid profiles" }));
+    await waitFor(() => expect(mockImportProfiles).toHaveBeenCalledWith(rawCsv));
+  });
+
   it("redacts preview row profile metadata from rendered evidence", async () => {
     const leakMarker = "profile-csv-row-secret";
     mockPreviewProfileImport.mockResolvedValueOnce({

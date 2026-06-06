@@ -8992,3 +8992,48 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw proxy persistence、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-07 Profile CSV runtime service token marker guardrail
+
+背景：
+
+- Profile CSV import dialog 的 textarea、preview table 和 row `title` 属性会进入 release triage 的人工 UI evidence。
+- 该 dialog 和 Proxy CSV 一样有双轨语义：可见 UI 必须低敏，但真正提交给 import API 的 raw CSV 仍要保留用户原始输入。
+- 旧 profile CSV marker 字段规则已把 `api_key`、`client_secret`、`private_key` 等 marker-only 字段显示为 `unknown`，但 `runtime_service_token` / `service_token` alias 会先被通用 sanitizer 显示为 `[redacted]`。
+- 当前策略下，Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 和类似底层 fingerprint detector 问题只标 blocker，不在 Manager 前端硬解；本轮继续收 Manager 可控 UI evidence 边界。
+
+已覆盖：
+
+- `ProfileCsvPreviewDialog` 的 textarea visible text 现在把 runtime/service token marker-only CSV 字段折叠为 `unknown`。
+- Profile CSV preview table 的 name/template/platform/locale/timezone/proxy/tag evidence 和 `title` 属性同样折叠这些 marker，不再显示 `[redacted]` 或 marker alias。
+- endpoint host/port 低敏 evidence 继续保留，URL credential userinfo 继续隐藏。
+- `importProfiles()` 仍收到原始 raw CSV，避免 UI 脱敏破坏实际导入语义。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx -t "runtime and service token marker profile CSV evidence"
+# RED: 旧 textarea 显示 "[redacted]" 字段而不是 "unknown"；GREEN: 1 passed, 9 skipped
+
+npm --prefix frontend test -- --run src/components/ProfileCsvPreviewDialog.test.tsx
+# 10 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed in 41.62s
+
+npm --prefix frontend test -- --run
+# 21 files / 313 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled Profile CSV import UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw profile persistence、profile import request contract、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
