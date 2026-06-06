@@ -3839,6 +3839,31 @@ def test_automation_pages_redacts_sensitive_url_and_title(app_client: TestClient
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_pages_redacts_non_http_internal_url_paths(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationInternalUrlRedaction"})
+    pid = create.json()["id"]
+    leak_marker = "automation-internal-url-secret"
+    secret_url = f"file://localhost/tmp/profile-{leak_marker}/state.html?token={leak_marker}#frag"
+    _automation_running_profile(pid, [_automation_page(secret_url, "Internal URL")])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    page = resp.json()["pages"][0]
+    assert page["url"] == ""
+    serialized = resp.text
+    for leaked in (
+        leak_marker,
+        "file://",
+        "/tmp/profile",
+        "state.html",
+        "?token",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_pages_redacts_about_url_query_and_fragment(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationAboutUrlRedaction"})
     pid = create.json()["id"]
