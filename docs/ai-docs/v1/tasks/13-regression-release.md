@@ -9092,3 +9092,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Launch response runtime display/VNC port release boundary。
+
+## 2026-06-07 Automation info runtime engine marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation API evidence，因为 `/api/profiles/{profile_id}/automation` 会把运行态 engine、status 和 pages URL 返回给 Manager UI/调用方。
+- 旧 automation info path 直接使用 `running.engine`；异常/历史污染运行态字段会让 token/runtime-service marker 进入 Automation info response。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Automation info runtime evidence 边界。
+
+已覆盖：
+
+- Automation info response 的 engine 现在走 public engine sanitizer。
+- 只有 `invisible_playwright` 作为公开标准值透出；污染值、空值或非字符串值折叠为 `"unknown"`。
+- 正常 Automation info response contract 保持：profile id、`invisible_playwright` engine、`running` status 和低敏 pages URL。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_info_sanitizes_runtime_engine_marker -q
+# RED then GREEN；旧 automation info response 回显 invisible_playwright token=runtime_service_token_automation_engine_marker；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_info_sanitizes_runtime_engine_marker backend/tests/test_api.py::test_automation_info_running backend/tests/test_api.py::test_status_and_automation_info_sanitize_persisted_profile_id_urls backend/tests/test_api.py::test_automation_info_not_running -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Automation info API response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation info runtime engine marker release boundary。

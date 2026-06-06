@@ -3819,6 +3819,33 @@ def test_status_and_automation_info_sanitize_persisted_profile_id_urls(
         assert leaked not in serialized
 
 
+def test_automation_info_sanitizes_runtime_engine_marker(
+    app_client: TestClient,
+):
+    leak_marker = "runtime_service_token_automation_engine_marker"
+    create = app_client.post("/api/profiles", json={"name": "AutomationInfoEngineMarker"})
+    pid = create.json()["id"]
+    running = _automation_running_profile(pid)
+    running.engine = f"invisible_playwright token={leak_marker}"
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["profile_id"] == pid
+    assert data["engine"] == "unknown"
+    assert data["status"] == "running"
+    assert data["pages_url"] == f"/api/profiles/{pid}/automation/pages"
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "token=",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_info_not_running(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationStopped"})
     pid = create.json()["id"]

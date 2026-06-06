@@ -1258,6 +1258,10 @@ def _profile_automation_pages_url(public_profile_id: str) -> str:
     return f"{_profile_automation_url(public_profile_id)}/pages"
 
 
+def _public_automation_engine(value: object) -> str:
+    return value if isinstance(value, str) and value == "invisible_playwright" else "unknown"
+
+
 _PUBLIC_PROFILE_DISPLAY_RE = re.compile(r"^:\d{1,5}$")
 
 
@@ -5280,7 +5284,7 @@ async def automation_info(profile_id: str):
     public_profile_id = _public_profile_identifier(profile_id)
     return AutomationInfoResponse(
         profile_id=public_profile_id,
-        engine=running.engine,
+        engine=_public_automation_engine(getattr(running, "engine", None)),
         status="running",
         pages_url=_profile_automation_pages_url(public_profile_id),
     )

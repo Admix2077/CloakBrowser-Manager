@@ -9416,3 +9416,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled launch API response stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Automation info runtime engine marker guardrail
+
+背景：
+
+- `/api/profiles/{profile_id}/automation` 是 Manager-controlled Automation info response evidence，会把运行态 engine、status 和 pages URL 返回给本地管理台/API 调用方。
+- 旧 automation info path 直接使用 `running.engine`；如果异常/历史 RunningProfile engine 字段被污染为包含 token/runtime-service marker 的字符串，响应会原样回显该 marker。
+- 该问题属于 Manager 自己的 Automation info response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Automation info engine 现在只允许公开标准值 `invisible_playwright`。
+- 其他非字符串、空值或被 marker 污染的运行态 engine 折叠为固定 `"unknown"`。
+- 正常 Automation info response contract 保持：profile id、`invisible_playwright` engine、`running` status 和低敏 pages URL。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_info_sanitizes_runtime_engine_marker -q
+# RED: old automation info response echoed invisible_playwright token=runtime_service_token_automation_engine_marker
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_info_sanitizes_runtime_engine_marker backend/tests/test_api.py::test_automation_info_running backend/tests/test_api.py::test_status_and_automation_info_sanitize_persisted_profile_id_urls backend/tests/test_api.py::test_automation_info_not_running -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Automation info API response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
