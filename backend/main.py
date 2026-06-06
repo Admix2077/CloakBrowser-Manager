@@ -861,6 +861,38 @@ def _tag_responses(tags: object) -> list[TagResponse]:
     return responses
 
 
+def _public_selection_tag(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    tag = value.strip()
+    if not tag:
+        return None
+    if _SENSITIVE_PROXY_PROVIDER_RE.search(tag) or _AUTOMATION_SENSITIVE_MARKER_RE.search(tag):
+        return None
+    return tag
+
+
+def _public_selection_tags(tags: list[str]) -> list[str]:
+    public_tags: list[str] = []
+    for tag in tags:
+        public_tag = _public_selection_tag(tag)
+        if public_tag is None:
+            continue
+        public_tags.append(public_tag)
+    return public_tags
+
+
+def _proxy_response_without_sensitive_tags(proxy: dict) -> ProxyResponse:
+    safe = dict(proxy)
+    safe["tags"] = [
+        {"tag": public_tag, "color": tag.get("color") if isinstance(tag.get("color"), str) else None}
+        for tag in proxy.get("tags", [])
+        if isinstance(tag, dict)
+        if (public_tag := _public_selection_tag(tag.get("tag"))) is not None
+    ]
+    return _proxy_response(safe)
+
+
 def _proxy_response(proxy: dict) -> ProxyResponse:
     safe = dict(proxy)
     safe["id"] = _public_proxy_identifier(safe.get("id"))
@@ -1955,7 +1987,7 @@ async def assign_random_proxy_to_profiles(request: Request):
                 ok=True,
                 error=None,
                 proxy_id=_public_proxy_identifier(chosen.get("id")),
-                proxy=_proxy_response(chosen),
+                proxy=_proxy_response_without_sensitive_tags(chosen),
             )
         )
 
@@ -1969,7 +2001,7 @@ async def assign_random_proxy_to_profiles(request: Request):
         ),
         provider=provider,
         country_code=country_code,
-        tags=tags,
+        tags=_public_selection_tags(tags),
         candidate_count=len(candidates),
         total=len(req.profile_ids),
         succeeded=succeeded,

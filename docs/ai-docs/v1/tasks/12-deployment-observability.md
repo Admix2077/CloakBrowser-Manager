@@ -9198,3 +9198,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled runtime/VNC audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 viewer token schema、VNC forwarding、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Random proxy assignment selection tag evidence guardrail
+
+背景：
+
+- Random proxy assignment response 是 Manager-controlled release evidence，会返回本次随机分配的 provider/country/tag selection summary 和嵌入的 selected proxy summary。
+- 普通 proxy/provider preset tag 可以作为筛选条件保留，但如果历史/异常 tag 文本含 `runtime_service_token...`、Authorization、Bearer、token 或 secret marker，旧响应会把该 tag 原样回显到 `tags` 或嵌入 proxy `tags`。
+- 该问题属于 Manager 自己的 proxy assignment response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Random proxy assignment 内部匹配仍使用原有 normalized tag，所以不会因为丢弃敏感 tag 而扩大候选 proxy 范围。
+- Random assignment response 的 selection `tags` 只返回低敏 tag；敏感 marker tag 不再回显。
+- Random assignment result 内嵌 proxy summary 也过滤敏感 marker tag；普通 proxy CRUD/list/detail 的原有 tag response contract 保持不变。
+- Audit metadata 继续只记录 `tag_count` 等低敏计数，不记录 raw tag 文本。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py::test_random_proxy_assignment_redacts_sensitive_selection_tags_without_broadening_match -q
+# RED: old random assignment response preserved mobile-runtime_service_token_random_tag_marker in data["tags"]
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py -k "random_proxy_assignment" -q
+# 6 passed, 38 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled proxy assignment response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 raw proxy persistence、raw provider preset persistence、proxy selection matching、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。

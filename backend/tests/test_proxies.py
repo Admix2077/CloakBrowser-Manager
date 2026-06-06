@@ -1677,6 +1677,63 @@ def test_random_proxy_assignment_redacts_persisted_sensitive_preset_selection_me
         assert leaked not in serialized
 
 
+def test_random_proxy_assignment_redacts_sensitive_selection_tags_without_broadening_match(
+    app_client: TestClient,
+):
+    leak_marker = "runtime_service_token_random_tag_marker"
+    sensitive_tag = f"mobile-{leak_marker}"
+    preset = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Sensitive tag preset",
+            "tags": [{"tag": sensitive_tag, "color": "#0ea5e9"}],
+        },
+    ).json()
+    matching = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Sensitive tagged proxy",
+            "url": "http://user:hiddenpass@sensitive-tagged.example:8080",
+            "tags": [{"tag": sensitive_tag, "color": "#0ea5e9"}],
+        },
+    ).json()
+    app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Public untagged decoy",
+            "url": "http://user:hiddenpass@public-decoy.example:8080",
+        },
+    )
+    profile = app_client.post("/api/profiles", json={"name": "Sensitive Tag Random"}).json()
+
+    resp = app_client.post(
+        "/api/proxies/assign/random",
+        json={
+            "profile_ids": [profile["id"]],
+            "provider_preset_id": preset["id"],
+            "confirm_assign": True,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["candidate_count"] == 1
+    assert data["tags"] == []
+    assert data["results"][0]["proxy_id"] == matching["id"]
+
+    events = _proxy_bulk_audit_events()
+    assert [event["event_type"] for event in events] == ["proxy.random_assigned"]
+    assert events[0]["metadata"]["tag_count"] == 1
+
+    serialized = json.dumps({"response": data, "events": events}, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "hiddenpass",
+    ):
+        assert leaked not in serialized
+
+
 def test_random_proxy_assignment_requires_explicit_confirmation_without_side_effects(
     app_client: TestClient,
 ):

@@ -8874,3 +8874,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 viewer token schema、VNC forwarding、runtime session storage、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Runtime viewer failure reason release boundary。
+
+## 2026-06-07 Random proxy assignment selection tag release guardrail
+
+背景：
+
+- Release convergence 继续检查 Proxy Manager API evidence，因为 random proxy assignment 会把 provider/country/tag selection summary、candidate count 和 selected proxy summary 返回给调用方。
+- 旧 selection summary 会原样回显 provider preset/request 合并后的 tag；如果历史/异常 tag 包含 `runtime_service_token...` 或 token/secret/header marker，会进入 release/debug evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 random proxy assignment response evidence 边界。
+
+已覆盖：
+
+- Random proxy assignment 内部 candidate matching 继续使用原 normalized tags，不因为响应脱敏而扩大候选范围。
+- Response selection `tags` 过滤 token/secret/header/runtime-service marker tag。
+- Response result 内嵌 proxy summary 过滤敏感 tag；普通 proxy/preset/profile tag CRUD/list/detail contract 不变。
+- Audit 仍只写 provider/country/tag_count/candidate/profile/assigned/missing counts，不写 raw tag。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_proxies.py::test_random_proxy_assignment_redacts_sensitive_selection_tags_without_broadening_match -q
+# RED then GREEN；旧响应在 data["tags"] 中保留 mobile-runtime_service_token_random_tag_marker；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_proxies.py -k "random_proxy_assignment" -q
+# 6 passed, 38 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Proxy Manager API response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 raw proxy persistence、raw provider preset persistence、proxy selection matching、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 random proxy assignment selection tag release boundary。
