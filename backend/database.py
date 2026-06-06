@@ -1075,7 +1075,7 @@ def _sanitize_audit_metadata(value: Any) -> Any:
                 continue
             sanitized[key] = _sanitize_audit_metadata(item)
         return sanitized
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_sanitize_audit_metadata(item) for item in value]
     if isinstance(value, str):
         sanitized = _AUDIT_PROXY_URL_RE.sub(

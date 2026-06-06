@@ -2032,6 +2032,51 @@ def test_audit_metadata_sanitizer_removes_sensitive_fields(tmp_db):
     assert "session-cookie" not in serialized_events
 
 
+def test_audit_metadata_sanitizer_sanitizes_tuple_values_before_persistence(tmp_db):
+    leak_marker = "audit-tuple-secret"
+    event = db.create_audit_event(
+        event_type="runtime.test",
+        actor_type="runtime_service",
+        metadata={
+            "tuple_values": (
+                "kept",
+                f"token={leak_marker}",
+                {
+                    "viewer_token": f"viewer-{leak_marker}",
+                    "message": f"Authorization=Bearer {leak_marker}",
+                },
+            ),
+            "nested": {
+                "tuple_values": (
+                    f"runtime_service_token_{leak_marker}",
+                    "safe",
+                )
+            },
+        },
+    )
+
+    with db.get_db() as conn:
+        raw_metadata = conn.execute(
+            "SELECT metadata FROM audit_events WHERE id = ?",
+            (event["id"],),
+        ).fetchone()[0]
+
+    persisted = json.loads(raw_metadata)
+    assert persisted == {
+        "nested": {"tuple_values": ["[redacted]", "safe"]},
+        "tuple_values": [
+            "kept",
+            "token=[redacted]",
+            {"message": "Authorization=[redacted]"},
+        ],
+    }
+    serialized_raw = json.dumps(persisted, sort_keys=True)
+    assert leak_marker not in serialized_raw
+    assert "viewer-" not in serialized_raw
+    assert "Authorization=Bearer" not in serialized_raw
+    assert "runtime_service_token" not in serialized_raw
+
+
 def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
     sensitive_ids = [
         "api_key-audit-external-marker",

@@ -8747,3 +8747,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 raw profile persistence、raw proxy persistence、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy assignment runtime/service token release boundary。
+
+## 2026-06-07 Audit tuple metadata persistence release guardrail
+
+背景：
+
+- Release convergence 继续检查审计持久化边界，因为 audit metadata 是 Manager 可控、长期保留、会进入诊断和发布 triage 的 evidence 面。
+- 旧 sanitizer 会递归处理 `dict/list/str`，但 Python `tuple` 会被 `json.dumps()` 自动写成数组；如果调用方误把 tuple 放进 metadata，tuple 内部敏感字符串和敏感键会在落库前绕过递归脱敏。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 audit persistence 边界。
+
+已覆盖：
+
+- `_sanitize_audit_metadata()` 现在把 tuple 作为 list-like 容器递归脱敏。
+- tuple 内部 `token=...`、`Authorization=Bearer ...`、`runtime_service_token...` 文本在写入 `audit_events.metadata` 前被替换。
+- tuple 内部 dict 的敏感键，例如 `viewer_token`，会在持久化前移除。
+- 历史 audit event reader 的顶层 id/event_type/actor/external_session_id 和 metadata 低敏读取行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_sanitizes_tuple_values_before_persistence -q
+# RED then GREEN；旧 raw audit_events.metadata 持久化 audit-tuple-secret、viewer_token、Authorization=Bearer 和 runtime_service_token evidence；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_sanitizes_tuple_values_before_persistence backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 3 passed
+```
+
+边界：
+
+- 这是 Manager-controlled audit metadata persistence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit tuple metadata persistence release boundary。
