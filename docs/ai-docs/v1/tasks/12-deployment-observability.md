@@ -8661,3 +8661,51 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL coherence、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 Health warning runtime service token marker guardrail
+
+背景：
+
+- `HealthBadge` 会把 profile health warning summary 同时放入 visible text 和 `title` evidence，release triage 可能直接截取这些 UI 字段。
+- `publicErrorText()` 已能把 runtime/service token marker 替换为 `[redacted]`，但 `getHealthWarningSummary()` 自己的敏感判断没有复用 marker-only detector。
+- 下划线 marker 例如 `runtime_service_token_health_warning_marker` 和 `service_token_health_warning_marker` 会被渲染为 `[redacted] [redacted]`，没有进一步折叠为更低敏的 `unknown`。
+
+已覆盖：
+
+- `getHealthWarningSummary()` 现在在原有 health warning sensitive regex 之外复用 `hasSensitiveMarkerText()`。
+- 下划线 runtime/service token marker-only warning summary 会折叠为 `unknown`。
+- visible text 和 `title` evidence 不再包含 `runtime_service_token` / `service_token` marker。
+- 普通 health warning summary、已有 Authorization/Bearer/path/token redaction 和 profile GeoIP label 展示保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/HealthBadge.test.tsx -t "underscore runtime service token"
+# RED: 旧 HealthBadge 渲染 [redacted] [redacted]，没有 unknown
+# GREEN: 1 passed, 7 skipped
+
+npm --prefix frontend test -- --run src/components/HealthBadge.test.tsx
+# 8 passed
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/HealthBadge.test.tsx
+# 20 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled frontend health warning evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

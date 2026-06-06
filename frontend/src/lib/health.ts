@@ -1,5 +1,5 @@
 import type { HealthStatus, ProfileHealthResponse } from "./api";
-import { isOnlyRedactedText, publicErrorText, publicProfileGeoipLabel } from "./errorDisplay";
+import { hasSensitiveMarkerText, isOnlyRedactedText, publicErrorText, publicProfileGeoipLabel } from "./errorDisplay";
 
 const HEALTH_WARNING_SENSITIVE_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
@@ -72,7 +72,10 @@ export function getHealthWarningSummary(
   const message = health?.warnings.find((warning) => warning.message.trim())?.message;
   if (!message) return null;
   const publicText = publicErrorText(message);
-  if (HEALTH_WARNING_SENSITIVE_RE.test(message) && (publicText === message || isOnlyRedactedText(publicText))) return "unknown";
+  if (
+    (HEALTH_WARNING_SENSITIVE_RE.test(message) || hasSensitiveMarkerText(message)) &&
+    (publicText === message || isOnlyRedactedText(publicText))
+  ) return "unknown";
   return publicText || "unknown";
 }
 

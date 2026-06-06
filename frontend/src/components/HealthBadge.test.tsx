@@ -97,6 +97,35 @@ describe("HealthBadge", () => {
     }
   });
 
+  it("folds underscore runtime service token warning markers before rendering evidence", () => {
+    render(
+      <HealthBadge
+        health={health("warning", [
+          {
+            code: "proxy_check_failed",
+            message: "runtime_service_token_health_warning_marker service_token_health_warning_marker",
+            severity: "warning",
+            action: "检查代理。",
+          },
+        ])}
+      />,
+    );
+
+    expect(screen.getAllByText("unknown").length).toBeGreaterThan(0);
+
+    const renderedEvidence = [
+      document.body.textContent,
+      ...Array.from(document.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+    ].join(" ");
+
+    for (const leaked of [
+      "runtime_service_token",
+      "service_token",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+  });
+
   it("renders error status as unavailable", () => {
     render(<HealthBadge health={health("error")} />);
 

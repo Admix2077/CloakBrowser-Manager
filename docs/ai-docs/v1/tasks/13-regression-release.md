@@ -8339,3 +8339,51 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL coherence、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 BrowserManager runtime/service token release boundary。
+
+## 2026-06-06 Health warning runtime service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 HealthBadge warning summary，因为 profile health warning 会进入状态徽标 visible text、tooltip/title 和人工回归证据。
+- `publicErrorText()` 已能 redacts runtime/service token marker-only text，但 HealthBadge 自己的折叠判断没有复用 marker detector。
+- 下划线 marker 例如 `runtime_service_token_health_warning_marker` / `service_token_health_warning_marker` 会显示成 `[redacted] [redacted]`，不是最低敏的 `unknown`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 和 IPhey 类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 frontend health evidence 边界。
+
+已覆盖：
+
+- `getHealthWarningSummary()` 现在把 `hasSensitiveMarkerText()` 作为敏感 warning 判断的一部分。
+- runtime/service token 下划线 marker-only health warning summary 会折叠为 `unknown`。
+- HealthBadge visible text 和 `title` evidence 不包含 `runtime_service_token` / `service_token` marker。
+- 普通 warning summary、已有敏感错误文本 redaction 和 compact mode 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/HealthBadge.test.tsx -t "underscore runtime service token"
+# RED then GREEN；旧 HealthBadge 对 runtime_service_token/service_token 下划线 marker 显示 [redacted] [redacted]；GREEN 1 passed, 7 skipped
+
+npm --prefix frontend test -- --run src/components/HealthBadge.test.tsx
+# 8 passed
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts src/components/HealthBadge.test.tsx
+# 20 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/health/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Health warning runtime/service token release boundary。
