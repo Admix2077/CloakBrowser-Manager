@@ -202,7 +202,7 @@ def sanitize_profile_config_export_data(
     safe = dict(profile)
     safe["fingerprint_seed"] = _safe_profile_fingerprint_seed(profile.get("fingerprint_seed"))
     if not include_sensitive_proxy and safe.get("proxy"):
-        safe["proxy"] = redact_proxy_asset_url(str(safe["proxy"]))
+        safe["proxy"] = _redact_proxy_asset_url_with_markers(str(safe["proxy"]))
 
     for field in TEMPLATE_FIELDS:
         safe_value, should_copy = _safe_template_field(field, profile.get(field))
@@ -575,6 +575,10 @@ def _redact_optional_proxy(proxy: object) -> str | None:
 
 
 def _redact_csv_proxy_source(value: str) -> str:
+    return _redact_proxy_asset_url_with_markers(value)
+
+
+def _redact_proxy_asset_url_with_markers(value: str) -> str:
     redacted = redact_proxy_asset_url(value)
     return "[redacted]" if _contains_csv_source_marker(redacted) else redacted
 

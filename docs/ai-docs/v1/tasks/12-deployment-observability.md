@@ -9574,3 +9574,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Profile export proxy host marker guardrail
+
+背景：
+
+- Profile config export 和 profile bundle export 的默认 proxy 输出属于 Manager-controlled export response evidence。
+- 旧默认导出路径只通过 proxy URL redactor 去掉 userinfo、query 和 fragment；如果 proxy host 自身包含 `runtime_service_token...` 这类内部 marker，脱敏后的 host 仍会进入 `config.proxy`。
+- 该问题属于 Manager 自己的 default export response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- 默认 `/api/profiles/export` 和 `/api/profiles/{profile_id}/bundle/export` 在 proxy URL redaction 后再次检查内部 marker。
+- 普通 proxy host 仍按既有 contract 返回脱敏 host；命中 `runtime_service_token`、`api_key`、`session_id` 等 marker 的默认导出 proxy 折叠为 `[redacted]`。
+- 显式确认的敏感 proxy 导出路径保持不变：`include_sensitive`/`confirm_sensitive_export` 和 bundle 的 `include_sensitive_proxy`/`confirm_sensitive_proxy_export` 仍可导出完整 proxy。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_sensitive_proxy_host_markers_by_default backend/tests/test_api.py::test_export_profile_bundle_redacts_sensitive_proxy_host_markers_by_default -q
+# RED: old default export responses returned http://runtime_service_token_*_proxy_marker.example:8080 in config.proxy
+# GREEN: 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_proxy_credentials_by_default backend/tests/test_api.py::test_export_profiles_redacts_sensitive_proxy_host_markers_by_default backend/tests/test_api.py::test_export_profiles_can_include_sensitive_proxy_when_confirmed backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_redacts_sensitive_proxy_host_markers_by_default backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_when_confirmed -q
+# 6 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_redacts_sensitive_proxy_source_host_markers backend/tests/test_bulk.py::test_bulk_export_profile_configs_returns_partial_results backend/tests/test_bulk.py::test_bulk_export_profile_configs_sanitizes_persisted_identity_fields -q
+# 3 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile config/bundle default export response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

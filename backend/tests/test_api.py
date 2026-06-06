@@ -861,6 +861,34 @@ def test_export_profiles_redacts_proxy_credentials_by_default(app_client: TestCl
     assert "user:super-secret-proxy-password" not in response_text
 
 
+def test_export_profiles_redacts_sensitive_proxy_host_markers_by_default(
+    app_client: TestClient,
+):
+    proxy = (
+        "http://user:hiddenpass@runtime_service_token_export_proxy_marker.example:8080"
+        "?token=super-secret"
+    )
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "ExportProxyMarker",
+            "proxy": proxy,
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post("/api/profiles/export", json={"profile_ids": [pid]})
+
+    assert resp.status_code == 200
+    config = resp.json()["results"][0]["config"]
+    assert config["proxy"] == "[redacted]"
+    response_text = resp.text
+    assert "runtime_service_token_export_proxy_marker" not in response_text
+    assert "hiddenpass" not in response_text
+    assert "token=super-secret" not in response_text
+    assert "user:" not in response_text
+
+
 def test_export_profiles_sanitizes_persisted_profile_id_response(
     app_client: TestClient,
 ):
@@ -3141,6 +3169,35 @@ def test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fi
     assert "order" not in response_text
     assert "payment" not in response_text
     assert _audit_events_except("profile.created") == []
+
+
+def test_export_profile_bundle_redacts_sensitive_proxy_host_markers_by_default(
+    app_client: TestClient,
+):
+    proxy = (
+        "http://user:hiddenpass@runtime_service_token_bundle_proxy_marker.example:8080"
+        "?token=super-secret"
+    )
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bundle Proxy Marker",
+            "proxy": proxy,
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(f"/api/profiles/{pid}/bundle/export", json={})
+
+    assert resp.status_code == 200
+    bundle = resp.json()["bundle"]
+    assert bundle["profile"]["config"]["proxy"] == "[redacted]"
+    assert bundle["metadata"]["sensitive_proxy_included"] is False
+    response_text = resp.text
+    assert "runtime_service_token_bundle_proxy_marker" not in response_text
+    assert "hiddenpass" not in response_text
+    assert "token=super-secret" not in response_text
+    assert "user:" not in response_text
 
 
 def test_export_profile_bundle_sanitizes_persisted_identity_fields(app_client: TestClient):
