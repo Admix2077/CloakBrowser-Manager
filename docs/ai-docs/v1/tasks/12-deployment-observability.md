@@ -9037,3 +9037,36 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 raw profile persistence、profile import request contract、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-07 Proxy assignment service token marker guardrail
+
+背景：
+
+- Proxy Manager 的 assign dialog 会把候选 profile 的 name/id/current proxy 渲染到可见文本、`title` 和 checkbox `aria-label` 中。
+- 这些字段会进入 release triage 的人工 UI evidence；如果历史数据或手工输入中混入 `runtime_service_token-*` / `service_token-*` marker，旧逻辑会显示 marker alias 或 `[redacted]` 占位。
+- Assignment 保持双轨语义：可见 UI 必须低敏，但分配 API 必须继续收到原始 profile id，避免 UI 脱敏破坏真实分配。
+- 当前策略下，Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 和类似底层 fingerprint detector 问题只标 blocker，不在 Manager 前端硬解；本轮继续收 Manager 可控 UI evidence 边界。
+
+已覆盖：
+
+- `ProxyManagerPage` 的 assignment profile id label 现在把 runtime/service token marker id 折叠为 `unknown`。
+- assignment profile name 和 current proxy evidence 中的 runtime/service token marker-only 文本同样折叠为 `unknown`，不显示 marker alias 或 `[redacted]`。
+- assignment 搜索只匹配低敏渲染文本；搜索 marker alias 不会返回污染 profile，搜索 `unknown` 仍能找到折叠后的候选项。
+- `assignProxyToProfiles()` 仍收到原始 profile id，确认 UI 脱敏不改变分配 payload。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "runtime and service token marker assignment profile evidence"
+# RED: 旧 dialog 没有足够 unknown，且 runtime_service_token profile id/current proxy evidence 可见；GREEN: 1 passed, 41 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 42 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Proxy Manager assignment UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 raw profile persistence、raw proxy persistence、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

@@ -8714,3 +8714,36 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 raw profile persistence、profile import request contract、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile CSV runtime/service token release boundary。
+
+## 2026-06-07 Proxy assignment service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 Proxy Manager assignment dialog，因为候选 profile name/id/current proxy 会进入人工 UI evidence、搜索结果、`title` 和 checkbox `aria-label`。
+- Proxy assignment 保持双轨语义：UI 只显示低敏 evidence，但 assign API 仍必须使用原始 profile id。
+- 旧 assignment profile id/name/current proxy 规则已覆盖 `api_key`、`session_id`、`private_key` 等 marker，但 `runtime_service_token` / `service_token` alias 仍会暴露为 marker 文本或 `[redacted]` evidence。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 Proxy Manager UI evidence 边界。
+
+已覆盖：
+
+- Proxy assignment dialog 对 `runtime_service_token-*` / `service_token-*` profile id、profile name 和 current proxy marker evidence 显示 `unknown`。
+- 搜索 marker alias 不会命中污染候选项；搜索 `unknown` 仍能找到折叠后的候选 profile。
+- dialog 的可见文本、`title` 和 `aria-label` 不再包含 marker alias、`[redacted]`、URL userinfo 或 proxy password evidence。
+- `assignProxyToProfiles()` 仍收到原始 profile id，确认 UI 脱敏不改变 assignment payload。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx -t "runtime and service token marker assignment profile evidence"
+# RED then GREEN；旧 dialog 没有足够 unknown，并可渲染 runtime_service_token profile id/current proxy evidence；GREEN 1 passed, 41 skipped
+
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 42 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Proxy Manager assignment UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 raw profile persistence、raw proxy persistence、proxy resolution、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy assignment runtime/service token release boundary。
