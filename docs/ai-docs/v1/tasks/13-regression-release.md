@@ -8431,3 +8431,48 @@ npm --prefix frontend run build
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/health/runtime/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Backend health runtime/service token release boundary。
+
+## 2026-06-06 Runtime external session service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 RuntimeSessionResponse 和 audit reader evidence，因为 `external_session_id` 会进入 runtime API response、audit API output 和人工 release triage。
+- 旧 runtime/audit external session id sanitizer 覆盖 URL、authorization、api/session/private-key marker 和短横线 marker，但 `runtime_service_token_*` / `service_token_*` 下划线 marker 会绕过旧 word-boundary 结尾。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 runtime/audit response evidence 边界。
+
+已覆盖：
+
+- Runtime response 的 sensitive external session id matcher 现在覆盖 runtime/service token alias。
+- Audit event reader 的 top-level `external_session_id` matcher 同步覆盖这些 alias。
+- `runtime_service_token_*` / `service_token_*` marker external session id 在 runtime response 中折叠为 `unknown`。
+- 这些 marker 在 audit reader output 中折叠为 `None`。
+- 普通公开 `pm-session-*` external session id 继续保留。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id_markers"
+# RED then GREEN；旧 runtime response/audit reader 保留 runtime_service_token/service_token 下划线 marker；GREEN 2 passed, 47 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 49 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled runtime/audit response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/health/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Runtime external session runtime/service token release boundary。

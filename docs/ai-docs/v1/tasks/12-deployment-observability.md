@@ -8755,3 +8755,49 @@ npm --prefix frontend run build
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 Runtime external session service token marker guardrail
+
+背景：
+
+- Runtime session response 的 `external_session_id` 会进入 runtime service/API response evidence。
+- Audit event reader 同样会把 top-level `external_session_id` 暴露给审计 API 和 release triage。
+- 旧 runtime/audit external session id sanitizer 覆盖常见 api/session/private-key marker，也覆盖短横线 marker，但 `runtime_service_token_*` / `service_token_*` 下划线 marker 会绕过旧 word-boundary 结尾。
+
+已覆盖：
+
+- Runtime response 的 `_SENSITIVE_RUNTIME_EXTERNAL_SESSION_ID_RE` 现在覆盖 `runtime[_-]?service[_-]?token` 和 `service[_-]?token`。
+- Audit reader 的 `_SENSITIVE_AUDIT_EXTERNAL_SESSION_ID_RE` 同步覆盖这些 alias。
+- runtime response 中的 marker external session id 折叠为 `unknown`。
+- audit reader output 中的 marker external session id 折叠为 `None`。
+- 公开 `pm-session-*` external session id 继续保留。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q -k "external_session_id_markers"
+# RED: runtime response/audit reader 保留 runtime_service_token/service_token 下划线 external session marker
+# GREEN: 2 passed, 47 deselected
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 49 passed
+
+git diff --check
+# passed
+
+.venv/bin/python -m pytest backend/tests -q
+# 662 passed
+
+npm --prefix frontend test -- --run
+# 21 files / 309 tests passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled runtime/audit response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
