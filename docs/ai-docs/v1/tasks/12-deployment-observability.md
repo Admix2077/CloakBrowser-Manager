@@ -9608,3 +9608,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled profile config/bundle default export response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Runtime external session token marker guardrail
+
+背景：
+
+- Runtime session response 的 `external_session_id` 属于 Manager-controlled runtime/session diagnostics evidence。
+- 旧过滤规则已屏蔽 URL、credential、`runtime_service_token`、`api_key`、`session_id` 等明显敏感形态，但 marker-only 的 `auth_token...` / `auth-token...` 和 `viewer_token...` / `viewer-token...` 仍可能作为外部 session id 回显。
+- 该问题属于 Manager 自己的 runtime session response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Runtime session response 现在把 marker-only `auth_token`、`auth-token`、`viewer_token` 和 `viewer-token` 外部 session id 折叠为 `unknown`。
+- 普通公开 session id 仍保留，例如 `pm-session-token` 不会因为包含普通 `token` 字样被误删。
+- Runtime session 存储、viewer token schema、VNC forwarding、Automation lease/task execution 和 browser runtime 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_omits_viewer_and_auth_token_external_session_markers -q
+# RED: old runtime session response returned auth_token-runtime-external-marker instead of unknown
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_omits_sensitive_external_session_id_markers backend/tests/test_session_broker.py::test_runtime_session_response_omits_viewer_and_auth_token_external_session_markers backend/tests/test_session_broker.py::test_runtime_session_response_sanitizes_persisted_external_session_id backend/tests/test_session_broker.py::test_runtime_viewer_failure_audit_omits_sensitive_external_session_id -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled runtime session response/audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

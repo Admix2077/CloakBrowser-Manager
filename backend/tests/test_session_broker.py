@@ -297,6 +297,53 @@ def test_runtime_session_response_omits_sensitive_external_session_id_markers(
         assert external_session_id not in serialized_responses
 
 
+def test_runtime_session_response_omits_viewer_and_auth_token_external_session_markers(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    sensitive_ids = [
+        "auth_token-runtime-external-marker",
+        "auth-token-runtime-external-marker",
+        "viewer_token-runtime-external-marker",
+        "viewer-token-runtime-external-marker",
+    ]
+    sessions = [
+        db.create_runtime_session(
+            profile_id=profile_id,
+            external_session_id=external_session_id,
+            lease_seconds=900,
+        )
+        for external_session_id in sensitive_ids
+    ]
+    public_session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm-session-token",
+        lease_seconds=900,
+    )
+
+    sensitive_responses = []
+    for session in sessions:
+        resp = app_client.get(
+            f"/api/runtime/sessions/{session['id']}",
+            headers=runtime_headers,
+        )
+        assert resp.status_code == 200
+        sensitive_responses.append(resp.json())
+
+    public_resp = app_client.get(
+        f"/api/runtime/sessions/{public_session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert [data["external_session_id"] for data in sensitive_responses] == ["unknown"] * 4
+    assert public_resp.status_code == 200
+    assert public_resp.json()["external_session_id"] == "pm-session-token"
+    serialized_responses = json.dumps(sensitive_responses, sort_keys=True)
+    for external_session_id in sensitive_ids:
+        assert external_session_id not in serialized_responses
+
+
 def test_runtime_session_response_sanitizes_persisted_profile_id(
     app_client: TestClient,
     runtime_headers: dict[str, str],
