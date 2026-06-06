@@ -9315,3 +9315,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 runtime external session token marker release boundary。
+
+## 2026-06-07 Audit external session token marker reader release guardrail
+
+背景：
+
+- Release convergence 继续检查 audit evidence，因为 `db.list_audit_events()` 会读取历史或直接持久化的 audit records，并返回给 Manager 审计/诊断调用方。
+- 旧 audit reader external session id sanitizer 已覆盖 URL、credentials、runtime service token、API key 和 session id marker，但没有覆盖 marker-only 的 `auth_token...` / `auth-token...` 与 `viewer_token...` / `viewer-token...`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 audit reader evidence 边界。
+
+已覆盖：
+
+- Audit reader 现在把历史记录中的 marker-only auth/viewer token external session id 折叠为 `None`。
+- 公开业务 external session id 仍保持可见，例如 `pm-session-public-marker`。
+- Audit storage schema、runtime session persistence、viewer token schema、VNC forwarding、Automation worker lease/task execution 和 browser runtime 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_event_reader_omits_sensitive_external_session_id_markers -q
+# RED then GREEN；旧 audit reader 回显 auth_token-audit-external-marker；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_session_response_omits_viewer_and_auth_token_external_session_markers backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_sanitizes_tuple_values_before_persistence backend/tests/test_session_broker.py::test_audit_event_reader_omits_sensitive_external_session_id_markers backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 5 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 54 passed
+```
+
+边界：
+
+- 这是 Manager-controlled audit reader evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit external session token marker reader release boundary。

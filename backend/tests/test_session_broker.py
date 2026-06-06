@@ -2270,6 +2270,8 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
         "x-api-key-audit-external-marker",
         "access_token-audit-external-marker",
         "refresh_token-audit-external-marker",
+        "auth_token-audit-external-marker",
+        "auth-token-audit-external-marker",
         "session_id-audit-external-marker",
         "client_secret-audit-external-marker",
         "private_key-audit-external-marker",
@@ -2279,6 +2281,8 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
         "private-key-audit-external-marker",
         "runtime_service_token_audit_external_marker",
         "service_token_audit_external_marker",
+        "viewer_token-audit-external-marker",
+        "viewer-token-audit-external-marker",
     ]
     for external_session_id in sensitive_ids:
         db.create_audit_event(
@@ -2296,8 +2300,8 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
 
     events = db.list_audit_events()
 
-    assert len(events) == 14
-    assert [event["external_session_id"] for event in events[:-1]] == [None] * 13
+    assert len(events) == 18
+    assert [event["external_session_id"] for event in events[:-1]] == [None] * 17
     assert events[-1]["external_session_id"] == "pm-session-public-marker"
     serialized_events = json.dumps(events, sort_keys=True)
     for external_session_id in sensitive_ids:
