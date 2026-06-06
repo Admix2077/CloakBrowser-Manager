@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { publicErrorText, publicProfileGeoipLabel, publicProfileIdLabel, publicProfileName, publicProfileTagLabel } from "./errorDisplay";
+import {
+  publicErrorText,
+  publicProfileGeoipLabel,
+  publicProfileIdLabel,
+  publicProfileLaunchArgLabel,
+  publicProfileName,
+  publicProfileTagLabel,
+} from "./errorDisplay";
 
 describe("publicErrorText", () => {
   it("redacts Windows drive paths without redacting public URL host and port", () => {
@@ -124,6 +131,27 @@ describe("publicProfileGeoipLabel", () => {
       "private_key-geoip-marker",
     ]) {
       expect(publicProfileGeoipLabel(polluted)).toBe("unknown");
+    }
+  });
+
+  it("redacts runtime and service token aliases from profile-visible labels", () => {
+    expect(publicProfileName("Alpha Good")).toBe("Alpha Good");
+    expect(publicProfileIdLabel("profile-123456")).toBe("profile-");
+    expect(publicProfileTagLabel("stable-pool")).toBe("stable-pool");
+    expect(publicProfileGeoipLabel("America/Los_Angeles")).toBe("America/Los_Angeles");
+    expect(publicProfileLaunchArgLabel("--disable-dev-shm-usage")).toBe("--disable-dev-shm-usage");
+
+    for (const polluted of [
+      "runtime_service_token-profile-marker",
+      "runtime-service-token-profile-marker",
+      "service_token-profile-marker",
+      "service-token-profile-marker",
+    ]) {
+      expect(publicProfileName(polluted)).toBe("unknown");
+      expect(publicProfileIdLabel(polluted)).toBe("unknown");
+      expect(publicProfileTagLabel(polluted)).toBe("unknown");
+      expect(publicProfileGeoipLabel(polluted)).toBe("unknown");
+      expect(publicProfileLaunchArgLabel(polluted)).toBe("unknown");
     }
   });
 });

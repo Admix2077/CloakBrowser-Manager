@@ -5,21 +5,21 @@ const ERROR_BEARER_RE = /\bBearer\s+[^\s;,]+/gi;
 const ERROR_SENSITIVE_ASSIGNMENT_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\s*[:=]\s*[^\s;,]+/gi;
 const ERROR_SENSITIVE_MARKER_TOKEN_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/i;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/i;
 const ERROR_SENSITIVE_MARKER_RE =
   /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key)(?:[-_][A-Za-z0-9]+)+\b/gi;
 const ERROR_LOCAL_PATH_RE = /(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])[^\s"'<>)]*/gi;
 const PROFILE_GEOIP_SENSITIVE_RE =
-  /\bAuthorization\b|\bBearer\b|\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
+  /\bAuthorization\b|\bBearer\b|\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b|(?:\/(?:data|tmp|home)\/|(?<![A-Za-z0-9])[A-Za-z]:[\\/])/i;
 const PROFILE_TAG_SENSITIVE_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 const PROFILE_LAUNCH_ARG_SENSITIVE_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 const PROFILE_NAME_SENSITIVE_RE =
-  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
+  /\b(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|viewer[_-]?token|session[_-]?id|client[_-]?secret|private[_-]?key|token|password|passwd|secret|cookie|set-cookie)\b/i;
 const PUBLIC_PROFILE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const SENSITIVE_PROFILE_ID_RE =
-  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bsession[_-]?id\b|\bviewer[_-]?token\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\baccess[_-]?token\b|\bauth[_-]?token\b|\brefresh[_-]?token\b|\bruntime[_-]?service[_-]?token\b|\bservice[_-]?token\b|\bsession[_-]?id\b|\bviewer[_-]?token\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\s)/i;
 const ERROR_IPV4_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
 const ERROR_BRACKETED_IPV6_RE = /\[([0-9a-fA-F:.]{2,})\]/g;
 const ERROR_BARE_IPV6_RE = /(?<![A-Za-z0-9_.:[\]-])(?:[0-9a-fA-F]{1,4}:){2,}[0-9a-fA-F:.]*(?![A-Za-z0-9_.:[\]-])/g;

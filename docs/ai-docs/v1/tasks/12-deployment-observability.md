@@ -8595,3 +8595,35 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。
+
+## 2026-06-06 Frontend profile label runtime service token guardrail
+
+背景：
+
+- Profile name/id/tag/GeoIP/launch-arg label helpers 是 ProfileTable、ProfileList、ProfileSummaryPanel、ProfileForm 和 filters 的共享 UI evidence 边界。
+- 上一轮 `publicErrorText()` 已覆盖 runtime/service token alias，但 profile-visible label helpers 还可能把 marker-only alias 显示成 `[redacted]` 或截断 label，而不是折叠成更低敏的 `unknown`。
+- runtime service token alias 不应作为 profile 名称、标签、GeoIP 文案、launch arg chip 或 profile id label 出现在 UI evidence 中。
+
+已覆盖：
+
+- `hasSensitiveMarkerText()` 现在显式覆盖 `runtime[_-]?service[_-]?token` 和 `service[_-]?token` marker-only alias。
+- `publicProfileName()`、`publicProfileTagLabel()`、`publicProfileGeoipLabel()` 和 `publicProfileLaunchArgLabel()` 的敏感词判断同步覆盖 runtime/service token alias。
+- `publicProfileIdLabel()` 同步拒绝 runtime/service token alias，避免 `runtime_` / `service-` 截断标签出现在 profile id evidence。
+- 正常公开 label 保持不变，例如 `Alpha Good`、`profile-123456`、`stable-pool`、`America/Los_Angeles` 和 `--disable-dev-shm-usage`。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "runtime and service token aliases from profile-visible labels"
+# RED: 旧 publicProfileName(runtime_service_token-profile-marker) 返回 [redacted]；GREEN: 1 passed, 11 skipped
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 12 passed
+```
+
+边界：
+
+- 这是 Manager-controlled frontend UI label evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 底层/第三方 fingerprint 检测站点问题继续按 blocker 管理；遇到同类外部检测站失败时先标阻塞项，再继续 Manager 可控范围。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- 不记录 screenshots、cookies、local storage、headers、tokens、profile dirs、full page text、font lists、WebRTC candidates、raw errors 或外站页面原文。

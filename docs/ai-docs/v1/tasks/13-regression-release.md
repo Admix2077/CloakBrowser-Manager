@@ -8277,3 +8277,34 @@ npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Frontend runtime/service token error release boundary。
+
+## 2026-06-06 Frontend profile label runtime service token release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile-visible UI evidence，因为 profile name/id/tag/GeoIP/launch-arg label 会进入表格、卡片、筛选、确认弹窗和人工回归截图范围。
+- `publicErrorText()` 已覆盖 runtime/service token alias，但 profile label helpers 需要把 marker-only alias 折叠为 `unknown`，避免只显示 `[redacted]` 或截断后的敏感字段前缀。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING` 和 IPhey 类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮继续收 Manager 自己可控的 frontend label evidence 边界。
+
+已覆盖：
+
+- `publicProfileName`、`publicProfileIdLabel`、`publicProfileTagLabel`、`publicProfileGeoipLabel` 和 `publicProfileLaunchArgLabel` 现在都拒绝 runtime/service token marker alias。
+- 覆盖 `_` 和 `-` 两种 alias：`runtime_service_token`、`runtime-service-token`、`service_token`、`service-token`。
+- 普通公开 profile label、profile id、tag、GeoIP 和 launch arg 文案保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts -t "runtime and service token aliases from profile-visible labels"
+# RED then GREEN；旧 profile-visible label evidence 对 runtime_service_token marker 返回 [redacted]；GREEN 1 passed, 11 skipped
+
+npm --prefix frontend test -- --run src/lib/errorDisplay.test.ts
+# 12 passed
+```
+
+边界：
+
+- 这不是 Pixelscan fingerprint masking 修复；`PXLSCN-FINGERPRINT-MASKING` 继续按底层/第三方检测站 blocker 管理，不在 Manager 侧硬解。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/evidence 边界。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Frontend profile label runtime/service token release boundary。
