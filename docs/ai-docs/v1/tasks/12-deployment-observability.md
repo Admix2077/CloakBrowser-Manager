@@ -9478,3 +9478,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Automation pages API response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema 或 browser fingerprint 行为。
+
+## 2026-06-07 VNC proxy runtime display log guardrail
+
+背景：
+
+- VNC proxy completion logs 和 Xvnc log availability signal 是 Manager-controlled VNC/runtime diagnostics evidence，会记录 profile id、pending tasks、Xvnc alive 状态和 display。
+- 旧 `_proxy_running_vnc()` 在完成路径中用 `display=:%d` 直接格式化 `running.display`，并把 raw display 拼进 `/tmp/xvnc-{display}.log` 检查；如果异常/历史 RunningProfile display 被污染为 token/runtime-service marker 字符串，日志路径会触发 `TypeError` 或形成 marker evidence 泄漏风险。
+- 该问题属于 Manager 自己的 VNC proxy log stability/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- VNC proxy 完成日志现在复用 public display sanitizer，正常 display 记录为 `:100`，污染 display 折叠为 `unknown`。
+- Xvnc log availability 检查只在 display 可解析为公开数字时拼接 `/tmp/xvnc-*.log`，不再使用 raw runtime display。
+- VNC backend URL、WebSocket forwarding、viewer token validation、runtime viewer audit 和正常 VNC path contract 保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_logs_public_display_when_runtime_display_is_polluted -q
+# RED: old VNC proxy completion log hit TypeError on polluted running.display and logged vnc.proxy_connect_failed
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_proxy_logs_public_display_when_runtime_display_is_polluted backend/tests/test_api.py::test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log backend/tests/test_api.py::test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception backend/tests/test_api.py::test_vnc_proxy_connects_websockify_path -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled VNC proxy log stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 VNC forwarding、viewer token schema、runtime session storage、Automation worker lease behavior、task execution semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution 或 browser fingerprint 行为。

@@ -8437,6 +8437,61 @@ def test_vnc_proxy_disconnect_does_not_dump_raw_xvnc_log(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_vnc_proxy_logs_public_display_when_runtime_display_is_polluted(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "VncDisplayLogRedaction"})
+    pid = create.json()["id"]
+    running = _mock_running_profile(pid)
+    leak_marker = "runtime_service_token_vnc_display_marker"
+    running.display = f"100 token={leak_marker}"
+
+    class FakeVncWs:
+        subprotocol = "binary"
+        close_code = 1000
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    class FakeConnect:
+        def __init__(self, url: str, **kwargs: object):
+            pass
+
+        async def __aenter__(self):
+            return FakeVncWs()
+
+        async def __aexit__(self, *exc: object):
+            return False
+
+    fake_websockets = MagicMock()
+    fake_websockets.connect = FakeConnect
+    monkeypatch.setitem(sys.modules, "websockets", fake_websockets)
+    monkeypatch.setattr(main.os.path, "exists", lambda _path: False)
+    caplog.set_level("INFO", logger="invisible_browser.manager")
+
+    with app_client.websocket_connect(
+        f"/api/profiles/{pid}/vnc",
+        headers={"origin": "http://testserver"},
+        subprotocols=["binary"],
+    ):
+        pass
+
+    assert f"for {pid}" in caplog.text
+    assert "display=unknown" in caplog.text
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "token=",
+    ):
+        assert leaked not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_vnc_proxy_connect_failure_logs_error_type_without_raw_exception(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

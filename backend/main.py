@@ -4688,6 +4688,8 @@ async def _proxy_running_vnc(
     vnc_url = f"ws://127.0.0.1:{running.ws_port}/websockify"
     audit_connected = False
     disconnect_metadata = {"close_code": None}
+    public_display = _public_profile_display(running.display) or "unknown"
+    public_display_number = _public_profile_display_number(running.display)
 
     try:
         async with websockets.connect(
@@ -4838,19 +4840,23 @@ async def _proxy_running_vnc(
             vnc_instance = browser_mgr.vnc._allocated.get(running.display)
             xvnc_alive = vnc_instance and vnc_instance.process and vnc_instance.process.poll() is None
             logger.info(
-                "VNC proxy: finished=%s pending=%s xvnc_alive=%s display=:%d for %s",
-                finished, still_running, xvnc_alive, running.display, public_profile_id,
+                "VNC proxy: finished=%s pending=%s xvnc_alive=%s display=%s for %s",
+                finished, still_running, xvnc_alive, public_display, public_profile_id,
             )
 
             # Xvnc logs can include backend URLs, profile paths, or token-like
             # text. Keep a low-sensitive signal without dumping raw log lines.
             import os
-            xvnc_log = f"/tmp/xvnc-{running.display}.log"
-            if os.path.exists(xvnc_log):
+            xvnc_log = (
+                f"/tmp/xvnc-{public_display_number}.log"
+                if public_display_number is not None
+                else None
+            )
+            if xvnc_log is not None and os.path.exists(xvnc_log):
                 logger.info(
-                    "action=vnc.xvnc_log_available profile_id=%s display=:%d",
+                    "action=vnc.xvnc_log_available profile_id=%s display=%s",
                     public_profile_id,
-                    running.display,
+                    public_display,
                 )
 
             for task in pending:
