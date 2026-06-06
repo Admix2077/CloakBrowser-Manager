@@ -9030,3 +9030,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 runtime session storage、viewer token schema、VNC forwarding、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Runtime audit non-dict metadata release boundary。
+
+## 2026-06-07 Profile bundle localStorage origin host marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile bundle import/export evidence，因为 localStorage export 会把当前页面 origin 写入 Manager response。
+- 旧 `_origin_from_page_url()` 会剥离 path/query/fragment，但不会识别 hostname 自身的 marker；`runtime_service_token...example` 会作为 localStorage origin 进入导出流程。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 profile bundle localStorage origin evidence 边界。
+
+已覆盖：
+
+- Profile bundle localStorage export 在 origin 阶段拒绝含 token/header/runtime-service marker 的 hostname。
+- unsafe origin 下返回固定 `Local storage origin unavailable`，不读取页面 localStorage，不写 localStorage export audit。
+- 正常 http/https origin 导出、explicit confirmation 要求、localStorage values 在确认后进入 bundle 的既有语义保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_sensitive_marker_origins_without_reading_page -q
+# RED then GREEN；旧流程继续读取 page.evaluate() 并返回 Profile bundle local storage export failed；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_sensitive_marker_origins_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin -q
+# 3 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile bundle localStorage response/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile bundle schema、cookie/localStorage value inclusion confirmation semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema 或 Automation worker lease behavior。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile bundle localStorage origin host marker release boundary。

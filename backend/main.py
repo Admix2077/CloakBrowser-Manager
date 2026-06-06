@@ -1478,6 +1478,8 @@ def _origin_from_page_url(raw_url: str) -> str | None:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return None
     host = parsed.hostname
+    if _AUTOMATION_SENSITIVE_MARKER_RE.search(host):
+        return None
     if parsed.port:
         host = f"{host}:{parsed.port}"
     return f"{parsed.scheme}://{host}"

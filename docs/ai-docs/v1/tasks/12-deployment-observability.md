@@ -9354,3 +9354,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled runtime audit stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 runtime session storage、viewer token schema、VNC forwarding、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Profile bundle localStorage origin host marker guardrail
+
+背景：
+
+- Profile bundle localStorage export 会把当前页面 origin 作为 Manager-controlled import/export evidence 写入 bundle response。
+- 旧 `_origin_from_page_url()` 只检查 `http`/`https` scheme 和 hostname；如果历史/异常页面 hostname 自身包含 `runtime_service_token...` marker，会继续读取 localStorage，并可能把 marker origin 放进导出包。
+- 该问题属于 Manager 自己的 profile bundle response/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_origin_from_page_url()` 现在会把含 token/header/runtime-service marker 的 hostname 判为 unsafe origin。
+- unsafe origin 下返回固定 `Local storage origin unavailable`，并且不读取页面 localStorage。
+- 普通 `https://app.example.com/dashboard?token=...#...` 仍导出为 `https://app.example.com`；path/query/fragment 不进入 origin。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_sensitive_marker_origins_without_reading_page -q
+# RED: old flow continued to page.evaluate() and returned Profile bundle local storage export failed
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_sensitive_marker_origins_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin -q
+# 3 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile bundle localStorage response/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile bundle schema、cookie/localStorage value inclusion confirmation semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema 或 Automation worker lease behavior。

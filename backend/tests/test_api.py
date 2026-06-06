@@ -3445,6 +3445,29 @@ def test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_export_profile_bundle_local_storage_rejects_sensitive_marker_origins_without_reading_page(
+    app_client: TestClient,
+):
+    leak_marker = "runtime_service_token_local_storage_marker"
+    create = app_client.post("/api/profiles", json={"name": "Marker Bundle LocalStorage"})
+    pid = create.json()["id"]
+    page = _automation_page(url=f"https://{leak_marker}.example/dashboard?token=hidden#frag")
+    _automation_running_profile(pid, pages=[page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_local_storage": True, "confirm_local_storage_export": True},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Local storage origin unavailable"}
+    page.evaluate.assert_not_called()
+    assert leak_marker not in resp.text
+    assert "token=hidden" not in resp.text
+    assert _audit_events_except("profile.created") == []
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit(
     app_client: TestClient,
 ):
