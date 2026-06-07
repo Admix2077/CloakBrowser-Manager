@@ -10083,3 +10083,35 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、profile export/CSV redaction response contract、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy redaction sensitive host marker release boundary。
+
+## 2026-06-07 System diagnostics numeric release-evidence guardrail
+
+背景：
+
+- Release evidence 会包含 System diagnostics 页面和 accessible snapshot，数字字段也会进入 visible text 与 aria-label。
+- 后端正常返回数字，但前端仍需要防御历史、mock 或异常 diagnostics JSON 把运行计数、display/VNC port、worker 秒数、runtime session counts 等字段污染为 `token=...`、`Authorization=Bearer ...` 或 `/data/...` 文本。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 diagnostics UI evidence 边界。
+
+已覆盖：
+
+- System diagnostics 数字 tile、runtime/session 数字行和 worker 秒数字段现在只展示安全非负整数，否则显示 `unknown`。
+- Active display、VNC port、automation task count map 和 runtime session status count map 只统计合法数字项；污染数字项不会进入 visible/aria evidence。
+- RED 确认旧页面会把 `/data/diagnostics-number-token-secret`、`token=...` 和 `Authorization=Bearer ...` 渲染进 release evidence。
+- GREEN 后普通 diagnostics 渲染、map/list label guardrail、刷新和固定错误消息保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds non-public diagnostics numeric fields"
+# RED then GREEN；旧页面渲染 polluted numeric diagnostics evidence；GREEN 1 passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 7 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics UI release-evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics numeric release-evidence boundary。

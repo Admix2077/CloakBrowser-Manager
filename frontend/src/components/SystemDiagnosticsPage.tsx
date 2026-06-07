@@ -76,13 +76,13 @@ export function SystemDiagnosticsPage() {
                   value={formatDiagnosticStatus(diagnostics.status)}
                   tone={formatDiagnosticStatus(diagnostics.status) === "ok" ? "success" : "warning"}
                 />
-                <DiagnosticTile label="Profiles" value={diagnostics.counts.profiles_total} />
-                <DiagnosticTile label="Running" value={diagnostics.counts.running} tone="success" />
-                <DiagnosticTile label="Launching" value={diagnostics.counts.launching} />
-                <DiagnosticTile label="Failed tasks" value={diagnostics.counts.failed_tasks} tone="warning" />
-                <DiagnosticTile label="Queued tasks" value={diagnostics.counts.queued_tasks} />
-                <DiagnosticTile label="Proxies" value={diagnostics.counts.proxy_count} />
-                <DiagnosticTile label="Max running" value={diagnostics.runtime.max_running_profiles ?? "unlimited"} />
+                <DiagnosticTile label="Profiles" value={formatDiagnosticNumber(diagnostics.counts.profiles_total)} />
+                <DiagnosticTile label="Running" value={formatDiagnosticNumber(diagnostics.counts.running)} tone="success" />
+                <DiagnosticTile label="Launching" value={formatDiagnosticNumber(diagnostics.counts.launching)} />
+                <DiagnosticTile label="Failed tasks" value={formatDiagnosticNumber(diagnostics.counts.failed_tasks)} tone="warning" />
+                <DiagnosticTile label="Queued tasks" value={formatDiagnosticNumber(diagnostics.counts.queued_tasks)} />
+                <DiagnosticTile label="Proxies" value={formatDiagnosticNumber(diagnostics.counts.proxy_count)} />
+                <DiagnosticTile label="Max running" value={formatNullableLimit(diagnostics.runtime.max_running_profiles)} />
               </div>
             </section>
 
@@ -91,7 +91,7 @@ export function SystemDiagnosticsPage() {
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <InfoRow label="Active displays" value={formatDisplays(diagnostics.runtime.active_displays)} />
                 <InfoRow label="Active VNC ports" value={formatNumbers(diagnostics.runtime.active_vnc_ws_ports)} />
-                <InfoRow label="Launch failures" value={diagnostics.runtime.launch_failure_count} />
+                <InfoRow label="Launch failures" value={formatDiagnosticNumber(diagnostics.runtime.launch_failure_count)} />
                 <InfoRow
                   label="Launch failure stages"
                   value={formatStageCounts(diagnostics.runtime.launch_failure_stage_counts)}
@@ -118,8 +118,11 @@ export function SystemDiagnosticsPage() {
             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
               <h3 className="text-sm font-semibold text-slate-950">Runtime sessions</h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <InfoRow label="Live sessions" value={diagnostics.runtime_sessions.live_count} />
-                <InfoRow label="Viewer credentials" value={diagnostics.runtime_sessions.active_viewer_token_count} />
+                <InfoRow label="Live sessions" value={formatDiagnosticNumber(diagnostics.runtime_sessions.live_count)} />
+                <InfoRow
+                  label="Viewer credentials"
+                  value={formatDiagnosticNumber(diagnostics.runtime_sessions.active_viewer_token_count)}
+                />
                 <InfoRow
                   label="Runtime session statuses"
                   value={formatCountMap(diagnostics.runtime_sessions.status_counts)}
@@ -142,9 +145,9 @@ export function SystemDiagnosticsPage() {
               <h3 className="text-sm font-semibold text-slate-950">Automation worker</h3>
               <div className="mt-3 space-y-2">
                 <InfoRow label="State" value={diagnostics.automation_worker.enabled ? "enabled" : "disabled"} />
-                <InfoRow label="Lease" value={`${diagnostics.automation_worker.lease_seconds}s`} />
-                <InfoRow label="Idle sleep" value={`${diagnostics.automation_worker.idle_sleep_seconds}s`} />
-                <InfoRow label="Shutdown wait" value={`${diagnostics.automation_worker.shutdown_timeout_seconds}s`} />
+                <InfoRow label="Lease" value={formatSeconds(diagnostics.automation_worker.lease_seconds)} />
+                <InfoRow label="Idle sleep" value={formatSeconds(diagnostics.automation_worker.idle_sleep_seconds)} />
+                <InfoRow label="Shutdown wait" value={formatSeconds(diagnostics.automation_worker.shutdown_timeout_seconds)} />
               </div>
             </section>
 
@@ -215,16 +218,33 @@ function CountRows({ values, emptyLabel }: { values: Record<string, number>; emp
   ));
 }
 
-function formatNumbers(values: number[]): string {
-  return values.length > 0 ? values.join(", ") : "none";
+function formatDiagnosticNumber(value: unknown): number | string {
+  return publicNonNegativeInteger(value) ?? "unknown";
 }
 
-function formatDisplays(values: number[]): string {
-  return values.length > 0 ? values.map((value) => `:${value}`).join(", ") : "none";
+function formatNullableLimit(value: unknown): number | string {
+  if (value === null) return "unlimited";
+  return formatDiagnosticNumber(value);
 }
 
-function formatStealthPrefCount(value: number | null): string {
-  return value === null ? "unknown" : `${value} keys`;
+function formatSeconds(value: unknown): string {
+  const number = publicNonNegativeInteger(value);
+  return number === null ? "unknown" : `${number}s`;
+}
+
+function formatNumbers(values: unknown): string {
+  const numbers = publicNumberList(values);
+  return numbers.length > 0 ? numbers.join(", ") : "none";
+}
+
+function formatDisplays(values: unknown): string {
+  const numbers = publicNumberList(values);
+  return numbers.length > 0 ? numbers.map((value) => `:${value}`).join(", ") : "none";
+}
+
+function formatStealthPrefCount(value: unknown): string {
+  const number = publicNonNegativeInteger(value);
+  return number === null ? "unknown" : `${number} keys`;
 }
 
 function formatMajorVersionMatch(value: boolean | null): string {
@@ -287,14 +307,28 @@ function formatCountMap(values: Record<string, number>): string {
     : "none";
 }
 
-function publicCountEntries(values: Record<string, number>): Array<[string, number]> {
+function publicCountEntries(values: Record<string, unknown>): Array<[string, number]> {
   const counts = new Map<string, number>();
   for (const [rawLabel, count] of Object.entries(values)) {
-    if (count <= 0) continue;
+    const publicCount = publicNonNegativeInteger(count);
+    if (publicCount === null || publicCount <= 0) continue;
     const label = publicDiagnosticLabel(rawLabel);
-    counts.set(label, (counts.get(label) ?? 0) + count);
+    counts.set(label, (counts.get(label) ?? 0) + publicCount);
   }
   return Array.from(counts.entries()).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function publicNumberList(values: unknown): number[] {
+  if (!Array.isArray(values)) return [];
+  return values.flatMap((value) => {
+    const number = publicNonNegativeInteger(value);
+    return number === null ? [] : [number];
+  });
+}
+
+function publicNonNegativeInteger(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) return null;
+  return value;
 }
 
 function publicDiagnosticLabel(value: string): string {

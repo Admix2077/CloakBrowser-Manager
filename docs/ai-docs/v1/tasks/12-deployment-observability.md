@@ -10271,6 +10271,38 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 
+## 2026-06-07 System diagnostics numeric evidence guardrail
+
+背景：
+
+- System diagnostics 页面会渲染后端诊断 JSON 中的运行计数、端口、display、worker 秒数和 runtime session 计数。
+- 后端正常会返回数字，但前端 release/accessibility evidence 仍需要防御历史、mock 或异常 JSON 把这些数字字段污染成 `token=...`、`Authorization=Bearer ...` 或 `/data/...` 文本。
+- 该问题只属于 Manager-controlled diagnostics UI evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- System diagnostics 数字 tile、runtime/session 数字行、worker 秒数字段现在只接受安全非负整数，否则显示 `unknown`。
+- Active display、VNC port 和 count map 只保留合法数字项；污染数字项会被忽略，不再进入 visible text 或 aria-label。
+- RED 确认旧页面会把 `/data/diagnostics-number-token-secret`、`token=...` 和 `Authorization=Bearer ...` 渲染进 diagnostics evidence。
+- GREEN 后异常数字字段折叠为 `unknown` 或被过滤，普通 diagnostics 数字展示、map/list label 过滤、刷新和错误态保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds non-public diagnostics numeric fields"
+# RED: old page rendered polluted numeric fields into visible/aria diagnostics evidence
+# GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 7 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
 ## 2026-06-07 Proxy redaction sensitive host marker evidence guardrail
 
 背景：

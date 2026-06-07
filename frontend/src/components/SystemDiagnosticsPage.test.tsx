@@ -270,6 +270,75 @@ describe("SystemDiagnosticsPage", () => {
     expect(page.textContent).not.toContain("/data/");
   });
 
+  it("folds non-public diagnostics numeric fields before rendering", async () => {
+    const leakMarker = "diagnostics-number-token-secret";
+    const base = diagnostics();
+    mockGetDiagnostics.mockResolvedValueOnce(diagnostics({
+      counts: {
+        running: `2 token=${leakMarker}` as unknown as number,
+        launching: `1 Authorization=Bearer ${leakMarker}` as unknown as number,
+        profiles_total: `/data/${leakMarker}` as unknown as number,
+        proxy_count: `4 token=${leakMarker}` as unknown as number,
+        queued_tasks: `5 token=${leakMarker}` as unknown as number,
+        failed_tasks: `3 token=${leakMarker}` as unknown as number,
+        automation_task_counts: {
+          queued: `5 token=${leakMarker}` as unknown as number,
+          running: 1,
+        },
+      },
+      runtime: {
+        ...base.runtime,
+        active_displays: [100, `101 token=${leakMarker}` as unknown as number],
+        active_vnc_ws_ports: [6100, `6101 Authorization=Bearer ${leakMarker}` as unknown as number],
+        max_running_profiles: `6 token=${leakMarker}` as unknown as number,
+        launch_failure_count: `3 token=${leakMarker}` as unknown as number,
+        stealth_pref_count: `29 token=${leakMarker}` as unknown as number,
+      },
+      runtime_sessions: {
+        status_counts: {
+          active: `2 token=${leakMarker}` as unknown as number,
+          terminated: 1,
+        },
+        live_count: `2 token=${leakMarker}` as unknown as number,
+        active_viewer_token_count: `1 token=${leakMarker}` as unknown as number,
+      },
+      automation_worker: {
+        enabled: true,
+        lease_seconds: `60 token=${leakMarker}` as unknown as number,
+        idle_sleep_seconds: `1 token=${leakMarker}` as unknown as number,
+        shutdown_timeout_seconds: `5 token=${leakMarker}` as unknown as number,
+      },
+    }));
+
+    render(<SystemDiagnosticsPage />);
+
+    const page = await findLoadedDiagnosticsPage();
+    expect(within(page).getByRole("group", { name: "Profiles: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Running: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Launching: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Failed tasks: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Queued tasks: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Proxies: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Max running: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Active displays: :100" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Active VNC ports: 6100" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Launch failures: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Stealth prefs: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Live sessions: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Viewer credentials: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Runtime session statuses: terminated (1)" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "running: 1" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Lease: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Idle sleep: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Shutdown wait: unknown" })).toBeTruthy();
+
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/");
+  });
+
   it("uses a fixed error message without rendering backend details", async () => {
     mockGetDiagnostics.mockRejectedValueOnce(new Error("secret token at /data/profiles/profile-1"));
 
