@@ -8788,6 +8788,23 @@ def test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_vnc_ws_rejects_origin_with_non_default_port_for_scheme(app_client: TestClient):
+    """Origin default-port handling must be scheme-aware for CSWSH checks."""
+    create = app_client.post("/api/profiles", json={"name": "OriginPortMismatch"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": "http://testserver:443", "host": "testserver"},
+        ):
+            pass
+
+    assert rejected.value.code == 4403
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_same_origin(app_client: TestClient):
     """WebSocket from same origin should pass Origin check (not get 4403)."""
     create = app_client.post("/api/profiles", json={"name": "OriginOk"})

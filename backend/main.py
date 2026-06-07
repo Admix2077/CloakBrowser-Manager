@@ -348,8 +348,9 @@ def _websocket_origin_compare_netloc(value: str | None) -> str | None:
     raw_value = str(value).strip()
     if not raw_value:
         return None
+    has_scheme = "://" in raw_value
     try:
-        parsed = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
+        parsed = urlparse(raw_value if has_scheme else f"//{raw_value}")
         host = parsed.hostname or ""
         port = parsed.port
     except ValueError:
@@ -359,7 +360,10 @@ def _websocket_origin_compare_netloc(value: str | None) -> str | None:
     host = host.lower()
     if _automation_is_ip_literal(host) and ":" in host:
         host = f"[{host}]"
-    if port and port not in (80, 443):
+    default_ports = {80, 443}
+    if has_scheme:
+        default_ports = {"http": {80}, "https": {443}}.get(parsed.scheme.lower(), set())
+    if port and port not in default_ports:
         return f"{host}:{port}"
     return host
 
