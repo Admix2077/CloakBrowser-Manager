@@ -6,6 +6,10 @@ import { formatTimestamp } from "../lib/profileDisplay";
 
 const DEFAULT_TASK_LIMIT = 50;
 type TaskStatusFilter = "all" | "running" | "failed" | "finished";
+type SearchState = {
+  display: string;
+  filter: string | null;
+};
 
 const STATUS_STYLES: Record<string, string> = {
   queued: "border-slate-200 bg-slate-50 text-slate-700",
@@ -36,7 +40,7 @@ export function AutomationTaskLogViewer() {
   const [error, setError] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TaskStatusFilter>("all");
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState<SearchState>({ display: "", filter: "" });
 
   const loadTasks = useCallback(async ({ quiet = false }: { quiet?: boolean } = {}) => {
     if (quiet) {
@@ -74,7 +78,7 @@ export function AutomationTaskLogViewer() {
     () => tasks.find((task) => task.id === selectedTaskId) ?? null,
     [selectedTaskId, tasks],
   );
-  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedQuery = search.filter?.trim().toLowerCase() ?? null;
   const visibleTasks = useMemo(
     () => tasks.filter((task) => taskMatchesStatusFilter(task.status, statusFilter) && taskMatchesQuery(task, normalizedQuery)),
     [normalizedQuery, statusFilter, tasks],
@@ -118,8 +122,8 @@ export function AutomationTaskLogViewer() {
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                value={search.display}
+                onChange={(event) => setSearch(publicSearchState(event.target.value))}
                 aria-label="Filter automation tasks by task or profile id"
                 placeholder="Filter task or profile"
                 className="h-8 w-full rounded-md border border-slate-200 bg-white pl-8 pr-2 text-xs text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
@@ -493,6 +497,14 @@ function publicIdLabel(value: string): string {
   return publicSummaryLabel(value);
 }
 
+function publicSearchState(value: string): SearchState {
+  const trimmed = value.trim();
+  if (!trimmed) return { display: "", filter: "" };
+  const publicValue = publicSummaryLabel(trimmed);
+  if (publicValue === "unknown") return { display: "unknown", filter: null };
+  return { display: publicValue, filter: publicValue };
+}
+
 function publicSummaryLabel(value: string): string {
   const trimmed = value.trim();
   if (!trimmed || !PUBLIC_ID_RE.test(trimmed)) return "unknown";
@@ -584,7 +596,8 @@ function taskMatchesStatusFilter(status: string, filter: TaskStatusFilter): bool
   return publicStatus === "succeeded" || publicStatus === "cancelled";
 }
 
-function taskMatchesQuery(task: AutomationTask, query: string): boolean {
+function taskMatchesQuery(task: AutomationTask, query: string | null): boolean {
+  if (query === null) return false;
   if (!query) return true;
   return publicIdLabel(task.id).toLowerCase().includes(query) || publicIdLabel(task.profile_id).toLowerCase().includes(query);
 }

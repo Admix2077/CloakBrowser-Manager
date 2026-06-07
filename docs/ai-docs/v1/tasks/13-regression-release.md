@@ -10342,3 +10342,50 @@ npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation task list response shape release-evidence boundary。
+
+## 2026-06-08 Automation task search input release-evidence guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation task log UI，因为搜索框 input value、empty state、aria label 和页面文本都会进入 release evidence。
+- 搜索框允许用户输入 task/profile id 子串，但也可能被粘贴进 token、Authorization/Bearer、路径、IP 或其他不该进入 evidence 的调试文本。
+- 旧页面直接把搜索框原文保存到 React state 并渲染为 input value；敏感搜索串会留在 DOM evidence 中。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Automation task UI release evidence boundary。
+
+已覆盖：
+
+- Automation task 搜索输入现在先折叠为 public search state；input 只显示低敏 public label。
+- 敏感或非 public 搜索输入显示为 `unknown`，但过滤值不会变成 `unknown`，避免误命中已经被 redacted 为 `unknown` 的 task/profile 行。
+- 空输入仍清空过滤；正常 public 子串如 `beta`、`profile-shared` 继续按 task/profile id 本地过滤。
+- RED 确认旧搜索框会保留敏感 raw input；GREEN 后 token、Authorization/Bearer、path、IP marker 不进入 visible 或 input evidence。
+- 完整组件测试补抓到 `unknown` 过滤值误匹配 redacted 行的回归；最终实现把 display value 和 filter value 分开，避免泄露和误匹配同时发生。
+- 正常 task list、status filter、task/profile id filter、detail drawer、step/result summary、automation task API schema、automation execution、worker lease 和 browser fingerprint 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx -t "folds sensitive search input"
+# 1 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# 14 passed
+
+npm --prefix frontend test
+# Test Files 21 passed；Tests 323 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task" -q
+# 45 passed, 246 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 707 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled Automation task UI release-evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.75` 的 Manager-controlled 收口只证明 search input evidence boundary 已加固；不能声称 Pixelscan/IPhey 全通过，也不改变 Project Mileage runtime session / VNC 集成边界。

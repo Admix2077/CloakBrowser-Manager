@@ -10667,3 +10667,48 @@ npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.
 - 这是 Manager-controlled Automation task UI evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-08 Automation task search input evidence guardrail
+
+背景：
+
+- Automation task log 搜索框 input value 会被浏览器测试、截图、DOM dump 或 release evidence 捕获。
+- 搜索框面向 task/profile id 子串过滤，但实际操作中可能被粘贴进 token、Authorization/Bearer、路径、IP 或其他调试文本。
+- 旧页面直接把搜索框原文保存并渲染，敏感搜索串会进入 evidence。
+- 该问题只属于 Manager-controlled Automation task UI evidence redaction 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `AutomationTaskLogViewer` 使用 public search state，把 input 展示值和内部过滤值分开。
+- 敏感或非 public 搜索输入只显示低敏 `unknown`，内部过滤值为 no-match，不会误搜到已经 redacted 为 `unknown` 的 task/profile 行。
+- 空输入继续清空搜索；正常 public task/profile 子串过滤保持可用。
+- Search input 中的 token、Authorization/Bearer、路径和 IP marker 不会进入 visible/aria/input evidence。
+- 正常 automation task list、status filtering、task/profile id filtering、task detail drawer、step/result summary、automation task API schema、automation task execution、worker lease 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx -t "folds sensitive search input"
+# 1 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# 14 passed
+
+npm --prefix frontend test
+# Test Files 21 passed；Tests 323 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_task" -q
+# 45 passed, 246 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 707 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+```
+
+边界：
+
+- 这是 Manager-controlled Automation task UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

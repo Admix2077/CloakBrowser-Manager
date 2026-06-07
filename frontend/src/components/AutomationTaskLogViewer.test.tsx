@@ -492,6 +492,45 @@ describe("AutomationTaskLogViewer", () => {
     expect(within(page).queryByText("task-gam...")).toBeNull();
   });
 
+  it("folds sensitive search input before it enters automation release evidence", async () => {
+    const leakMarker = "search-token-secret";
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        task({ id: "task-search-123456", profile_id: "profile-search-123456", status: "queued" }),
+        task({
+          id: `token=${leakMarker} Authorization=Bearer ${leakMarker}`,
+          profile_id: `/data/profiles/${leakMarker}/203.0.113.91`,
+          status: "queued",
+        }),
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    const search = within(page).getByRole("searchbox", { name: "Filter automation tasks by task or profile id" });
+    expect(within(page).getByRole("button", { name: "View task details for unknown" })).toBeTruthy();
+
+    fireEvent.change(search, {
+      target: {
+        value: `token=${leakMarker} Authorization=Bearer ${leakMarker} /data/tasks/${leakMarker} 203.0.113.90`,
+      },
+    });
+
+    expect((search as HTMLInputElement).value).toBe("unknown");
+    expect(await screen.findByRole("status", { name: "No automation tasks match the selected filter" })).toBeTruthy();
+
+    const renderedText = page.textContent ?? "";
+    expect(renderedText).not.toContain(leakMarker);
+    expect(renderedText).not.toContain("Authorization");
+    expect(renderedText).not.toContain("Bearer");
+    expect(renderedText).not.toContain("token=");
+    expect(renderedText).not.toContain("/data/tasks");
+    expect(renderedText).not.toContain("/data/profiles");
+    expect(renderedText).not.toContain("203.0.113.90");
+    expect(renderedText).not.toContain("203.0.113.91");
+  });
+
   it("opens a read-only task detail drawer without rendering sensitive payloads", async () => {
     const errorLeakMarker = "drawer-task-error-secret";
     mockListAutomationTasks.mockResolvedValueOnce({
