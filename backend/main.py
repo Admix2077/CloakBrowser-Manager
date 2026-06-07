@@ -342,6 +342,28 @@ def _websocket_public_host_label(value: str | None) -> str:
     return host
 
 
+def _websocket_origin_compare_netloc(value: str | None) -> str | None:
+    if not value:
+        return None
+    raw_value = str(value).strip()
+    if not raw_value:
+        return None
+    try:
+        parsed = urlparse(raw_value if "://" in raw_value else f"//{raw_value}")
+        host = parsed.hostname or ""
+        port = parsed.port
+    except ValueError:
+        return None
+    if not host:
+        return None
+    host = host.lower()
+    if _automation_is_ip_literal(host) and ":" in host:
+        host = f"[{host}]"
+    if port and port not in (80, 443):
+        return f"{host}:{port}"
+    return host
+
+
 async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> bool:
     """Reject cross-origin WebSocket connections (CSWSH protection).
 
@@ -361,30 +383,18 @@ async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> boo
     if not origin:
         return True
 
-    # Parse origin to extract host:port
-    try:
-        parsed = urlparse(origin)
-        origin_host = parsed.hostname or ""
-        origin_port = parsed.port
-    except ValueError:
+    origin_netloc = _websocket_origin_compare_netloc(origin)
+    if origin_netloc is None:
         logger.warning("WebSocket origin malformed: origin=%s", _websocket_public_host_label(origin))
         if on_rejected:
             on_rejected()
         await websocket.close(code=4403, reason="Origin not allowed")
         return False
-    # Build origin netloc (host:port or just host if default port)
-    if origin_port and origin_port not in (80, 443):
-        origin_netloc = f"{origin_host}:{origin_port}"
-    else:
-        origin_netloc = origin_host
 
     if not host:
         return True  # no Host header to compare against
 
-    # Strip default port from Host too (some proxies send "example.com:443")
-    host_normalized = host
-    if host.endswith(":80") or host.endswith(":443"):
-        host_normalized = host.rsplit(":", 1)[0]
+    host_normalized = _websocket_origin_compare_netloc(host)
 
     if origin_netloc == host_normalized:
         return True

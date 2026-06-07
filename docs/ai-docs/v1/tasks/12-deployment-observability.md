@@ -10270,3 +10270,38 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled VNC/WebSocket origin rejection log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 VNC WebSocket IPv6 same-origin guardrail
+
+背景：
+
+- VNC/profile viewer 和 runtime viewer 的 WebSocket origin 校验属于 Manager-controlled viewer session protection。
+- 旧 origin 比较会把 `Origin: http://[2001:db8::42]:8080` 解析成无括号 host，但直接拿原始 `Host: [2001:db8::42]:8080` 比较，导致合法 bracketed IPv6 same-origin 被误判为跨源 4403。
+- 该问题只属于 Manager 自己的 WebSocket origin comparison stability 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Origin 和 Host 现在共用 `_websocket_origin_compare_netloc()` 规范化后再比较。
+- IPv6 host 会以 bracketed netloc 参与比较，默认端口继续忽略，非默认端口继续保留。
+- 合法 bracketed IPv6 same-origin 不再被 origin 校验拒绝。
+- 跨源拒绝、低敏 origin/host 日志 label、profile VNC forwarding、runtime viewer token 校验、runtime session storage 和 viewer token schema 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_ws_allows_bracketed_ipv6_same_origin -q
+# RED: old WebSocket origin comparison rejected bracketed IPv6 same-origin with 4403
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_ws_allows_bracketed_ipv6_same_origin backend/tests/test_api.py::test_vnc_ws_rejects_cross_origin backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host backend/tests/test_api.py::test_ws_allows_same_origin -q
+# 4 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc_ws_origin or ws_allows or vnc_ws_rejects_cross_origin" -q
+# 7 passed, 282 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled VNC/WebSocket origin comparison stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

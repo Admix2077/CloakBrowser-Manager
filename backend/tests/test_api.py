@@ -8809,6 +8809,26 @@ def test_ws_allows_same_origin(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_ws_allows_bracketed_ipv6_same_origin(app_client: TestClient):
+    """Bracketed IPv6 Origin/Host pairs should compare as same-origin."""
+    create = app_client.post("/api/profiles", json={"name": "OriginIpv6Ok"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+
+    try:
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={
+                "origin": "http://[2001:db8::42]:8080",
+                "host": "[2001:db8::42]:8080",
+            },
+        ):
+            pass
+    except Exception as exc:
+        assert getattr(exc, "code", None) != 4403
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_no_origin(app_client: TestClient):
     """WebSocket without Origin header (Playwright/Puppeteer) should be accepted."""
     create = app_client.post("/api/profiles", json={"name": "NoOrigin"})
