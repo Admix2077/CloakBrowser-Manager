@@ -7669,6 +7669,32 @@ def test_run_open_url_step_marks_failed_for_invalid_url_without_leaking_payload(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_run_open_url_step_marks_failed_for_malformed_url_without_leaking_payload(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "TaskRunOpenUrlMalformedProfile"})
+    pid = create.json()["id"]
+    page = _automation_page()
+    _automation_running_profile(pid, [page])
+    malformed_url = "https://[2001:db8::1/app?token=super-secret#frag"
+    task = app_client.post(
+        "/api/tasks",
+        json={"profile_id": pid, "steps": [{"type": "open_url", "url": malformed_url}]},
+    ).json()
+
+    resp = app_client.post(f"/api/tasks/{task['id']}/run")
+
+    assert resp.status_code == 400
+    data = resp.json()
+    assert data["status"] == "failed"
+    assert data["steps"] == [{"type": "open_url"}]
+    assert data["result"] == {"steps": [{"index": 0, "type": "open_url", "status": "failed"}]}
+    assert data["error"] == "Invalid open_url step"
+    assert "super-secret" not in str(data)
+    page.goto.assert_not_awaited()
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_run_wait_for_selector_step_waits_existing_page_without_leaking_selector(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "TaskRunWaitForSelectorProfile"})
     pid = create.json()["id"]

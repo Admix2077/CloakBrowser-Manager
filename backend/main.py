@@ -3900,8 +3900,12 @@ def _automation_step_int(step: dict, key: str, default: int) -> int:
 
 
 def _is_supported_automation_url(raw_url: str) -> bool:
-    parsed = urlparse(raw_url)
-    return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+    try:
+        parsed = urlparse(raw_url)
+        host = parsed.hostname
+    except ValueError:
+        return False
+    return parsed.scheme in {"http", "https"} and bool(host)
 
 
 def _automation_profile_has_running_task(profile_id: str, task_id: str) -> bool:

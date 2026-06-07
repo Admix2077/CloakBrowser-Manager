@@ -9725,3 +9725,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile bundle localStorage malformed port origin release boundary。
+
+## 2026-06-07 Automation open_url malformed URL release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation task execution evidence，因为 queued/persisted `open_url` step payload 会在 worker run endpoint 中被读取和校验。
+- 旧 `_is_supported_automation_url()` 直接调用 `urlparse(raw_url)`；当 URL 形如 `https://[2001:db8::1/app?token=...` 时，`urllib.parse` 抛出 `ValueError`，Automation run 可能从固定低敏 invalid-step 响应变成接口异常。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Automation open_url task execution stability/response evidence 边界。
+
+已覆盖：
+
+- Automation URL support helper 遇到 malformed URL 会返回 unsupported，复用既有 `Invalid open_url step` 失败路径。
+- malformed URL 不会传给 `page.goto()`；task response 只保留低敏 step type/status/error，不回显 URL 原文、query、fragment 或 token。
+- 正常 http/https URL、普通 invalid URL、Automation task response redaction、worker lease、runtime browser、proxy resolution 和 VNC forwarding 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_run_open_url_step_marks_failed_for_malformed_url_without_leaking_payload -q
+# RED then GREEN；旧 Automation open_url worker 在 urllib.parse 解析 malformed IPv6 URL 时抛 ValueError；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "run_open_url_step or automation_task_responses_redact_open_url_steps or create_automation_task_queues_steps_without_running_script" -q
+# 5 passed, 279 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation task execution stability/response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation open_url malformed URL release boundary。

@@ -10050,3 +10050,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled profile bundle localStorage export response/audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Automation open_url malformed URL guardrail
+
+背景：
+
+- Automation worker 的 `open_url` step 会读取 caller/persisted task payload 中的 URL，并先经过 Manager-controlled support check，再交给 Playwright 页面导航。
+- 旧 `_is_supported_automation_url()` 直接调用 `urlparse(raw_url)`；当 URL 形如 `https://[2001:db8::1/app?token=...` 这类 malformed IPv6 netloc 时，`urllib.parse` 会抛 `ValueError`，导致 worker run endpoint 从固定低敏 invalid-step 响应变成接口异常。
+- 该问题只属于 Manager 自己的 Automation task execution stability/response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_is_supported_automation_url()` 现在捕获 URL parse/hostname 解析异常，把 malformed URL 视为 unsupported。
+- `open_url` step 遇到 malformed URL 会走既有 `Invalid open_url step` 路径：任务状态为 failed，step summary 只保留低敏 type/status，不调用 `page.goto()`，不回显原始 URL、query、fragment 或 token。
+- 正常 http/https URL、普通 invalid URL、Automation task redaction、worker lease、runtime browser、proxy resolution、VNC forwarding 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_run_open_url_step_marks_failed_for_malformed_url_without_leaking_payload -q
+# RED: old Automation open_url worker raised ValueError from urllib.parse on malformed IPv6 URL
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "run_open_url_step or automation_task_responses_redact_open_url_steps or create_automation_task_queues_steps_without_running_script" -q
+# 5 passed, 279 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation task execution stability/response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
