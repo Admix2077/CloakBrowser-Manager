@@ -135,8 +135,8 @@ export function SystemDiagnosticsPage() {
             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
               <h3 className="text-sm font-semibold text-slate-950">Storage</h3>
               <div className="mt-3 space-y-2">
-                <InfoRow label="Data directory" value={diagnostics.storage.data_dir_exists ? "available" : "missing"} />
-                <InfoRow label="Database" value={diagnostics.storage.db_exists ? "available" : "missing"} />
+                <InfoRow label="Data directory" value={formatStorageAvailability(diagnostics.storage.data_dir_exists)} />
+                <InfoRow label="Database" value={formatStorageAvailability(diagnostics.storage.db_exists)} />
                 <InfoRow label="Binary" value={formatBinaryVersion(diagnostics.binary_version)} />
               </div>
             </section>
@@ -144,7 +144,7 @@ export function SystemDiagnosticsPage() {
             <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04),inset_0_1px_0_rgba(255,255,255,0.9)]">
               <h3 className="text-sm font-semibold text-slate-950">Automation worker</h3>
               <div className="mt-3 space-y-2">
-                <InfoRow label="State" value={diagnostics.automation_worker.enabled ? "enabled" : "disabled"} />
+                <InfoRow label="State" value={formatWorkerState(diagnostics.automation_worker.enabled)} />
                 <InfoRow label="Lease" value={formatSeconds(diagnostics.automation_worker.lease_seconds)} />
                 <InfoRow label="Idle sleep" value={formatSeconds(diagnostics.automation_worker.idle_sleep_seconds)} />
                 <InfoRow label="Shutdown wait" value={formatSeconds(diagnostics.automation_worker.shutdown_timeout_seconds)} />
@@ -253,6 +253,26 @@ function formatMajorVersionMatch(value: boolean | null): string {
   }
   if (value === false) {
     return "mismatch";
+  }
+  return "unknown";
+}
+
+function formatStorageAvailability(value: unknown): string {
+  if (value === true) {
+    return "available";
+  }
+  if (value === false) {
+    return "missing";
+  }
+  return "unknown";
+}
+
+function formatWorkerState(value: unknown): string {
+  if (value === true) {
+    return "enabled";
+  }
+  if (value === false) {
+    return "disabled";
   }
   return "unknown";
 }

@@ -339,6 +339,39 @@ describe("SystemDiagnosticsPage", () => {
     expect(page.textContent).not.toContain("/data/");
   });
 
+  it("folds non-public diagnostics boolean fields before rendering", async () => {
+    const leakMarker = "diagnostics-boolean-token-secret";
+    const base = diagnostics();
+    mockGetDiagnostics.mockResolvedValueOnce(diagnostics({
+      storage: {
+        data_dir_exists: `true token=${leakMarker}` as unknown as boolean,
+        db_exists: `false Authorization=Bearer ${leakMarker}` as unknown as boolean,
+      },
+      runtime: {
+        ...base.runtime,
+        firefox_identity_major_version_match: `true token=${leakMarker}` as unknown as boolean,
+      },
+      automation_worker: {
+        ...base.automation_worker,
+        enabled: `true /data/${leakMarker}` as unknown as boolean,
+      },
+    }));
+
+    render(<SystemDiagnosticsPage />);
+
+    const page = await findLoadedDiagnosticsPage();
+    expect(within(page).getByRole("group", { name: "Data directory: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Database: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Firefox major match: unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "State: unknown" })).toBeTruthy();
+
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/");
+  });
+
   it("uses a fixed error message without rendering backend details", async () => {
     mockGetDiagnostics.mockRejectedValueOnce(new Error("secret token at /data/profiles/profile-1"));
 

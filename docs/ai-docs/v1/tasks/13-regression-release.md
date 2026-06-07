@@ -10115,3 +10115,33 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics numeric release-evidence boundary。
+
+## 2026-06-07 System diagnostics boolean release-evidence guardrail
+
+背景：
+
+- Release convergence 继续检查 System diagnostics 页面，因为 storage checks、Firefox major match 和 Automation worker state 会进入 UI visible text 与 accessible snapshot。
+- 旧页面对 storage/worker 布尔字段使用 truthy/falsy 判断；如果历史、mock 或异常 diagnostics JSON 把字段污染成 `token=...`、`Authorization=Bearer ...` 或 `/data/...` 字符串，会误报为 `available` 或 `enabled`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 diagnostics UI release evidence 边界。
+
+已覆盖：
+
+- Storage `data_dir_exists`、`db_exists` 只接受真实布尔值，异常值显示 `unknown`。
+- Automation worker `enabled` 只接受真实布尔值，异常值显示 `unknown`。
+- Firefox major match 的严格布尔/null 处理被纳入同一个污染布尔字段测试。
+- RED 确认旧页面把污染布尔字符串误报为 `available/enabled`；GREEN 后污染 marker 不进入 visible/aria evidence。
+- 正常 diagnostics true/false 渲染、API schema、runtime/session lifecycle、worker lease 和 browser fingerprint 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds non-public diagnostics boolean fields"
+# RED then GREEN；旧页面 rendered polluted boolean strings as available/enabled；GREEN 1 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics UI release-evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics boolean release-evidence boundary。

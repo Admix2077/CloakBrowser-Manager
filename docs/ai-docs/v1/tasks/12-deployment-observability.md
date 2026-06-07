@@ -10440,3 +10440,34 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 这是 Manager-controlled VNC/WebSocket origin rejection log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 System diagnostics boolean evidence guardrail
+
+背景：
+
+- System diagnostics 页面会把 storage checks、Firefox identity match 和 Automation worker state 写入 visible text 与 aria-label，后续 release evidence 会引用这些文本。
+- 正常 API 返回布尔值，但历史、mock 或异常 diagnostics JSON 可能把这些布尔字段污染为 `token=...`、`Authorization=Bearer ...` 或 `/data/...` 字符串。
+- 旧页面对 storage/worker 字段使用 JavaScript truthy/falsy 判断，会把污染字符串误报为 `available` 或 `enabled`，造成 release evidence 不可靠。
+- 该问题只属于 Manager diagnostics UI evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Storage `data_dir_exists`、`db_exists` 现在只接受真实 `true`/`false`；其他值显示 `unknown`。
+- Automation worker `enabled` 现在只接受真实 `true`/`false`；其他值显示 `unknown`。
+- Firefox major match 已保持严格布尔/null 处理，并纳入异常布尔字段回归测试。
+- 污染布尔字段中的 token、Authorization、Bearer、`/data/` marker 不会进入 diagnostics visible/aria evidence。
+- 正常 true/false 渲染、diagnostics API schema、runtime/session lifecycle、worker lease 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds non-public diagnostics boolean fields"
+# RED: old UI rendered polluted boolean strings as available/enabled
+# GREEN: 1 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
