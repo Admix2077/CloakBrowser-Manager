@@ -9634,3 +9634,33 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation URL IP literal host release boundary。
+
+## 2026-06-07 Automation about URL IP literal path release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation pages evidence，因为 about URL 会通过单独的低敏规范化路径进入 `/api/profiles/{profile_id}/automation/pages`。
+- 上一轮 URL host guardrail 覆盖了普通 `http/https` URL 的 IP literal host，但 `about:203.0.113.45?token=...#...` 的 IP literal 位于 about path，旧实现清掉 query/fragment 后仍会回显 `about:203.0.113.45`。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Automation pages response evidence 边界。
+
+已覆盖：
+
+- Automation about URL public formatter 现在会把有效 IP literal path 折叠为空 public URL。
+- query、fragment 和 token marker 仍按既有逻辑清理；普通 about URL、内部页过滤、Automation capture、page refs、task execution、runtime browser 和 proxy resolution 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_about_url_ip_literal_path -q
+# RED then GREEN；旧 Automation pages response 回显 about:203.0.113.45；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_pages_redacts_about_url or automation_pages_filters_internal_about" -q
+# 4 passed, 277 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation pages response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation about URL IP literal path release boundary。

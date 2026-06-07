@@ -9957,3 +9957,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Automation about URL IP literal path guardrail
+
+背景：
+
+- Automation pages response 的 `url` 属于 Manager-controlled Automation response evidence，会进入 UI、debug 和 release triage。
+- 上一轮 Automation URL IP literal host guardrail 覆盖了 `https://203.0.113.45/app` 这类 host，但 `about:203.0.113.45?token=...#...` 走 about URL path 规范化，旧实现会保留低敏 path 并回显 `about:203.0.113.45`。
+- 该问题只属于 Manager 自己的 Automation pages response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_automation_public_about_url()` 现在会在清理 query/fragment 和 marker path 后，识别 about URL path 是否为有效 IP literal。
+- about URL path 如果是有效 IP literal，会折叠为空 public URL，避免 `/api/profiles/{profile_id}/automation/pages` 回显 `about:203.0.113.45`。
+- 普通 about URL path、内部页过滤、Automation capture、page refs、task execution、runtime browser 和 proxy resolution 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_pages_redacts_about_url_ip_literal_path -q
+# RED: old Automation pages response returned about:203.0.113.45
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_pages_redacts_about_url or automation_pages_filters_internal_about" -q
+# 4 passed, 277 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation pages response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

@@ -4931,6 +4931,8 @@ def _automation_public_about_url(raw_url: str) -> str:
         return ""
     if _AUTOMATION_SENSITIVE_MARKER_RE.search(parsed.path):
         return ""
+    if _automation_is_ip_literal(parsed.path):
+        return ""
     return f"about:{parsed.path}"
 
 

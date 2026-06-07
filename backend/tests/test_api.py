@@ -4389,6 +4389,29 @@ def test_automation_pages_redacts_about_url_query_and_fragment(app_client: TestC
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_pages_redacts_about_url_ip_literal_path(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationAboutIpPathRedaction"})
+    pid = create.json()["id"]
+    secret_url = "about:203.0.113.45?token=about-ip-secret#frag"
+    _automation_running_profile(pid, [_automation_page(secret_url, "About IP")])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+
+    assert resp.status_code == 200
+    page = resp.json()["pages"][0]
+    assert page["url"] == ""
+    serialized = resp.text
+    for leaked in (
+        "203.0.113.45",
+        "about-ip-secret",
+        "?token",
+        "#frag",
+        secret_url,
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_pages_redacts_about_url_sensitive_marker_path(
     app_client: TestClient,
 ):
