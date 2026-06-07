@@ -10145,3 +10145,36 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics boolean release-evidence boundary。
+
+## 2026-06-07 System diagnostics collection shape release-evidence guardrail
+
+背景：
+
+- Release convergence 继续检查 System diagnostics 页面，因为 collection 字段会进入 UI visible text 与 accessible snapshot。
+- 旧页面假设 `stealth_pref_categories` 一定是数组、count map 一定是对象；如果历史、mock 或异常 diagnostics JSON 把这些字段污染成 `null`、字符串或普通对象，页面会在 evidence 渲染路径上崩溃。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 diagnostics UI release evidence stability 边界。
+
+已覆盖：
+
+- Active displays、VNC ports 非数组输入显示 `none`。
+- Launch failure stages、runtime session status counts、automation task counts 非对象输入显示 `none`。
+- Stealth categories 非数组输入显示 `none`；数组内非字符串 label 或敏感 label 折叠为 `unknown`。
+- RED 确认旧页面在 `Object.entries(null)` 崩溃；GREEN 后 malformed collection 字段不会泄露 token/Authorization/Bearer marker，也不会阻断 diagnostics 页面渲染。
+- 正常 diagnostics 渲染、刷新、数字/布尔/scalar guardrail、API schema、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds malformed diagnostics collection fields"
+# RED then GREEN；旧页面 crashed at Object.entries(null)；GREEN 1 passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 9 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics UI release-evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics collection shape release-evidence boundary。

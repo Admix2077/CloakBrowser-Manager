@@ -208,7 +208,7 @@ function InfoRow({ label, value }: { label: string; value: number | string }) {
   );
 }
 
-function CountRows({ values, emptyLabel }: { values: Record<string, number>; emptyLabel: string }) {
+function CountRows({ values, emptyLabel }: { values: unknown; emptyLabel: string }) {
   const entries = publicCountEntries(values);
   if (entries.length === 0) {
     return <InfoRow label={emptyLabel} value="none" />;
@@ -311,23 +311,25 @@ function publicVersion(value: string | null): string | null {
   return /^\d+(?:\.\d+){0,3}$/.test(trimmed) ? trimmed : null;
 }
 
-function formatStringList(values: string[]): string {
+function formatStringList(values: unknown): string {
+  if (!Array.isArray(values)) return "none";
   const labels = Array.from(new Set(values.map(publicDiagnosticLabel)));
   return labels.length > 0 ? labels.join(", ") : "none";
 }
 
-function formatStageCounts(values: Record<string, number>): string {
+function formatStageCounts(values: unknown): string {
   return formatCountMap(values);
 }
 
-function formatCountMap(values: Record<string, number>): string {
+function formatCountMap(values: unknown): string {
   const entries = publicCountEntries(values);
   return entries.length > 0
     ? entries.map(([stage, count]) => `${stage} (${count})`).join(", ")
     : "none";
 }
 
-function publicCountEntries(values: Record<string, unknown>): Array<[string, number]> {
+function publicCountEntries(values: unknown): Array<[string, number]> {
+  if (!values || typeof values !== "object" || Array.isArray(values)) return [];
   const counts = new Map<string, number>();
   for (const [rawLabel, count] of Object.entries(values)) {
     const publicCount = publicNonNegativeInteger(count);
@@ -351,7 +353,8 @@ function publicNonNegativeInteger(value: unknown): number | null {
   return value;
 }
 
-function publicDiagnosticLabel(value: string): string {
+function publicDiagnosticLabel(value: unknown): string {
+  if (typeof value !== "string") return "unknown";
   const trimmed = value.trim();
   if (!trimmed || !PUBLIC_DIAGNOSTIC_LABEL_RE.test(trimmed)) return "unknown";
   if (SENSITIVE_DIAGNOSTIC_TEXT_RE.test(trimmed)) return "unknown";

@@ -10471,3 +10471,37 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 这是 Manager-controlled diagnostics UI evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 System diagnostics collection shape evidence guardrail
+
+背景：
+
+- System diagnostics 页面会把 active displays、VNC ports、launch failure stages、stealth categories、runtime session status counts 和 automation task counts 写入 visible text 与 aria-label。
+- 正常 API 返回数组或 count map，但历史、mock 或异常 diagnostics JSON 可能把这些 collection 字段污染成 `null`、字符串或普通对象。
+- 旧页面在 `Object.entries(null)` 或 `values.map(...)` 路径上会抛错，导致 diagnostics evidence 页面无法渲染，影响 release/observability 排障证据。
+- 该问题只属于 Manager diagnostics UI evidence stability 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Count map formatter 现在只接受非数组对象；`null`、数组或其他非对象输入显示 `none`。
+- String list formatter 现在只接受数组；非数组输入显示 `none`。
+- List 内非字符串 label 统一折叠为 `unknown`，敏感 marker 继续折叠为 `unknown`。
+- Malformed collection 中的 token、Authorization、Bearer marker 不会进入 diagnostics visible/aria evidence。
+- 正常 diagnostics 渲染、刷新、数字/布尔/scalar guardrail、diagnostics API schema、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx -t "folds malformed diagnostics collection fields"
+# RED: old UI crashed at Object.entries(null)
+# GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.tsx
+# 9 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics UI evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

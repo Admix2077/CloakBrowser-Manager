@@ -372,6 +372,47 @@ describe("SystemDiagnosticsPage", () => {
     expect(page.textContent).not.toContain("/data/");
   });
 
+  it("folds malformed diagnostics collection fields before rendering", async () => {
+    const leakMarker = "diagnostics-collection-token-secret";
+    const base = diagnostics();
+    mockGetDiagnostics.mockResolvedValueOnce(diagnostics({
+      counts: {
+        ...base.counts,
+        automation_task_counts: null as unknown as Record<string, number>,
+      },
+      runtime: {
+        ...base.runtime,
+        active_displays: `100 token=${leakMarker}` as unknown as number[],
+        active_vnc_ws_ports: { port: `6100 token=${leakMarker}` } as unknown as number[],
+        launch_failure_stage_counts: null as unknown as Record<string, number>,
+        stealth_pref_categories: [
+          "canvas",
+          null,
+          `Authorization=Bearer ${leakMarker}`,
+        ] as unknown as string[],
+      },
+      runtime_sessions: {
+        ...base.runtime_sessions,
+        status_counts: null as unknown as Record<string, number>,
+      },
+    }));
+
+    render(<SystemDiagnosticsPage />);
+
+    const page = await findLoadedDiagnosticsPage();
+    expect(within(page).getByRole("group", { name: "Active displays: none" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Active VNC ports: none" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Launch failure stages: none" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Stealth categories: canvas, unknown" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Runtime session statuses: none" })).toBeTruthy();
+    expect(within(page).getByRole("group", { name: "Tasks: none" })).toBeTruthy();
+
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("Authorization");
+    expect(page.textContent).not.toContain("Bearer");
+    expect(page.textContent).not.toContain("token=");
+  });
+
   it("uses a fixed error message without rendering backend details", async () => {
     mockGetDiagnostics.mockRejectedValueOnce(new Error("secret token at /data/profiles/profile-1"));
 
