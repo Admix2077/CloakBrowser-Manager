@@ -4971,6 +4971,49 @@ def test_automation_console_logs_redacts_sensitive_text_and_location_urls(app_cl
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_console_logs_redacts_ip_literal_text(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleIpRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.automation_console_logs = [
+        {
+            "type": "warning",
+            "text": (
+                "exit ip 203.0.113.45 via 198.51.100.20:8080 "
+                "and ipv6 2001:db8::45 via [2001:db8::46]:443 "
+                "candidate 2001:db8::44 selected"
+            ),
+            "location": {},
+        }
+    ]
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    assert resp.json()["logs"] == [
+        {
+            "type": "warning",
+            "text": (
+                "exit ip [redacted-ip] via [redacted-ip]:8080 "
+                "and ipv6 [redacted-ip] via [redacted-ip]:443 "
+                "candidate [redacted-ip] selected"
+            ),
+            "location": {},
+        }
+    ]
+    serialized = resp.text
+    for leaked in (
+        "203.0.113.45",
+        "198.51.100.20",
+        "2001:db8::45",
+        "2001:db8::46",
+        "2001:db8::44",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_console_logs_redacts_hyphen_sensitive_assignments(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationConsoleHyphenRedaction"})
     pid = create.json()["id"]

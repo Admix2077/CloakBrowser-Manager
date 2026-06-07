@@ -10,6 +10,7 @@ import asyncio
 import datetime
 import hashlib
 import hmac
+import ipaddress
 import logging
 import math
 import os
@@ -207,6 +208,11 @@ _AUTOMATION_SENSITIVE_MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 _AUTOMATION_BEARER_TOKEN_RE = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/\-=]+", re.IGNORECASE)
+_AUTOMATION_IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+_AUTOMATION_BRACKETED_IP_RE = re.compile(r"\[([0-9A-Fa-f:.%]+)\]")
+_AUTOMATION_IPV6_RE = re.compile(
+    r"(?<![A-Za-z0-9:.])(?:[0-9A-Fa-f]{0,4}:){2,}[0-9A-Fa-f:.%]*(?![A-Za-z0-9:.])"
+)
 _AUTOMATION_INVALID_PAGE_REF = "invalid"
 
 # Paths that bypass authentication even when AUTH_TOKEN is set
@@ -5073,7 +5079,43 @@ def _automation_redact_text(text: str) -> str:
         redacted,
     )
     redacted = _AUTOMATION_SENSITIVE_MARKER_RE.sub("[redacted]", redacted)
-    return _AUTOMATION_BEARER_TOKEN_RE.sub("Bearer [redacted]", redacted)
+    redacted = _AUTOMATION_BEARER_TOKEN_RE.sub("Bearer [redacted]", redacted)
+    return _automation_redact_ip_literals(redacted)
+
+
+def _automation_redact_ip_literals(value: str) -> str:
+    redacted = _AUTOMATION_BRACKETED_IP_RE.sub(
+        lambda match: (
+            "[redacted-ip]"
+            if _automation_is_ip_literal(match.group(1))
+            else match.group(0)
+        ),
+        value,
+    )
+    redacted = _AUTOMATION_IPV4_RE.sub(
+        lambda match: (
+            "[redacted-ip]"
+            if _automation_is_ip_literal(match.group(0))
+            else match.group(0)
+        ),
+        redacted,
+    )
+    return _AUTOMATION_IPV6_RE.sub(
+        lambda match: (
+            "[redacted-ip]"
+            if _automation_is_ip_literal(match.group(0))
+            else match.group(0)
+        ),
+        redacted,
+    )
+
+
+def _automation_is_ip_literal(value: str) -> bool:
+    try:
+        parsed = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return parsed.version in {4, 6}
 
 
 _AUTOMATION_NETWORK_METHODS = {

@@ -9575,6 +9575,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 
+## 2026-06-07 Automation console IP literal redaction guardrail
+
+背景：
+
+- Automation console logs 属于 Manager-controlled Automation evidence，会把页面 console message text 返回给 UI 和 API 调用方定位脚本/页面问题。
+- 旧 `_automation_redact_text()` 已覆盖 URL、Authorization/Bearer、Cookie、token/secret assignment 和 marker-only 文本，但裸 IPv4/IPv6 literal 仍可能原样回显。
+- 该问题只属于 Manager 自己的 Automation console evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Automation console log text 现在会把有效 IPv4 literal、裸 IPv6 literal 和 bracketed IPv6 literal 折叠为 `[redacted-ip]`。
+- Bracketed/endpoint 形态保留低敏端口上下文，例如 `[2001:db8::46]:443` 变为 `[redacted-ip]:443`。
+- 不改变 Automation console capture、page refs、network capture、task execution、browser runtime、proxy resolution 或 fingerprint 行为。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_console_logs_redacts_ip_literal_text -q
+# RED: old console log text returned 203.0.113.45, 198.51.100.20, 2001:db8::45, 2001:db8::46, and 2001:db8::44
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_console" -q
+# 7 passed, 272 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation console response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
 ## 2026-06-07 Profile export proxy host marker guardrail
 
 背景：
