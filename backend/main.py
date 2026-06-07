@@ -5063,8 +5063,12 @@ def _automation_safe_url(raw_url: str) -> str:
     if _automation_is_ip_literal(parsed.hostname):
         return ""
     host = parsed.hostname
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
+    try:
+        port = parsed.port
+    except ValueError:
+        return ""
+    if port:
+        host = f"{host}:{port}"
     return parsed._replace(netloc=host, params="", query="", fragment="").geturl()
 
 

@@ -9664,3 +9664,33 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation about URL IP literal path release boundary。
+
+## 2026-06-07 Automation URL malformed port release guardrail
+
+背景：
+
+- Release convergence 继续检查 Automation URL evidence，因为 pages、console location 和 network summary URL 会从运行时内存或历史兼容数据进入 API/debug/release triage。
+- 旧 `_automation_safe_url()` 会直接访问 `urlparse(...).port`；当 URL 形如 `https://app.example.com:bad/app?token=...` 时，`urllib.parse` 抛出 `ValueError`，Automation pages response 可能从低敏 evidence 读取变成接口失败。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Automation URL response stability/evidence 边界。
+
+已覆盖：
+
+- Automation URL sanitizer 遇到 malformed port 会折叠为空 public URL，避免 500 和 token/query/fragment 泄漏。
+- pages URL、console location URL 和 network summary URL 共用该逻辑；正常 domain URL、合法端口、host marker/IP literal redaction、about URL 处理、Automation capture、task execution、runtime browser 和 proxy resolution 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_url_evidence_redacts_malformed_ports -q
+# RED then GREEN；旧 Automation pages response 读取 ParseResult.port 时抛 ValueError；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_url_evidence or automation_pages_redacts_about_url or automation_pages_filters_internal_about or automation_pages_redacts_non_http" -q
+# 8 passed, 274 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation URL response stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation URL malformed port release boundary。
