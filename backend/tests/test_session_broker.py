@@ -2264,6 +2264,33 @@ def test_audit_metadata_sanitizer_sanitizes_tuple_values_before_persistence(tmp_
     assert "runtime_service_token" not in serialized_raw
 
 
+def test_audit_metadata_sanitizer_collapses_malformed_url_without_credentials(tmp_db):
+    leak_marker = "audit-malformed-url-secret"
+
+    event = db.create_audit_event(
+        event_type="runtime.test",
+        actor_type="runtime_service",
+        metadata={
+            "message": (
+                "proxy "
+                f"http://audit-user:audit-pass@[2001:db8::1/path?token={leak_marker}#frag "
+                "failed"
+            )
+        },
+    )
+
+    assert event["metadata"] == {"message": "proxy http://unknown failed"}
+    events = db.list_audit_events()
+    assert events[0]["metadata"] == {"message": "proxy http://unknown failed"}
+    serialized_events = json.dumps(events, sort_keys=True)
+    assert "audit-user" not in serialized_events
+    assert "audit-pass" not in serialized_events
+    assert "2001:db8" not in serialized_events
+    assert leak_marker not in serialized_events
+    assert "?token" not in serialized_events
+    assert "#frag" not in serialized_events
+
+
 def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
     sensitive_ids = [
         "api_key-audit-external-marker",

@@ -9818,3 +9818,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy URL redactor malformed IPv6 release boundary。
+
+## 2026-06-07 Audit metadata malformed URL redaction release guardrail
+
+背景：
+
+- Release convergence 继续检查 audit metadata redaction，因为该 sanitizer 会处理 Manager 自己创建的新 audit event，也会在读取历史 audit event 时二次低敏化。
+- 旧 `_public_audit_url_label()` 在 `urlsplit()` 遇到 malformed IPv6 netloc 时直接返回原 URL；后续 token/IP 规则不足以移除 `username:password@` 这类 credential 片段。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 audit metadata persistence/reader redaction 边界。
+
+已覆盖：
+
+- Audit URL label 遇到 malformed http/https/socks5 URL 会折叠为 `scheme://unknown`。
+- 新建 audit event 和历史 audit event 读取均不回显 URL username/password、IPv6 literal、query、fragment 或 token。
+- 正常 audit URL label、sensitive metadata key removal、tuple/list sanitizer、audit top-level public field sanitizer、runtime browser、proxy resolution、Automation/VNC 和 browser runtime 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_collapses_malformed_url_without_credentials -q
+# RED then GREEN；旧 audit metadata sanitizer 在 malformed IPv6 URL parse 失败后保留 audit-user:audit-pass@；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_removes_sensitive_fields backend/tests/test_session_broker.py::test_audit_metadata_sanitizer_sanitizes_tuple_values_before_persistence backend/tests/test_session_broker.py::test_audit_event_reader_sanitizes_historical_top_level_fields_and_metadata -q
+# 3 passed
+```
+
+边界：
+
+- 这是 Manager-controlled audit metadata persistence/reader redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 audit metadata malformed URL redaction release boundary。

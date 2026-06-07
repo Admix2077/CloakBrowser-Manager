@@ -1050,7 +1050,10 @@ def _public_audit_url_label(url: str) -> str:
     try:
         parsed = urlsplit(url)
     except ValueError:
-        return url
+        scheme = url.split("://", 1)[0].lower()
+        if scheme in {"http", "https", "socks5"}:
+            return f"{scheme}://unknown"
+        return "unknown"
     scheme = parsed.scheme.lower()
     if scheme not in {"http", "https", "socks5"} or not parsed.netloc:
         return url
