@@ -8805,6 +8805,34 @@ def test_vnc_ws_rejects_origin_with_non_default_port_for_scheme(app_client: Test
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_vnc_ws_origin_rejection_log_keeps_scheme_non_default_port(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "OriginPortMismatchLog"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    with pytest.raises(Exception):
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": "http://evil.com:443/path?viewer_token=origin-secret#frag"},
+        ):
+            pass
+
+    assert "WebSocket origin mismatch: origin=evil.com:443 host=testserver" in caplog.text
+    for leaked in (
+        "origin-secret",
+        "viewer_token",
+        "?viewer_token",
+        "/path",
+        "#frag",
+    ):
+        assert leaked not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_same_origin(app_client: TestClient):
     """WebSocket from same origin should pass Origin check (not get 4403)."""
     create = app_client.post("/api/profiles", json={"name": "OriginOk"})

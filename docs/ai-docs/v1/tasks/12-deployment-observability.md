@@ -10340,3 +10340,38 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled VNC/WebSocket origin comparison stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 VNC WebSocket origin log scheme port evidence guardrail
+
+背景：
+
+- WebSocket origin rejection warning 是 Manager-controlled viewer lifecycle evidence，排障时需要保留低敏但准确的 host/port 上下文。
+- 行为校验已经按 scheme 判断默认端口，但旧 `_websocket_public_host_label()` 仍把 `80` 和 `443` 都作为默认端口处理，导致 `http://evil.com:443` 的拒绝日志显示为 `origin=evil.com`。
+- 该问题只属于 Manager 自己的 WebSocket origin rejection log evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_websocket_public_host_label()` 现在和 comparison helper 一样按 scheme 判断默认端口。
+- `http://evil.com:443` 的跨源拒绝日志保留低敏 `origin=evil.com:443`。
+- Origin path、query、fragment、viewer_token marker 仍不进入日志。
+- 普通 same-origin、scheme-aware origin comparison、bracketed IPv6 same-origin、跨源拒绝、profile VNC forwarding、runtime viewer token 校验、runtime session storage 和 viewer token schema 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_log_keeps_scheme_non_default_port -q
+# RED: old origin rejection log folded http://evil.com:443 to origin=evil.com
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_log_keeps_scheme_non_default_port backend/tests/test_api.py::test_vnc_ws_origin_rejection_logs_low_sensitive_origin backend/tests/test_api.py::test_vnc_ws_rejects_origin_with_non_default_port_for_scheme backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host -q
+# 4 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc_ws_origin or ws_allows or vnc_ws_rejects_cross_origin" -q
+# 8 passed, 283 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled VNC/WebSocket origin rejection log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
