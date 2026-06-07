@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import ipaddress
 import io
 import re
 import uuid
@@ -123,6 +124,15 @@ _SENSITIVE_CSV_SOURCE_MARKERS = (
     "x_api_key",
     "x-api-key",
 )
+_SENSITIVE_PROFILE_CONFIG_TAG_RE = re.compile(
+    r"https?://|socks[45]://|@|[/?#=]|"
+    r"\b(authorization|bearer|token|secret|password|cookie|auth|"
+    r"access[_-]?token|api[_-]?key|client[_-]?secret|private[_-]?key|"
+    r"refresh[_-]?token|runtime[_-]?service[_-]?token|service[_-]?token|"
+    r"session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)\b",
+    re.IGNORECASE,
+)
+_PROFILE_CONFIG_TAG_IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 
 
 @dataclass(frozen=True)
@@ -216,6 +226,7 @@ def sanitize_profile_config_export_data(
 
     safe["timezone"] = public_geoip_timezone(profile.get("timezone"))
     safe["locale"] = public_geoip_locale(profile.get("locale"))
+    safe["tags"] = _safe_profile_config_export_tags(profile.get("tags"))
     for field, default in PROFILE_CONFIG_EXPORT_BOOL_DEFAULTS.items():
         safe[field] = _safe_profile_config_bool(profile.get(field), default)
     return safe
@@ -263,6 +274,43 @@ def _safe_profile_config_bool(value: Any, default: bool) -> bool:
     if isinstance(value, int) and value in {0, 1}:
         return bool(value)
     return default
+
+
+def _safe_profile_config_export_tags(tags: Any) -> list[dict[str, str | None]]:
+    if not isinstance(tags, list):
+        return []
+    public_tags: list[dict[str, str | None]] = []
+    for tag in tags:
+        if not isinstance(tag, dict):
+            continue
+        name = tag.get("tag")
+        if not isinstance(name, str):
+            continue
+        public_name = _safe_profile_config_export_tag(name)
+        if public_name is None:
+            continue
+        color = tag.get("color")
+        public_tags.append({"tag": public_name, "color": color if isinstance(color, str) else None})
+    return public_tags
+
+
+def _safe_profile_config_export_tag(value: str) -> str | None:
+    tag = value.strip()
+    if not tag:
+        return None
+    if _SENSITIVE_PROFILE_CONFIG_TAG_RE.search(tag) or _contains_ip_literal(tag):
+        return None
+    return tag
+
+
+def _contains_ip_literal(value: str) -> bool:
+    for match in _PROFILE_CONFIG_TAG_IPV4_RE.finditer(value):
+        try:
+            ipaddress.ip_address(match.group(0))
+        except ValueError:
+            continue
+        return True
+    return False
 
 
 def _safe_template_launch_args(value: Any) -> list[str]:

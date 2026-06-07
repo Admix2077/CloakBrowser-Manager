@@ -1075,6 +1075,35 @@ def test_export_profiles_redacts_sensitive_proxy_host_markers_by_default(
     assert "user:" not in response_text
 
 
+def test_export_profiles_omits_sensitive_tags(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "ExportSensitiveTags",
+            "tags": [
+                {"tag": "release", "color": "#2563eb"},
+                {"tag": "runtime_service_token-export-tag-marker", "color": "#ef4444"},
+                {"tag": "api-key-export-tag-marker token=export-tag-secret", "color": "#f97316"},
+                {"tag": "/tmp/export-tag-secret", "color": "#22c55e"},
+                {"tag": "203.0.113.77", "color": "#a855f7"},
+            ],
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post("/api/profiles/export", json={"profile_ids": [pid]})
+
+    assert resp.status_code == 200
+    config = resp.json()["results"][0]["config"]
+    assert config["tags"] == [{"tag": "release", "color": "#2563eb"}]
+    response_text = resp.text
+    assert "runtime_service_token-export-tag-marker" not in response_text
+    assert "api-key-export-tag-marker" not in response_text
+    assert "export-tag-secret" not in response_text
+    assert "/tmp/export-tag-secret" not in response_text
+    assert "203.0.113.77" not in response_text
+
+
 def test_export_profiles_sanitizes_persisted_profile_id_response(
     app_client: TestClient,
 ):
@@ -3384,6 +3413,35 @@ def test_export_profile_bundle_redacts_sensitive_proxy_host_markers_by_default(
     assert "hiddenpass" not in response_text
     assert "token=super-secret" not in response_text
     assert "user:" not in response_text
+
+
+def test_export_profile_bundle_omits_sensitive_tags(app_client: TestClient):
+    create = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Bundle Sensitive Tags",
+            "tags": [
+                {"tag": "bundle", "color": "#2563eb"},
+                {"tag": "runtime_service_token-bundle-tag-marker", "color": "#ef4444"},
+                {"tag": "api-key-bundle-tag-marker token=bundle-tag-secret", "color": "#f97316"},
+                {"tag": "/tmp/bundle-tag-secret", "color": "#22c55e"},
+                {"tag": "203.0.113.78", "color": "#a855f7"},
+            ],
+        },
+    )
+    pid = create.json()["id"]
+
+    resp = app_client.post(f"/api/profiles/{pid}/bundle/export", json={})
+
+    assert resp.status_code == 200
+    config = resp.json()["bundle"]["profile"]["config"]
+    assert config["tags"] == [{"tag": "bundle", "color": "#2563eb"}]
+    response_text = resp.text
+    assert "runtime_service_token-bundle-tag-marker" not in response_text
+    assert "api-key-bundle-tag-marker" not in response_text
+    assert "bundle-tag-secret" not in response_text
+    assert "/tmp/bundle-tag-secret" not in response_text
+    assert "203.0.113.78" not in response_text
 
 
 def test_export_profile_bundle_sanitizes_persisted_identity_fields(app_client: TestClient):

@@ -9481,3 +9481,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile response sensitive tag release boundary。
+
+## 2026-06-07 Profile config/bundle export sensitive tag release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile import/export evidence，因为 config export 和 bundle export 会把 profile config 交给备份、迁移和调用方保存。
+- Profile API response tag guardrail 已覆盖 create/get/list/update，但 `/api/profiles/export` 与 `/api/profiles/{profile_id}/bundle/export` 旧响应仍会把包含 runtime/token/path/IP marker 的 tag 写入导出配置。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 profile config/bundle export response evidence 边界。
+
+已覆盖：
+
+- Profile config export 响应会省略敏感 tag，但保留普通 tag 与颜色。
+- Profile bundle export 的 `bundle.profile.config.tags` 共享 profile config export sanitizer。
+- 不改变 tag 持久化、profile CRUD、profile config import、bundle import、proxy resolution、browser runtime 或 fingerprint 行为。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profiles_omits_sensitive_tags backend/tests/test_api.py::test_export_profile_bundle_omits_sensitive_tags -q
+# RED then GREEN；旧 profile config export/bundle export 回显 runtime_service_token/api-key/path/IP tag marker；GREEN 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_profile_responses_omit_sensitive_tags backend/tests/test_api.py::test_export_profiles_redacts_proxy_credentials_by_default backend/tests/test_api.py::test_export_profiles_redacts_sensitive_proxy_host_markers_by_default backend/tests/test_api.py::test_export_profiles_omits_sensitive_tags backend/tests/test_api.py::test_export_profiles_sensitive_proxy_requires_independent_confirmation backend/tests/test_api.py::test_export_profiles_can_include_sensitive_proxy_when_confirmed backend/tests/test_api.py::test_export_profile_bundle_returns_config_only_manifest_without_sensitive_fields backend/tests/test_api.py::test_export_profile_bundle_redacts_sensitive_proxy_host_markers_by_default backend/tests/test_api.py::test_export_profile_bundle_omits_sensitive_tags backend/tests/test_api.py::test_export_profile_bundle_sensitive_proxy_requires_independent_confirmation backend/tests/test_api.py::test_export_profile_bundle_can_include_sensitive_proxy_when_confirmed backend/tests/test_profile_bundle.py -q
+# 16 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile config/bundle export response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile config/bundle export sensitive tag release boundary。
