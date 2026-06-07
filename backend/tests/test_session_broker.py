@@ -1073,6 +1073,41 @@ def test_runtime_viewer_token_persists_hash_and_returns_short_lived_viewer_url(
     assert stored["viewer_token_expires_at"] == data["expires_at"]
 
 
+def test_runtime_viewer_token_rejects_extra_business_and_secret_fields(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    leak_marker = "runtime-viewer-token-extra-secret"
+
+    resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={
+            "ttl_seconds": 60,
+            "order_id": f"order-{leak_marker}",
+            "wallet_id": f"wallet-{leak_marker}",
+            "viewer_token": f"viewer-{leak_marker}",
+            "runtime_service_token": f"runtime-{leak_marker}",
+            "cookie": f"sid={leak_marker}",
+            "proxy_password": leak_marker,
+        },
+    )
+
+    assert resp.status_code == 422
+    serialized_response = json.dumps(resp.json(), sort_keys=True)
+    assert leak_marker not in serialized_response
+    assert "viewer_token" not in serialized_response
+    stored = db.get_runtime_session(session["id"])
+    assert stored is not None
+    assert stored["viewer_token_hash"] is None
+    assert stored["viewer_token_expires_at"] is None
+    serialized_events = json.dumps(db.list_audit_events(), sort_keys=True)
+    assert "runtime.viewer_token.created" not in _audit_event_types()
+    assert leak_marker not in serialized_events
+
+
 def test_runtime_viewer_token_rejects_missing_session(
     app_client: TestClient,
     runtime_headers: dict[str, str],

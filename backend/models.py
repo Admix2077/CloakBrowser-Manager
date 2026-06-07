@@ -510,6 +510,8 @@ class RuntimeSessionResponse(BaseModel):
 
 
 class RuntimeViewerTokenCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     ttl_seconds: int = Field(ge=1, le=300)
 
 
