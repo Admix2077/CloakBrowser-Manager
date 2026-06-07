@@ -9450,3 +9450,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy response sensitive tag release boundary。
+
+## 2026-06-07 Profile response sensitive tag release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile API evidence，因为 profile tag 会在 Manager API/UI、bulk flows 和调用方中直接展示。
+- 旧 `/api/profiles` 与 `/api/profiles/{profile_id}` response 会把包含 runtime/token/path/IP marker 的 tag 原样返回。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 profile API response evidence 边界。
+
+已覆盖：
+
+- Profile create/get/list/update 响应会省略敏感 tag，但保留普通 tag 与颜色。
+- Profile、proxy、proxy provider preset 响应共享同一 public selection tag 过滤路径。
+- 不改变 tag 持久化、profile update 语义、proxy selection、browser runtime 或 fingerprint 行为。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_profile_responses_omit_sensitive_tags -q
+# RED then GREEN；旧 profile create response 回显 runtime_service_token-profile-tag-marker token=profile-tag-secret；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "profile_response or profile_responses or proxy_responses_omit_sensitive_tags or proxy_provider_preset_responses_omit_sensitive_tags or update_profile" -q
+# 15 passed, 261 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled profile API response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile response sensitive tag release boundary。

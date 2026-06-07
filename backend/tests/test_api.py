@@ -397,6 +397,67 @@ def test_profile_response_sanitizes_persisted_malformed_tags(app_client: TestCli
     assert sorted(listed_profile["tags"], key=lambda tag: tag["tag"]) == actual_tags
 
 
+def test_profile_responses_omit_sensitive_tags(app_client: TestClient):
+    leak_marker = "profile-tag-secret"
+    sensitive_tag = (
+        "runtime_service_token-profile-tag-marker "
+        f"token={leak_marker} /tmp/profile-tag 203.0.113.69"
+    )
+    create_resp = app_client.post(
+        "/api/profiles",
+        json={
+            "name": "Profile Tag Redaction",
+            "tags": [
+                {"tag": "daily", "color": "#2563eb"},
+                {"tag": sensitive_tag, "color": "#ef4444"},
+            ],
+        },
+    )
+    assert create_resp.status_code == 201
+    profile_id = create_resp.json()["id"]
+
+    get_resp = app_client.get(f"/api/profiles/{profile_id}")
+    list_resp = app_client.get("/api/profiles")
+    update_resp = app_client.put(
+        f"/api/profiles/{profile_id}",
+        json={
+            "tags": [
+                {"tag": "review", "color": "#16a34a"},
+                {"tag": f"access-token-profile-tag-marker {leak_marker}", "color": None},
+            ],
+        },
+    )
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    assert update_resp.status_code == 200
+    listed_profile = next(profile for profile in list_resp.json() if profile["id"] == profile_id)
+    assert create_resp.json()["tags"] == [{"tag": "daily", "color": "#2563eb"}]
+    assert get_resp.json()["tags"] == [{"tag": "daily", "color": "#2563eb"}]
+    assert listed_profile["tags"] == [{"tag": "daily", "color": "#2563eb"}]
+    assert update_resp.json()["tags"] == [{"tag": "review", "color": "#16a34a"}]
+
+    serialized = json.dumps(
+        {
+            "create": create_resp.json(),
+            "get": get_resp.json(),
+            "list": listed_profile,
+            "update": update_resp.json(),
+            "events": main.db.list_audit_events(),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "access-token",
+        "token=",
+        "/tmp/profile-tag",
+        "203.0.113.69",
+    ):
+        assert leaked not in serialized
+
+
 def test_proxy_assignment_responses_sanitize_persisted_profile_id(
     app_client: TestClient,
 ):

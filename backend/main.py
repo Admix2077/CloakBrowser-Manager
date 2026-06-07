@@ -884,7 +884,7 @@ def _public_selection_tags(tags: list[str]) -> list[str]:
     return public_tags
 
 
-def _public_proxy_tag_responses(tags: object) -> list[TagResponse]:
+def _public_selection_tag_responses(tags: object) -> list[TagResponse]:
     if not isinstance(tags, list):
         return []
     responses: list[TagResponse] = []
@@ -921,7 +921,7 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     safe["last_check_at"] = _public_optional_timestamp(safe.get("last_check_at"))
     safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
     safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
-    safe["tags"] = _public_proxy_tag_responses(safe.get("tags"))
+    safe["tags"] = _public_selection_tag_responses(safe.get("tags"))
     return ProxyResponse(**safe)
 
 
@@ -943,7 +943,7 @@ def _profile_response(profile: dict) -> ProfileResponse:
     safe["last_geoip_resolved_at"] = _public_optional_timestamp(safe.get("last_geoip_resolved_at"))
     safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
     safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
-    safe["tags"] = _tag_responses(safe.get("tags"))
+    safe["tags"] = _public_selection_tag_responses(safe.get("tags"))
     return ProfileResponse(**safe)
 
 
@@ -1067,7 +1067,7 @@ def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse
     safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
     safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
     safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
-    safe["tags"] = _public_proxy_tag_responses(safe.get("tags"))
+    safe["tags"] = _public_selection_tag_responses(safe.get("tags"))
     return ProxyProviderPresetResponse(**safe)
 
 
