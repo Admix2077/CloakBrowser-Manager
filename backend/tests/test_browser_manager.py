@@ -86,6 +86,17 @@ def test_validate_no_port():
         bm._validate_proxy("http://host")
 
 
+def test_redact_proxy_url_handles_malformed_ipv6_without_leaking_payload():
+    redacted = bm._redact_proxy_url(
+        "http://user:hiddenpass@[2001:db8::1:8080?token=super-secret#frag"
+    )
+
+    assert redacted == "invalid proxy URL"
+    assert "hiddenpass" not in redacted
+    assert "super-secret" not in redacted
+    assert "2001:db8::1" not in redacted
+
+
 # ── _proxy_to_invisible ──────────────────────────────────────────────────────
 
 

@@ -150,7 +150,10 @@ def _validate_proxy(url: str) -> None:
 
 
 def _redact_proxy_url(url: str) -> str:
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "invalid proxy URL"
     if not parsed.scheme or not parsed.netloc:
         return url
 

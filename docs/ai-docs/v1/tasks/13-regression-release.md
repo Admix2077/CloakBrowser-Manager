@@ -9787,3 +9787,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation URL malformed IPv6 release boundary。
+
+## 2026-06-07 Proxy URL redactor malformed IPv6 release guardrail
+
+背景：
+
+- Release convergence 继续检查 proxy URL redaction，因为该 helper 会服务 Proxy API response、profile/import/export evidence、CSV source summaries 和 error/audit 低敏路径。
+- 旧 `_redact_proxy_url()` 直接调用 `urlparse()`；当 proxy URL 形如 `http://user:pass@[2001:db8::1:8080?token=...` 时，`urllib.parse` 抛出 `ValueError`，redaction helper 可能从低敏 evidence 处理变成异常源。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 proxy URL redaction stability/evidence 边界。
+
+已覆盖：
+
+- Proxy URL redactor 遇到 malformed IPv6 URL 会返回固定低敏 `invalid proxy URL`。
+- malformed proxy URL 不回显 username/password、IPv6 literal、query、fragment 或 token。
+- 正常 proxy URL redaction、proxy validation、proxy-to-invisible launch mapping、proxy resolution、GeoIP lookup、profile persistence、Automation/VNC 和 browser runtime 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py::test_redact_proxy_url_handles_malformed_ipv6_without_leaking_payload -q
+# RED then GREEN；旧 proxy URL redactor 在 urllib.parse 解析 malformed IPv6 URL 时抛 ValueError；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py -k "normalize_ or validate_ or proxy_to_invisible or redact_proxy_url" -q
+# 20 passed, 58 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled proxy URL redaction stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy URL redactor malformed IPv6 release boundary。
