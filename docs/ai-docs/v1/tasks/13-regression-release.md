@@ -9694,3 +9694,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Automation URL malformed port release boundary。
+
+## 2026-06-07 Profile bundle localStorage malformed port origin release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile bundle localStorage export，因为该路径会把 running profile 当前页面 origin 作为 bundle response/audit evidence。
+- 旧 `_origin_from_page_url()` 会直接访问 `urlparse(...).port`；当页面 URL 形如 `https://app.example.com:bad/dashboard?token=...` 时，`urllib.parse` 抛出 `ValueError`，profile bundle localStorage export 可能从固定低敏错误变成接口异常。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 profile bundle localStorage export stability/evidence 边界。
+
+已覆盖：
+
+- Profile bundle localStorage origin helper 遇到 malformed port 会返回 unsafe origin，导出接口返回固定 `Local storage origin unavailable`。
+- 页面 localStorage 不会被读取，origin 原文、query、fragment 和 token 不进入 response/audit。
+- 正常 http/https origin、合法端口、marker origin 拒绝、about/non-http 拒绝、bundle config/cookie export、Automation execution、runtime browser 和 proxy resolution 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_malformed_port_origins_without_reading_page -q
+# RED then GREEN；旧 localStorage bundle export 读取 ParseResult.port 时抛 ValueError；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "export_profile_bundle_local_storage" -q
+# 7 passed, 276 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled profile bundle localStorage export response/audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile bundle localStorage malformed port origin release boundary。

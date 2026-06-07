@@ -1498,8 +1498,12 @@ def _origin_from_page_url(raw_url: str) -> str | None:
     host = parsed.hostname
     if _AUTOMATION_SENSITIVE_MARKER_RE.search(host):
         return None
-    if parsed.port:
-        host = f"{host}:{parsed.port}"
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if port:
+        host = f"{host}:{port}"
     return f"{parsed.scheme}://{host}"
 
 

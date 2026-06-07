@@ -10019,3 +10019,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Automation URL response stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Profile bundle localStorage malformed port origin guardrail
+
+背景：
+
+- Profile bundle localStorage export 会从 running profile 当前页面 URL 提取 origin，并把该 origin 写入 Manager-controlled bundle response/audit evidence。
+- 旧 `_origin_from_page_url()` 会直接读取 `urlparse(...).port`；当页面 URL 包含 malformed port，例如 `https://app.example.com:bad/dashboard?token=...` 时，`urllib.parse` 会抛 `ValueError`，导致 localStorage export 失败并跳过固定低敏错误路径。
+- 该问题只属于 Manager 自己的 profile bundle localStorage export stability/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_origin_from_page_url()` 现在把 malformed port 视为 unsafe origin，返回 `None`。
+- localStorage bundle export 遇到 malformed port origin 会返回固定 `Local storage origin unavailable`，不读取页面 localStorage，也不把 origin、query、fragment 或 token 写入响应/audit。
+- 普通 http/https origin、合法端口、marker origin 拒绝、about/non-http 拒绝、bundle config export、cookie export、Automation execution 和 browser runtime 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_malformed_port_origins_without_reading_page -q
+# RED: old localStorage bundle export raised ValueError while reading ParseResult.port
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "export_profile_bundle_local_storage" -q
+# 7 passed, 276 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled profile bundle localStorage export response/audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
