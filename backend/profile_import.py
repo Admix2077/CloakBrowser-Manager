@@ -105,6 +105,7 @@ _SENSITIVE_CSV_SOURCE_MARKERS = (
     "api_key",
     "api-key",
     "auth_token",
+    "auth-token",
     "client_secret",
     "private_key",
     "private-key",
@@ -114,6 +115,7 @@ _SENSITIVE_CSV_SOURCE_MARKERS = (
     "session-id",
     "service_token",
     "viewer_token",
+    "viewer-token",
     "x_api_key",
     "x-api-key",
 )

@@ -9673,3 +9673,36 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled audit reader evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 CSV import auth/viewer proxy source marker guardrail
+
+背景：
+
+- CSV import preview/import response 的 `source.proxy` 属于 Manager-controlled import diagnostics evidence。
+- 旧 proxy source marker 检查已覆盖 `auth_token` 和 `viewer_token`，但漏了 `auth-token` 和 `viewer-token` host marker；proxy URL redaction 后仍可能回显 `http://auth-token-...:8080`。
+- 该问题属于 Manager 自己的 import response evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- CSV import preview 和 confirmed import 的 `source.proxy` 现在会把 `auth-token`、`auth_token`、`viewer-token`、`viewer_token` proxy host marker 折叠为 `[redacted]`。
+- 普通 proxy redaction、导入行验证、profile 创建 payload、proxy normalization、audit event 和 browser proxy resolution 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_redacts_auth_viewer_proxy_source_host_markers -q
+# RED: old source.proxy returned http://auth-token-csv-proxy-marker.example:8080
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 23 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profiles_redacts_sensitive_proxy_host_markers_by_default backend/tests/test_api.py::test_export_profile_bundle_redacts_sensitive_proxy_host_markers_by_default -q
+# 2 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
