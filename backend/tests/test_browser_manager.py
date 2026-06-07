@@ -97,6 +97,23 @@ def test_redact_proxy_url_handles_malformed_ipv6_without_leaking_payload():
     assert "2001:db8::1" not in redacted
 
 
+def test_redact_proxy_url_redacts_sensitive_host_markers():
+    leak_marker = "runtime_service_token_proxy_marker"
+
+    redacted = bm._redact_proxy_url(
+        f"http://user:hiddenpass@{leak_marker}.example:8080"
+    )
+
+    assert redacted == "[redacted]"
+    assert bm._redact_proxy_url(
+        f"http://user:hiddenpass@{leak_marker}.example:8080",
+        sensitive_host_fallback="invalid proxy URL",
+    ) == "invalid proxy URL"
+    assert leak_marker not in redacted
+    assert "hiddenpass" not in redacted
+    assert "example" not in redacted
+
+
 # ── _proxy_to_invisible ──────────────────────────────────────────────────────
 
 

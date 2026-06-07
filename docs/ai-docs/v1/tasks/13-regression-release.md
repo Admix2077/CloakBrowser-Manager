@@ -10050,3 +10050,36 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC WebSocket origin log scheme port release boundary。
+
+## 2026-06-07 Proxy redaction sensitive host marker release guardrail
+
+背景：
+
+- Release convergence 继续检查 Manager-controlled proxy error evidence，因为 proxy validation 错误文本会被 API/UI/log/audit/diagnostics 调试链路引用。
+- 旧 `_redact_proxy_url()` 会删除 proxy credential，但敏感 marker 如果出现在 host（例如 `runtime_service_token_proxy_marker.example`），仍可能出现在 redacted proxy URL 中。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 proxy error redaction 边界。
+
+已覆盖：
+
+- `_redact_proxy_url()` 对包含 token/secret marker 的 proxy host 默认返回 `[redacted]`，保持 profile export/CSV source redaction response contract。
+- BrowserManager proxy validation 错误文本显式请求固定 `invalid proxy URL` fallback，避免把敏感 host marker 写入 error detail。
+- RED 确认旧 helper 会返回 `http://runtime_service_token_proxy_marker.example:8080`。
+- GREEN 后 credential、sensitive host marker 和 host suffix 都不进入 redacted proxy URL 或 validation error detail。
+- 正常 proxy normalization、proxy-to-invisible 映射、proxy validation、proxy resolution、profile launch 和 browser runtime 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py::test_redact_proxy_url_redacts_sensitive_host_markers -q
+# RED then GREEN；旧 redaction returned http://runtime_service_token_proxy_marker.example:8080；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_browser_manager.py::test_redact_proxy_url_redacts_sensitive_host_markers backend/tests/test_browser_manager.py::test_redact_proxy_url_handles_malformed_ipv6_without_leaking_payload backend/tests/test_browser_manager.py::test_validate_no_hostname backend/tests/test_browser_manager.py::test_validate_no_port backend/tests/test_browser_manager.py::test_proxy_to_invisible_http_with_auth backend/tests/test_browser_manager.py::test_proxy_to_invisible_https_no_auth backend/tests/test_browser_manager.py::test_proxy_to_invisible_socks5_no_auth -q
+# 7 passed
+```
+
+边界：
+
+- 这是 Manager-controlled proxy error evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、profile export/CSV redaction response contract、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy redaction sensitive host marker release boundary。

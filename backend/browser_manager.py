@@ -66,6 +66,12 @@ SENSITIVE_TEXT_RE = re.compile(
     r"token|viewer[_-]?token|x[_-]?api[_-]?key)(?=$|[^A-Za-z0-9]))",
     re.IGNORECASE,
 )
+SENSITIVE_PROXY_HOST_MARKER_RE = re.compile(
+    r"(?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|"
+    r"private[_-]?key|refresh[_-]?token|runtime[_-]?service[_-]?token|"
+    r"service[_-]?token|session[_-]?id|viewer[_-]?token|x[_-]?api[_-]?key)",
+    re.IGNORECASE,
+)
 PUBLIC_PROFILE_LOG_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 STEALTH_PREF_CATEGORY_ALIASES = {
     "fpp": "fingerprint",
@@ -140,16 +146,25 @@ def _validate_proxy(url: str) -> None:
             f"Invalid proxy scheme '{parsed.scheme}'. Must be http, https, or socks5."
         )
     if not parsed.hostname:
-        raise ValueError(f"Proxy URL missing hostname: {_redact_proxy_url(url)}")
+        raise ValueError(
+            "Proxy URL missing hostname: "
+            f"{_redact_proxy_url(url, sensitive_host_fallback='invalid proxy URL')}"
+        )
     try:
         port = parsed.port
     except ValueError as exc:
-        raise ValueError(f"Proxy URL invalid port: {_redact_proxy_url(url)}") from exc
+        raise ValueError(
+            "Proxy URL invalid port: "
+            f"{_redact_proxy_url(url, sensitive_host_fallback='invalid proxy URL')}"
+        ) from exc
     if not port:
-        raise ValueError(f"Proxy URL missing port: {_redact_proxy_url(url)}")
+        raise ValueError(
+            "Proxy URL missing port: "
+            f"{_redact_proxy_url(url, sensitive_host_fallback='invalid proxy URL')}"
+        )
 
 
-def _redact_proxy_url(url: str) -> str:
+def _redact_proxy_url(url: str, *, sensitive_host_fallback: str = "[redacted]") -> str:
     try:
         parsed = urlparse(url)
     except ValueError:
@@ -162,6 +177,8 @@ def _redact_proxy_url(url: str) -> str:
         port = parsed.port
     except ValueError:
         port = None
+    if SENSITIVE_PROXY_HOST_MARKER_RE.search(host):
+        return sensitive_host_fallback
     port_part = f":{port}" if port else ""
     return f"{parsed.scheme}://{host}{port_part}"
 
