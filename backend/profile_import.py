@@ -646,6 +646,7 @@ def _redact_csv_source_text(value: str) -> str:
         or "@" in value
         or "?" in value
         or "#" in value
+        or _contains_ip_literal(value)
         or _contains_csv_source_marker(lowered)
         or "token" in lowered
         or "secret" in lowered

@@ -9834,3 +9834,33 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled profile config/bundle export response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 CSV import source IP literal guardrail
+
+背景：
+
+- CSV import preview/import response 的 `source` 字段属于 Manager-controlled import diagnostics evidence，会把用户粘贴的原始行摘要返回给 UI 和调用方定位问题。
+- 旧 source 文本过滤已覆盖 URL、路径、credential、token/secret marker 和 proxy host marker，但普通 `name/tags/notes/template` source 字段里只包含裸 IP literal 时仍会原样回显。
+- 该问题只属于 Manager 自己的导入诊断证据边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- CSV import preview 和 confirmed import 的普通 `source` 文本字段现在遇到有效 IP literal 会折叠为 `[redacted]`。
+- `source.proxy` 的既有 proxy redaction、导入行验证、profile 创建、template 解析、audit metadata、browser runtime 和 proxy resolution 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_responses_redact_ip_literal_source_fields -q
+# RED: old source.name returned Imported 203.0.113.88
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 25 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

@@ -9512,3 +9512,33 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 profile config/bundle export sensitive tag release boundary。
+
+## 2026-06-07 CSV import source IP literal release guardrail
+
+背景：
+
+- Release convergence 继续检查 profile import evidence，因为 CSV preview/import response 的 `source` 字段会直接展示用户粘贴行的诊断摘要。
+- 旧普通 source 文本过滤已覆盖 URL、路径、credential、token/secret marker 和 proxy host marker，但 `name/tags/notes/template` source 字段里的裸 IP literal 仍可能原样回显。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 CSV import diagnostics evidence 边界。
+
+已覆盖：
+
+- CSV import preview 和 confirmed import 的普通 `source` 文本字段会把有效 IP literal 折叠为 `[redacted]`。
+- 不改变导入行验证、profile 创建、template 解析、proxy normalization、audit metadata、runtime browser 或 proxy resolution 行为。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_responses_redact_ip_literal_source_fields -q
+# RED then GREEN；旧 source.name 回显 Imported 203.0.113.88；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 25 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CSV import source IP literal release boundary。

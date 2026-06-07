@@ -241,6 +241,40 @@ def test_profile_csv_import_responses_redact_marker_source_fields(
             assert marker not in resp.text
 
 
+def test_profile_csv_import_responses_redact_ip_literal_source_fields(
+    app_client: TestClient,
+):
+    ip_markers = [
+        "203.0.113.88",
+        "203.0.113.89",
+        "198.51.100.20",
+        "192.0.2.44",
+    ]
+    csv_text = "\n".join(
+        [
+            "name,tags,notes,template,platform",
+            f"Imported {ip_markers[0]},tag-{ip_markers[1]},Notes {ip_markers[2]},Template {ip_markers[3]},ios",
+        ]
+    )
+
+    endpoints = [
+        ("/api/profiles/import/preview", {"csv_text": csv_text}, "rows"),
+        ("/api/profiles/import", {"csv_text": csv_text, "confirm_import": True}, "results"),
+    ]
+    for endpoint, payload, rows_key in endpoints:
+        resp = app_client.post(endpoint, json=payload)
+
+        assert resp.status_code == 200
+        row = resp.json()[rows_key][0]
+        assert row["ok"] is False
+        assert row["source"]["name"] == "[redacted]"
+        assert row["source"]["tags"] == "[redacted]"
+        assert row["source"]["notes"] == "[redacted]"
+        assert row["source"]["template"] == "[redacted]"
+        for marker in ip_markers:
+            assert marker not in resp.text
+
+
 def test_profile_csv_import_preview_redacts_sensitive_proxy_error_detail(
     app_client: TestClient,
 ):
