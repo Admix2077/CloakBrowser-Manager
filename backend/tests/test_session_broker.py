@@ -141,6 +141,39 @@ def test_runtime_session_create_launches_profile_and_persists_session(
     assert get_resp.json() == data
 
 
+def test_runtime_session_create_rejects_extra_business_and_secret_fields(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    leak_marker = "runtime-create-extra-secret"
+
+    resp = app_client.post(
+        "/api/runtime/sessions",
+        headers=runtime_headers,
+        json={
+            "external_session_id": "pm-session-extra-fields",
+            "profile_id": profile_id,
+            "lease_seconds": 900,
+            "order_id": f"order-{leak_marker}",
+            "wallet_id": f"wallet-{leak_marker}",
+            "viewer_token": f"viewer-{leak_marker}",
+            "runtime_service_token": f"runtime-{leak_marker}",
+            "cookie": f"sid={leak_marker}",
+            "proxy_password": leak_marker,
+        },
+    )
+
+    assert resp.status_code == 422
+    serialized_response = json.dumps(resp.json(), sort_keys=True)
+    assert leak_marker not in serialized_response
+    assert "viewer_token" not in serialized_response
+    assert db.count_live_runtime_sessions() == 0
+    assert "runtime.session.created" not in _audit_event_types()
+    serialized_events = json.dumps(db.list_audit_events(), sort_keys=True)
+    assert leak_marker not in serialized_events
+
+
 def test_runtime_session_response_sanitizes_persisted_status(
     app_client: TestClient,
     runtime_headers: dict[str, str],

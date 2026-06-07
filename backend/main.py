@@ -2262,8 +2262,15 @@ async def delete_profile_template(template_id: str, request: Request):
 
 
 @app.post("/api/runtime/sessions", response_model=RuntimeSessionResponse, status_code=201)
-async def create_runtime_session(req: RuntimeSessionCreate, request: Request):
+async def create_runtime_session(request: Request):
     _require_runtime_service_token(request)
+    try:
+        req = RuntimeSessionCreate.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid runtime session create request",
+        ) from None
 
     profile = None
     if req.profile_id:

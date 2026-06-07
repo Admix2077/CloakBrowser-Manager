@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, StrictBool, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 
 class TagCreate(BaseModel):
@@ -485,6 +485,8 @@ class LaunchResponse(BaseModel):
 
 
 class RuntimeSessionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     external_session_id: str = Field(min_length=1)
     profile_id: str | None = None
     template_id: str | None = None
