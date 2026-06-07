@@ -10081,3 +10081,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Automation task execution stability/response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Automation URL malformed IPv6 evidence guardrail
+
+背景：
+
+- Automation pages、console location 和 network summary response 都会通过 Manager-controlled URL sanitizer 输出低敏 URL evidence。
+- 旧 `_automation_public_about_url()` 和 `_automation_safe_url()` 会直接调用 `urlparse()`；当运行时页面、console location 或 network event URL 形如 `https://[2001:db8::1/app?token=...` 这类 malformed IPv6 netloc 时，`urllib.parse` 会抛 `ValueError`，导致 response 读取变成接口异常。
+- 该问题只属于 Manager 自己的 Automation URL response stability/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Automation about URL formatter 和 http/https URL sanitizer 现在捕获 URL parse/hostname 解析异常，把 malformed URL 折叠为空 public URL。
+- pages URL、console location URL 和 network summary URL 遇到 malformed IPv6 URL 时均返回低敏空 URL evidence，不回显 IPv6 literal、query、fragment 或 token。
+- 正常 domain URL、合法 IPv6 URL 的既有 IP literal redaction、malformed port redaction、about URL handling、Automation task execution、runtime browser、proxy resolution、VNC forwarding 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_url_evidence_redacts_malformed_ipv6_urls -q
+# RED: old Automation pages response raised ValueError from urllib.parse on malformed IPv6 URL
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_url_evidence or automation_pages_redacts_about_url or automation_pages_filters_internal_about or automation_pages_redacts_non_http" -q
+# 9 passed, 276 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation URL response stability/evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

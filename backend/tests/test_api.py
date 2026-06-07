@@ -4450,6 +4450,66 @@ def test_automation_url_evidence_redacts_malformed_ports(app_client: TestClient)
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_url_evidence_redacts_malformed_ipv6_urls(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationMalformedIpv6UrlRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page(
+        "https://[2001:db8::1/app?viewer_token=page-secret#frag",
+        "Malformed IPv6",
+    )
+    page.automation_console_logs = [
+        {
+            "type": "log",
+            "text": "ready",
+            "location": {
+                "url": "https://[2001:db8::2/static/app.js?token=console-secret#frag",
+                "lineNumber": 1,
+            },
+        }
+    ]
+    page.automation_network_events = [
+        {
+            "event": "request",
+            "method": "GET",
+            "url": "https://[2001:db8::3/api?token=network-secret#frag",
+            "resource_type": "xhr",
+        }
+    ]
+    _automation_running_profile(pid, [page])
+
+    pages_resp = app_client.get(f"/api/profiles/{pid}/automation/pages")
+    console_resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+    network_resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/network-summary")
+
+    assert pages_resp.status_code == 200
+    assert console_resp.status_code == 200
+    assert network_resp.status_code == 200
+    assert pages_resp.json()["pages"][0]["url"] == ""
+    assert console_resp.json()["logs"][0]["location"] == {"lineNumber": 1}
+    assert network_resp.json()["events"][0]["url"] == ""
+    serialized = json.dumps(
+        {
+            "pages": pages_resp.json(),
+            "console": console_resp.json(),
+            "network": network_resp.json(),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        "2001:db8::1",
+        "2001:db8::2",
+        "2001:db8::3",
+        "viewer_token",
+        "page-secret",
+        "console-secret",
+        "network-secret",
+        "?token",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_pages_redacts_about_url_query_and_fragment(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationAboutUrlRedaction"})
     pid = create.json()["id"]

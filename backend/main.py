@@ -4934,7 +4934,10 @@ def _automation_page_url(page) -> str:
 
 
 def _automation_public_about_url(raw_url: str) -> str:
-    parsed = urlparse(raw_url)
+    try:
+        parsed = urlparse(raw_url)
+    except ValueError:
+        return ""
     if parsed.scheme.lower() != "about" or not parsed.path:
         return ""
     if _AUTOMATION_SENSITIVE_MARKER_RE.search(parsed.path):
@@ -5063,14 +5066,17 @@ def _automation_ensure_console_capture(page) -> None:
 
 
 def _automation_safe_url(raw_url: str) -> str:
-    parsed = urlparse(str(raw_url))
-    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+    try:
+        parsed = urlparse(str(raw_url))
+        host = parsed.hostname
+    except ValueError:
         return ""
-    if _AUTOMATION_SENSITIVE_MARKER_RE.search(parsed.hostname):
+    if parsed.scheme.lower() not in {"http", "https"} or not host:
         return ""
-    if _automation_is_ip_literal(parsed.hostname):
+    if _AUTOMATION_SENSITIVE_MARKER_RE.search(host):
         return ""
-    host = parsed.hostname
+    if _automation_is_ip_literal(host):
+        return ""
     try:
         port = parsed.port
     except ValueError:
