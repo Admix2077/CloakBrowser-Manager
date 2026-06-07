@@ -522,10 +522,14 @@ class RuntimeViewerTokenResponse(BaseModel):
 
 
 class RuntimeSessionTerminate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     confirm_terminate: StrictBool = False
 
 
 class RuntimeSessionRenew(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     lease_seconds: int = Field(ge=1, le=86_400)
 
 

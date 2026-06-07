@@ -2422,8 +2422,15 @@ async def terminate_runtime_session(session_id: str, request: Request):
 
 
 @app.post("/api/runtime/sessions/{session_id}/renew", response_model=RuntimeSessionResponse)
-async def renew_runtime_session(session_id: str, req: RuntimeSessionRenew, request: Request):
+async def renew_runtime_session(session_id: str, request: Request):
     _require_runtime_service_token(request)
+    try:
+        req = RuntimeSessionRenew.model_validate(await request.json())
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid runtime session renew request",
+        ) from None
     session = db.get_runtime_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Runtime session not found")
