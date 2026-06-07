@@ -48,7 +48,7 @@ export function AutomationTaskLogViewer() {
 
     try {
       const response = await api.listAutomationTasks({ limit: DEFAULT_TASK_LIMIT });
-      setTasks(response.tasks);
+      setTasks(publicTaskList(response.tasks));
     } catch {
       setError("Unable to load automation tasks");
     } finally {
@@ -504,6 +504,17 @@ function publicSummaryLabel(value: string): string {
 
 function publicTaskStatus(status: string): string {
   return PUBLIC_TASK_STATUSES.has(status) ? status : "unknown";
+}
+
+function publicTaskList(value: unknown): AutomationTask[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((task): task is AutomationTask => {
+    if (!task || typeof task !== "object") return false;
+    const candidate = task as { id?: unknown; profile_id?: unknown; status?: unknown };
+    return typeof candidate.id === "string"
+      && typeof candidate.profile_id === "string"
+      && typeof candidate.status === "string";
+  });
 }
 
 function publicTaskSteps(value: unknown): AutomationTaskStep[] {

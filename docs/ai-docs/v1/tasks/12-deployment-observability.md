@@ -10637,3 +10637,33 @@ npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.
 - 这是 Manager-controlled Automation task UI evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-08 Automation task list response shape evidence guardrail
+
+背景：
+
+- Automation task log 页面会把 task list response 写入 stats、status filter、search filter、table 和 detail drawer。
+- 正常 API 返回 `{ tasks: AutomationTask[] }`，但历史、mock 或异常 JSON 可能把 `tasks` 污染成字符串、对象、`null` 或其他非数组形状。
+- 旧页面在 stats/filter 渲染路径上直接调用 `tasks.filter(...)`，非数组输入会让 automation evidence 页面崩溃。
+- 该问题只属于 Manager-controlled Automation task UI evidence stability 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `AutomationTaskLogViewer` 现在只接受数组形状的 task list；非数组输入折叠为空列表并显示低风险 empty state。
+- 数组内缺少 public string `id`、`profile_id` 或 `status` 的 entry 不进入 automation evidence。
+- Malformed task list 中的 token、path 和 IP marker 不会进入 visible/aria evidence。
+- 正常 automation task list、status filtering、task/profile id filtering、task detail drawer、step/result summary、automation task API schema、automation task execution、worker lease 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx -t "folds malformed task list responses"
+# RED: old UI crashed at tasks.filter when tasks was not an array
+# GREEN: 1 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Automation task UI evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

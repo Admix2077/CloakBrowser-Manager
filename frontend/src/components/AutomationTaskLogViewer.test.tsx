@@ -439,6 +439,24 @@ describe("AutomationTaskLogViewer", () => {
     expect(renderedText).not.toContain("evaluate");
   });
 
+  it("folds malformed task list responses before rendering automation evidence", async () => {
+    const leakMarker = "task-list-token-secret";
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: `task-list token=${leakMarker} /data/tasks/${leakMarker} 203.0.113.86`,
+    } as unknown as { tasks: AutomationTask[] });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getByRole("status", { name: "No automation tasks yet" })).toBeTruthy();
+    expect(within(page).getByText("Queued scripts will appear here after they are created through the trusted management API.")).toBeTruthy();
+
+    expect(page.textContent).not.toContain(leakMarker);
+    expect(page.textContent).not.toContain("token=");
+    expect(page.textContent).not.toContain("/data/tasks");
+    expect(page.textContent).not.toContain("203.0.113.86");
+  });
+
   it("filters the local read-only task list by task or profile id", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [
