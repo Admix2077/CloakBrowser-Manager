@@ -5058,6 +5058,8 @@ def _automation_safe_url(raw_url: str) -> str:
         return ""
     if _AUTOMATION_SENSITIVE_MARKER_RE.search(parsed.hostname):
         return ""
+    if _automation_is_ip_literal(parsed.hostname):
+        return ""
     host = parsed.hostname
     if parsed.port:
         host = f"{host}:{parsed.port}"

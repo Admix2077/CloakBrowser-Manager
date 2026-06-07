@@ -9575,6 +9575,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 
+## 2026-06-07 Automation URL IP literal host guardrail
+
+背景：
+
+- Automation pages、console location 和 network summary URL 属于 Manager-controlled Automation evidence，会把页面/请求 URL 摘要返回给 UI 和 API 调用方定位问题。
+- 旧 `_automation_safe_url()` 已清理 credential、query、fragment 和敏感 marker host，但普通 IP literal host 仍可能在 page URL、console location URL 或 network URL 摘要中回显。
+- 该问题只属于 Manager 自己的 Automation URL evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- Automation URL sanitizer 现在遇到有效 IPv4 host 或 bracketed IPv6 host 会折叠为空，不把 IP literal 放入 pages/console location/network summary response evidence。
+- 普通域名 URL 的低敏 scheme、host、port、path 摘要行为保持不变。
+- 不改变 Automation capture、page refs、network capture、task execution、browser runtime、proxy resolution 或 fingerprint 行为。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_automation_url_evidence_redacts_ip_literal_hosts -q
+# RED: old pages URL returned https://203.0.113.45/app
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "automation_url_evidence or automation_pages_redacts_sensitive_url_and_title or automation_network_summary" -q
+# 6 passed, 274 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled Automation URL response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
 ## 2026-06-07 Automation console IP literal redaction guardrail
 
 背景：
