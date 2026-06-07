@@ -349,6 +349,45 @@ def test_profile_csv_import_redacts_auth_viewer_proxy_source_host_markers(
     assert db.list_profiles() == []
 
 
+def test_profile_csv_import_redacts_hyphen_token_proxy_source_host_markers(
+    app_client: TestClient,
+):
+    marker_hosts = [
+        "access-token-csv-proxy-marker.example",
+        "refresh-token-csv-proxy-marker.example",
+        "runtime-service-token-csv-proxy-marker.example",
+        "service-token-csv-proxy-marker.example",
+    ]
+    csv_text = "\n".join(
+        [
+            "name,proxy,platform",
+            *[
+                f"Proxy marker source,http://user:hiddenpass@{host}:8080,ios"
+                for host in marker_hosts
+            ],
+        ]
+    )
+
+    endpoints = [
+        ("/api/profiles/import/preview", {"csv_text": csv_text}, "rows"),
+        ("/api/profiles/import", {"csv_text": csv_text, "confirm_import": True}, "results"),
+    ]
+    for endpoint, payload, rows_key in endpoints:
+        resp = app_client.post(endpoint, json=payload)
+
+        assert resp.status_code == 200
+        rows = resp.json()[rows_key]
+        assert len(rows) == 4
+        for row in rows:
+            assert row["ok"] is False
+            assert "platform must be one of: windows, macos, linux" in row["errors"]
+            assert row["source"]["proxy"] == "[redacted]"
+        serialized = resp.text
+        for leaked in (*marker_hosts, "hiddenpass", "user:"):
+            assert leaked not in serialized
+    assert db.list_profiles() == []
+
+
 def test_profile_csv_import_preview_rejects_empty_or_headerless_csv(app_client: TestClient):
     empty = app_client.post("/api/profiles/import/preview", json={"csv_text": ""})
     assert empty.status_code == 422

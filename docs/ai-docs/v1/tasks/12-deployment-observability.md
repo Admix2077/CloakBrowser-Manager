@@ -9706,3 +9706,31 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 CSV import hyphen token proxy source marker guardrail
+
+背景：
+
+- CSV import `source.proxy` 的 marker 检查还存在同类列表漂移：已覆盖 underscore token marker，但部分 hyphen token host marker 仍会在 proxy URL redaction 后回显。
+- 该问题属于 Manager-controlled import response evidence，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- CSV import preview/import 的 `source.proxy` 现在会把 `access-token`、`refresh-token`、`runtime-service-token`、`service-token` proxy host marker 折叠为 `[redacted]`。
+- 普通 proxy redaction、导入行验证、profile 创建、proxy normalization、audit metadata 和 proxy resolution 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_redacts_hyphen_token_proxy_source_host_markers backend/tests/test_bulk.py::test_profile_csv_import_redacts_auth_viewer_proxy_source_host_markers -q
+# RED then GREEN；旧 source.proxy 回显 http://access-token-csv-proxy-marker.example:8080；GREEN 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 24 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
