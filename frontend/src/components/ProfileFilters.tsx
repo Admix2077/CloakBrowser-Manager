@@ -116,7 +116,10 @@ export function ProfileFilters({
           onChange={(nextValue) => update("tag", nextValue)}
           options={[
             ["all", "All tags"],
-            ...options.tags.map((tag) => [tag, publicProfileTagLabel(tag)] as const),
+            ...options.tags.map((tag) => {
+              const label = publicProfileTagLabel(tag);
+              return [label, label] as const;
+            }),
           ]}
         />
         <FilterSelect

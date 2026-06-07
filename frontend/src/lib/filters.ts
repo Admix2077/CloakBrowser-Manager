@@ -1,5 +1,5 @@
 import type { HealthStatus, Profile, ProfileHealthResponse } from "./api";
-import { publicProfileGeoipLabel, publicProfileName } from "./errorDisplay";
+import { publicProfileGeoipLabel, publicProfileName, publicProfileTagLabel } from "./errorDisplay";
 
 export type RuntimeStatusFilter = "all" | Profile["status"];
 export type HealthStatusFilter = "all" | HealthStatus;
@@ -102,7 +102,7 @@ export function filterAndSortProfiles(
     if (filters.proxy === "with_proxy" && !profile.proxy) return false;
     if (filters.proxy === "without_proxy" && profile.proxy) return false;
     if (filters.country !== "all" && countryCode(profile, healthByProfileId) !== filters.country) return false;
-    if (filters.tag !== "all" && !profile.tags.some((tag) => tag.tag === filters.tag)) return false;
+    if (filters.tag !== "all" && !profile.tags.some((tag) => publicProfileTagLabel(tag.tag) === filters.tag)) return false;
     return true;
   });
 
@@ -141,7 +141,7 @@ export function getProfileFilterOptions(
   profiles.forEach((profile) => {
     const country = countryCode(profile, healthByProfileId);
     if (country) countries.add(country);
-    profile.tags.forEach((tag) => tags.add(tag.tag));
+    profile.tags.forEach((tag) => tags.add(publicProfileTagLabel(tag.tag)));
   });
 
   return {

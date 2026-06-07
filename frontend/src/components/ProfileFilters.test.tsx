@@ -100,7 +100,7 @@ describe("ProfileFilters", () => {
     expect(screen.getByLabelText("Country filter").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("false");
   });
 
-  it("redacts tag option labels without changing submitted filter values", () => {
+  it("redacts tag option values before emitting filter changes", () => {
     const leakMarker = "profile-filter-tag-secret";
     const rawTag =
       "warm Authorization=Bearer " +
@@ -117,7 +117,7 @@ describe("ProfileFilters", () => {
     );
 
     const option = screen.getByRole("option", { name: safeTag }) as HTMLOptionElement;
-    expect(option.value).toBe(rawTag);
+    expect(option.value).toBe(safeTag);
     expect(document.body.textContent).not.toContain(leakMarker);
     expect(document.body.textContent).not.toContain("Authorization");
     expect(document.body.textContent).not.toContain("Bearer");
@@ -126,8 +126,8 @@ describe("ProfileFilters", () => {
     expect(document.body.textContent).not.toContain("203.0.113.90");
 
     fireEvent.change(screen.getByLabelText("Tag filter"), {
-      target: { value: rawTag },
+      target: { value: safeTag },
     });
-    expect(onChange).toHaveBeenLastCalledWith({ ...value, tag: rawTag });
+    expect(onChange).toHaveBeenLastCalledWith({ ...value, tag: safeTag });
   });
 });

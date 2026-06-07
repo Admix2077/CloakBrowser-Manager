@@ -10178,3 +10178,39 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 System diagnostics collection shape release-evidence boundary。
+
+## 2026-06-07 Profile filter tag release-evidence guardrail
+
+背景：
+
+- Release convergence 继续检查 Profile operations UI，因为 tag filter options 会进入 DOM option text/value 和 filter state。
+- 旧 `getProfileFilterOptions()` 返回 raw persisted tag，`ProfileFilters` 也把 raw tag 写入 `<option value>`；如果异常 tag 带有 `Authorization=Bearer ...`、`token=...`、`/data/...` 或 IP literal，option value/filter state 仍可能保留敏感原值。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 profile operations UI release evidence redaction 边界。
+
+已覆盖：
+
+- `getProfileFilterOptions()` 返回 public tag label，不再返回 raw polluted tag option。
+- `filterAndSortProfiles()` 使用 public tag label 做 tag filter 匹配，脱敏 tag 仍可筛到对应 profile。
+- `ProfileFilters` tag option value 和 label 都使用 public tag label，即使上游误传 raw tag 也不把敏感内容写入 DOM option value 或 emitted filter state。
+- RED 确认旧 filter options 返回 raw polluted tag，旧 `ProfileFilters` option value 也保留 raw polluted tag；GREEN 后 tag filter evidence 不再包含 token/Authorization/Bearer/path/IP marker。
+- 正常 profile filter interactions、profile data、profile launch、proxy validation、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/lib/filters.test.ts -t "redacts polluted tag options"
+# RED then GREEN；旧 filter options returned raw polluted tag；GREEN 1 passed
+
+npm --prefix frontend test -- --run src/components/ProfileFilters.test.tsx -t "redacts tag option values"
+# RED then GREEN；旧 option value kept the raw polluted tag；GREEN 1 passed
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/ProfileFilters.test.tsx
+# 11 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile operations UI release-evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile filter tag release-evidence boundary。

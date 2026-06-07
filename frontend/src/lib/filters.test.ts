@@ -208,4 +208,36 @@ describe("getProfileFilterOptions", () => {
     });
     expect(result.map((item) => item.id)).toEqual(["polluted-country"]);
   });
+
+  it("redacts polluted tag options while keeping tag filters usable", () => {
+    const leakMarker = "filter-tag-secret";
+    const polluted = profile({
+      id: "polluted-tag",
+      name: "Polluted tag",
+      tags: [{
+        tag:
+          "client-a Authorization=Bearer " +
+          `${leakMarker} token=${leakMarker} /data/filter-tag 203.0.113.122`,
+        color: null,
+      }],
+    });
+    const safeTag = "client-a [redacted] [redacted] [redacted-path] [redacted-ip]";
+
+    const options = getProfileFilterOptions([polluted], {});
+
+    expect(options.tags).toEqual([safeTag]);
+    expect(options.tags.join(" ")).not.toContain(leakMarker);
+    expect(options.tags.join(" ")).not.toContain("/data/filter-tag");
+
+    const result = filterAndSortProfiles([polluted], {}, {
+      search: "",
+      status: "all",
+      health: "all",
+      proxy: "all",
+      country: "all",
+      tag: safeTag,
+      sortBy: "name",
+    });
+    expect(result.map((item) => item.id)).toEqual(["polluted-tag"]);
+  });
 });

@@ -10505,3 +10505,40 @@ npm --prefix frontend test -- --run src/components/SystemDiagnosticsPage.test.ts
 - 这是 Manager-controlled diagnostics UI evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 diagnostics API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Profile filter tag evidence guardrail
+
+背景：
+
+- Profile operations 的 tag filter options 会进入 DOM option text/value 和 filter state，属于 Manager-controlled profile lifecycle UI evidence。
+- 旧 `getProfileFilterOptions()` 会把原始 persisted tag 作为 option value 返回；`ProfileFilters` 也会把 raw tag 写进 `<option value>`。
+- 如果历史、mock 或异常 profile tag 被污染成 `Authorization=Bearer ...`、`token=...`、`/data/...` 或 IP literal，虽然 label 可被脱敏，DOM option value/filter state 仍可能保留敏感原值。
+- 该问题只属于 Manager profile operations UI evidence redaction 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `getProfileFilterOptions()` 现在返回 public tag labels，污染 tag 不进入 filter options。
+- `filterAndSortProfiles()` 使用 public tag label 匹配 tag filter，保留脱敏 tag 的筛选能力。
+- `ProfileFilters` 的 tag option value 和 label 都使用 public tag label，即使上游误传 raw tag 也不把敏感内容写入 DOM option value。
+- 正常 country/status/health/proxy/tag 筛选、profile data、profile launch、proxy validation、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/lib/filters.test.ts -t "redacts polluted tag options"
+# RED: old filter options returned raw polluted tag
+# GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/components/ProfileFilters.test.tsx -t "redacts tag option values"
+# RED: old option value kept the raw polluted tag
+# GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/ProfileFilters.test.tsx
+# 11 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile operations UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
