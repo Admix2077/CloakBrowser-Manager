@@ -387,6 +387,35 @@ describe("ProfileViewer Automation API toolbar action", () => {
     expect(document.body.textContent).not.toContain(externalViewerUrl);
   });
 
+  it("rejects polluted runtime session path handles before opening noVNC", async () => {
+    const onDisconnect = vi.fn();
+    const leakMarker = "secret-viewer-token";
+    const pollutedViewerUrl =
+      `/api/runtime/sessions/session_id-runtime-marker/vnc?viewer_token=${leakMarker}`;
+
+    render(
+      <ProfileViewer
+        profileId="runtime-profile-1"
+        externalSessionId="pm-session-runtime-viewer"
+        vncUrl={pollutedViewerUrl}
+        automationUrl={null}
+        clipboardSync={false}
+        onDisconnect={onDisconnect}
+      />,
+    );
+
+    expect(await screen.findByText("Connection failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Viewer access expired or unavailable. Request a fresh viewer session from Project Mileage and try again.",
+      ),
+    ).toBeTruthy();
+    expect(MockRFB).not.toHaveBeenCalled();
+    expect(onDisconnect).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain(leakMarker);
+    expect(document.body.textContent).not.toContain(pollutedViewerUrl);
+  });
+
   it("redacts runtime viewer security failures instead of rendering token-bearing reasons", async () => {
     const runtimeViewerUrl =
       "/api/runtime/sessions/runtime-session-1/vnc?viewer_token=secret-viewer-token";

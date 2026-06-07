@@ -81,6 +81,10 @@ function runtimeViewerWebSocketUrl(value: string | null) {
 
     const sessionPart = parts[4];
     if (!sessionPart) return null;
+    const sessionHandle = decodeURIComponent(sessionPart);
+    if (!PUBLIC_VIEWER_HANDLE_RE.test(sessionHandle) || SENSITIVE_VIEWER_HANDLE_RE.test(sessionHandle)) {
+      return null;
+    }
 
     return `${url.pathname}${url.search}`;
   } catch {
