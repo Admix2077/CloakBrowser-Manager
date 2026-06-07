@@ -9413,3 +9413,40 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 CSV import hyphen token proxy source marker release boundary。
+
+## 2026-06-07 Proxy response sensitive tag release guardrail
+
+背景：
+
+- Release convergence 继续检查 proxy configuration evidence，因为 proxy 和 proxy provider preset 的 tag 会在 Manager API/UI 中直接展示。
+- 旧 `/api/proxies` 与 `/api/proxy-provider-presets` response 会把包含 runtime/token/path/IP marker 的 tag 原样返回。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 proxy API response evidence 边界。
+
+已覆盖：
+
+- Proxy create/get/list/update 响应会省略敏感 tag，但保留普通 tag 与颜色。
+- Proxy provider preset create/get/list/update 响应使用同一 public tag 过滤路径。
+- 不改变 proxy 持久化、proxy assignment、random assignment、provider preset CRUD、proxy resolution、browser runtime 或 fingerprint 行为。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_proxy_responses_omit_sensitive_tags -q
+# RED then GREEN；旧 proxy create response 回显 runtime_service_token-proxy-tag-marker token=proxy-tag-secret；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_proxy_provider_preset_responses_omit_sensitive_tags -q
+# RED then GREEN；旧 provider preset create response 回显 runtime_service_token-provider-preset-tag-marker token=proxy-provider-preset-tag-secret；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_proxy_responses_omit_sensitive_tags backend/tests/test_api.py::test_proxy_provider_preset_responses_omit_sensitive_tags -q
+# 2 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "proxy" -q
+# 20 passed, 255 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled proxy API response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 proxy response sensitive tag release boundary。

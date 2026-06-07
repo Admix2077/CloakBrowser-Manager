@@ -884,15 +884,23 @@ def _public_selection_tags(tags: list[str]) -> list[str]:
     return public_tags
 
 
+def _public_proxy_tag_responses(tags: object) -> list[TagResponse]:
+    if not isinstance(tags, list):
+        return []
+    responses: list[TagResponse] = []
+    for tag in tags:
+        if not isinstance(tag, dict):
+            continue
+        public_tag = _public_selection_tag(tag.get("tag"))
+        if public_tag is None:
+            continue
+        color = tag.get("color")
+        responses.append(TagResponse(tag=public_tag, color=color if isinstance(color, str) else None))
+    return responses
+
+
 def _proxy_response_without_sensitive_tags(proxy: dict) -> ProxyResponse:
-    safe = dict(proxy)
-    safe["tags"] = [
-        {"tag": public_tag, "color": tag.get("color") if isinstance(tag.get("color"), str) else None}
-        for tag in proxy.get("tags", [])
-        if isinstance(tag, dict)
-        if (public_tag := _public_selection_tag(tag.get("tag"))) is not None
-    ]
-    return _proxy_response(safe)
+    return _proxy_response(proxy)
 
 
 def _proxy_response(proxy: dict) -> ProxyResponse:
@@ -913,7 +921,7 @@ def _proxy_response(proxy: dict) -> ProxyResponse:
     safe["last_check_at"] = _public_optional_timestamp(safe.get("last_check_at"))
     safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
     safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
-    safe["tags"] = _tag_responses(safe.get("tags"))
+    safe["tags"] = _public_proxy_tag_responses(safe.get("tags"))
     return ProxyResponse(**safe)
 
 
@@ -1059,7 +1067,7 @@ def _proxy_provider_preset_response(preset: dict) -> ProxyProviderPresetResponse
     safe["country_code"] = public_geoip_country_code(safe.get("country_code"))
     safe["created_at"] = _public_required_timestamp(safe.get("created_at"))
     safe["updated_at"] = _public_required_timestamp(safe.get("updated_at"))
-    safe["tags"] = _tag_responses(safe.get("tags"))
+    safe["tags"] = _public_proxy_tag_responses(safe.get("tags"))
     return ProxyProviderPresetResponse(**safe)
 
 

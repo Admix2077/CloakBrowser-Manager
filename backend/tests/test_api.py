@@ -451,6 +451,131 @@ def test_proxy_assignment_responses_sanitize_persisted_profile_id(
         assert leaked not in serialized
 
 
+def test_proxy_responses_omit_sensitive_tags(app_client: TestClient):
+    leak_marker = "proxy-tag-secret"
+    sensitive_tag = (
+        "runtime_service_token-proxy-tag-marker "
+        f"token={leak_marker} /tmp/proxy-tag 203.0.113.67"
+    )
+    create_resp = app_client.post(
+        "/api/proxies",
+        json={
+            "name": "Proxy Tag Redaction",
+            "url": "http://proxy-tag-redaction.example:8080",
+            "provider": "ProxyCo",
+            "tags": [
+                {"tag": "warmup", "color": "#2563eb"},
+                {"tag": sensitive_tag, "color": "#ef4444"},
+            ],
+        },
+    )
+    assert create_resp.status_code == 201
+    proxy_id = create_resp.json()["id"]
+
+    get_resp = app_client.get(f"/api/proxies/{proxy_id}")
+    list_resp = app_client.get("/api/proxies")
+    update_resp = app_client.put(
+        f"/api/proxies/{proxy_id}",
+        json={
+            "tags": [
+                {"tag": "stable", "color": "#16a34a"},
+                {"tag": f"access-token-proxy-tag-marker {leak_marker}", "color": None},
+            ],
+        },
+    )
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    assert update_resp.status_code == 200
+    listed_proxy = next(proxy for proxy in list_resp.json() if proxy["id"] == proxy_id)
+    assert create_resp.json()["tags"] == [{"tag": "warmup", "color": "#2563eb"}]
+    assert get_resp.json()["tags"] == [{"tag": "warmup", "color": "#2563eb"}]
+    assert listed_proxy["tags"] == [{"tag": "warmup", "color": "#2563eb"}]
+    assert update_resp.json()["tags"] == [{"tag": "stable", "color": "#16a34a"}]
+
+    serialized = json.dumps(
+        {
+            "create": create_resp.json(),
+            "get": get_resp.json(),
+            "list": listed_proxy,
+            "update": update_resp.json(),
+            "events": main.db.list_audit_events(),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "access-token",
+        "token=",
+        "/tmp/proxy-tag",
+        "203.0.113.67",
+    ):
+        assert leaked not in serialized
+
+
+def test_proxy_provider_preset_responses_omit_sensitive_tags(app_client: TestClient):
+    leak_marker = "proxy-provider-preset-tag-secret"
+    sensitive_tag = (
+        "runtime_service_token-provider-preset-tag-marker "
+        f"token={leak_marker} /tmp/provider-preset-tag 203.0.113.68"
+    )
+    create_resp = app_client.post(
+        "/api/proxy-provider-presets",
+        json={
+            "name": "Provider Preset Tag Redaction",
+            "provider": "ProxyCo",
+            "tags": [
+                {"tag": "residential", "color": "#2563eb"},
+                {"tag": sensitive_tag, "color": "#ef4444"},
+            ],
+        },
+    )
+    assert create_resp.status_code == 201
+    preset_id = create_resp.json()["id"]
+
+    get_resp = app_client.get(f"/api/proxy-provider-presets/{preset_id}")
+    list_resp = app_client.get("/api/proxy-provider-presets")
+    update_resp = app_client.put(
+        f"/api/proxy-provider-presets/{preset_id}",
+        json={
+            "tags": [
+                {"tag": "mobile", "color": "#16a34a"},
+                {"tag": f"access-token-provider-preset-tag-marker {leak_marker}", "color": None},
+            ],
+        },
+    )
+
+    assert get_resp.status_code == 200
+    assert list_resp.status_code == 200
+    assert update_resp.status_code == 200
+    listed_preset = next(preset for preset in list_resp.json() if preset["id"] == preset_id)
+    assert create_resp.json()["tags"] == [{"tag": "residential", "color": "#2563eb"}]
+    assert get_resp.json()["tags"] == [{"tag": "residential", "color": "#2563eb"}]
+    assert listed_preset["tags"] == [{"tag": "residential", "color": "#2563eb"}]
+    assert update_resp.json()["tags"] == [{"tag": "mobile", "color": "#16a34a"}]
+
+    serialized = json.dumps(
+        {
+            "create": create_resp.json(),
+            "get": get_resp.json(),
+            "list": listed_preset,
+            "update": update_resp.json(),
+            "events": main.db.list_audit_events(),
+        },
+        sort_keys=True,
+    )
+    for leaked in (
+        leak_marker,
+        "runtime_service_token",
+        "access-token",
+        "token=",
+        "/tmp/provider-preset-tag",
+        "203.0.113.68",
+    ):
+        assert leaked not in serialized
+
+
 def test_get_profile_not_found(app_client: TestClient):
     resp = app_client.get("/api/profiles/nonexistent")
     assert resp.status_code == 404
