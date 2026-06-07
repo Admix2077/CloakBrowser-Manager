@@ -1492,7 +1492,10 @@ def _netscape_cookie_export_audit_metadata(summary: dict) -> dict:
 
 
 def _origin_from_page_url(raw_url: str) -> str | None:
-    parsed = urlparse(str(raw_url))
+    try:
+        parsed = urlparse(str(raw_url))
+    except ValueError:
+        return None
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         return None
     host = parsed.hostname

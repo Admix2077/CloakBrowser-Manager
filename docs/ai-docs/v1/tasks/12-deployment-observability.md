@@ -10174,3 +10174,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled audit metadata persistence/reader redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Profile bundle localStorage malformed IPv6 origin guardrail
+
+背景：
+
+- Profile bundle localStorage export 会从 running profile 当前 page URL 提取 origin，再读取该 origin 下的 localStorage 并写入 Manager-controlled bundle response/audit evidence。
+- 旧 `_origin_from_page_url()` 已处理 malformed port，但 `urlparse()` 遇到 `https://[2001:db8::1/...` 这类 malformed IPv6 netloc 会直接抛 `ValueError`，导致 export endpoint 跳过固定低敏 `Local storage origin unavailable` 路径。
+- 该问题只属于 Manager 自己的 profile bundle localStorage export stability/evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_origin_from_page_url()` 现在捕获 URL parse 异常，把 malformed IPv6 URL 视为 unsafe origin，返回 `None`。
+- localStorage bundle export 遇到 malformed IPv6 origin 会返回固定 `Local storage origin unavailable`，不读取页面 localStorage，也不把 IPv6 literal、query、fragment 或 token 写入响应/audit。
+- 正常 http/https origin、合法端口、marker origin 拒绝、about/non-http 拒绝、malformed port 拒绝、bundle config/cookie export、Automation execution、runtime browser 和 proxy resolution 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_malformed_ipv6_origins_without_reading_page -q
+# RED: old localStorage bundle export raised ValueError while urlparse parsed malformed IPv6 URL
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_pages_without_safe_origin backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_sensitive_marker_origins_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_rejects_malformed_port_origins_without_reading_page backend/tests/test_api.py::test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile bundle localStorage export response/audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile bundle schema、cookie/localStorage value inclusion confirmation semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

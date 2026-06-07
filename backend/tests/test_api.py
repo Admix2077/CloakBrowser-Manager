@@ -3825,6 +3825,29 @@ def test_export_profile_bundle_local_storage_rejects_malformed_port_origins_with
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_export_profile_bundle_local_storage_rejects_malformed_ipv6_origins_without_reading_page(
+    app_client: TestClient,
+):
+    create = app_client.post("/api/profiles", json={"name": "Malformed IPv6 Bundle LocalStorage"})
+    pid = create.json()["id"]
+    page = _automation_page(url="https://[2001:db8::1/dashboard?token=hidden#frag")
+    _automation_running_profile(pid, pages=[page])
+
+    resp = app_client.post(
+        f"/api/profiles/{pid}/bundle/export",
+        json={"include_local_storage": True, "confirm_local_storage_export": True},
+    )
+
+    assert resp.status_code == 400
+    assert resp.json() == {"detail": "Local storage origin unavailable"}
+    page.evaluate.assert_not_called()
+    assert "2001:db8" not in resp.text
+    assert "token=hidden" not in resp.text
+    assert "#frag" not in resp.text
+    assert _audit_events_except("profile.created") == []
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_export_profile_bundle_local_storage_embeds_current_origin_entries_and_redacted_audit(
     app_client: TestClient,
 ):

@@ -75,13 +75,19 @@ beforeEach(() => {
   mockGetDiagnostics.mockReset();
 });
 
+async function findLoadedDiagnosticsPage(statusLabel = "Status: ok") {
+  const page = await screen.findByRole("region", { name: "System diagnostics" });
+  await within(page).findByRole("group", { name: statusLabel });
+  return page;
+}
+
 describe("SystemDiagnosticsPage", () => {
   it("renders a read-only low-sensitive diagnostics snapshot", async () => {
     mockGetDiagnostics.mockResolvedValueOnce(diagnostics());
 
     render(<SystemDiagnosticsPage />);
 
-    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    const page = await findLoadedDiagnosticsPage();
     expect(within(page).getByRole("heading", { name: "System diagnostics" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Status: ok" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Binary: invisible-playwright" })).toBeTruthy();
@@ -132,11 +138,11 @@ describe("SystemDiagnosticsPage", () => {
     render(<SystemDiagnosticsPage />);
 
     const page = await screen.findByRole("region", { name: "System diagnostics" });
-    expect(within(page).getByRole("group", { name: "Running: 1" })).toBeTruthy();
+    expect(await within(page).findByRole("group", { name: "Running: 1" })).toBeTruthy();
     fireEvent.click(within(page).getByRole("button", { name: "Refresh diagnostics" }));
 
     await waitFor(() => expect(mockGetDiagnostics).toHaveBeenCalledTimes(2));
-    expect(within(page).getByRole("group", { name: "Running: 3" })).toBeTruthy();
+    expect(await within(page).findByRole("group", { name: "Running: 3" })).toBeTruthy();
   });
 
   it("folds non-public diagnostics map and list labels before rendering", async () => {
@@ -174,7 +180,7 @@ describe("SystemDiagnosticsPage", () => {
 
     render(<SystemDiagnosticsPage />);
 
-    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    const page = await findLoadedDiagnosticsPage();
     expect(within(page).getByRole("group", { name: "Launch failure stages: allocate_vnc (1), unknown (3)" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Stealth categories: canvas, unknown" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Runtime session statuses: active (1), unknown (2)" })).toBeTruthy();
@@ -220,7 +226,7 @@ describe("SystemDiagnosticsPage", () => {
 
     render(<SystemDiagnosticsPage />);
 
-    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    const page = await findLoadedDiagnosticsPage();
     expect(within(page).getByRole("group", { name: "Launch failure stages: unknown (2)" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Stealth categories: canvas, unknown" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Runtime session statuses: active (1), unknown (2)" })).toBeTruthy();
@@ -249,7 +255,7 @@ describe("SystemDiagnosticsPage", () => {
 
     render(<SystemDiagnosticsPage />);
 
-    const page = await screen.findByRole("region", { name: "System diagnostics" });
+    const page = await findLoadedDiagnosticsPage("Status: unknown");
     expect(within(page).getByRole("group", { name: "Status: unknown" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Binary: unknown" })).toBeTruthy();
     expect(within(page).getByRole("group", { name: "Managed UA: unknown" })).toBeTruthy();
