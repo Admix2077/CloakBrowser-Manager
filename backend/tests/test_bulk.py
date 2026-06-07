@@ -246,9 +246,9 @@ def test_profile_csv_import_responses_redact_ip_literal_source_fields(
 ):
     ip_markers = [
         "203.0.113.88",
-        "203.0.113.89",
+        "2001:db8::89",
         "198.51.100.20",
-        "192.0.2.44",
+        "2001:db8::44",
     ]
     csv_text = "\n".join(
         [

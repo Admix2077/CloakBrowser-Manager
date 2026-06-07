@@ -9864,3 +9864,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 CSV import source IPv6 literal guardrail
+
+背景：
+
+- 上一轮 CSV import source IP literal guardrail 覆盖了 IPv4，但 `_contains_ip_literal()` 旧实现只扫描 IPv4 正则。
+- CSV import preview/import 的普通 `source` 文本字段仍可能回显 IPv6 literal，例如 `tag-2001:db8::89` 或 `Template 2001:db8::44`。
+- 该问题只属于 Manager-controlled import diagnostics evidence 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_contains_ip_literal()` 现在会在既有 IPv4 校验之外，对包含冒号的 token 使用 `ipaddress.ip_address()` 识别 IPv6 literal。
+- CSV import preview 和 confirmed import 的普通 `source` 文本字段现在会把 IPv4/IPv6 literal 都折叠为 `[redacted]`。
+- 不改变 CSV import validation、profile 创建、template 解析、proxy source redaction、audit metadata、browser runtime 或 proxy resolution 行为。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_bulk.py::test_profile_csv_import_responses_redact_ip_literal_source_fields -q
+# RED: old source.tags returned tag-2001:db8::89
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_bulk.py -q
+# 25 passed
+```
+
+边界：
+
+- 这是 Manager-controlled CSV import preview/import response evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

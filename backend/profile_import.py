@@ -133,6 +133,7 @@ _SENSITIVE_PROFILE_CONFIG_TAG_RE = re.compile(
     re.IGNORECASE,
 )
 _PROFILE_CONFIG_TAG_IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+_IP_LITERAL_TOKEN_SPLIT_RE = re.compile(r"[^0-9A-Fa-f:.]+")
 
 
 @dataclass(frozen=True)
@@ -307,6 +308,14 @@ def _contains_ip_literal(value: str) -> bool:
     for match in _PROFILE_CONFIG_TAG_IPV4_RE.finditer(value):
         try:
             ipaddress.ip_address(match.group(0))
+        except ValueError:
+            continue
+        return True
+    for candidate in _IP_LITERAL_TOKEN_SPLIT_RE.split(value):
+        if ":" not in candidate:
+            continue
+        try:
+            ipaddress.ip_address(candidate.strip("."))
         except ValueError:
             continue
         return True
