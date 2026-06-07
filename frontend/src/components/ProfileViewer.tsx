@@ -61,6 +61,33 @@ function publicAutomationEndpointUrl(value: string | null) {
   }
 }
 
+function runtimeViewerWebSocketUrl(value: string | null) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+
+    const parts = url.pathname.split("/");
+    if (
+      parts.length !== 6 ||
+      parts[1] !== "api" ||
+      parts[2] !== "runtime" ||
+      parts[3] !== "sessions" ||
+      parts[5] !== "vnc"
+    ) {
+      return null;
+    }
+
+    const sessionPart = parts[4];
+    if (!sessionPart) return null;
+
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
 export function ProfileViewer({
   profileId,
   externalSessionId = null,
@@ -98,7 +125,15 @@ export function ProfileViewer({
         if (cancelled) return;
 
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsUrl = vncUrl ?? `${protocol}//${window.location.host}/api/profiles/${encodeURIComponent(profileId)}/vnc`;
+        let wsUrl = `${protocol}//${window.location.host}/api/profiles/${encodeURIComponent(profileId)}/vnc`;
+        if (vncUrl) {
+          const runtimeWsUrl = runtimeViewerWebSocketUrl(vncUrl);
+          if (!runtimeWsUrl) {
+            setError(RUNTIME_VIEWER_ACCESS_UNAVAILABLE_MESSAGE);
+            return;
+          }
+          wsUrl = runtimeWsUrl;
+        }
 
         rfb = new RFB(containerRef.current!, wsUrl, {
           wsProtocols: ["binary"],
