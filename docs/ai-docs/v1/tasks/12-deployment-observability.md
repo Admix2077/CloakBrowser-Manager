@@ -10205,3 +10205,34 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled profile bundle localStorage export response/audit evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 profile bundle schema、cookie/localStorage value inclusion confirmation semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Diagnostics Firefox identity summary guardrail
+
+背景：
+
+- `/api/diagnostics` 会展示 Firefox/InvisiblePlaywright 版本、BuildID、stealth pref count/category 等 Manager-controlled runtime evidence。
+- BrowserManager 自身通常已产出 public identity summary，但 diagnostics endpoint 旧实现直接信任该返回结构；如果调用边界被异常/测试污染，`stealth_pref_count` 等字段可能触发 Pydantic 校验异常，或让非公开 category 进入 diagnostics response。
+- 该问题只属于 Manager 自己的 diagnostics response stability/redaction 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `/api/diagnostics` 现在在 response 组装前二次低敏化 Firefox identity summary。
+- 非 public version/build id 折叠为 `None`；非法 stealth pref count 折叠为 `None`；非公开、敏感 marker 或 IP literal category 折叠为 `unknown` 并去重排序。
+- 正常 diagnostics snapshot、launch failure summary、runtime active display/port filtering、count-only query behavior、BrowserManager identity detection、runtime browser 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_system_diagnostics_sanitizes_polluted_firefox_identity_summary -q
+# RED: old diagnostics endpoint raised Pydantic ValidationError for polluted stealth_pref_count
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_system_diagnostics_returns_low_sensitive_snapshot backend/tests/test_api.py::test_system_diagnostics_reports_low_sensitive_launch_failure_summary backend/tests/test_api.py::test_system_diagnostics_sanitizes_active_runtime_ports_and_displays backend/tests/test_api.py::test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows -q
+# 4 passed
+```
+
+边界：
+
+- 这是 Manager-controlled diagnostics API response stability/redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 BrowserManager Firefox identity 检测、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

@@ -2086,6 +2086,47 @@ def test_system_diagnostics_sanitizes_active_runtime_ports_and_displays(
         assert leaked not in serialized
 
 
+def test_system_diagnostics_sanitizes_polluted_firefox_identity_summary(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    leak_marker = "diagnostics-identity-secret"
+    monkeypatch.setattr(main, "managed_firefox_identity_summary", lambda: {
+        "managed_user_agent_version": f"149.0 token={leak_marker}",
+        "invisible_playwright_version": f"0.1.8 Authorization=Bearer {leak_marker}",
+        "firefox_binary_version": f"150.0.1 token={leak_marker}",
+        "firefox_binary_build_id": f"20260521160037 token={leak_marker}",
+        "stealth_pref_count": f"29 token={leak_marker}",
+        "stealth_pref_categories": [
+            "canvas",
+            f"token={leak_marker}",
+            "203.0.113.42",
+        ],
+    })
+
+    resp = app_client.get("/api/diagnostics")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["runtime"]["managed_user_agent_version"] is None
+    assert data["runtime"]["invisible_playwright_version"] is None
+    assert data["runtime"]["firefox_binary_version"] is None
+    assert data["runtime"]["firefox_binary_build_id"] is None
+    assert data["runtime"]["firefox_identity_major_version_match"] is None
+    assert data["runtime"]["stealth_pref_count"] is None
+    assert data["runtime"]["stealth_pref_categories"] == ["canvas", "unknown"]
+
+    serialized = json.dumps(data, sort_keys=True)
+    for leaked in (
+        leak_marker,
+        "Authorization",
+        "Bearer",
+        "token=",
+        "203.0.113.42",
+    ):
+        assert leaked not in serialized
+
+
 def test_system_diagnostics_uses_count_queries_without_loading_sensitive_rows(
     app_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

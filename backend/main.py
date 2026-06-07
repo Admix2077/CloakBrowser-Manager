@@ -37,9 +37,12 @@ from . import database as db
 from .browser_manager import (
     BrowserManager,
     BrowserResourceLimitError,
+    PUBLIC_STEALTH_PREF_CATEGORIES,
     get_max_running_profiles_limit,
     managed_firefox_identity_summary,
+    _public_firefox_build_id,
     _public_profile_dir,
+    _public_version_string,
 )
 from .cookie_formats import (
     CookieJsonDocument,
@@ -1541,6 +1544,67 @@ def _firefox_identity_major_version_match(
     if managed_major is None or binary_major is None:
         return None
     return managed_major == binary_major
+
+
+def _public_diagnostics_stealth_pref_count(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return value
+    return None
+
+
+def _public_diagnostics_stealth_pref_category(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    category = value.strip()
+    if (
+        category not in PUBLIC_STEALTH_PREF_CATEGORIES
+        or _AUTOMATION_SENSITIVE_MARKER_RE.search(category)
+        or _automation_redact_ip_literals(category) != category
+    ):
+        return "unknown"
+    return category
+
+
+def _public_diagnostics_stealth_pref_categories(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    categories = {
+        _public_diagnostics_stealth_pref_category(item)
+        for item in value
+    }
+    return sorted(categories)
+
+
+def _public_diagnostics_firefox_identity(raw: object) -> dict[str, object]:
+    identity = raw if isinstance(raw, dict) else {}
+    managed_user_agent_version = _public_version_string(
+        identity.get("managed_user_agent_version")
+    )
+    firefox_binary_version = _public_version_string(
+        identity.get("firefox_binary_version")
+    )
+    return {
+        "managed_user_agent_version": managed_user_agent_version,
+        "invisible_playwright_version": _public_version_string(
+            identity.get("invisible_playwright_version")
+        ),
+        "firefox_binary_version": firefox_binary_version,
+        "firefox_binary_build_id": _public_firefox_build_id(
+            identity.get("firefox_binary_build_id")
+        ),
+        "firefox_identity_major_version_match": _firefox_identity_major_version_match(
+            managed_user_agent_version,
+            firefox_binary_version,
+        ),
+        "stealth_pref_count": _public_diagnostics_stealth_pref_count(
+            identity.get("stealth_pref_count")
+        ),
+        "stealth_pref_categories": _public_diagnostics_stealth_pref_categories(
+            identity.get("stealth_pref_categories")
+        ),
+    }
 
 
 _PROFILE_CONFIG_IMPORT_FIELDS = {
@@ -3225,7 +3289,9 @@ async def get_system_status():
 async def get_system_diagnostics():
     task_counts = db.count_automation_tasks_by_status()
     running_profiles = list(browser_mgr.running.values())
-    firefox_identity = managed_firefox_identity_summary()
+    firefox_identity = _public_diagnostics_firefox_identity(
+        managed_firefox_identity_summary()
+    )
     launch_failure_summary = browser_mgr.launch_failure_summary()
 
     return DiagnosticsResponse(
@@ -3262,10 +3328,7 @@ async def get_system_diagnostics():
             invisible_playwright_version=firefox_identity["invisible_playwright_version"],
             firefox_binary_version=firefox_identity["firefox_binary_version"],
             firefox_binary_build_id=firefox_identity["firefox_binary_build_id"],
-            firefox_identity_major_version_match=_firefox_identity_major_version_match(
-                firefox_identity["managed_user_agent_version"],
-                firefox_identity["firefox_binary_version"],
-            ),
+            firefox_identity_major_version_match=firefox_identity["firefox_identity_major_version_match"],
             stealth_pref_count=firefox_identity["stealth_pref_count"],
             stealth_pref_categories=firefox_identity["stealth_pref_categories"],
         ),
