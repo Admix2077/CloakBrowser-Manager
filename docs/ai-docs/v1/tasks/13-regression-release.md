@@ -10247,3 +10247,34 @@ npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/Profi
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile filter country release-evidence boundary。
+
+## 2026-06-07 Proxy Manager filter option value release-evidence guardrail
+
+背景：
+
+- Release convergence 继续检查 Proxy Manager UI，因为 country/provider/tag filter options 会进入 DOM option text/value、visible table filtering、bulk check selection 和 random assignment selector。
+- 旧 filter select 会把 raw country/provider/tag 写入 `<option value>`；如果异常 proxy metadata 带有 `Authorization=Bearer ...`、`token=...`、`/data/...` 或 IP literal，即使 visible label 脱敏，DOM value evidence 仍可能保留敏感原值。
+- Random assignment API payload 仍必须提交 raw country_code/provider/tags，不能把 redacted label 或内部 key 当作后端筛选值。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 Proxy Manager UI release evidence redaction 边界。
+
+已覆盖：
+
+- Proxy Manager country/provider/tag `<option value>` 使用低敏内部 key，visible option text 使用 redacted public metadata label。
+- Select change 从内部 key 映射回 raw filter state；table filtering、select all visible bulk check 和 random assignment candidate count 继续按 raw metadata 工作。
+- Focused coverage 证明 polluted country/provider/tag 不进入 visible/title/aria/option value evidence，同时 random assignment request 保留 raw `country_code`、`provider` 和 `tags`。
+- RED 确认旧 DOM option value 会保留 raw polluted proxy filter metadata；GREEN 后 Proxy Manager release evidence 不再包含 token/Authorization/Bearer/path/IP marker。
+- 正常 proxy inventory、bulk check、provider preset、CSV import、profile assignment、proxy normalization/validation/resolution、profile launch、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 43 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Proxy Manager UI release-evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Proxy Manager filter option value release-evidence boundary。

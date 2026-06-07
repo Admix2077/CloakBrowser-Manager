@@ -97,6 +97,11 @@ function profile(overrides: Partial<Profile>): Profile {
   };
 }
 
+function selectFilterOption(select: HTMLElement, optionLabel: string): void {
+  const option = within(select).getByRole("option", { name: optionLabel }) as HTMLOptionElement;
+  fireEvent.change(select, { target: { value: option.value } });
+}
+
 beforeEach(() => {
   mockListProxies.mockReset();
   mockListProxyProviderPresets.mockReset();
@@ -507,29 +512,44 @@ describe("ProxyManagerPage", () => {
     const provider = within(page).getByLabelText("Provider filter");
     const tag = within(page).getByLabelText("Tag filter");
 
-    expect(Array.from(country.querySelectorAll("option")).map((option) => option.value)).toEqual([
-      "__all_proxy_filter__",
+    expect(Array.from(country.querySelectorAll("option")).map((option) => option.textContent)).toEqual([
+      "All",
       "JP",
       "US",
     ]);
-    expect(Array.from(provider.querySelectorAll("option")).map((option) => option.value)).toEqual([
-      "__all_proxy_filter__",
+    expect(Array.from(provider.querySelectorAll("option")).map((option) => option.textContent)).toEqual([
+      "All",
       "ProxyCo",
       "ProxyJP",
     ]);
-    expect(Array.from(tag.querySelectorAll("option")).map((option) => option.value)).toEqual([
-      "__all_proxy_filter__",
+    expect(Array.from(tag.querySelectorAll("option")).map((option) => option.textContent)).toEqual([
+      "All",
       "asia",
       "stable",
     ]);
+    expect(Array.from(country.querySelectorAll("option")).map((option) => option.value)).toEqual([
+      "__all_proxy_filter__",
+      "proxy-filter-option-0",
+      "proxy-filter-option-1",
+    ]);
+    expect(Array.from(provider.querySelectorAll("option")).map((option) => option.value)).toEqual([
+      "__all_proxy_filter__",
+      "proxy-filter-option-0",
+      "proxy-filter-option-1",
+    ]);
+    expect(Array.from(tag.querySelectorAll("option")).map((option) => option.value)).toEqual([
+      "__all_proxy_filter__",
+      "proxy-filter-option-0",
+      "proxy-filter-option-1",
+    ]);
 
-    fireEvent.change(country, { target: { value: "JP" } });
+    selectFilterOption(country, "JP");
     expect(within(table).getByText("JP Stable")).toBeTruthy();
     expect(within(table).getByText("JP Backup")).toBeTruthy();
     expect(within(table).queryByText("US Stable")).toBeNull();
 
-    fireEvent.change(provider, { target: { value: "ProxyJP" } });
-    fireEvent.change(tag, { target: { value: "stable" } });
+    selectFilterOption(provider, "ProxyJP");
+    selectFilterOption(tag, "stable");
     expect(within(page).getByText("1 of 3 visible")).toBeTruthy();
     expect(within(table).getByText("JP Stable")).toBeTruthy();
     expect(within(table).queryByText("JP Backup")).toBeNull();
@@ -663,7 +683,7 @@ describe("ProxyManagerPage", () => {
     render(<ProxyManagerPage />);
 
     const page = await screen.findByRole("region", { name: "Proxy Manager" });
-    fireEvent.change(within(page).getByLabelText("Country filter"), { target: { value: "JP" } });
+    selectFilterOption(within(page).getByLabelText("Country filter"), "JP");
     fireEvent.click(within(page).getByLabelText("Select all visible proxy assets"));
 
     expect(within(page).getByText("2 selected")).toBeTruthy();
@@ -1300,9 +1320,9 @@ describe("ProxyManagerPage", () => {
     />);
 
     const page = await screen.findByRole("region", { name: "Proxy Manager" });
-    fireEvent.change(within(page).getByLabelText("Country filter"), { target: { value: "JP" } });
-    fireEvent.change(within(page).getByLabelText("Provider filter"), { target: { value: "ProxyJP" } });
-    fireEvent.change(within(page).getByLabelText("Tag filter"), { target: { value: "mobile" } });
+    selectFilterOption(within(page).getByLabelText("Country filter"), "JP");
+    selectFilterOption(within(page).getByLabelText("Provider filter"), "ProxyJP");
+    selectFilterOption(within(page).getByLabelText("Tag filter"), "mobile");
 
     expect(within(page).getByText("1 of 2 visible")).toBeTruthy();
     fireEvent.click(within(page).getByRole("button", { name: "Random assign" }));
@@ -1374,8 +1394,14 @@ describe("ProxyManagerPage", () => {
     />);
 
     const page = await screen.findByRole("region", { name: "Proxy Manager" });
-    fireEvent.change(within(page).getByLabelText("Provider filter"), { target: { value: rawProvider } });
-    fireEvent.change(within(page).getByLabelText("Tag filter"), { target: { value: rawTag } });
+    selectFilterOption(
+      within(page).getByLabelText("Provider filter"),
+      "ProxyJP [redacted] [redacted] [redacted-path] [redacted-ip]",
+    );
+    selectFilterOption(
+      within(page).getByLabelText("Tag filter"),
+      "mobile [redacted] [redacted] [redacted-path] [redacted-ip]",
+    );
     fireEvent.click(within(page).getByRole("button", { name: "Random assign" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Random proxy assignment" });
@@ -1406,6 +1432,101 @@ describe("ProxyManagerPage", () => {
 
     await waitFor(() => expect(mockAssignRandomProxyToProfiles).toHaveBeenCalledWith({
       profile_ids: ["alpha"],
+      provider: rawProvider,
+      tags: [rawTag],
+    }));
+  });
+
+  it("redacts proxy filter option values without changing random assignment payloads", async () => {
+    const leakMarker = "proxy-filter-option-secret";
+    const rawCountry =
+      "JP Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/proxy-filter-country 203.0.113.124`;
+    const rawProvider =
+      "ProxyJP Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/proxy-filter-provider 203.0.113.125`;
+    const rawTag =
+      "mobile Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/proxy-filter-tag 203.0.113.126`;
+    const safeCountry = "JP [redacted] [redacted] [redacted-path] [redacted-ip]";
+    const safeProvider = "ProxyJP [redacted] [redacted] [redacted-path] [redacted-ip]";
+    const safeTag = "mobile [redacted] [redacted] [redacted-path] [redacted-ip]";
+    mockListProxies.mockResolvedValue([
+      proxy({
+        id: "proxy-polluted-filter",
+        name: "JP Mobile A",
+        country_code: rawCountry,
+        provider: rawProvider,
+        tags: [{ tag: rawTag, color: "#0ea5e9" }],
+      }),
+    ]);
+    mockAssignRandomProxyToProfiles.mockResolvedValue({
+      strategy: "random",
+      provider_preset_id: null,
+      provider: rawProvider,
+      country_code: rawCountry.toUpperCase(),
+      tags: [rawTag],
+      candidate_count: 1,
+      total: 1,
+      succeeded: 1,
+      failed: 0,
+      results: [
+        { profile_id: "alpha", ok: true, error: null, proxy_id: "proxy-polluted-filter", proxy: null },
+      ],
+    });
+
+    render(<ProxyManagerPage
+      profiles={[
+        profile({ id: "alpha", name: "Alpha Good" }),
+      ]}
+    />);
+
+    const page = await screen.findByRole("region", { name: "Proxy Manager" });
+    const countryFilter = within(page).getByLabelText("Country filter");
+    const providerFilter = within(page).getByLabelText("Provider filter");
+    const tagFilter = within(page).getByLabelText("Tag filter");
+
+    const countryOption = within(countryFilter).getByRole("option", { name: safeCountry }) as HTMLOptionElement;
+    const providerOption = within(providerFilter).getByRole("option", { name: safeProvider }) as HTMLOptionElement;
+    const tagOption = within(tagFilter).getByRole("option", { name: safeTag }) as HTMLOptionElement;
+    expect(countryOption.value).not.toBe(rawCountry);
+    expect(providerOption.value).not.toBe(rawProvider);
+    expect(tagOption.value).not.toBe(rawTag);
+
+    const renderedEvidence = [
+      page.textContent,
+      ...Array.from(page.querySelectorAll("[title]")).map((element) => element.getAttribute("title") ?? ""),
+      ...Array.from(page.querySelectorAll("[aria-label]")).map((element) => element.getAttribute("aria-label") ?? ""),
+      ...Array.from(page.querySelectorAll("option")).map((element) => `${element.textContent ?? ""} ${element.getAttribute("value") ?? ""}`),
+    ].join(" ");
+
+    for (const leaked of [
+      leakMarker,
+      "Authorization",
+      "Bearer",
+      "token=",
+      "/data/proxy-filter-country",
+      "/data/proxy-filter-provider",
+      "/data/proxy-filter-tag",
+      "203.0.113.124",
+      "203.0.113.125",
+      "203.0.113.126",
+    ]) {
+      expect(renderedEvidence).not.toContain(leaked);
+    }
+
+    fireEvent.change(countryFilter, { target: { value: countryOption.value } });
+    fireEvent.change(providerFilter, { target: { value: providerOption.value } });
+    fireEvent.change(tagFilter, { target: { value: tagOption.value } });
+    fireEvent.click(within(page).getByRole("button", { name: "Random assign" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Random proxy assignment" });
+    fireEvent.click(within(dialog).getByLabelText("Assign Alpha Good"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign random proxy" }));
+
+    await waitFor(() => expect(mockAssignRandomProxyToProfiles).toHaveBeenCalledWith({
+      profile_ids: ["alpha"],
+      country_code: rawCountry.toUpperCase(),
       provider: rawProvider,
       tags: [rawTag],
     }));

@@ -1001,19 +1001,37 @@ function FilterSelect({
   options: string[];
   onChange: (value: string) => void;
 }) {
+  const optionEntries = options.map((option, index) => ({
+    rawValue: option,
+    value: `proxy-filter-option-${index}`,
+    label: publicProxyMetadataLabel(option),
+  }));
+  const selectValue = value === FILTER_ALL
+    ? FILTER_ALL
+    : optionEntries.find((entry) => entry.rawValue === value)?.value ?? FILTER_ALL;
+
   return (
     <label className="min-w-0">
       <span className="label">{label}</span>
       <select
         aria-label={ariaLabel}
         className="input"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={selectValue}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (nextValue === FILTER_ALL) {
+            onChange(FILTER_ALL);
+            return;
+          }
+          const selectedOption = optionEntries.find((entry) => entry.value === nextValue)
+            ?? optionEntries.find((entry) => entry.rawValue === nextValue);
+          if (selectedOption) onChange(selectedOption.rawValue);
+        }}
       >
         <option value={FILTER_ALL}>All</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {publicProxyMetadataLabel(option)}
+        {optionEntries.map((option) => (
+          <option key={option.rawValue} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>

@@ -10574,3 +10574,32 @@ npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/Profi
 - 这是 Manager-controlled profile operations UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Proxy Manager filter option value evidence guardrail
+
+背景：
+
+- Proxy Manager 的 country/provider/tag filter options 会进入 DOM option text/value、筛选 state、bulk action visibility 和 random assignment selector。
+- UI label 已通过 public proxy metadata boundary 脱敏，但旧 `<option value>` 仍使用 raw country/provider/tag；如果历史、mock 或异常 proxy metadata 被污染成 `Authorization=Bearer ...`、`token=...`、`/data/...` 或 IP literal，DOM evidence 仍可能保留敏感原值。
+- Random assignment API 必须继续收到 raw country_code/provider/tags，避免把 redacted label 当成业务筛选值提交给后端。
+- 该问题只属于 Manager-controlled Proxy Manager UI evidence redaction 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `ProxyManagerPage` 的 country/provider/tag `<option value>` 现在使用低敏内部 key，visible option text 继续使用 redacted public label。
+- Select change 通过内部 key 映射回组件 state 中的 raw filter value；Proxy Manager 表格筛选、bulk visible selection 和 random assignment candidate pool 仍按 raw metadata 匹配。
+- Random assignment payload 继续保留 raw `country_code`、`provider` 和 `tags`；UI summary、title、aria evidence 只显示 redacted label。
+- 正常 proxy list、bulk check、provider preset、CSV import、profile assignment、proxy normalization/validation/resolution、profile launch、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
+# 43 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Proxy Manager UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
