@@ -352,11 +352,12 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function StepList({ steps, maxItems = 4 }: { steps: AutomationTaskStep[]; maxItems?: number }) {
-  if (steps.length === 0) return <span className="text-slate-400">-</span>;
+function StepList({ steps, maxItems = 4 }: { steps: unknown; maxItems?: number }) {
+  const publicSteps = publicTaskSteps(steps);
+  if (publicSteps.length === 0) return <span className="text-slate-400">-</span>;
 
-  const visibleSteps = steps.slice(0, maxItems);
-  const hiddenCount = steps.length - visibleSteps.length;
+  const visibleSteps = publicSteps.slice(0, maxItems);
+  const hiddenCount = publicSteps.length - visibleSteps.length;
 
   return (
     <div className="flex max-w-[320px] flex-col gap-1">
@@ -379,11 +380,12 @@ function StepList({ steps, maxItems = 4 }: { steps: AutomationTaskStep[]; maxIte
   );
 }
 
-function ResultList({ steps, maxItems = 4 }: { steps: AutomationTaskResultStep[]; maxItems?: number }) {
-  if (steps.length === 0) return <span className="text-slate-400">-</span>;
+function ResultList({ steps, maxItems = 4 }: { steps: unknown; maxItems?: number }) {
+  const publicSteps = publicResultSteps(steps);
+  if (publicSteps.length === 0) return <span className="text-slate-400">-</span>;
 
-  const visibleSteps = steps.slice(0, maxItems);
-  const hiddenCount = steps.length - visibleSteps.length;
+  const visibleSteps = publicSteps.slice(0, maxItems);
+  const hiddenCount = publicSteps.length - visibleSteps.length;
 
   return (
     <div className="flex max-w-[260px] flex-col gap-1">
@@ -444,11 +446,11 @@ function TaskDetailDrawer({ task, onClose }: { task: AutomationTask; onClose: ()
           )}
 
           <DetailSection title="Steps">
-            <StepList steps={task.steps} maxItems={task.steps.length} />
+            <StepList steps={task.steps} maxItems={publicTaskSteps(task.steps).length} />
           </DetailSection>
 
           <DetailSection title="Result">
-            <ResultList steps={task.result?.steps ?? []} maxItems={task.result?.steps.length ?? 0} />
+            <ResultList steps={task.result?.steps ?? []} maxItems={publicResultSteps(task.result?.steps).length} />
           </DetailSection>
         </div>
       </aside>
@@ -502,6 +504,23 @@ function publicSummaryLabel(value: string): string {
 
 function publicTaskStatus(status: string): string {
   return PUBLIC_TASK_STATUSES.has(status) ? status : "unknown";
+}
+
+function publicTaskSteps(value: unknown): AutomationTaskStep[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((step): step is AutomationTaskStep => {
+    if (!step || typeof step !== "object") return false;
+    return typeof (step as { type?: unknown }).type === "string";
+  });
+}
+
+function publicResultSteps(value: unknown): AutomationTaskResultStep[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((step): step is AutomationTaskResultStep => {
+    if (!step || typeof step !== "object") return false;
+    return typeof (step as { type?: unknown }).type === "string"
+      && typeof (step as { status?: unknown }).status === "string";
+  });
 }
 
 function stepSummary(step: AutomationTaskStep): string[] {

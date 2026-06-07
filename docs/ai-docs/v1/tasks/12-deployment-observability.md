@@ -10603,3 +10603,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled Proxy Manager UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Automation task step collection evidence guardrail
+
+背景：
+
+- Automation task log 页面会把 task steps 和 result steps 写入 visible text、detail drawer 和 release evidence。
+- 正常 API 返回数组，但历史、mock 或异常 automation task JSON 可能把 `steps` 或 `result.steps` 污染成字符串、对象、`null` 或其他非数组形状。
+- 旧页面在 `StepList` / `ResultList` 中直接调用 `.slice()` / `.map()`，遇到非数组会崩溃，导致 automation release evidence 页面不可用。
+- 该问题只属于 Manager-controlled Automation task UI evidence stability 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `StepList` 现在只接受数组形状的 task steps；非数组输入折叠为空列表并显示低风险 `-`。
+- `ResultList` 现在只接受数组形状的 result steps；非数组输入折叠为空列表并显示低风险 `-`。
+- 数组内非对象或缺少 public string `type` 的 entry 不进入 release evidence。
+- Malformed collection 中的 token、path、IP、raw step type 或 raw result type 不会进入 automation visible/detail evidence。
+- 正常 automation task list、status filtering、task/profile id filtering、task detail drawer、step summary、result summary、automation task API schema、automation task execution、worker lease 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx -t "folds malformed task step collections"
+# RED: old UI crashed at visibleSteps.map when steps was not an array
+# GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/components/AutomationTaskLogViewer.test.tsx
+# 12 passed
+```
+
+边界：
+
+- 这是 Manager-controlled Automation task UI evidence stability 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

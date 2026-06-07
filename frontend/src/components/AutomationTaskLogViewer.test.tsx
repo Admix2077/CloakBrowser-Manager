@@ -395,6 +395,50 @@ describe("AutomationTaskLogViewer", () => {
     expect(drawer.textContent).not.toContain("https://example.test");
   });
 
+  it("folds malformed task step collections before rendering automation evidence", async () => {
+    const leakMarker = "task-collection-token-secret";
+    mockListAutomationTasks.mockResolvedValueOnce({
+      tasks: [
+        {
+          ...task({
+            id: "task-malformed-steps",
+            profile_id: "profile-malformed-steps",
+            status: "failed",
+            error: `failed token=${leakMarker} /data/tasks/${leakMarker} 203.0.113.87`,
+          }),
+          steps: `open_url token=${leakMarker} /data/tasks/${leakMarker}`,
+          result: {
+            steps: {
+              index: 0,
+              type: `evaluate token=${leakMarker}`,
+              status: `failed token=${leakMarker}`,
+            },
+          },
+        } as unknown as AutomationTask,
+      ],
+    });
+
+    render(<AutomationTaskLogViewer />);
+
+    const page = await screen.findByRole("region", { name: "Automation tasks" });
+    expect(within(page).getByText("task-mal...")).toBeTruthy();
+    expect(within(page).getAllByText("-").length).toBeGreaterThanOrEqual(2);
+    expect(within(page).getByText("failed [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    fireEvent.click(within(page).getByRole("button", { name: "View task details for task-malformed-steps" }));
+    const drawer = await screen.findByRole("dialog", { name: "Automation task details" });
+    expect(within(drawer).getAllByText("-").length).toBeGreaterThanOrEqual(2);
+    expect(within(drawer).getByText("failed [redacted] [redacted-path] [redacted-ip]")).toBeTruthy();
+
+    const renderedText = `${page.textContent ?? ""} ${drawer.textContent ?? ""}`;
+    expect(renderedText).not.toContain(leakMarker);
+    expect(renderedText).not.toContain("token=");
+    expect(renderedText).not.toContain("/data/tasks");
+    expect(renderedText).not.toContain("203.0.113.87");
+    expect(renderedText).not.toContain("open_url");
+    expect(renderedText).not.toContain("evaluate");
+  });
+
   it("filters the local read-only task list by task or profile id", async () => {
     mockListAutomationTasks.mockResolvedValueOnce({
       tasks: [
