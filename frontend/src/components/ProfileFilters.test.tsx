@@ -130,4 +130,35 @@ describe("ProfileFilters", () => {
     });
     expect(onChange).toHaveBeenLastCalledWith({ ...value, tag: safeTag });
   });
+
+  it("redacts country option values before emitting filter changes", () => {
+    const leakMarker = "profile-filter-country-secret";
+    const rawCountry =
+      "JP Authorization=Bearer " +
+      `${leakMarker} token=${leakMarker} /data/filter-country-secret 203.0.113.91`;
+    const safeCountry = "JP [redacted] [redacted] [redacted-path] [redacted-ip]";
+    const onChange = vi.fn();
+
+    render(
+      <ProfileFilters
+        value={value}
+        options={{ countries: [rawCountry], tags: [] }}
+        onChange={onChange}
+      />,
+    );
+
+    const option = screen.getByRole("option", { name: safeCountry }) as HTMLOptionElement;
+    expect(option.value).toBe(safeCountry);
+    expect(document.body.textContent).not.toContain(leakMarker);
+    expect(document.body.textContent).not.toContain("Authorization");
+    expect(document.body.textContent).not.toContain("Bearer");
+    expect(document.body.textContent).not.toContain("token=");
+    expect(document.body.textContent).not.toContain("/data/filter-country-secret");
+    expect(document.body.textContent).not.toContain("203.0.113.91");
+
+    fireEvent.change(screen.getByLabelText("Country filter"), {
+      target: { value: safeCountry },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ ...value, country: safeCountry });
+  });
 });

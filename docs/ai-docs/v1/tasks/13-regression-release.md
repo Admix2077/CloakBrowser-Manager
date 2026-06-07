@@ -10214,3 +10214,36 @@ npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/Profi
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile filter tag release-evidence boundary。
+
+## 2026-06-07 Profile filter country release-evidence guardrail
+
+背景：
+
+- Release convergence 继续检查 Profile operations UI，因为 country filter options 会进入 DOM option text/value 和 emitted filter state。
+- `getProfileFilterOptions()` 已经返回 public country label，但组件仍可能从历史、mock 或异常上游收到 raw polluted country option。
+- 如果异常 country option 带有 `Authorization=Bearer ...`、`token=...`、`/data/...` 或 IP literal，旧 `ProfileFilters` 会把 raw option 写入 `<option value>` 和 accessible option name。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 profile operations UI release evidence redaction 边界。
+
+已覆盖：
+
+- `ProfileFilters` country option value 和 label 都使用 `publicProfileGeoipLabel()`。
+- 即使上游误传 raw country option，token/Authorization/Bearer/path/IP marker 也不会进入 DOM option value、visible option text 或 emitted filter state。
+- RED 确认旧 country option value 和 accessible name 保留 raw polluted country；GREEN 后 country filter evidence 不再包含敏感 marker。
+- 正常 profile filter interactions、profile data、profile launch、proxy validation、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileFilters.test.tsx -t "redacts country option values"
+# RED then GREEN；旧 option value and accessible name kept the raw polluted country；GREEN 1 passed
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/ProfileFilters.test.tsx
+# 12 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile operations UI release-evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 Profile filter country release-evidence boundary。

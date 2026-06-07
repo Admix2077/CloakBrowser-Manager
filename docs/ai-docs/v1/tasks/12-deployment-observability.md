@@ -10542,3 +10542,35 @@ npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/Profi
 - 这是 Manager-controlled profile operations UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 Profile filter country evidence guardrail
+
+背景：
+
+- Profile operations 的 country filter options 会进入 DOM option text/value 和 filter state，属于 Manager-controlled profile lifecycle UI evidence。
+- `getProfileFilterOptions()` 已经返回 public country label，但 `ProfileFilters` 组件仍需要防御历史、mock 或异常上游把 raw country option 直接传入组件。
+- 如果 country option 被污染成 `Authorization=Bearer ...`、`token=...`、`/data/...` 或 IP literal，旧组件会把 raw option 写进 `<option value>` 和可访问名称。
+- 该问题只属于 Manager profile operations UI evidence redaction 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `ProfileFilters` 的 country option value 和 label 都使用 `publicProfileGeoipLabel()`。
+- 即使上游误传 raw country option，敏感 marker 也不会进入 DOM option value、visible option text 或 emitted filter state。
+- 正常 country/status/health/proxy/tag 筛选、profile data、profile launch、proxy validation、runtime/session lifecycle 和 browser fingerprint 行为保持不变。
+
+验证记录：
+
+```bash
+npm --prefix frontend test -- --run src/components/ProfileFilters.test.tsx -t "redacts country option values"
+# RED: old option value and accessible name kept the raw polluted country
+# GREEN: 1 passed
+
+npm --prefix frontend test -- --run src/lib/filters.test.ts src/components/ProfileFilters.test.tsx
+# 12 passed
+```
+
+边界：
+
+- 这是 Manager-controlled profile operations UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 profile API schema、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

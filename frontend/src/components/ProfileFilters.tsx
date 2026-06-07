@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import type { ReactNode } from "react";
-import { publicProfileTagLabel } from "../lib/errorDisplay";
+import { publicProfileGeoipLabel, publicProfileTagLabel } from "../lib/errorDisplay";
 import type { ProfileFilterOptions, ProfileFilterState } from "../lib/filters";
 
 interface ProfileFiltersProps {
@@ -104,7 +104,10 @@ export function ProfileFilters({
           onChange={(nextValue) => update("country", nextValue)}
           options={[
             ["all", "All countries"],
-            ...options.countries.map((country) => [country, country] as const),
+            ...options.countries.map((country) => {
+              const label = publicProfileGeoipLabel(country);
+              return [label, label] as const;
+            }),
           ]}
         />
         <FilterSelect
