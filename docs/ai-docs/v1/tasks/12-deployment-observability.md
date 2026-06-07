@@ -10236,3 +10236,37 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 这是 Manager-controlled diagnostics API response stability/redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 BrowserManager Firefox identity 检测、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-07 VNC WebSocket origin IP literal log guardrail
+
+背景：
+
+- VNC/profile viewer 和 runtime viewer 的 WebSocket origin 校验会在跨源拒绝时写 warning 日志，属于 Manager-controlled viewer lifecycle evidence。
+- 旧日志 label 已去掉 origin path/query/fragment，并能折叠 sensitive marker host，但遇到 IP literal origin/host 时仍会写出真实 IPv4/IPv6 字面量。
+- 该问题只属于 Manager 自己的 VNC/WebSocket origin rejection log redaction 边界，不属于 Pixelscan/IPhey/PXLSCN-FINGERPRINT-MASKING 或类似底层 fingerprint detector 问题。
+
+已覆盖：
+
+- `_websocket_public_host_label()` 现在会把 IP literal host 折叠为 `[redacted-ip]`，并保留低敏非默认端口上下文。
+- 跨源拒绝日志不再回显 IPv4、IPv6、origin query/fragment 或 viewer_token marker。
+- 普通域名 origin/host label、sensitive marker host 折叠、same-origin allow、profile VNC forwarding、runtime viewer token 校验、runtime session storage 和 viewer token schema 行为保持不变。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host -q
+# RED: old VNC WebSocket origin mismatch log emitted 203.0.113.42 and 2001:db8::42
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_logs_low_sensitive_origin backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_sensitive_origin_host_marker backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host -q
+# 3 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc_ws_origin or runtime_vnc_rejects_cross_origin or runtime_viewer_origin_failure" -q
+# 3 passed, 285 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled VNC/WebSocket origin rejection log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。

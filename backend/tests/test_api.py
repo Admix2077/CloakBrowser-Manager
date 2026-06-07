@@ -8755,6 +8755,39 @@ def test_vnc_ws_origin_rejection_redacts_sensitive_origin_host_marker(
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host(
+    app_client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    create = app_client.post("/api/profiles", json={"name": "OriginVncIpLogRedaction"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+    caplog.set_level("WARNING", logger="invisible_browser.manager")
+
+    with pytest.raises(Exception):
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={
+                "origin": "http://203.0.113.42/path?viewer_token=origin-secret#frag",
+                "host": "[2001:db8::42]:8080",
+            },
+        ):
+            pass
+
+    assert "WebSocket origin mismatch: origin=[redacted-ip] host=[redacted-ip]:8080" in caplog.text
+    for leaked in (
+        "203.0.113.42",
+        "2001:db8::42",
+        "origin-secret",
+        "viewer_token",
+        "?viewer_token",
+        "/path",
+        "#frag",
+    ):
+        assert leaked not in caplog.text
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_same_origin(app_client: TestClient):
     """WebSocket from same origin should pass Origin check (not get 4403)."""
     create = app_client.post("/api/profiles", json={"name": "OriginOk"})

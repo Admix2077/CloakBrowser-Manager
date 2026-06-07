@@ -9911,3 +9911,38 @@ npm --prefix frontend test -- --run src/components/ProxyManagerPage.test.tsx
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 BrowserManager Firefox identity 检测、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
 - `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 diagnostics Firefox identity summary release boundary。
+
+## 2026-06-07 VNC WebSocket origin IP literal log release guardrail
+
+背景：
+
+- Release convergence 继续检查 VNC/profile viewer 和 runtime viewer 的 WebSocket origin rejection 日志，因为这类 warning 会作为 Manager-controlled viewer lifecycle evidence 进入排障记录。
+- 旧 `_websocket_public_host_label()` 已折叠 query/fragment 和 sensitive marker host，但 IP literal origin/host 仍可能以 `203.0.113.42` 或 `2001:db8::42` 形式写入日志。
+- 当前策略下，Pixelscan `PXLSCN-FINGERPRINT-MASKING`、IPhey 以及同类底层/第三方 fingerprint 检测失败先标阻塞，不在 Manager 侧硬解；本轮只收 Manager 自己可控的 VNC/WebSocket origin log redaction 边界。
+
+已覆盖：
+
+- VNC WebSocket origin mismatch 日志把 IP literal origin/host 折叠为 `[redacted-ip]`。
+- 非默认端口仍可作为低敏上下文保留，例如 `[redacted-ip]:8080`。
+- Origin path、query、fragment、viewer_token marker、IPv4 literal 和 IPv6 literal 不进入日志。
+- 普通域名 origin/host label、sensitive marker host 折叠、same-origin allow、profile VNC forwarding、runtime viewer token 校验、runtime session storage 和 viewer token schema 行为保持不变。
+
+验证：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host -q
+# RED then GREEN；旧 VNC WebSocket origin mismatch log emitted 203.0.113.42 and 2001:db8::42；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py::test_vnc_ws_origin_rejection_logs_low_sensitive_origin backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_sensitive_origin_host_marker backend/tests/test_api.py::test_vnc_ws_origin_rejection_redacts_ip_literal_origin_and_host -q
+# 3 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "vnc_ws_origin or runtime_vnc_rejects_cross_origin or runtime_viewer_origin_failure" -q
+# 3 passed, 285 deselected
+```
+
+边界：
+
+- 这是 Manager-controlled VNC/WebSocket origin rejection log evidence 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
+- 不改变 browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy resolution、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+- `cbim-23h.1` 的最终 all-clear 仍不能声称 Pixelscan/IPhey 全通过；本轮只收 VNC WebSocket origin IP literal log release boundary。

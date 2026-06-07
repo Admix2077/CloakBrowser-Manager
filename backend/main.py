@@ -335,6 +335,8 @@ def _websocket_public_host_label(value: str | None) -> str:
         return "missing"
     if _AUTOMATION_SENSITIVE_MARKER_RE.search(host):
         return "unknown"
+    if _automation_is_ip_literal(host):
+        host = "[redacted-ip]"
     if port and port not in (80, 443):
         return f"{host}:{port}"
     return host
