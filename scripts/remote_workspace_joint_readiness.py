@@ -73,7 +73,10 @@ EVIDENCE_DEFINITIONS = (
         not_verified_paths=(
             "project-mileage-v3-payload/test-reports/{date}-remote-workspace-live-preflight/REPORT.md",
         ),
-        not_verified_markers=("REMOTE_WORKSPACE_BROKER_E2E_READY: NOT VERIFIED",),
+        not_verified_markers=(
+            "REMOTE_WORKSPACE_BROWSER_E2E_READY: NOT VERIFIED",
+            "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED",
+        ),
     ),
     EvidenceDefinition(
         key="REMOTE_WORKSPACE_ADAPTER_EVIDENCE",

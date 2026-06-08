@@ -154,7 +154,35 @@ def test_joint_readiness_report_uses_broker_not_verified_marker(tmp_path: Path) 
     ).unlink()
     _write(
         tmp_path / f"project-mileage-v3-payload/test-reports/{REPORT_DATE}-remote-workspace-live-preflight/REPORT.md",
-        "REMOTE_WORKSPACE_BROKER_E2E_READY: NOT VERIFIED\n",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_BROWSER_E2E_READY: NOT VERIFIED",
+                "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+
+    assert report.ready is False
+    assert "REMOTE_WORKSPACE_BROKER_EVIDENCE=NOT_VERIFIED" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+
+
+def test_joint_readiness_report_uses_payload_preflight_browser_not_verified_marker(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    (
+        tmp_path / f"project-mileage-v3-payload/test-reports/{REPORT_DATE}-remote-workspace-broker-live/REPORT.md"
+    ).unlink()
+    _write(
+        tmp_path / f"project-mileage-v3-payload/test-reports/{REPORT_DATE}-remote-workspace-live-preflight/REPORT.md",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_BROWSER_E2E_READY: NOT VERIFIED",
+                "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED",
+                "REMOTE_WORKSPACE_LIVE_PREFLIGHT=FAIL",
+            ]
+        ),
     )
 
     report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
