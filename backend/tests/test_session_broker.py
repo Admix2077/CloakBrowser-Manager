@@ -85,10 +85,11 @@ def _create_runtime_session(
     profile_id: str,
     external_session_id: str = "pm-session-token",
 ) -> dict:
+    running = _mock_running_profile()
     with patch.object(
         main.browser_mgr,
         "launch",
-        new=AsyncMock(return_value=_mock_running_profile()),
+        new=AsyncMock(return_value=running),
     ):
         resp = client.post(
             "/api/runtime/sessions",
@@ -100,6 +101,7 @@ def _create_runtime_session(
             },
         )
     assert resp.status_code == 201
+    main.browser_mgr.running[profile_id] = running
     return resp.json()
 
 
@@ -515,6 +517,7 @@ def test_runtime_viewer_token_response_sanitizes_persisted_session_id(
         external_session_id="pm-session-viewer-token-session-id",
         lease_seconds=900,
     )
+    main.browser_mgr.running[profile_id] = _mock_running_profile()
     polluted_session_id = (
         f"viewer-token-session-id {leak_marker} "
         f"token={leak_marker} Authorization=Bearer {leak_marker}"
@@ -1115,6 +1118,33 @@ def test_runtime_viewer_token_persists_hash_and_returns_short_lived_viewer_url(
     assert stored["viewer_token_expires_at"] == data["expires_at"]
 
 
+def test_runtime_viewer_token_rejects_session_whose_profile_is_not_running(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    session = _create_runtime_session(app_client, runtime_headers, profile_id)
+    main.browser_mgr.running.clear()
+
+    resp = app_client.post(
+        f"/api/runtime/sessions/{session['id']}/viewer-token",
+        headers=runtime_headers,
+        json={"ttl_seconds": 60},
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Runtime session is not available"
+    stored = db.get_runtime_session(session["id"])
+    assert stored is not None
+    assert stored["viewer_token_hash"] is None
+    assert stored["viewer_token_expires_at"] is None
+    failures = _viewer_failure_events(session["id"])
+    assert len(failures) == 1
+    assert failures[0]["metadata"] == {"reason_code": "profile_not_running"}
+    serialized_events = json.dumps(failures, sort_keys=True)
+    assert "viewer_token" not in serialized_events
+
+
 def test_runtime_viewer_token_rejects_extra_business_and_secret_fields(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -1309,6 +1339,7 @@ def test_runtime_vnc_failure_audits_profile_not_running(
         json={"ttl_seconds": 60},
     )
     assert token_resp.status_code == 201
+    main.browser_mgr.running.clear()
 
     with pytest.raises(Exception) as rejected:
         with app_client.websocket_connect(

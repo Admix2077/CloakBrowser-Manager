@@ -372,6 +372,37 @@ def _websocket_origin_compare_netloc(value: str | None) -> str | None:
     return host
 
 
+def _websocket_allowed_origin_netlocs() -> set[str]:
+    raw = os.environ.get("VNC_WEBSOCKET_ALLOWED_ORIGINS", "")
+    allowed: set[str] = set()
+    for item in raw.split(","):
+        value = item.strip()
+        if not value:
+            continue
+        try:
+            parsed = urlparse(value)
+        except ValueError:
+            continue
+        if parsed.scheme.lower() not in {"http", "https"}:
+            continue
+        if parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+            continue
+        netloc = _websocket_origin_compare_netloc(value)
+        if netloc:
+            allowed.add(netloc)
+    return allowed
+
+
+def _websocket_origin_is_allowed(origin: str | None, host: str | None) -> bool:
+    origin_netloc = _websocket_origin_compare_netloc(origin)
+    if origin_netloc is None:
+        return False
+    host_normalized = _websocket_origin_compare_netloc(host)
+    if origin_netloc == host_normalized:
+        return True
+    return origin_netloc in _websocket_allowed_origin_netlocs()
+
+
 async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> bool:
     """Reject cross-origin WebSocket connections (CSWSH protection).
 
@@ -402,9 +433,7 @@ async def _check_websocket_origin(websocket: WebSocket, on_rejected=None) -> boo
     if not host:
         return True  # no Host header to compare against
 
-    host_normalized = _websocket_origin_compare_netloc(host)
-
-    if origin_netloc == host_normalized:
+    if _websocket_origin_is_allowed(origin, host):
         return True
 
     logger.warning(
@@ -2369,6 +2398,9 @@ async def create_runtime_viewer_token(
         raise HTTPException(status_code=404, detail="Runtime session not found")
     if not _runtime_session_is_live(session):
         raise HTTPException(status_code=409, detail="Runtime session is not active")
+    if str(session.get("profile_id")) not in browser_mgr.running:
+        _audit_runtime_viewer_failure("profile_not_running", session=session)
+        raise HTTPException(status_code=409, detail="Runtime session is not available")
 
     viewer_token = secrets.token_urlsafe(32)
     expires_at = (_utc_now() + datetime.timedelta(seconds=req.ttl_seconds)).isoformat()

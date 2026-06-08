@@ -8854,6 +8854,51 @@ def test_ws_allows_same_origin(app_client: TestClient):
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_ws_allows_configured_project_mileage_app_origin(app_client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """Configured App origins may connect to runtime VNC without disabling CSWSH checks."""
+    monkeypatch.setenv("VNC_WEBSOCKET_ALLOWED_ORIGINS", "http://127.0.0.1:3014")
+    create = app_client.post("/api/profiles", json={"name": "OriginAllowlistOk"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+
+    try:
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": "http://127.0.0.1:3014", "host": "100.104.13.11:8080"},
+        ):
+            pass
+    except Exception as exc:
+        assert "4403" not in str(exc)
+    main.browser_mgr.running.pop(pid, None)
+
+
+def test_configured_vnc_ws_origin_allowlist_accepts_explicit_app_origin(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("VNC_WEBSOCKET_ALLOWED_ORIGINS", "http://127.0.0.1:3014")
+
+    assert main._websocket_origin_is_allowed("http://127.0.0.1:3014", "100.104.13.11:8080") is True
+    assert main._websocket_origin_is_allowed("http://evil.com", "100.104.13.11:8080") is False
+
+
+def test_ws_allowed_origin_config_does_not_allow_unlisted_origins(
+    app_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("VNC_WEBSOCKET_ALLOWED_ORIGINS", "http://127.0.0.1:3014")
+    create = app_client.post("/api/profiles", json={"name": "OriginAllowlistReject"})
+    pid = create.json()["id"]
+    _mock_running_profile(pid)
+
+    with pytest.raises(Exception) as rejected:
+        with app_client.websocket_connect(
+            f"/api/profiles/{pid}/vnc",
+            headers={"origin": "http://evil.com", "host": "100.104.13.11:8080"},
+        ):
+            pass
+
+    assert rejected.value.code == 4403
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_ws_allows_bracketed_ipv6_same_origin(app_client: TestClient):
     """Bracketed IPv6 Origin/Host pairs should compare as same-origin."""
     create = app_client.post("/api/profiles", json={"name": "OriginIpv6Ok"})
