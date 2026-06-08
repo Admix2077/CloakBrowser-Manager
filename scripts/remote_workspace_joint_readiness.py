@@ -159,6 +159,11 @@ SENSITIVE_REPORT_MARKERS = (
     "cookie",
 )
 
+SENSITIVE_REPORT_PATTERNS = (
+    re.compile(r"\bviewer\s+token\s*[:=]\s*[^<\s][^\n]*", re.IGNORECASE),
+    re.compile(r"wss?://\S*/api/runtime/sessions/\S*/vnc", re.IGNORECASE),
+)
+
 
 def _default_workspace_root() -> Path:
     return Path.cwd().parent
@@ -188,7 +193,9 @@ def _contains_sensitive_text(text: str) -> bool:
         flags=re.MULTILINE,
     )
     lowered = low_sensitive_status_text.lower()
-    return any(marker.lower() in lowered for marker in SENSITIVE_REPORT_MARKERS)
+    return any(marker.lower() in lowered for marker in SENSITIVE_REPORT_MARKERS) or any(
+        pattern.search(low_sensitive_status_text) for pattern in SENSITIVE_REPORT_PATTERNS
+    )
 
 
 def _read_text(path: Path) -> str | None:
