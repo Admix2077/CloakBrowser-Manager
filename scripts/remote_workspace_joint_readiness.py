@@ -211,6 +211,8 @@ def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: Ev
         return "MISSING"
     if _contains_sensitive_text(text):
         return "SENSITIVE"
+    if any(marker in text for marker in evidence.not_verified_markers):
+        return "FAIL"
     if all(marker in text for marker in evidence.required_markers) and all(
         _has_required_value(text, marker) for marker in evidence.required_value_markers
     ):
