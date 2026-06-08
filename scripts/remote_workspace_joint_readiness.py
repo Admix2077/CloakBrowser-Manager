@@ -92,6 +92,7 @@ EVIDENCE_DEFINITIONS = (
             "REMOTE_WORKSPACE_ADAPTER_VIEWER=PASS",
             "viewer.available：true",
             "viewer.reasonCode：null",
+            "viewer.originAllowed=true",
         ),
         required_value_markers=(
             "目标订单号：",
@@ -117,6 +118,7 @@ EVIDENCE_DEFINITIONS = (
             "REMOTE_WORKSPACE_BROWSER_E2E_READY: PASS",
             "viewer.available：true",
             "viewer.reasonCode：null",
+            "viewer.originAllowed=true",
             "noVNC canvas 已绘制像素",
             "noVNC canvas 点击与低敏键盘输入后仍有像素",
             "交互后页面正文和地址栏无敏感连接信息",

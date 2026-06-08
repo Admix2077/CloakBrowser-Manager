@@ -71,6 +71,7 @@ def _write_pass_reports(root: Path) -> None:
                 "列表 session 数量：1",
                 "viewer.available：true",
                 "viewer.reasonCode：null",
+                "viewer.originAllowed=true",
                 "expiresAt：2099-06-08T00:00:00.000Z",
             ]
         ),
@@ -88,6 +89,7 @@ def _write_pass_reports(root: Path) -> None:
                 "App VNC pathname：/app/remote-workspace/rws_browser_1/vnc",
                 "viewer.available：true",
                 "viewer.reasonCode：null",
+                "viewer.originAllowed=true",
                 "noVNC canvas 已绘制像素",
                 "noVNC canvas 点击与低敏键盘输入后仍有像素",
                 "交互后页面正文和地址栏无敏感连接信息",
@@ -189,6 +191,66 @@ def test_joint_readiness_report_uses_payload_preflight_browser_not_verified_mark
 
     assert report.ready is False
     assert "REMOTE_WORKSPACE_BROKER_EVIDENCE=NOT_VERIFIED" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+
+
+def test_joint_readiness_report_rejects_adapter_pass_without_viewer_origin_evidence(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    _write(
+        tmp_path
+        / f"project-mileage-v3-app/doc/tasks-browser-test-v1/runs/{REPORT_DATE}-remote-workspace-adapter-live/REPORT.md",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_ADAPTER_E2E_READY: PASS",
+                "REMOTE_WORKSPACE_ADAPTER_CREATE_OR_REUSE=PASS",
+                "REMOTE_WORKSPACE_ADAPTER_DETAIL=PASS",
+                "REMOTE_WORKSPACE_ADAPTER_LIST=PASS",
+                "REMOTE_WORKSPACE_ADAPTER_VIEWER=PASS",
+                "目标订单号：AO-LIVE-1",
+                "目标 remoteAccountId：account-live-1",
+                "创建/复用 session id：rws_adapter_1",
+                "详情 session id：rws_adapter_1",
+                "列表 session 数量：1",
+                "viewer.available：true",
+                "viewer.reasonCode：null",
+                "expiresAt：2099-06-08T00:00:00.000Z",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+
+    assert report.ready is False
+    assert "REMOTE_WORKSPACE_ADAPTER_EVIDENCE=FAIL" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+
+
+def test_joint_readiness_report_rejects_browser_pass_without_viewer_origin_evidence(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    _write(
+        tmp_path
+        / f"project-mileage-v3-app/doc/tasks-browser-test-v1/runs/{REPORT_DATE}-remote-workspace-browser-live/REPORT.md",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_BROWSER_E2E_READY: PASS",
+                "目标订单号：AO-LIVE-1",
+                "目标 remoteAccountId：account-live-1",
+                "Payload 可启动订单数量：1",
+                "Payload broker session id：rws_browser_1",
+                "App VNC pathname：/app/remote-workspace/rws_browser_1/vnc",
+                "viewer.available：true",
+                "viewer.reasonCode：null",
+                "noVNC canvas 已绘制像素",
+                "noVNC canvas 点击与低敏键盘输入后仍有像素",
+                "交互后页面正文和地址栏无敏感连接信息",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+
+    assert report.ready is False
+    assert "REMOTE_WORKSPACE_BROWSER_EVIDENCE=FAIL" in report.lines
     assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
 
 
