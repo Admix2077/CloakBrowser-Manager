@@ -225,6 +225,20 @@ def _has_required_value(text: str, marker: str) -> bool:
     return False
 
 
+def _has_valid_app_vnc_pathname_evidence(text: str) -> bool:
+    marker = "App VNC pathname："
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("- "):
+            line = line[2:].strip()
+        if not line.startswith(marker):
+            continue
+        pathname = line[len(marker) :].strip()
+        if re.fullmatch(r"/app/remote-workspace/[A-Za-z0-9_-]+/vnc", pathname):
+            return True
+    return False
+
+
 def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: EvidenceDefinition) -> EvidenceStatus:
     text = _read_text(_report_path(workspace_root, evidence.relative_path, report_date))
     if text is None:
@@ -236,6 +250,8 @@ def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: Ev
     if all(marker in text for marker in evidence.required_markers) and all(
         _has_required_value(text, marker) for marker in evidence.required_value_markers
     ):
+        if evidence.key == "REMOTE_WORKSPACE_BROWSER_EVIDENCE" and not _has_valid_app_vnc_pathname_evidence(text):
+            return "FAIL"
         return "PASS"
     return "FAIL"
 
