@@ -10766,3 +10766,43 @@ git diff --check
 - 这是 Manager-controlled runtime/VNC live verification evidence 收紧，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 默认测试仍跳过，不打开真实 runtime、不创建 runtime session、不输出 token、cookie、proxy password、viewer token、runtime service token 或 profile/runtime 原始敏感信息。
 - 本轮只让 opt-in verifier 在测试结束时调用既有 terminate API；不改变 terminate API 语义、VNC forwarding、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy 或 browser fingerprint behavior。
+
+## 2026-06-08 Runtime live verifier NOT VERIFIED report guardrail
+
+背景：
+
+- App 与 Payload 已在缺 live env 时写入低敏 `NOT VERIFIED` preflight 报告，但 CloakBrowser runtime live verifier 只有 pytest 失败输出。
+- Project Mileage 联合测试需要三端在同一环境不可运行时都留下可归档、低敏、可追溯的阻塞证据。
+- 报告只能记录变量名和 `SET/EMPTY/INVALID` 状态，不能写入任何环境变量值、runtime 响应、token、cookie、proxy password 或 viewer token。
+
+已覆盖：
+
+- `backend/tests/test_runtime_live.py` 新增 `_build_runtime_live_not_verified_report()` 与 `_write_runtime_live_not_verified_report()`。
+- 当 `RUN_LIVE_RUNTIME_WORKSPACE=1` 且 live env 缺失或非法时，verifier 会写入 `test-reports/<date>-runtime-live-preflight/REPORT.md`，标记 `RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED` 和 `RUNTIME_LIVE_WORKSPACE_PREFLIGHT=FAIL`，随后继续抛出原 env gate 错误，不把失败伪装成通过。
+- 报告只包含 `CLOAKBROWSER_RUNTIME_API_BASE_URL`、`CLOAKBROWSER_RUNTIME_SERVICE_TOKEN`、`CLOAKBROWSER_RUNTIME_PROFILE_SOURCE`、`CLOAKBROWSER_RUNTIME_LEASE_SECONDS`、`CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS` 的状态。
+- CloakBrowser runtime live verifier 的 API base URL gate 已对齐 App/Payload 预检口径，要求 HTTP(S) origin-only，拒绝 path、userinfo、query 和 fragment。
+- `backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in` 同步 source guard，锁住 opt-in、报告路径、`NOT VERIFIED` 标记、失败状态和不打印边界。
+- 本机缺 live env 演练生成 `test-reports/2026-06-08-runtime-live-preflight/REPORT.md`，报告只显示 `EMPTY/INVALID` 状态。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_runtime_live_env_failure_report_is_low_sensitive -q
+# RED: _write_runtime_live_not_verified_report was not defined
+# GREEN: 1 passed
+
+env -u CLOAKBROWSER_RUNTIME_API_BASE_URL -u CLOAKBROWSER_RUNTIME_SERVICE_TOKEN -u CLOAKBROWSER_RUNTIME_PROFILE_ID -u CLOAKBROWSER_RUNTIME_TEMPLATE_ID -u CLOAKBROWSER_RUNTIME_LEASE_SECONDS -u CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS RUN_LIVE_RUNTIME_WORKSPACE=1 .venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_live_runtime_session_viewer_token_and_vnc_websocket_are_available -q
+# 1 failed，写入 test-reports/2026-06-08-runtime-live-preflight/REPORT.md；失败原因为缺必需 live env
+
+.venv/bin/python -m pytest backend/tests/test_runtime_live.py backend/tests/test_session_broker.py -q
+# 62 passed, 1 skipped
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 Manager-controlled runtime live verifier evidence 收紧，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 默认测试仍跳过真实 runtime verifier，不创建 runtime session、不打开真实 VNC、不调用 Project Mileage App/Payload。
+- 本轮不改变 runtime API、VNC forwarding、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy 或 browser fingerprint behavior。

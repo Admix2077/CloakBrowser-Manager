@@ -26,6 +26,13 @@ def test_runtime_live_verifier_source_exists_and_is_opt_in():
     assert "_assert_live_runtime_workspace_env" in source
     assert "_assert_http_api_base_url" in source
     assert "_assert_optional_positive_integer_env" in source
+    assert "_build_runtime_live_not_verified_report" in source
+    assert "_write_runtime_live_not_verified_report" in source
+    assert "test-reports" in source
+    assert "RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED" in source
+    assert "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=FAIL" in source
+    assert "No environment values are written." in source
+    assert "_assert_no_sensitive_report_text" in source
     assert "CLOAKBROWSER_RUNTIME_API_BASE_URL" in source
     assert "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN" in source
     assert "/api/runtime/sessions" in source

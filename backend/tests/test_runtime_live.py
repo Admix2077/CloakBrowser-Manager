@@ -7,9 +7,11 @@ runtime service that has been provisioned with a safe test profile/template.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import os
 import uuid
+from pathlib import Path
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
@@ -34,6 +36,18 @@ _OPTIONAL_POSITIVE_INTEGER_ENV = (
     "CLOAKBROWSER_RUNTIME_LEASE_SECONDS",
     "CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS",
 )
+_REPORT_ROOT = Path("test-reports")
+_REPORT_SENSITIVE_MARKERS = (
+    "runtime-service-token-secret",
+    "viewer_token",
+    "viewer-token",
+    "cookie",
+    "proxy_password",
+    "proxy-password",
+    "Authorization",
+    "Bearer ",
+    "X-Runtime-Service-Token",
+)
 
 
 def _assert_http_api_base_url(value: str | None, name: str) -> None:
@@ -43,6 +57,7 @@ def _assert_http_api_base_url(value: str | None, name: str) -> None:
     if (
         parsed.scheme not in {"http", "https"}
         or not parsed.netloc
+        or parsed.path not in {"", "/"}
         or parsed.username
         or parsed.password
         or parsed.query
@@ -57,6 +72,90 @@ def _assert_optional_positive_integer_env(name: str) -> None:
         return
     if not value.strip().isdigit() or int(value.strip()) <= 0:
         raise ValueError(f"Invalid live runtime environment variable: {name}")
+
+
+def _env_presence_status(name: str) -> str:
+    return "SET" if os.environ.get(name, "").strip() else "EMPTY"
+
+
+def _api_base_url_status(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return "EMPTY"
+    try:
+        _assert_http_api_base_url(value, name)
+    except ValueError:
+        return "INVALID"
+    return "SET"
+
+
+def _optional_positive_integer_status(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return "EMPTY"
+    if not value.isdigit() or int(value) <= 0:
+        return "INVALID"
+    return "SET"
+
+
+def _runtime_profile_source_status() -> str:
+    has_profile = bool(os.environ.get("CLOAKBROWSER_RUNTIME_PROFILE_ID", "").strip())
+    has_template = bool(os.environ.get("CLOAKBROWSER_RUNTIME_TEMPLATE_ID", "").strip())
+    if has_profile == has_template:
+        return "INVALID"
+    return "SET"
+
+
+def _assert_no_sensitive_report_text(text: str) -> None:
+    for marker in _REPORT_SENSITIVE_MARKERS:
+        assert marker not in text
+
+
+def _build_runtime_live_not_verified_report() -> str:
+    rows = [
+        ("CLOAKBROWSER_RUNTIME_API_BASE_URL", _api_base_url_status("CLOAKBROWSER_RUNTIME_API_BASE_URL")),
+        ("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN", _env_presence_status("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN")),
+        ("CLOAKBROWSER_RUNTIME_PROFILE_SOURCE", _runtime_profile_source_status()),
+        (
+            "CLOAKBROWSER_RUNTIME_LEASE_SECONDS",
+            _optional_positive_integer_status("CLOAKBROWSER_RUNTIME_LEASE_SECONDS"),
+        ),
+        (
+            "CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS",
+            _optional_positive_integer_status("CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS"),
+        ),
+    ]
+    lines = [
+        "# CloakBrowser Runtime Live Preflight Report",
+        "",
+        "RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED",
+        "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=FAIL",
+        "",
+        "## Environment Status",
+        "",
+        *(f"- {name}={status}" for name, status in rows),
+        "",
+        "## Safety",
+        "",
+        "- No environment values are written.",
+        "- No secret values or raw runtime responses are written.",
+    ]
+    text = "\n".join(lines) + "\n"
+    _assert_no_sensitive_report_text(text)
+    return text
+
+
+def _write_runtime_live_not_verified_report(
+    text: str,
+    report_root: Path = _REPORT_ROOT,
+) -> Path:
+    _assert_no_sensitive_report_text(text)
+    run_date = datetime.now(timezone.utc).date().isoformat()
+    report_dir = report_root / f"{run_date}-runtime-live-preflight"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / "REPORT.md"
+    report_path.write_text(text)
+    return report_path
 
 
 def _assert_live_runtime_workspace_env() -> None:
@@ -141,6 +240,46 @@ def test_live_runtime_workspace_env_guard_rejects_invalid_values(monkeypatch: py
     _assert_live_runtime_workspace_env()
 
 
+def test_runtime_live_env_failure_report_is_low_sensitive(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    for name in (
+        *_REQUIRED_LIVE_ENV,
+        *_OPTIONAL_POSITIVE_INTEGER_ENV,
+        "CLOAKBROWSER_RUNTIME_PROFILE_ID",
+        "CLOAKBROWSER_RUNTIME_TEMPLATE_ID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN", "runtime-service-token-secret")
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_API_BASE_URL", "https://runtime.example.test/path")
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_PROFILE_ID", "profile-live")
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_TEMPLATE_ID", "template-live")
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_LEASE_SECONDS", "0")
+
+    report = _write_runtime_live_not_verified_report(
+        _build_runtime_live_not_verified_report(),
+        report_root=tmp_path,
+    )
+    text = report.read_text()
+
+    assert report.name == "REPORT.md"
+    assert "RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED" in text
+    assert "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=FAIL" in text
+    assert "CLOAKBROWSER_RUNTIME_API_BASE_URL=INVALID" in text
+    assert "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN=SET" in text
+    assert "CLOAKBROWSER_RUNTIME_PROFILE_SOURCE=INVALID" in text
+    assert "CLOAKBROWSER_RUNTIME_LEASE_SECONDS=INVALID" in text
+    assert "runtime-service-token-secret" not in text
+    assert "https://runtime.example.test/path" not in text
+    assert "profile-live" not in text
+    assert "template-live" not in text
+    assert "viewer_token" not in text
+    assert "cookie" not in text
+    assert "proxy_password" not in text
+
+
 def _absolute_api_url(base_url: str, path: str) -> str:
     return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
 
@@ -174,7 +313,11 @@ def _assert_runtime_session_is_safe(data: dict[str, object]) -> None:
     reason="Set RUN_LIVE_RUNTIME_WORKSPACE=1 to run the live runtime verifier",
 )
 async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available():
-    _assert_live_runtime_workspace_env()
+    try:
+        _assert_live_runtime_workspace_env()
+    except ValueError:
+        _write_runtime_live_not_verified_report(_build_runtime_live_not_verified_report())
+        raise
     base_url = _required_env("CLOAKBROWSER_RUNTIME_API_BASE_URL")
     service_token = _required_env("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN")
     lease_seconds = _optional_positive_int_env("CLOAKBROWSER_RUNTIME_LEASE_SECONDS", 900)
