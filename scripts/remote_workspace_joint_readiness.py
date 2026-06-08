@@ -16,6 +16,7 @@ class EvidenceDefinition:
     key: str
     relative_path: str
     required_markers: tuple[str, ...]
+    required_value_markers: tuple[str, ...] = ()
     not_verified_paths: tuple[str, ...] = ()
     not_verified_markers: tuple[str, ...] = ()
 
@@ -39,6 +40,12 @@ EVIDENCE_DEFINITIONS = (
             "RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS",
             "websocket_frame_prefix=RFB",
         ),
+        required_value_markers=(
+            "session_id=",
+            "external_session_id=",
+            "profile_id=",
+            "viewer_expires_at=",
+        ),
         not_verified_paths=(
             "cloakbrowser-invisible-manager/test-reports/{date}-runtime-live-preflight/REPORT.md",
         ),
@@ -56,10 +63,17 @@ EVIDENCE_DEFINITIONS = (
             "viewer_available=true",
             "viewer_reason_code=null",
         ),
+        required_value_markers=(
+            "session_id=",
+            "remote_account_id=",
+            "runtime_status=",
+            "viewer_expires_at=",
+            "local_session_count=",
+        ),
         not_verified_paths=(
             "project-mileage-v3-payload/test-reports/{date}-remote-workspace-live-preflight/REPORT.md",
         ),
-        not_verified_markers=("REMOTE_WORKSPACE_BROWSER_E2E_READY: NOT VERIFIED",),
+        not_verified_markers=("REMOTE_WORKSPACE_BROKER_E2E_READY: NOT VERIFIED",),
     ),
     EvidenceDefinition(
         key="REMOTE_WORKSPACE_ADAPTER_EVIDENCE",
@@ -75,6 +89,14 @@ EVIDENCE_DEFINITIONS = (
             "REMOTE_WORKSPACE_ADAPTER_VIEWER=PASS",
             "viewer.available：true",
             "viewer.reasonCode：null",
+        ),
+        required_value_markers=(
+            "目标订单号：",
+            "目标 remoteAccountId：",
+            "创建/复用 session id：",
+            "详情 session id：",
+            "列表 session 数量：",
+            "expiresAt：",
         ),
         not_verified_paths=(
             "project-mileage-v3-app/doc/tasks-browser-test-v1/runs/"
@@ -95,6 +117,13 @@ EVIDENCE_DEFINITIONS = (
             "noVNC canvas 已绘制像素",
             "noVNC canvas 点击与低敏键盘输入后仍有像素",
             "交互后页面正文和地址栏无敏感连接信息",
+        ),
+        required_value_markers=(
+            "目标订单号：",
+            "目标 remoteAccountId：",
+            "Payload 可启动订单数量：",
+            "Payload broker session id：",
+            "App VNC pathname：",
         ),
         not_verified_paths=(
             "project-mileage-v3-app/doc/tasks-browser-test-v1/runs/"
@@ -166,13 +195,25 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+def _has_required_value(text: str, marker: str) -> bool:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("- "):
+            line = line[2:].strip()
+        if line.startswith(marker) and line[len(marker):].strip():
+            return True
+    return False
+
+
 def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: EvidenceDefinition) -> EvidenceStatus:
     text = _read_text(_report_path(workspace_root, evidence.relative_path, report_date))
     if text is None:
         return "MISSING"
     if _contains_sensitive_text(text):
         return "SENSITIVE"
-    if all(marker in text for marker in evidence.required_markers):
+    if all(marker in text for marker in evidence.required_markers) and all(
+        _has_required_value(text, marker) for marker in evidence.required_value_markers
+    ):
         return "PASS"
     return "FAIL"
 
