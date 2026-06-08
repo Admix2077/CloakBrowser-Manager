@@ -116,6 +116,7 @@ EVIDENCE_DEFINITIONS = (
         ),
         required_markers=(
             "REMOTE_WORKSPACE_BROWSER_E2E_READY: PASS",
+            "/vnc",
             "viewer.available：true",
             "viewer.reasonCode：null",
             "viewer.originAllowed=true",
