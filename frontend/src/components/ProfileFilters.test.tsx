@@ -100,6 +100,33 @@ describe("ProfileFilters", () => {
     expect(screen.getByLabelText("Country filter").closest("[data-filter-control]")?.getAttribute("data-active")).toBe("false");
   });
 
+  it("folds sensitive search input before rendering or emitting filter changes", () => {
+    const onChange = vi.fn();
+    const rawSearch =
+      "Authorization=Bearer profile-filter-search-secret " +
+      "viewer_token=viewer-secret /data/profile-filter-search 203.0.113.77";
+
+    render(
+      <ProfileFilters
+        value={{ ...value, search: rawSearch }}
+        options={options}
+        onChange={onChange}
+      />,
+    );
+
+    const input = screen.getByLabelText("Search profiles") as HTMLInputElement;
+    expect(input.value).toBe("unknown");
+    expect(document.body.textContent).not.toContain("profile-filter-search-secret");
+    expect(document.body.textContent).not.toContain("viewer_token");
+    expect(document.body.textContent).not.toContain("/data/profile-filter-search");
+    expect(document.body.textContent).not.toContain("203.0.113.77");
+
+    fireEvent.change(input, {
+      target: { value: rawSearch },
+    });
+    expect(onChange).toHaveBeenLastCalledWith({ ...value, search: "unknown" });
+  });
+
   it("redacts tag option values before emitting filter changes", () => {
     const leakMarker = "profile-filter-tag-secret";
     const rawTag =

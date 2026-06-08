@@ -132,6 +132,25 @@ describe("filterAndSortProfiles", () => {
     expect(publicMatch.map((item) => item.id)).toEqual(["polluted"]);
   });
 
+  it("treats sensitive search evidence as a no-match filter", () => {
+    const polluted = profile({
+      id: "polluted-search",
+      name: "Unknown Alpha",
+    });
+
+    const result = filterAndSortProfiles([polluted], {}, {
+      search: "viewer_token=secret /data/profile-search 203.0.113.78",
+      status: "all",
+      health: "all",
+      proxy: "all",
+      country: "all",
+      tag: "all",
+      sortBy: "name",
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it("sorts health by risk first for operations triage", () => {
     const result = filterAndSortProfiles(profiles, healthByProfileId, {
       search: "",

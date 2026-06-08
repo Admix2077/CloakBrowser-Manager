@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { publicProfileGeoipLabel, publicProfileTagLabel } from "../lib/errorDisplay";
-import type { ProfileFilterOptions, ProfileFilterState } from "../lib/filters";
+import { publicProfileSearchInput, type ProfileFilterOptions, type ProfileFilterState } from "../lib/filters";
 
 interface ProfileFiltersProps {
   value: ProfileFilterState;
@@ -21,6 +21,7 @@ export function ProfileFilters({
   const update = <K extends keyof ProfileFilterState>(key: K, nextValue: ProfileFilterState[K]) => {
     onChange({ ...value, [key]: nextValue });
   };
+  const publicSearch = publicProfileSearchInput(value.search);
   const labelled = (label: string) => labelPrefix ? `${labelPrefix} ${label}` : label;
   const showVisibleLabels = layout === "toolbar";
   const isToolbar = layout === "toolbar";
@@ -46,8 +47,8 @@ export function ProfileFilters({
             aria-label={labelled("Search profiles")}
             type="text"
             placeholder="Search profiles..."
-            value={value.search}
-            onChange={(event) => update("search", event.target.value)}
+            value={publicSearch}
+            onChange={(event) => update("search", publicProfileSearchInput(event.target.value))}
             className="input h-9 rounded-[7px] border-slate-200 bg-white pl-8 text-xs shadow-none ring-0 hover:border-slate-300 focus:border-blue-500 focus:bg-white focus:shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
           />
         </div>

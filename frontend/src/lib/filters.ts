@@ -1,5 +1,5 @@
 import type { HealthStatus, Profile, ProfileHealthResponse } from "./api";
-import { publicProfileGeoipLabel, publicProfileName, publicProfileTagLabel } from "./errorDisplay";
+import { publicErrorText, publicProfileGeoipLabel, publicProfileName, publicProfileTagLabel } from "./errorDisplay";
 
 export type RuntimeStatusFilter = "all" | Profile["status"];
 export type HealthStatusFilter = "all" | HealthStatus;
@@ -37,6 +37,23 @@ const HEALTH_RISK_RANK: Record<HealthStatus, number> = {
   unknown: 2,
   good: 3,
 };
+const PROFILE_SEARCH_NO_MATCH = "\u0000no-match";
+const PROFILE_SEARCH_SENSITIVE_RE =
+  /(?:https?:\/\/|[/?#&=\\]|\bauthorization\b|\bbearer\b|\bviewer[_-]?token\b|\bruntime[_-]?service[_-]?token\b|\bservice[_-]?token\b|\btoken\b|\bpassword\b|\bsecret\b|\bcookie\b|\bapi[_-]?key\b|\bx[_-]?api[_-]?key\b|\bsession[_-]?id\b|\bclient[_-]?secret\b|\bprivate[_-]?key\b|(?:\d{1,3}\.){3}\d{1,3})/i;
+
+export function publicProfileSearchInput(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (PROFILE_SEARCH_SENSITIVE_RE.test(trimmed)) return "unknown";
+  return publicErrorText(trimmed) || "unknown";
+}
+
+function profileSearchQuery(value: string): string {
+  const publicSearch = publicProfileSearchInput(value).toLowerCase();
+  if (!publicSearch) return "";
+  if (publicSearch === "unknown") return PROFILE_SEARCH_NO_MATCH;
+  return publicSearch;
+}
 
 function profileHealth(
   profile: Profile,
@@ -94,7 +111,7 @@ export function filterAndSortProfiles(
   healthByProfileId: Record<string, ProfileHealthResponse | undefined>,
   filters: ProfileFilterState,
 ): Profile[] {
-  const search = filters.search.trim().toLowerCase();
+  const search = profileSearchQuery(filters.search);
   const filtered = profiles.filter((profile) => {
     if (search && !publicProfileName(profile.name).toLowerCase().includes(search)) return false;
     if (filters.status !== "all" && profile.status !== filters.status) return false;
