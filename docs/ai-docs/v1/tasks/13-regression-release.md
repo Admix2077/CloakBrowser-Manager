@@ -10402,13 +10402,17 @@ npm --prefix frontend run build
 
 - `backend/tests/test_runtime_live.py` 连接 runtime VNC WebSocket 后读取首个后端 frame。
 - 首帧必须是 bytes 且以 `RFB ` 开头，证明 runtime viewer path 至少已经收到 RFB protocol banner。
-- Source guard 要求 live verifier 保持 `RUN_LIVE_RUNTIME_WORKSPACE` opt-in、默认跳过、包含 runtime API/session/viewer-token/VNC path，并包含 RFB banner 读取证据。
+- opt-in verifier 现在会在 `finally` 中调用既有 `/api/runtime/sessions/{id}/terminate`，请求体只包含 `{"confirm_terminate": true}`，避免真实验收失败或成功后遗留测试 session。
+- Source guard 要求 live verifier 保持 `RUN_LIVE_RUNTIME_WORKSPACE` opt-in、默认跳过、包含 runtime API/session/viewer-token/VNC path，并包含 RFB banner 读取和 terminate cleanup 证据。
 
 验证：
 
 ```bash
 .venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in -q
 # RED then GREEN；旧 verifier 缺少 websocket.recv()/RFB banner 证据；GREEN 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k test_runtime_live_verifier_source_exists_and_is_opt_in
+# RED then GREEN；旧 verifier 缺少 finally terminate cleanup 证据；GREEN 1 passed, 59 deselected
 
 .venv/bin/python -m pytest backend/tests/test_runtime_live.py -q
 # 1 skipped；默认未设置 RUN_LIVE_RUNTIME_WORKSPACE
@@ -10436,4 +10440,4 @@ git diff --check
 
 - 这是 Manager-controlled runtime/VNC release-evidence guardrail，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 默认测试不调用真实 runtime，不创建 runtime session，不输出 token、cookie、proxy password、viewer token、runtime service token 或 profile/runtime 原始敏感信息。
-- 不改变 VNC forwarding、RFB filtering、viewer token validation、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC 或 browser fingerprint behavior。
+- 本轮只让 opt-in verifier 使用既有 terminate API 清理自己创建的 session；不改变 terminate API 语义、VNC forwarding、RFB filtering、viewer token validation、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC 或 browser fingerprint behavior。

@@ -88,59 +88,74 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
     service_token = _required_env("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN")
     external_session_id = f"pm-live-runtime-{uuid.uuid4()}"
     headers = {"X-Runtime-Service-Token": service_token}
+    created_session_id: str | None = None
 
     async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
-        create_resp = await client.post(
-            "/api/runtime/sessions",
-            headers=headers,
-            json={
-                "external_session_id": external_session_id,
-                "lease_seconds": 900,
-                **_runtime_profile_source(),
-            },
-        )
-        assert create_resp.status_code == 201
-        created = create_resp.json()
-        _assert_runtime_session_is_safe(created)
-        assert created["external_session_id"] == external_session_id
+        try:
+            create_resp = await client.post(
+                "/api/runtime/sessions",
+                headers=headers,
+                json={
+                    "external_session_id": external_session_id,
+                    "lease_seconds": 900,
+                    **_runtime_profile_source(),
+                },
+            )
+            assert create_resp.status_code == 201
+            created = create_resp.json()
+            _assert_runtime_session_is_safe(created)
+            created_session_id = str(created["id"])
+            assert created["external_session_id"] == external_session_id
 
-        get_resp = await client.get(
-            f"/api/runtime/sessions/{created['id']}",
-            headers=headers,
-        )
-        assert get_resp.status_code == 200
-        fetched = get_resp.json()
-        _assert_runtime_session_is_safe(fetched)
-        assert fetched == created
+            get_resp = await client.get(
+                f"/api/runtime/sessions/{created_session_id}",
+                headers=headers,
+            )
+            assert get_resp.status_code == 200
+            fetched = get_resp.json()
+            _assert_runtime_session_is_safe(fetched)
+            assert fetched == created
 
-        token_resp = await client.post(
-            f"/api/runtime/sessions/{created['id']}/viewer-token",
-            headers=headers,
-            json={"ttl_seconds": 60},
-        )
-        assert token_resp.status_code == 201
-        token_data = token_resp.json()
-        assert set(token_data) == {"viewer_url", "viewer_token", "expires_at"}
-        assert isinstance(token_data["viewer_token"], str)
-        assert token_data["viewer_token"]
-        assert token_data["viewer_url"].startswith(
-            f"/api/runtime/sessions/{created['id']}/vnc?"
-        )
-        assert token_data["viewer_token"] in token_data["viewer_url"]
-        assert service_token not in json.dumps(
-            {"created": created, "fetched": fetched, "token": token_data["viewer_url"]},
-            sort_keys=True,
-        )
+            token_resp = await client.post(
+                f"/api/runtime/sessions/{created_session_id}/viewer-token",
+                headers=headers,
+                json={"ttl_seconds": 60},
+            )
+            assert token_resp.status_code == 201
+            token_data = token_resp.json()
+            assert set(token_data) == {"viewer_url", "viewer_token", "expires_at"}
+            assert isinstance(token_data["viewer_token"], str)
+            assert token_data["viewer_token"]
+            assert token_data["viewer_url"].startswith(
+                f"/api/runtime/sessions/{created_session_id}/vnc?"
+            )
+            assert token_data["viewer_token"] in token_data["viewer_url"]
+            assert service_token not in json.dumps(
+                {
+                    "created": created,
+                    "fetched": fetched,
+                    "token": token_data["viewer_url"],
+                },
+                sort_keys=True,
+            )
 
-    async with websockets.connect(
-        _websocket_url(base_url, token_data["viewer_url"]),
-        subprotocols=["binary"],
-        open_timeout=15,
-        close_timeout=5,
-        ping_interval=None,
-        compression=None,
-    ) as websocket:
-        assert websocket.subprotocol in {None, "binary"}
-        first_frame = await asyncio.wait_for(websocket.recv(), timeout=10)
-        assert isinstance(first_frame, bytes)
-        assert first_frame.startswith(b"RFB ")
+            async with websockets.connect(
+                _websocket_url(base_url, token_data["viewer_url"]),
+                subprotocols=["binary"],
+                open_timeout=15,
+                close_timeout=5,
+                ping_interval=None,
+                compression=None,
+            ) as websocket:
+                assert websocket.subprotocol in {None, "binary"}
+                first_frame = await asyncio.wait_for(websocket.recv(), timeout=10)
+                assert isinstance(first_frame, bytes)
+                assert first_frame.startswith(b"RFB ")
+        finally:
+            if created_session_id is not None:
+                terminate_resp = await client.post(
+                    f"/api/runtime/sessions/{created_session_id}/terminate",
+                    headers=headers,
+                    json={"confirm_terminate": True},
+                )
+                assert terminate_resp.status_code == 200

@@ -10725,7 +10725,8 @@ npm --prefix frontend run build
 
 - `backend/tests/test_runtime_live.py` 在 `RUN_LIVE_RUNTIME_WORKSPACE=1` opt-in 模式下，连接 runtime VNC WebSocket 后会等待首个后端帧。
 - 首帧必须是 bytes 且以 `RFB ` 开头，作为 KasmVNC/RFB 协议握手已经到达 viewer 入口的低敏证据。
-- `backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in` 增加 source guard，要求 live verifier 保持 opt-in，并包含 `asyncio.wait_for`、`websocket.recv()` 和 `RFB ` 证据。
+- live verifier 现在会记录自己创建的 runtime session id，并在 `finally` 中调用既有 `/api/runtime/sessions/{id}/terminate`，请求体只包含 `{"confirm_terminate": true}`，避免 opt-in live 验收遗留测试 session。
+- `backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in` 增加 source guard，要求 live verifier 保持 opt-in，并包含 `asyncio.wait_for`、`websocket.recv()`、`RFB ` 和 terminate cleanup 证据。
 
 验证记录：
 
@@ -10733,6 +10734,10 @@ npm --prefix frontend run build
 .venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in -q
 # RED: old verifier did not read websocket.recv() or assert RFB banner
 # GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k test_runtime_live_verifier_source_exists_and_is_opt_in
+# RED: old verifier did not contain finally terminate cleanup
+# GREEN: 1 passed, 59 deselected
 
 .venv/bin/python -m pytest backend/tests/test_runtime_live.py -q
 # 1 skipped; default env 未设置 RUN_LIVE_RUNTIME_WORKSPACE，未调用真实 runtime
@@ -10760,4 +10765,4 @@ git diff --check
 
 - 这是 Manager-controlled runtime/VNC live verification evidence 收紧，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 默认测试仍跳过，不打开真实 runtime、不创建 runtime session、不输出 token、cookie、proxy password、viewer token、runtime service token 或 profile/runtime 原始敏感信息。
-- 不改变 browser fingerprint behavior、stealth prefs、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、viewer token schema、runtime session storage、automation execution 或 automation lease behavior。
+- 本轮只让 opt-in verifier 在测试结束时调用既有 terminate API；不改变 terminate API 语义、VNC forwarding、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy 或 browser fingerprint behavior。
