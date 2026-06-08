@@ -28,10 +28,19 @@ def test_runtime_live_verifier_source_exists_and_is_opt_in():
     assert "_assert_optional_positive_integer_env" in source
     assert "_build_runtime_live_not_verified_report" in source
     assert "_write_runtime_live_not_verified_report" in source
+    assert "_build_runtime_live_pass_report" in source
+    assert "_write_runtime_live_pass_report" in source
     assert "test-reports" in source
     assert "RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED" in source
+    assert "RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS" in source
     assert "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=FAIL" in source
+    assert "RUNTIME_LIVE_WORKSPACE_RUNTIME_SESSION=PASS" in source
+    assert "RUNTIME_LIVE_WORKSPACE_VIEWER_TOKEN=PASS" in source
+    assert "RUNTIME_LIVE_WORKSPACE_VNC_WEBSOCKET=PASS" in source
+    assert "RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS" in source
+    assert '"runtime-live"' in source
     assert "No environment values are written." in source
+    assert "No viewer URL is written." in source
     assert "_assert_no_sensitive_report_text" in source
     assert "CLOAKBROWSER_RUNTIME_API_BASE_URL" in source
     assert "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN" in source

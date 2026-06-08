@@ -158,6 +158,63 @@ def _write_runtime_live_not_verified_report(
     return report_path
 
 
+def _write_runtime_report(
+    text: str,
+    report_dir_name: str,
+    report_root: Path = _REPORT_ROOT,
+) -> Path:
+    _assert_no_sensitive_report_text(text)
+    run_date = datetime.now(timezone.utc).date().isoformat()
+    report_dir = report_root / f"{run_date}-{report_dir_name}"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_path = report_dir / "REPORT.md"
+    report_path.write_text(text)
+    return report_path
+
+
+def _build_runtime_live_pass_report(
+    *,
+    session_id: str,
+    external_session_id: str,
+    profile_id: str,
+    viewer_expires_at: str,
+    websocket_frame_prefix: str,
+) -> str:
+    lines = [
+        "# CloakBrowser Runtime Live Report",
+        "",
+        "RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS",
+        "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=PASS",
+        "RUNTIME_LIVE_WORKSPACE_RUNTIME_SESSION=PASS",
+        "RUNTIME_LIVE_WORKSPACE_VIEWER_TOKEN=PASS",
+        "RUNTIME_LIVE_WORKSPACE_VNC_WEBSOCKET=PASS",
+        "RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS",
+        "",
+        "## Runtime Evidence",
+        "",
+        f"- session_id={session_id}",
+        f"- external_session_id={external_session_id}",
+        f"- profile_id={profile_id}",
+        f"- viewer_expires_at={viewer_expires_at}",
+        f"- websocket_frame_prefix={websocket_frame_prefix}",
+        "",
+        "## Safety",
+        "",
+        "- No viewer URL is written.",
+        "- No secret values or raw runtime responses are written.",
+    ]
+    text = "\n".join(lines) + "\n"
+    _assert_no_sensitive_report_text(text)
+    return text
+
+
+def _write_runtime_live_pass_report(
+    text: str,
+    report_root: Path = _REPORT_ROOT,
+) -> Path:
+    return _write_runtime_report(text, "runtime-live", report_root=report_root)
+
+
 def _assert_live_runtime_workspace_env() -> None:
     missing = [
         name for name in _REQUIRED_LIVE_ENV if not os.environ.get(name, "").strip()
@@ -280,6 +337,39 @@ def test_runtime_live_env_failure_report_is_low_sensitive(
     assert "proxy_password" not in text
 
 
+def test_runtime_live_success_report_is_low_sensitive(tmp_path: Path):
+    report = _write_runtime_live_pass_report(
+        _build_runtime_live_pass_report(
+            session_id="rt-live-session-123",
+            external_session_id="pm-live-runtime-123",
+            profile_id="profile-public-123",
+            viewer_expires_at="2099-06-08T05:30:00.000Z",
+            websocket_frame_prefix="RFB",
+        ),
+        report_root=tmp_path,
+    )
+    text = report.read_text()
+
+    assert report.name == "REPORT.md"
+    assert "RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS" in text
+    assert "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=PASS" in text
+    assert "RUNTIME_LIVE_WORKSPACE_RUNTIME_SESSION=PASS" in text
+    assert "RUNTIME_LIVE_WORKSPACE_VIEWER_TOKEN=PASS" in text
+    assert "RUNTIME_LIVE_WORKSPACE_VNC_WEBSOCKET=PASS" in text
+    assert "RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS" in text
+    assert "rt-live-session-123" in text
+    assert "pm-live-runtime-123" in text
+    assert "profile-public-123" in text
+    assert "2099-06-08T05:30:00.000Z" in text
+    assert "RFB" in text
+    assert "viewer_url" not in text
+    assert "viewer_token" not in text
+    assert "/vnc?" not in text
+    assert "runtime-service-token-secret" not in text
+    assert "cookie" not in text
+    assert "proxy_password" not in text
+
+
 def _absolute_api_url(base_url: str, path: str) -> str:
     return urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
 
@@ -328,6 +418,9 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
     external_session_id = f"pm-live-runtime-{uuid.uuid4()}"
     headers = {"X-Runtime-Service-Token": service_token}
     created_session_id: str | None = None
+    created_session: dict[str, object] | None = None
+    viewer_expires_at: str | None = None
+    websocket_frame_prefix: str | None = None
 
     async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
         try:
@@ -343,6 +436,7 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
             assert create_resp.status_code == 201
             created = create_resp.json()
             _assert_runtime_session_is_safe(created)
+            created_session = created
             created_session_id = str(created["id"])
             assert created["external_session_id"] == external_session_id
 
@@ -365,6 +459,9 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
             assert set(token_data) == {"viewer_url", "viewer_token", "expires_at"}
             assert isinstance(token_data["viewer_token"], str)
             assert token_data["viewer_token"]
+            assert isinstance(token_data["expires_at"], str)
+            assert token_data["expires_at"]
+            viewer_expires_at = token_data["expires_at"]
             assert token_data["viewer_url"].startswith(
                 f"/api/runtime/sessions/{created_session_id}/vnc?"
             )
@@ -390,6 +487,7 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
                 first_frame = await asyncio.wait_for(websocket.recv(), timeout=10)
                 assert isinstance(first_frame, bytes)
                 assert first_frame.startswith(b"RFB ")
+                websocket_frame_prefix = first_frame[:3].decode("ascii")
         finally:
             if created_session_id is not None:
                 terminate_resp = await client.post(
@@ -398,3 +496,17 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
                     json={"confirm_terminate": True},
                 )
                 assert terminate_resp.status_code == 200
+                if (
+                    created_session is not None
+                    and viewer_expires_at is not None
+                    and websocket_frame_prefix is not None
+                ):
+                    _write_runtime_live_pass_report(
+                        _build_runtime_live_pass_report(
+                            session_id=created_session_id,
+                            external_session_id=str(created_session["external_session_id"]),
+                            profile_id=str(created_session["profile_id"]),
+                            viewer_expires_at=viewer_expires_at,
+                            websocket_frame_prefix=websocket_frame_prefix,
+                        )
+                    )

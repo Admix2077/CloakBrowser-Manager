@@ -10806,3 +10806,35 @@ git diff --check
 - 这是 Manager-controlled runtime live verifier evidence 收紧，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 默认测试仍跳过真实 runtime verifier，不创建 runtime session、不打开真实 VNC、不调用 Project Mileage App/Payload。
 - 本轮不改变 runtime API、VNC forwarding、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy 或 browser fingerprint behavior。
+
+## 2026-06-08 Runtime live verifier PASS report guardrail
+
+背景：
+
+- Project Mileage 联合测试需要在 CloakBrowser runtime/VNC 真实连通时也留下低敏、可归档的 runtime 层 PASS 证据。
+- 旧 verifier 成功时只依赖 pytest 输出；后续 App/Payload/browser PASS 报告无法直接引用 CloakBrowser runtime 层的低敏报告。
+- PASS 报告不得写入 viewer URL、viewer token、runtime service token、cookie、proxy password 或 runtime 原始响应。
+
+已覆盖：
+
+- `backend/tests/test_runtime_live.py` 新增 `_build_runtime_live_pass_report()` 与 `_write_runtime_live_pass_report()`。
+- `RUN_LIVE_RUNTIME_WORKSPACE=1` 且 runtime session 创建、详情读取、viewer-token 签发、VNC WebSocket 首帧和 terminate 均通过后，verifier 会写入 `test-reports/<date>-runtime-live/REPORT.md`。
+- PASS 报告标记 `RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS`、`RUNTIME_LIVE_WORKSPACE_PREFLIGHT=PASS`、`RUNTIME_LIVE_WORKSPACE_RUNTIME_SESSION=PASS`、`RUNTIME_LIVE_WORKSPACE_VIEWER_TOKEN=PASS`、`RUNTIME_LIVE_WORKSPACE_VNC_WEBSOCKET=PASS` 和 `RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS`。
+- 报告只记录低敏 session id、external session id、profile id、viewer `expires_at` 和 WebSocket 首帧前缀 `RFB`。
+- `backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in` 同步 source guard，锁住 PASS 报告 helper、marker、报告目录和脱敏边界。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_runtime_live_success_report_is_low_sensitive -q
+# RED: _write_runtime_live_pass_report was not defined
+
+.venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_runtime_live_success_report_is_low_sensitive backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in -q
+# 2 passed
+```
+
+边界：
+
+- 这是 Manager-controlled runtime live verifier evidence 收紧，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 默认测试仍跳过真实 runtime verifier，不创建 runtime session、不打开真实 VNC、不调用 Project Mileage App/Payload。
+- 本轮不改变 runtime API、VNC forwarding、viewer token schema、runtime session storage、profile launch、automation execution、automation lease、proxy 或 browser fingerprint behavior。
