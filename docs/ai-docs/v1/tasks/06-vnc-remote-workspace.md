@@ -532,3 +532,43 @@ git diff --check
 - 本轮不新增公开 fingerprint QA API，不新增 Project Mileage DTO。
 - WebRTC prefs 不记录、不回显 IP、proxy、token、cookie/local storage、viewer URL 或 Project Mileage 钱包/订单/权限/审计事实。
 - 未来 Project Mileage 如需展示远程账号环境健康，只能通过 Payload 低敏 DTO，不允许 App 直连 CloakBrowser 检测或 automation API。
+
+## 2026-06-08 runtime live verifier 配置守卫小闭环
+
+当前状态：
+
+- CloakBrowser 侧 `backend/tests/test_runtime_live.py` 已从模块级 skip 调整为只跳过真实 live runtime 用例。
+- 默认执行的配置形状 guard 会在没有 `RUN_LIVE_RUNTIME_WORKSPACE=1` 时仍然运行，用于提前拦截不安全或无效 live verifier 配置。
+- 本轮只收紧 verifier 和 source guard，不修改 runtime service、VNC forwarding、viewer token schema、runtime session storage 或自动化语义。
+
+已完成：
+
+- `backend/tests/test_runtime_live.py`
+  - 新增 `_assert_live_runtime_workspace_env()`，要求 runtime API base、service token 和 profile/template 来源满足 live verifier 前置条件。
+  - runtime API base 必须是 HTTP(S)，并拒绝 userinfo、query 和 fragment，避免把 token 或其他敏感信息混入 base URL。
+  - `CLOAKBROWSER_RUNTIME_LEASE_SECONDS` 和 `CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS` 若配置则必须为正整数。
+  - profile id 和 template id 必须且只能设置一个。
+  - 真实 live verifier 仍需 `RUN_LIVE_RUNTIME_WORKSPACE=1` 才会发起 HTTP/WebSocket 调用。
+- `backend/tests/test_session_broker.py`
+  - source guard 固化 live verifier 的 opt-in skip、默认配置 guard 和 env 校验 helper 证据。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k runtime_live_verifier_source_exists_and_is_opt_in
+# RED: 1 failed；旧 verifier 仍是模块级 pytest.skip，缺少默认运行的配置 guard 证据
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -k runtime_live_verifier_source_exists_and_is_opt_in
+# 1 passed, 59 deselected
+
+.venv/bin/python -m pytest backend/tests/test_runtime_live.py
+# 1 passed, 1 skipped
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py
+# 60 passed
+```
+
+边界：
+
+- 未设置 `RUN_LIVE_RUNTIME_WORKSPACE=1`，未调用真实 CloakBrowser runtime，未创建真实 runtime session。
+- 测试和文档不记录、不回显 service token、viewer token、cookie、proxy password、account password、URL query 或数据库内容。

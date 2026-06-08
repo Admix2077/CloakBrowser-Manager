@@ -21,7 +21,11 @@ def test_runtime_live_verifier_source_exists_and_is_opt_in():
     assert verifier.exists()
     source = verifier.read_text()
     assert "RUN_LIVE_RUNTIME_WORKSPACE" in source
-    assert "pytest.skip" in source
+    assert "pytest.mark.skipif" in source
+    assert "test_live_runtime_workspace_env_guard_rejects_invalid_values" in source
+    assert "_assert_live_runtime_workspace_env" in source
+    assert "_assert_http_api_base_url" in source
+    assert "_assert_optional_positive_integer_env" in source
     assert "CLOAKBROWSER_RUNTIME_API_BASE_URL" in source
     assert "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN" in source
     assert "/api/runtime/sessions" in source

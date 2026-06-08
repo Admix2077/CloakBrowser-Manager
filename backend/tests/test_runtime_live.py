@@ -17,13 +17,6 @@ import pytest
 import websockets
 
 
-if os.environ.get("RUN_LIVE_RUNTIME_WORKSPACE") != "1":
-    pytest.skip(
-        "Set RUN_LIVE_RUNTIME_WORKSPACE=1 to run the live runtime verifier",
-        allow_module_level=True,
-    )
-
-
 _SENSITIVE_RESPONSE_KEYS = {
     "viewer_token_hash",
     "wallet",
@@ -33,6 +26,62 @@ _SENSITIVE_RESPONSE_KEYS = {
     "proxy_password",
     "runtime_service_token",
 }
+_REQUIRED_LIVE_ENV = (
+    "CLOAKBROWSER_RUNTIME_API_BASE_URL",
+    "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN",
+)
+_OPTIONAL_POSITIVE_INTEGER_ENV = (
+    "CLOAKBROWSER_RUNTIME_LEASE_SECONDS",
+    "CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS",
+)
+
+
+def _assert_http_api_base_url(value: str | None, name: str) -> None:
+    if not value or not value.strip():
+        raise ValueError(f"Missing required environment variable: {name}")
+    parsed = urlsplit(value.strip())
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(f"Invalid live runtime environment variable: {name}")
+
+
+def _assert_optional_positive_integer_env(name: str) -> None:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return
+    if not value.strip().isdigit() or int(value.strip()) <= 0:
+        raise ValueError(f"Invalid live runtime environment variable: {name}")
+
+
+def _assert_live_runtime_workspace_env() -> None:
+    missing = [
+        name for name in _REQUIRED_LIVE_ENV if not os.environ.get(name, "").strip()
+    ]
+    if missing:
+        raise ValueError(
+            f"Missing live runtime workspace environment variables: {', '.join(missing)}"
+        )
+
+    _assert_http_api_base_url(
+        os.environ.get("CLOAKBROWSER_RUNTIME_API_BASE_URL"),
+        "CLOAKBROWSER_RUNTIME_API_BASE_URL",
+    )
+    for name in _OPTIONAL_POSITIVE_INTEGER_ENV:
+        _assert_optional_positive_integer_env(name)
+
+    profile_id = os.environ.get("CLOAKBROWSER_RUNTIME_PROFILE_ID")
+    template_id = os.environ.get("CLOAKBROWSER_RUNTIME_TEMPLATE_ID")
+    if bool(profile_id and profile_id.strip()) == bool(template_id and template_id.strip()):
+        raise ValueError(
+            "Set exactly one of CLOAKBROWSER_RUNTIME_PROFILE_ID or "
+            "CLOAKBROWSER_RUNTIME_TEMPLATE_ID"
+        )
 
 
 def _required_env(name: str) -> str:
@@ -40,6 +89,13 @@ def _required_env(name: str) -> str:
     if value:
         return value
     pytest.fail(f"Missing required environment variable: {name}")
+
+
+def _optional_positive_int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if not value or not value.strip():
+        return default
+    return int(value.strip())
 
 
 def _runtime_profile_source() -> dict[str, str]:
@@ -53,6 +109,36 @@ def _runtime_profile_source() -> dict[str, str]:
     if profile_id:
         return {"profile_id": profile_id}
     return {"template_id": template_id or ""}
+
+
+def test_live_runtime_workspace_env_guard_rejects_invalid_values(monkeypatch: pytest.MonkeyPatch):
+    for name in (
+        *_REQUIRED_LIVE_ENV,
+        *_OPTIONAL_POSITIVE_INTEGER_ENV,
+        "CLOAKBROWSER_RUNTIME_PROFILE_ID",
+        "CLOAKBROWSER_RUNTIME_TEMPLATE_ID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN", "runtime-service-token-secret")
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_PROFILE_ID", "profile-live")
+    with pytest.raises(ValueError, match="CLOAKBROWSER_RUNTIME_API_BASE_URL"):
+        _assert_live_runtime_workspace_env()
+
+    monkeypatch.setenv(
+        "CLOAKBROWSER_RUNTIME_API_BASE_URL",
+        "https://runtime.example.test?token=leak",
+    )
+    with pytest.raises(ValueError, match="CLOAKBROWSER_RUNTIME_API_BASE_URL"):
+        _assert_live_runtime_workspace_env()
+
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_API_BASE_URL", "https://runtime.example.test")
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS", "0")
+    with pytest.raises(ValueError, match="CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS"):
+        _assert_live_runtime_workspace_env()
+
+    monkeypatch.setenv("CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS", "60")
+    _assert_live_runtime_workspace_env()
 
 
 def _absolute_api_url(base_url: str, path: str) -> str:
@@ -83,9 +169,19 @@ def _assert_runtime_session_is_safe(data: dict[str, object]) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.environ.get("RUN_LIVE_RUNTIME_WORKSPACE") != "1",
+    reason="Set RUN_LIVE_RUNTIME_WORKSPACE=1 to run the live runtime verifier",
+)
 async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available():
+    _assert_live_runtime_workspace_env()
     base_url = _required_env("CLOAKBROWSER_RUNTIME_API_BASE_URL")
     service_token = _required_env("CLOAKBROWSER_RUNTIME_SERVICE_TOKEN")
+    lease_seconds = _optional_positive_int_env("CLOAKBROWSER_RUNTIME_LEASE_SECONDS", 900)
+    viewer_token_ttl_seconds = _optional_positive_int_env(
+        "CLOAKBROWSER_RUNTIME_VIEWER_TOKEN_TTL_SECONDS",
+        60,
+    )
     external_session_id = f"pm-live-runtime-{uuid.uuid4()}"
     headers = {"X-Runtime-Service-Token": service_token}
     created_session_id: str | None = None
@@ -97,7 +193,7 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
                 headers=headers,
                 json={
                     "external_session_id": external_session_id,
-                    "lease_seconds": 900,
+                    "lease_seconds": lease_seconds,
                     **_runtime_profile_source(),
                 },
             )
@@ -119,7 +215,7 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
             token_resp = await client.post(
                 f"/api/runtime/sessions/{created_session_id}/viewer-token",
                 headers=headers,
-                json={"ttl_seconds": 60},
+                json={"ttl_seconds": viewer_token_ttl_seconds},
             )
             assert token_resp.status_code == 201
             token_data = token_resp.json()
