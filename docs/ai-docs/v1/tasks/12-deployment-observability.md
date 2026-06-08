@@ -10712,3 +10712,52 @@ npm --prefix frontend run build
 - 这是 Manager-controlled Automation task UI evidence redaction 防御，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
 - 同类底层/第三方 fingerprint 检测站失败先标阻塞项，再继续推进 Manager 可控 API/UI/log/audit/diagnostics/runtime/proxy/profile evidence。
 - 不改变 automation task API schema、automation execution、automation lease semantics、browser runtime、`invisible_playwright` 包、stealth prefs、fingerprint seed、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、runtime session storage、viewer token schema、Automation worker lease behavior 或 browser fingerprint 行为。
+
+## 2026-06-08 Runtime live verifier RFB banner evidence guardrail
+
+背景：
+
+- Project Mileage 远程工作台链路需要证明 CloakBrowser runtime/VNC/noVNC 真实可用。
+- 旧 `backend/tests/test_runtime_live.py` 的 opt-in live verifier 已创建 runtime session、签发 viewer token，并打开 `/api/runtime/sessions/{id}/vnc` WebSocket，但只断言 WebSocket 连接成功，没有读取 VNC 后端首帧。
+- WebSocket connect 只能证明代理入口可达，不能证明后端已经开始 RFB 协议握手。
+
+已覆盖：
+
+- `backend/tests/test_runtime_live.py` 在 `RUN_LIVE_RUNTIME_WORKSPACE=1` opt-in 模式下，连接 runtime VNC WebSocket 后会等待首个后端帧。
+- 首帧必须是 bytes 且以 `RFB ` 开头，作为 KasmVNC/RFB 协议握手已经到达 viewer 入口的低敏证据。
+- `backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in` 增加 source guard，要求 live verifier 保持 opt-in，并包含 `asyncio.wait_for`、`websocket.recv()` 和 `RFB ` 证据。
+
+验证记录：
+
+```bash
+.venv/bin/python -m pytest backend/tests/test_session_broker.py::test_runtime_live_verifier_source_exists_and_is_opt_in -q
+# RED: old verifier did not read websocket.recv() or assert RFB banner
+# GREEN: 1 passed
+
+.venv/bin/python -m pytest backend/tests/test_runtime_live.py -q
+# 1 skipped; default env 未设置 RUN_LIVE_RUNTIME_WORKSPACE，未调用真实 runtime
+
+.venv/bin/python -m pytest backend/tests/test_session_broker.py -q
+# 60 passed
+
+.venv/bin/python -m pytest backend/tests/test_api.py -k "runtime_vnc or vnc_ws or vnc_proxy" -q
+# 14 passed, 277 deselected
+
+.venv/bin/python -m pytest backend/tests -q
+# 712 passed, 1 skipped
+
+npm --prefix frontend test
+# Test Files 21 passed；Tests 325 passed
+
+npm --prefix frontend run build
+# tsc -b && vite build succeeded
+
+git diff --check
+# passed
+```
+
+边界：
+
+- 这是 Manager-controlled runtime/VNC live verification evidence 收紧，不是 Pixelscan/IPhey 或 `PXLSCN-FINGERPRINT-MASKING` 修复。
+- 默认测试仍跳过，不打开真实 runtime、不创建 runtime session、不输出 token、cookie、proxy password、viewer token、runtime service token 或 profile/runtime 原始敏感信息。
+- 不改变 browser fingerprint behavior、stealth prefs、WebGL/canvas/noise、UA、locale/timezone、WebRTC、proxy normalization、proxy validation semantics、proxy resolution、profile launch、VNC forwarding、viewer token schema、runtime session storage、automation execution 或 automation lease behavior。

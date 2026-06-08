@@ -6,6 +6,7 @@ runtime service that has been provisioned with a safe test profile/template.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import uuid
@@ -140,3 +141,6 @@ async def test_live_runtime_session_viewer_token_and_vnc_websocket_are_available
         compression=None,
     ) as websocket:
         assert websocket.subprotocol in {None, "binary"}
+        first_frame = await asyncio.wait_for(websocket.recv(), timeout=10)
+        assert isinstance(first_frame, bytes)
+        assert first_frame.startswith(b"RFB ")

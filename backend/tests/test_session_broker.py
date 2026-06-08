@@ -27,6 +27,9 @@ def test_runtime_live_verifier_source_exists_and_is_opt_in():
     assert "/api/runtime/sessions" in source
     assert "/viewer-token" in source
     assert "/vnc?" in source
+    assert "asyncio.wait_for" in source
+    assert "websocket.recv()" in source
+    assert "RFB " in source
     assert "print(" not in source
 
 
