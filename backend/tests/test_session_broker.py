@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import quote
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -12,6 +13,21 @@ import pytest
 from starlette.testclient import TestClient
 
 from backend import database as db, main
+
+
+def test_runtime_live_verifier_source_exists_and_is_opt_in():
+    verifier = Path(__file__).with_name("test_runtime_live.py")
+
+    assert verifier.exists()
+    source = verifier.read_text()
+    assert "RUN_LIVE_RUNTIME_WORKSPACE" in source
+    assert "pytest.skip" in source
+    assert "CLOAKBROWSER_RUNTIME_API_BASE_URL" in source
+    assert "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN" in source
+    assert "/api/runtime/sessions" in source
+    assert "/viewer-token" in source
+    assert "/vnc?" in source
+    assert "print(" not in source
 
 
 @pytest.fixture()
