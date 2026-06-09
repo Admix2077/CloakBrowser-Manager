@@ -59,14 +59,21 @@ ssh -L 8080:127.0.0.1:8080 your-server
 
 ## Project Mileage 远程工作台联合测试
 
-Project Mileage App -> Payload API broker -> CloakBrowser runtime service -> noVNC/VNC 的联合测试以 Payload 仓 runbook 为准；CloakBrowser 仓只保留 runtime 层低敏入口和汇总命令，方便排查 runtime/VNC 证据。
+Project Mileage App -> Payload API broker -> CloakBrowser runtime service -> noVNC/VNC 的联合测试以 App 一键 smoke 为主入口；Payload 仓 runbook 保留完整环境和排障顺序，CloakBrowser 仓只保留 runtime 层低敏入口和汇总命令，方便排查 runtime/VNC 证据。
 
 ```bash
 set +x
+cd /home/jeff/code/project-mileage-v3-app
+pnpm run smoke:remote-workspace:live -- --dry-run
+pnpm run smoke:remote-workspace:live -- --date <date>
+
+cd /home/jeff/code/cloakbrowser-invisible-manager
 RUN_LIVE_RUNTIME_WORKSPACE=1 .venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_live_runtime_session_viewer_token_and_vnc_websocket_are_available -q
 
 .venv/bin/python scripts/remote_workspace_joint_readiness.py --date <date>
 ```
+
+人工测试入口为 `http://127.0.0.1:3014/login`。
 
 runtime live verifier 缺 env 或 URL 形状非法时，会写入 `test-reports/<date>-runtime-live-preflight/REPORT.md`，并记录 `RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED`。runtime session、viewer token 签发、VNC WebSocket 首帧和 terminate 清理都通过时，才写入 `test-reports/<date>-runtime-live/REPORT.md`，并记录 `RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS`。
 

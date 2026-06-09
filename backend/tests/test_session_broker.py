@@ -61,6 +61,11 @@ def test_readme_exposes_project_mileage_joint_test_entry_without_secrets():
 
     for text in [
         "Project Mileage 远程工作台联合测试",
+        "App 一键 smoke",
+        "/home/jeff/code/project-mileage-v3-app",
+        "pnpm run smoke:remote-workspace:live -- --dry-run",
+        "pnpm run smoke:remote-workspace:live -- --date <date>",
+        "http://127.0.0.1:3014/login",
         "RUN_LIVE_RUNTIME_WORKSPACE=1 .venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_live_runtime_session_viewer_token_and_vnc_websocket_are_available -q",
         ".venv/bin/python scripts/remote_workspace_joint_readiness.py --date <date>",
         "RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS",
