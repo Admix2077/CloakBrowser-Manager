@@ -189,6 +189,7 @@ SENSITIVE_REPORT_MARKERS = (
 
 SENSITIVE_REPORT_PATTERNS = (
     re.compile(r"\bviewer\s+token\s*[:=]\s*[^<\s][^\n]*", re.IGNORECASE),
+    re.compile(r"\bjwt\s*[:=]\s*\S+", re.IGNORECASE),
     re.compile(r"wss?://\S*/api/runtime/sessions/\S*/vnc", re.IGNORECASE),
 )
 

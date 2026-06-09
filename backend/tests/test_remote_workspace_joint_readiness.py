@@ -706,6 +706,40 @@ def test_joint_readiness_report_rejects_token_and_api_key_aliases(tmp_path: Path
     assert "api-key-secret" not in text
 
 
+def test_joint_readiness_report_rejects_jwt_identity_material(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    _write(
+        tmp_path / f"project-mileage-v3-payload/test-reports/{REPORT_DATE}-remote-workspace-broker-live/REPORT.md",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_BROKER_E2E_READY: PASS",
+                "REMOTE_WORKSPACE_BROKER_LIVE=PASS",
+                "REMOTE_WORKSPACE_BROKER_CREATE_OR_REUSE=PASS",
+                "REMOTE_WORKSPACE_BROKER_DETAIL=PASS",
+                "REMOTE_WORKSPACE_BROKER_LIST=PASS",
+                "REMOTE_WORKSPACE_BROKER_LOCAL_SESSION=PASS",
+                "session_id=rws_broker_1",
+                "remote_account_id=account-live-1",
+                "runtime_status=active",
+                "viewer_available=true",
+                "viewer_reason_code=null",
+                "viewer_expires_at=2099-06-08T00:00:00.000Z",
+                "session_listed=true",
+                "local_session_count=1",
+                "jwt:eyJhbGciOiJIUzI1NiJ9.payload.signature",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+    text = "\n".join(report.lines)
+
+    assert report.ready is False
+    assert "REMOTE_WORKSPACE_BROKER_EVIDENCE=SENSITIVE" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+    assert "eyJhbGciOiJIUzI1NiJ9" not in text
+
+
 def test_joint_readiness_report_rejects_conflicting_not_verified_marker_in_pass_report(tmp_path: Path) -> None:
     _write_pass_reports(tmp_path)
     _write(
