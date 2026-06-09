@@ -421,6 +421,60 @@ def test_runtime_session_response_omits_viewer_and_auth_token_external_session_m
         assert external_session_id not in serialized_responses
 
 
+def test_runtime_session_response_omits_dotted_sensitive_external_session_markers(
+    app_client: TestClient,
+    runtime_headers: dict[str, str],
+):
+    profile_id = _create_profile(app_client)
+    sensitive_ids = [
+        "api.key-runtime-external-marker",
+        "x.api.key-runtime-external-marker",
+        "access.token-runtime-external-marker",
+        "refresh.token-runtime-external-marker",
+        "auth.token-runtime-external-marker",
+        "session.id-runtime-external-marker",
+        "client.secret-runtime-external-marker",
+        "private.key-runtime-external-marker",
+        "runtime.service.token-runtime-external-marker",
+        "service.token-runtime-external-marker",
+        "viewer.token-runtime-external-marker",
+    ]
+    sessions = [
+        db.create_runtime_session(
+            profile_id=profile_id,
+            external_session_id=external_session_id,
+            lease_seconds=900,
+        )
+        for external_session_id in sensitive_ids
+    ]
+    public_session = db.create_runtime_session(
+        profile_id=profile_id,
+        external_session_id="pm.session.public-marker",
+        lease_seconds=900,
+    )
+
+    sensitive_responses = []
+    for session in sessions:
+        resp = app_client.get(
+            f"/api/runtime/sessions/{session['id']}",
+            headers=runtime_headers,
+        )
+        assert resp.status_code == 200
+        sensitive_responses.append(resp.json())
+
+    public_resp = app_client.get(
+        f"/api/runtime/sessions/{public_session['id']}",
+        headers=runtime_headers,
+    )
+
+    assert [data["external_session_id"] for data in sensitive_responses] == ["unknown"] * 11
+    assert public_resp.status_code == 200
+    assert public_resp.json()["external_session_id"] == "pm.session.public-marker"
+    serialized_responses = json.dumps(sensitive_responses, sort_keys=True)
+    for external_session_id in sensitive_ids:
+        assert external_session_id not in serialized_responses
+
+
 def test_runtime_session_response_sanitizes_persisted_profile_id(
     app_client: TestClient,
     runtime_headers: dict[str, str],
@@ -2559,6 +2613,44 @@ def test_audit_event_reader_omits_sensitive_external_session_id_markers(tmp_db):
     assert len(events) == 18
     assert [event["external_session_id"] for event in events[:-1]] == [None] * 17
     assert events[-1]["external_session_id"] == "pm-session-public-marker"
+    serialized_events = json.dumps(events, sort_keys=True)
+    for external_session_id in sensitive_ids:
+        assert external_session_id not in serialized_events
+
+
+def test_audit_event_reader_omits_dotted_sensitive_external_session_id_markers(tmp_db):
+    sensitive_ids = [
+        "api.key-audit-external-marker",
+        "x.api.key-audit-external-marker",
+        "access.token-audit-external-marker",
+        "refresh.token-audit-external-marker",
+        "auth.token-audit-external-marker",
+        "session.id-audit-external-marker",
+        "client.secret-audit-external-marker",
+        "private.key-audit-external-marker",
+        "runtime.service.token-audit-external-marker",
+        "service.token-audit-external-marker",
+        "viewer.token-audit-external-marker",
+    ]
+    for external_session_id in sensitive_ids:
+        db.create_audit_event(
+            event_type="runtime.test",
+            actor_type="runtime_service",
+            external_session_id=external_session_id,
+            metadata={"safe": "kept"},
+        )
+    db.create_audit_event(
+        event_type="runtime.test",
+        actor_type="runtime_service",
+        external_session_id="pm.session.public-marker",
+        metadata={"safe": "kept"},
+    )
+
+    events = db.list_audit_events()
+
+    assert len(events) == 12
+    assert [event["external_session_id"] for event in events[:-1]] == [None] * 11
+    assert events[-1]["external_session_id"] == "pm.session.public-marker"
     serialized_events = json.dumps(events, sort_keys=True)
     for external_session_id in sensitive_ids:
         assert external_session_id not in serialized_events
