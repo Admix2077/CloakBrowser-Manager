@@ -9,10 +9,10 @@ RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS
 
 ## Runtime Evidence
 
-- session_id=3e9a83a2-85cb-435a-b28d-bbb535e2be05
-- external_session_id=pm-live-runtime-9eb38abf-d5db-4083-9b85-806248401e42
+- session_id=0aabc21a-4556-4282-8656-3c7005259ac6
+- external_session_id=pm-live-runtime-152e54c1-1144-40f2-a144-272e192e92e2
 - profile_id=944febde-6b5f-42b1-a012-3b07af152b5c
-- viewer_expires_at=2026-06-09T08:09:07.910600+00:00
+- viewer_expires_at=2026-06-09T08:30:20.152417+00:00
 - websocket_frame_prefix=RFB
 
 ## Safety
