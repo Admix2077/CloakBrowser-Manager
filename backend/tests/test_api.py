@@ -5344,6 +5344,50 @@ def test_automation_console_logs_redacts_hyphen_sensitive_assignments(app_client
     main.browser_mgr.running.pop(pid, None)
 
 
+def test_automation_console_logs_redacts_websocket_viewer_urls(app_client: TestClient):
+    create = app_client.post("/api/profiles", json={"name": "AutomationConsoleWebsocketRedaction"})
+    pid = create.json()["id"]
+    page = _automation_page("https://example.com/", "Example")
+    page.automation_console_logs = [
+        {
+            "type": "warning",
+            "text": (
+                "viewer connected wss://viewer-user:viewer-pass@runtime.example.test"
+                "/api/runtime/sessions/session-1/vnc?viewer_token=viewer-secret#frag "
+                "fallback ws://203.0.113.45:8080/api/runtime/sessions/session-2/vnc"
+            ),
+            "location": {},
+        }
+    ]
+    _automation_running_profile(pid, [page])
+
+    resp = app_client.get(f"/api/profiles/{pid}/automation/pages/0/console-logs")
+
+    assert resp.status_code == 200
+    assert resp.json()["logs"] == [
+        {
+            "type": "warning",
+            "text": "viewer connected [redacted-url] fallback [redacted-url]",
+            "location": {},
+        }
+    ]
+    serialized = resp.text
+    for leaked in (
+        "wss://",
+        "ws://",
+        "viewer-user",
+        "viewer-pass",
+        "runtime.example.test",
+        "/api/runtime/sessions",
+        "viewer-secret",
+        "viewer_token",
+        "203.0.113.45",
+        "#frag",
+    ):
+        assert leaked not in serialized
+    main.browser_mgr.running.pop(pid, None)
+
+
 def test_automation_network_summary_redacts_urls_and_returns_recent_events(app_client: TestClient):
     create = app_client.post("/api/profiles", json={"name": "AutomationNetworkSummary"})
     pid = create.json()["id"]

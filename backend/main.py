@@ -188,7 +188,7 @@ RUNTIME_SERVICE_TOKEN: str | None = os.environ.get("RUNTIME_SERVICE_TOKEN") or N
 _AUTOMATION_CONSOLE_LOG_LIMIT = 200
 _AUTOMATION_NETWORK_EVENT_LIMIT = 200
 _AUTOMATION_WORKER_LOST_LEASE_DETAIL = "Automation task lease no longer owned by worker"
-_AUTOMATION_TEXT_URL_RE = re.compile(r"https?://[^\s\"'<>]+")
+_AUTOMATION_TEXT_URL_RE = re.compile(r"(?:https?|wss?)://[^\s\"'<>]+")
 _AUTOMATION_AUTHORIZATION_HEADER_RE = re.compile(
     r"\bAuthorization\s*[:=]\s*(?:(?:Bearer|Basic|Digest)\s+)?[A-Za-z0-9._~+/\-=]+",
     re.IGNORECASE,
