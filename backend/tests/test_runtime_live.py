@@ -111,6 +111,14 @@ def _assert_no_sensitive_report_text(text: str) -> None:
         assert marker not in text
 
 
+def _assert_parseable_datetime_value(value: str, field_name: str) -> None:
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise AssertionError(f"{field_name} must be parseable") from exc
+
+
 def _build_runtime_live_not_verified_report() -> str:
     rows = [
         ("CLOAKBROWSER_RUNTIME_API_BASE_URL", _api_base_url_status("CLOAKBROWSER_RUNTIME_API_BASE_URL")),
@@ -180,6 +188,7 @@ def _build_runtime_live_pass_report(
     viewer_expires_at: str,
     websocket_frame_prefix: str,
 ) -> str:
+    _assert_parseable_datetime_value(viewer_expires_at, "viewer_expires_at")
     lines = [
         "# CloakBrowser Runtime Live Report",
         "",
@@ -368,6 +377,17 @@ def test_runtime_live_success_report_is_low_sensitive(tmp_path: Path):
     assert "runtime-service-token-secret" not in text
     assert "cookie" not in text
     assert "proxy_password" not in text
+
+
+def test_runtime_live_success_report_rejects_unparsable_viewer_expiry():
+    with pytest.raises(AssertionError, match="viewer_expires_at"):
+        _build_runtime_live_pass_report(
+            session_id="rt-live-session-123",
+            external_session_id="pm-live-runtime-123",
+            profile_id="profile-public-123",
+            viewer_expires_at="not-a-date",
+            websocket_frame_prefix="RFB",
+        )
 
 
 def _absolute_api_url(base_url: str, path: str) -> str:
