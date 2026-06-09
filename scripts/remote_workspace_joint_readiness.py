@@ -63,6 +63,7 @@ EVIDENCE_DEFINITIONS = (
             "REMOTE_WORKSPACE_BROKER_LOCAL_SESSION=PASS",
             "viewer_available=true",
             "viewer_reason_code=null",
+            "session_listed=true",
         ),
         required_value_markers=(
             "session_id=",
@@ -138,6 +139,7 @@ EVIDENCE_DEFINITIONS = (
             "Payload 可启动订单数量：",
             "Payload broker session id：",
             "App VNC pathname：",
+            "expiresAt：",
         ),
         not_verified_paths=(
             "project-mileage-v3-app/doc/tasks-browser-test-v1/runs/"
