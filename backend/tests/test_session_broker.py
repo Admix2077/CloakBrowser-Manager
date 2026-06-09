@@ -56,6 +56,30 @@ def test_runtime_live_verifier_source_exists_and_is_opt_in():
     assert "print(" not in source
 
 
+def test_readme_exposes_project_mileage_joint_test_entry_without_secrets():
+    readme = Path("README.md").read_text()
+
+    for text in [
+        "Project Mileage 远程工作台联合测试",
+        "RUN_LIVE_RUNTIME_WORKSPACE=1 .venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_live_runtime_session_viewer_token_and_vnc_websocket_are_available -q",
+        ".venv/bin/python scripts/remote_workspace_joint_readiness.py --date <date>",
+        "RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS",
+        "RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED",
+        "REMOTE_WORKSPACE_JOINT_E2E_READY: PASS",
+        "REMOTE_WORKSPACE_BROWSER_E2E_READY: NOT VERIFIED",
+        "test-reports/<date>-runtime-live/REPORT.md",
+        "test-reports/<date>-runtime-live-preflight/REPORT.md",
+        "不得输出 service token、viewer token、cookie、proxy password、账号密码",
+    ]:
+        assert text in readme
+
+    assert "CLOAKBROWSER_RUNTIME_SERVICE_TOKEN=" not in readme
+    assert "RUNTIME_SERVICE_TOKEN=your-runtime-service-token" in readme
+    assert "viewer_token=" not in readme
+    assert "Cookie:" not in readme
+    assert "Bearer eyJ" not in readme
+
+
 @pytest.fixture()
 def runtime_headers(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     monkeypatch.setattr(main, "RUNTIME_SERVICE_TOKEN", "runtime-secret", raising=False)

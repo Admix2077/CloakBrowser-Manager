@@ -57,6 +57,23 @@ Project Mileage App 不能直连 CloakBrowser runtime API，也不能持有 runt
 ssh -L 8080:127.0.0.1:8080 your-server
 ```
 
+## Project Mileage 远程工作台联合测试
+
+Project Mileage App -> Payload API broker -> CloakBrowser runtime service -> noVNC/VNC 的联合测试以 Payload 仓 runbook 为准；CloakBrowser 仓只保留 runtime 层低敏入口和汇总命令，方便排查 runtime/VNC 证据。
+
+```bash
+set +x
+RUN_LIVE_RUNTIME_WORKSPACE=1 .venv/bin/python -m pytest backend/tests/test_runtime_live.py::test_live_runtime_session_viewer_token_and_vnc_websocket_are_available -q
+
+.venv/bin/python scripts/remote_workspace_joint_readiness.py --date <date>
+```
+
+runtime live verifier 缺 env 或 URL 形状非法时，会写入 `test-reports/<date>-runtime-live-preflight/REPORT.md`，并记录 `RUNTIME_LIVE_WORKSPACE_E2E_READY: NOT VERIFIED`。runtime session、viewer token 签发、VNC WebSocket 首帧和 terminate 清理都通过时，才写入 `test-reports/<date>-runtime-live/REPORT.md`，并记录 `RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS`。
+
+联合 readiness 只有在 CloakBrowser runtime、Payload broker、App adapter 和 App browser 四类低敏 PASS 报告都齐全且无敏感 marker 时，才输出 `REMOTE_WORKSPACE_JOINT_E2E_READY: PASS`。如果 browser live 没有通过或只留下阻塞报告，交付口径必须保持 `REMOTE_WORKSPACE_BROWSER_E2E_READY: NOT VERIFIED`。
+
+不得输出 service token、viewer token、cookie、proxy password、账号密码、完整 viewer URL、runtime WebSocket URL、JWT、数据库 dump 或 runtime 原始响应。
+
 ## UI 验收路径
 
 1. 打开 `http://localhost:8080`
