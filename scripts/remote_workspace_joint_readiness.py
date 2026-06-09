@@ -287,6 +287,10 @@ def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: Ev
     if all(marker in text for marker in evidence.required_markers) and all(
         _has_required_value(text, marker) for marker in evidence.required_value_markers
     ):
+        if evidence.key in {"RUNTIME_LIVE_WORKSPACE_EVIDENCE", "REMOTE_WORKSPACE_BROKER_EVIDENCE"} and not (
+            _has_parseable_datetime_value(text, "viewer_expires_at=")
+        ):
+            return "FAIL"
         if evidence.key in {"REMOTE_WORKSPACE_ADAPTER_EVIDENCE", "REMOTE_WORKSPACE_BROWSER_EVIDENCE"} and not (
             _has_parseable_datetime_value(text, "expiresAt：")
         ):

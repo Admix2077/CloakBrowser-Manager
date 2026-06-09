@@ -203,6 +203,65 @@ def test_joint_readiness_report_uses_payload_preflight_browser_not_verified_mark
     assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
 
 
+def test_joint_readiness_report_rejects_runtime_pass_with_unparsable_viewer_expiry_evidence(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    _write(
+        tmp_path / f"cloakbrowser-invisible-manager/test-reports/{REPORT_DATE}-runtime-live/REPORT.md",
+        "\n".join(
+            [
+                "RUNTIME_LIVE_WORKSPACE_E2E_READY: PASS",
+                "RUNTIME_LIVE_WORKSPACE_PREFLIGHT=PASS",
+                "RUNTIME_LIVE_WORKSPACE_RUNTIME_SESSION=PASS",
+                "RUNTIME_LIVE_WORKSPACE_VIEWER_TOKEN=PASS",
+                "RUNTIME_LIVE_WORKSPACE_VNC_WEBSOCKET=PASS",
+                "RUNTIME_LIVE_WORKSPACE_TERMINATE=PASS",
+                "- session_id=rws_live_1",
+                "- external_session_id=pm-live-1",
+                "- profile_id=profile-live-1",
+                "- viewer_expires_at=not-a-date",
+                "- websocket_frame_prefix=RFB",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+
+    assert report.ready is False
+    assert "RUNTIME_LIVE_WORKSPACE_EVIDENCE=FAIL" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+
+
+def test_joint_readiness_report_rejects_broker_pass_with_unparsable_viewer_expiry_evidence(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    _write(
+        tmp_path / f"project-mileage-v3-payload/test-reports/{REPORT_DATE}-remote-workspace-broker-live/REPORT.md",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_BROKER_E2E_READY: PASS",
+                "REMOTE_WORKSPACE_BROKER_LIVE=PASS",
+                "REMOTE_WORKSPACE_BROKER_CREATE_OR_REUSE=PASS",
+                "REMOTE_WORKSPACE_BROKER_DETAIL=PASS",
+                "REMOTE_WORKSPACE_BROKER_LIST=PASS",
+                "REMOTE_WORKSPACE_BROKER_LOCAL_SESSION=PASS",
+                "session_id=rws_broker_1",
+                "remote_account_id=account-live-1",
+                "runtime_status=active",
+                "viewer_available=true",
+                "viewer_reason_code=null",
+                "viewer_expires_at=not-a-date",
+                "session_listed=true",
+                "local_session_count=1",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+
+    assert report.ready is False
+    assert "REMOTE_WORKSPACE_BROKER_EVIDENCE=FAIL" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+
+
 def test_joint_readiness_report_rejects_adapter_pass_without_viewer_origin_evidence(tmp_path: Path) -> None:
     _write_pass_reports(tmp_path)
     _write(
