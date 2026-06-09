@@ -257,6 +257,25 @@ def _has_valid_app_vnc_pathname_evidence(text: str) -> bool:
     return False
 
 
+def _has_parseable_datetime_value(text: str, marker: str) -> bool:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line.startswith("- "):
+            line = line[2:].strip()
+        if not line.startswith(marker):
+            continue
+        value = line[len(marker) :].strip()
+        if not value:
+            return False
+        normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+        try:
+            datetime.fromisoformat(normalized)
+        except ValueError:
+            return False
+        return True
+    return False
+
+
 def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: EvidenceDefinition) -> EvidenceStatus:
     text = _read_text(_report_path(workspace_root, evidence.relative_path, report_date))
     if text is None:
@@ -268,6 +287,10 @@ def _status_for_pass_report(workspace_root: Path, report_date: str, evidence: Ev
     if all(marker in text for marker in evidence.required_markers) and all(
         _has_required_value(text, marker) for marker in evidence.required_value_markers
     ):
+        if evidence.key in {"REMOTE_WORKSPACE_ADAPTER_EVIDENCE", "REMOTE_WORKSPACE_BROWSER_EVIDENCE"} and not (
+            _has_parseable_datetime_value(text, "expiresAt：")
+        ):
+            return "FAIL"
         if evidence.key == "REMOTE_WORKSPACE_BROWSER_EVIDENCE" and not _has_valid_app_vnc_pathname_evidence(text):
             return "FAIL"
         return "PASS"

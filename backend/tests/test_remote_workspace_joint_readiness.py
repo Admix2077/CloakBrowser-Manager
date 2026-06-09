@@ -330,6 +330,44 @@ def test_joint_readiness_report_rejects_browser_pass_missing_viewer_expiry_evide
     assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
 
 
+def test_joint_readiness_report_rejects_browser_pass_with_unparsable_viewer_expiry_evidence(tmp_path: Path) -> None:
+    _write_pass_reports(tmp_path)
+    _write(
+        tmp_path
+        / f"project-mileage-v3-app/doc/tasks-browser-test-v1/runs/{REPORT_DATE}-remote-workspace-browser-live/REPORT.md",
+        "\n".join(
+            [
+                "REMOTE_WORKSPACE_BROWSER_E2E_READY: PASS",
+                "目标订单号：AO-LIVE-1",
+                "目标 remoteAccountId：account-live-1",
+                "Payload 可启动订单数量：1",
+                "Payload broker session id：rws_browser_1",
+                "App VNC pathname：/app/remote-workspace/rws_browser_1/vnc",
+                "viewer.available：true",
+                "viewer.reasonCode：null",
+                "viewer.originAllowed=true",
+                "expiresAt：not-a-date",
+                "真实 App 登录桥建立登录态",
+                "页面启动卡片数量与 Payload launchable 订单数量一致",
+                "页面启动卡片订单号集合与 Payload launchable 订单集合一致",
+                "目标订单卡片唯一匹配",
+                "VNC pathname 保持同一 Payload broker session",
+                "noVNC canvas 已绘制像素",
+                "noVNC canvas 点击与低敏键盘输入后仍有像素",
+                "交互后页面无连接失败或已断开状态",
+                "交互后页面正文和地址栏无敏感连接信息",
+                "交互后 Payload broker 详情与 session 列表复核通过",
+            ]
+        ),
+    )
+
+    report = build_remote_workspace_joint_readiness_report(tmp_path, REPORT_DATE)
+
+    assert report.ready is False
+    assert "REMOTE_WORKSPACE_BROWSER_EVIDENCE=FAIL" in report.lines
+    assert "REMOTE_WORKSPACE_JOINT_E2E_READY: NOT VERIFIED" in report.lines
+
+
 def test_joint_readiness_report_rejects_browser_pass_with_non_vnc_app_pathname(tmp_path: Path) -> None:
     _write_pass_reports(tmp_path)
     _write(
